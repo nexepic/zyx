@@ -1,0 +1,2425 @@
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+index 30b0f18e..f6cfa370 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+@@ -24,9 +24,9 @@ Use three shared ordered maps per Node/Edge namespace, not a tree per owner or f
+ 
+ 1. Owner enumeration: key (owner u64, token u32), value (source u8, reserved-zero[3]); 16 payload bytes per actual field before B+Tree framing/fill. Source COLUMN or EXTENSION is the sole ownership selector. ROW continues existing actual-key enumeration.
+ 2. Column directory: key (group u64, token u32), value (stable PageId u64, slot u16, reserved u16, slot-generation u32); 28 payload bytes before tree framing. One locator per admitted field/group. Owner entries derive group/token and never duplicate that locator.
+-3. Extension: key (owner u64, token u32), one canonical field payload or independently authenticated LargeValue reference. Pack fields into shared pages. Include owner/token in authenticated body; obey the 4096-byte record ceiling including framing. Reuse the audited canonical large-field/media contract rather than inventing an unvalidated blob reference.
++3. Extension: logical key (owner u64, token u32), physically mapped to the same 16-byte stable slot locator as the column directory. The pointed shared field-page record contains one canonical field payload or independently authenticated LargeValue reference, with the owner/token in its authenticated body. Obey the record/native usable-payload ceiling and existing large-field/media contract. No duplicate whole ROW is stored.
+ 
+-Physical map implementation decision (R3.2): reuse existing key-only B+Tree entries as ordered logical-key prefix followed by canonical value suffix. Owner selectors are 12+4 bytes, column locators 12+16, group locators 8+16. These widths remain lower bounds before packed framing/restarts/internal separators/fill; value suffix bytes participate in compression and cost. Logical prefix uniqueness is additional to full native-key uniqueness: lookup reads the matching record and one lookahead, rejecting a second suffix for the same prefix, including across leaves. The owning typed map must enforce complete integrity and canonicalize final changes to one erase-old/insert-new replacement per prefix per transaction. Multiple unmerged replacements based on the same old snapshot are invalid. Ordinary internal B+Tree child layout stays U64; native compound mutation and fresh rebuild must explicitly retain EMPTY leaf layout. `FixedBTreeMap` only provides generic fixed-width encoding/lookup; it does not install a hybrid root, interpret locator targets or define the graph fence. Extension variable-value framing still requires its typed codec; do not infer that the fixed-map helper completes it. Those shared-map tests use generic index namespaces; they do not install hybrid field routing or complete production conversion.
++Physical map implementation decision (R3.2): reuse existing key-only B+Tree entries as ordered logical-key prefix followed by canonical value suffix. Owner selectors are 12+4 bytes, column and extension locators 12+16, group locators 8+16. These widths remain lower bounds before packed framing/restarts/internal separators/fill; value suffix bytes participate in compression and cost. Logical prefix uniqueness is additional to full native-key uniqueness: lookup reads the matching record and one lookahead, rejecting a second suffix for the same prefix, including across leaves. The owning typed map must enforce complete integrity and canonicalize final changes to one erase-old/insert-new replacement per prefix per transaction. Multiple unmerged replacements based on the same old snapshot are invalid. Ordinary internal B+Tree child layout stays U64; native compound mutation and fresh rebuild must explicitly retain EMPTY leaf layout. `FixedBTreeMap` only provides generic fixed-width encoding/lookup; it does not install a hybrid root, interpret locator targets or define the graph fence. The variable-size extension body lives in the shared field page, not the B+Tree key suffix. Its typed codec and page binding are separately required; the fixed-map helper does not complete them. Those shared-map tests use generic index namespaces; they do not install hybrid field routing or complete production conversion.
+ 
+ Map page framing is the existing B+Tree framing and must be measured; payload sizes are lower bounds, not allocated-space claims. The group-header directory is a fourth shared map per namespace, keyed by group u64 with the same 16-byte slot locator used by the column directory. Its O(G) cost is additional.
+ 
+@@ -37,7 +37,7 @@ R3.2 assigns the new Superblock field offset/format version and metadata-page ki
+ Selector, column presence and extension existence must agree exactly. Missing selector means absent; stored NULL has a selector. No duplicate authoritative extension row. Point access validates the selected path; full integrity checks both directions for orphan/duplicate/wrong-owner/group/type members. Dynamic type does not become permanent schema.
+ 
+ 
+-R3.2 native descriptor-frame preparation: `HybridPropertyDescriptorCodec` uses a 32-byte physical header (ZYXH magic u32 at 0, version u16=1 at 4, header bytes u16=32 at 6, physical generation u64 at 8, committed LSN u64 at 16, payload CRC32 at 24, header CRC32 at 28), followed by the specified 192-byte payload (ZYXD magic, version 1). The remaining 4096-byte frame tail is zero. Payload CRC covers offset 32 through the frame end; header CRC covers the 32-byte header with its own field zeroed. Relocation physical generation is separate from property semantic generation: require semantic<=physical<=snapshot, visible committed LSN, and exact database/expected physical-root generation. Physical generation must fit the Superblock 59-bit packed reference. Nonempty namespace roots cannot alias PageIds; partial-zero and future roots fail closed. After the in-memory codec checkpoint, the isolated empty-descriptor metadata lifecycle below is connected. This still does not admit R3.2 or authorize nonempty hybrid property layouts.
++R3.2 native descriptor-frame preparation: `HybridPropertyDescriptorCodec` uses a 32-byte physical header (ZYXH magic u32 at 0, version u16=1 at 4, header bytes u16=32 at 6, physical generation u64 at 8, committed LSN u64 at 16, payload CRC32 at 24, header CRC32 at 28), followed by the specified 192-byte payload (ZYXD magic, version 1). The remaining 4096-byte frame tail is zero. Payload CRC covers offset 32 through the frame end; header CRC covers the 32-byte header with its own field zeroed. Relocation physical generation is separate from property semantic generation: require semantic<=physical<=snapshot, visible committed LSN, and exact database/expected physical-root generation. Physical generation must fit the Superblock 59-bit packed reference. Nonempty namespace roots cannot alias PageIds; partial-zero roots fail closed. Their expected generations are shared-pool physical epochs, not semantic commit generations: no numeric ordering against descriptor/frame/snapshot generation is valid. Each eventual routed reader must instead match the selected namespace IndexId and pinned Index Root Directory entry, then authenticate the exact PageId and physical epoch of the actual B+Tree root. A frame checksum or paired positive root reference alone does not authenticate that tree. After the in-memory codec checkpoint, the isolated empty-descriptor metadata lifecycle below is connected. This still does not admit R3.2 or authorize nonempty hybrid property layouts.
+ 
+ ## Snapshot liveness and field transition contract
+ 
+@@ -93,4 +93,26 @@ The uninstalled R3.2 extension codec uses a 48-byte ZYHE (`0x4548595A`) envelope
+ 
+ Large mode reuses the existing LargeValueRefCodec and `application/vnd.zyx.entity-property-root` media, with the owner-neutral payload constrained to exactly one token/value. Both directory token and entry token must match the outer token; multiple fields, trailing data, wrong kind/media or future identity reject. Existing LargeValueStore must authenticate manifest, chunks and content hash before supplying bytes; this envelope decoder does not authenticate content by itself. Do not create a separate whole-row copy or treat an arbitrary same-media row as one field. Equal one-field payloads may share immutable contents across owners through existing deduplication and exact retirement rules.
+ 
+-The complete extension record must fit the actual destination limit and at most 3952 bytes (4032 owner payload minus 64 slotted header minus 16 slot bytes). A packed B+Tree key also needs its ordered owner/token prefix, packed framing, page header/slots and internal separator capacity; the future map planner must lower its record limit accordingly, never assume a 3952-byte record fits a B+Tree key. Charge the 48-byte envelope and any additional directory/value framing in total native costs. Destination and canonical encoding workspace use caller-owned PMR; reference media capacity and decoded value/directory allocations require separate retained reservations. The charged conversion plan can emit only actual inline-extension members, rejecting column-source members and oversized values. This codec does not install variable-map routing, allocate data IDs, publish large values or remove nonempty-root guards.
++The complete extension record must fit the actual destination limit and at most 3952 bytes (4032 owner payload minus 64 slotted header minus 16 slot bytes). The extension directory stores a fixed 12+16-byte prefix/locator key. Do not put a variable field body in that key: native internal separators retain the full key, so doing so duplicates potentially large field bytes and lowers fanout. The variable envelope stays in a shared slotted field page. This adds a locator and selected-page read that must be included in complete allocated costs and protected point latency; no performance admission is inferred. Charge the 48-byte envelope and any additional directory/value framing in total native costs. Destination and canonical encoding workspace use caller-owned PMR; reference media capacity and decoded value/directory allocations require separate retained reservations. The charged conversion plan can emit only actual inline-extension members, rejecting column-source members and oversized values. This codec does not install variable-map routing, allocate data IDs, publish large values or remove nonempty-root guards.
++
++## Private field-page preparation
++
++`HybridPropertyPageImage` prepares neutral native SlottedPage images, with one explicit allocation owner for page, record-copy and serialized buffers. It packs group, column and variable extension records behind stable PageId/slot/slot-generation references; fixed directories can share the existing canonical map writer. It is not an installed pool/format, does not allocate IDs, and must never be persisted as an ordinary ROW page. Metadata must assign the logical data IDs before map-key planning in the same eventual publication. No new generic variable B+Tree map is retained. A private variable-key experiment was not adopted: payload-bearing native separators create a mechanism/capacity cost, not a measured latency result.
++
++Keep shared-pool physical generation separate from semantic commit generation: data pool reuse generations do not advance on every graph commit. A column at semantic generation 7 can validly live in a data pool of physical generation 1, provided its group/descriptor/snapshot semantic bounds are valid. The descriptor metadata-frame physical generation follows its separate metadata publication rules. Private clone/overwrite preserves stable slot identities; erase/reuse advances slot generation. These image checks do not replace native graph routing, final authority/integrity, resource scratch admission, allocation/retirement or R3.2 full lifecycle acceptance.
++
++## Ordinary graph publication spine
++
++`NativeGraphHybridPropertyRootMutation` is a typed late-root request carrying expected database/root identity, replace/clear mode and eight namespace IndexIds. It adds no generic graph callback or physical authority. The writer validates the expected database/root and authenticates a present old descriptor before preparing graph data. Late preparation resolves each requested tree from this candidate's final roots or the retained current directory, rejects absent/retired/aliased namespaces and uses the actual batch generation. The descriptor and ordinary Index data then use the same unchanged data fence → inactive A/B → superblock fence → acknowledgment. Ordinary requests need no bulk scratch; the existing bulk early hook retains its scratch contract.
++
++The isolated build currently publishes empty descriptors or clears only; nonempty descriptor preparation still rejects, including after ordinary Index pages have been prepared, and the old graph remains authoritative. No production caller stages these requests. This is the publication spine, not installed field pools, conversion or full native property routing. Early data-ID assignment still needs the metadata-owned field coordinator before locator-key planning; never manufacture a standalone ID commit or bulk scratch merely to use the existing early hook.
++
++The bounded conversion classifier and reverse projection now have one storage-owned implementation, `HybridPropertyGroupConversion.hpp`. It consumes authenticated, immutable ROW roots borrowed from the enclosing coordinator. Its one fixed workspace allocation is charged through a required retained PMR owner (no default-resource fallback); the 64-owner/4096-membership/85-column bounds and the <=1 MiB workspace bound remain unchanged. Source roots/heap values, output buffers and native publication have separate allocation owners. Cancellation, quota refusal and invalid input release the workspace without changing ROW sources. No IDs, fields or roots are published by this planner. The benchmark `ReservedGroupConversion` is now only a laboratory view adapter using this implementation, with its additional view storage separately charged; production storage does not include benchmark or query execution headers. The metadata-owned early field coordinator must use this native planner before final locator/map planning; this migration alone is not R3.2 acceptance.
++
++Private early ID preparation is now owned by `HybridPropertyConversionPreparation` in metadata. Its constructor is accessible only to the native metadata store and a test accessor, not ordinary graph callers. It requires the plan's semantic generation to equal the actual batch generation, obtains logical PageIds from that same `MetadataWriteBatch` while packing append-only group/column/inline-extension records, and emits final owner/column/extension/group slot locators. It does not allocate physical pools, publish maps/fields/IDs or call a generic planning callback. Neutral physical epoch 1 is only a private image placeholder; later owner binding must install the actual pool epoch. On cancellation/refusal the enclosing batch must be discarded; local consumed IDs are not an independently published reservation. Output images, locator buffers and escaped record copies retain their resource owner after source roots/plan release. The final coordinator must create the shared <=1 MiB conversion subaccount under the existing QUERY/WRITE parent; this helper cannot infer an arbitrary PMR resource's quota. Oversized inline values refuse; independent large-reference creation/authentication/retirement is still pending. This private preparation is not yet invoked by ordinary graph commits and does not remove the generic-pool/nonempty-descriptor guards.
++
++## Private field-owner binding
++
++The isolated format reserves PageOwnerKind 16 for HYBRID_PROPERTY; 13–15 remain retired adjacency codes and must always be rejected. Reuse SGK_PROPERTY_PAGE_POOL without adding a new segment kind. `bindPrivateOwner` consumes only a validated private image: require a sealed PROPERTY catalog entry, exact pool owner/physical generation, exact expected page/LSN, zero flags and the full SlottedPage payload width. Enumerate all live slots with the retained allocation account, validate their typed group/column/extension shapes and semantic visibility, and only then rebind without allocation. Failure leaves the image unchanged and retryable. Large-reference envelope validation still needs caller admission; it does not authenticate content or prove global ownership.
++
++This is private binding only. Generic pool read matching and every standalone allocate/append/replace/evacuate entry reject HYBRID_PROPERTY, even in the isolated build. Do not permit field publication until the metadata-owned typed coordinator, all field readers/writers, integrity and exact retirement support the same atomic lifecycle. ROW frames cannot stand in for field frames. Pinned tree authentication remains required separately from the descriptor codec; the codec now correctly permits independent positive pool epochs above metadata/semantic generations while retaining all metadata visibility checks.
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+index 76e2e755..1f0cad5c 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+@@ -24,7 +24,7 @@
+ 
+ 1. owner 枚举：键 owner u64+token u32，值 source u8+reserved-zero[3]，每实际字段 payload 16 字节，另计 B+Tree framing/填充。source=COLUMN/EXTENSION 是唯一语义归属选择器；ROW 继续已有实际字段枚举。
+ 2. 列目录：键 group u64+token u32；值 stable PageId u64+slot u16+reserved u16+slot-generation u32，共 28 字节 payload。每获准字段/组一条 locator，owner 项通过 group/token 推导，不重复 locator。
+-3. extension：键 owner u64+token u32，一份 canonical 字段或认证独立 LargeValue 引用；共享页打包。认证 body 含 owner/token，含 framing 不超记录上限；复用已有 canonical 大字段/media 合同，不自造未认证 blob。
++3. extension：逻辑键 owner u64+token u32，物理目录值使用与列目录相同的 16 字节稳定 slot locator。所指共享字段页记录保存一份 canonical 字段或认证独立 LargeValue 引用；认证 body 含 owner/token，服从记录／原生可用载荷上限，复用既有大字段/media 合同，不保存完整第二份 ROW。
+ 
+ map 使用已有 B+Tree framing，R3.2 实测全部成本；16/28 字节只是 payload 下界。组 header 目录是每命名空间第四张共享 map，键 group u64，值使用列目录相同的 16 字节 slot locator，额外计 O(G) 成本。
+ 
+@@ -34,7 +34,7 @@ R3.2 在任何文件编码前，同时分配新 Superblock 字段 offset/format
+ 
+ selector、列 presence、extension 存在性精确一致；无 selector 是缺失，存储 NULL 有 selector。extension 不留完整第二份行。点读验证所访问归属，完整 integrity 双向枚举发现孤儿/重复/错 owner/group/type；不在每次点读扫描全图。当前列类型不成为永久 schema。
+ 
+-R3.2 物理映射实现定案：复用既有 key-only B+Tree entry，以有序逻辑键前缀加 canonical 值后缀编码。owner selector 为 12+4 字节，列定位为 12+16，组定位为 8+16；这些仍是 packed framing/restart/内部分隔符/填充前的下界，值后缀参与压缩和成本计算。逻辑前缀唯一性独立于完整原生键唯一性：点读匹配项并前看一项，同前缀第二个值即拒绝，跨叶也不能漏检。类型化所有者须验证完整 integrity，并把事务内最终修改归并成每前缀一次 erase-old/insert-new；不能从同一旧快照多次未归并替换。内部 B+Tree child 仍为 U64；原生复合变更和 fresh rebuild 显式保留 EMPTY 叶布局。`FixedBTreeMap` 仅提供通用定宽编码/查找，不安装 hybrid 根、不解释定位目标、不定义图 fence。extension 变长值 framing 仍需独立类型化 codec，不能认为定宽 helper 已实现它。上述共享 map 测试使用通用 index 命名空间，不代表安装了 hybrid 字段路由或完成生产转换。
++R3.2 物理映射实现定案：复用既有 key-only B+Tree entry，以有序逻辑键前缀加 canonical 值后缀编码。owner selector 为 12+4 字节，列和 extension 定位均为 12+16，组定位为 8+16；这些仍是 packed framing/restart/内部分隔符/填充前的下界，值后缀参与压缩和成本计算。逻辑前缀唯一性独立于完整原生键唯一性：点读匹配项并前看一项，同前缀第二个值即拒绝，跨叶也不能漏检。类型化所有者须验证完整 integrity，并把事务内最终修改归并成每前缀一次 erase-old/insert-new；不能从同一旧快照多次未归并替换。内部 B+Tree child 仍为 U64；原生复合变更和 fresh rebuild 显式保留 EMPTY 叶布局。`FixedBTreeMap` 仅提供通用定宽编码/查找，不安装 hybrid 根、不解释定位目标、不定义图 fence。extension 变长 body 位于共享字段页，仍需独立类型化 codec 和页绑定，不能认为定宽 helper 已实现它。上述共享 map 测试使用通用 index 命名空间，不代表安装了 hybrid 字段路由或完成生产转换。
+ 
+ ## 访问、修改和完整成本
+ 
+@@ -76,7 +76,7 @@ R3.2 同步更新全部 reader/writer/descriptor/map/page-kind/version、root 
+ 
+ 必测 R3.2：47/48/64 占用边界，稀疏/独有字段、随机交错形状、多标签、持续变型/降级、删除后稀疏、>4096 成员、宽行/大值、无序重复邻居 gather、no-op/NULL/merge/replace/remove、旧/新快照/重开、合法 checksum 身份错配、各发布 fence 故障、配额拒绝、搬迁/复用/退休。精确校验 ID/类型/值/重复和完整原生成本。失败可以完成比较项 R3.2，不能完成生产项 R3.3；R7 延迟/写入/资源/稳态门槛不变。
+ 
+-R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用 32 字节物理头（0 ZYXH magic u32，4 version u16=1，6 header bytes u16=32，8 physical generation u64，16 committed LSN u64，24 payload CRC32，28 header CRC32），其后为上述 192 字节 payload（magic ZYXD、version 1），其余 4096 字节页尾必须为零。payload CRC 覆盖 offset 32 至页尾，header CRC 覆盖 32 字节头且计算时自身字段归零。区分搬迁的物理代际与属性语义代际，要求 semantic<=physical<=snapshot、committed LSN 可见、database 与预期物理根代际精确匹配；物理代际还须能由 Superblock 的 59 位 packed reference 表示。八个非空命名空间根不能共用 PageId，部分零或未来根拒绝。内存 codec 检查点之后，已接入下述隔离的空描述符元数据生命周期；仍不能据此验收 R3.2 或发布非空 hybrid 属性布局。
++R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用 32 字节物理头（0 ZYXH magic u32，4 version u16=1，6 header bytes u16=32，8 physical generation u64，16 committed LSN u64，24 payload CRC32，28 header CRC32），其后为上述 192 字节 payload（magic ZYXD、version 1），其余 4096 字节页尾必须为零。payload CRC 覆盖 offset 32 至页尾，header CRC 覆盖 32 字节头且计算时自身字段归零。区分搬迁的物理代际与属性语义代际，要求 semantic<=physical<=snapshot、committed LSN 可见、database 与预期物理根代际精确匹配；物理代际还须能由 Superblock 的 59 位 packed reference 表示。八个非空命名空间根不能共用 PageId，部分零根拒绝。树根的预期 generation 是共享池物理复用代际，不能与描述符／帧／快照代数作大小比较。后续实际路由 reader 必须匹配所选命名空间 IndexId 和 pin 下的 Index Root Directory 项，再精确认证实际 B+Tree 根页的 PageId／物理代际；frame CRC 或完整的正数根引用本身不能认证所引用的树。内存 codec 检查点之后，已接入下述隔离的空描述符元数据生命周期；仍不能据此验收 R3.2 或发布非空 hybrid 属性布局。
+ 
+ 隔离元数据原型定案：`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` 默认 OFF；默认 Superblock 31/header 336/profile 5 不变，非空描述符根不能编码或发布。ON 构建仅用于实验，使用 Superblock 32/header 352/profile 6，新增 physical root 位于 336..351（slot u64 + 既有 generation/frame packed u64），emergency reserve 从 352 开始，共 32 字节；其后保留字节仍为零。两种构建互相拒绝文件，不迁移。当前实验 writer/read/open/integrity 只允许八根全零的空描述符；任何非空根在分配 frame 前拒绝，合法校验和下的非空路由或错误身份也会在打开/读取时拒绝，不能静默回落 ROW。普通 Node/Edge/ROW 能力继续可用，但实际子块转换 API 尚未安装。
+ 
+@@ -92,4 +92,28 @@ R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用
+ 
+ 大值模式复用现有 LargeValueRefCodec 和 `application/vnd.zyx.entity-property-root` media，但无 owner 的内容必须恰好包含一个 token/value；目录 token 和字段 token 均须匹配外层。多字段、尾随数据、错误 kind/media、未来身份都拒绝。现有 LargeValueStore 必须先认证 manifest、chunk 和内容 hash，再提供数据；信封 decoder 本身不认证内容。不能再复制整行，也不能把任意同 media 的整行当作单字段。相同单字段内容允许沿用现有跨 owner 不可变内容去重及精确退役规则。
+ 
+-完整 extension 记录必须满足真实目标上限，且至多 3952 字节（4032 字节 owner payload 减去 64 字节 slotted header 和 16 字节槽位）。若放入 packed B+Tree key，还要容纳 owner/token 有序前缀、packed framing、页头／槽位和内部 separator；后续 map planner 必须据此降低记录上限，不能假定 3952 字节记录能直接放入 B+Tree key。真实成本须计入 48 字节信封及额外目录／值编码开销。目标缓冲区和规范编码工作区使用调用方 PMR；引用 media 容量及字段／目录解码须分别持有预约。已计费转换计划只能输出实际 inline-extension 成员，拒绝 COLUMN 来源和超限值。此 codec 不安装 variable map 路由、不分配 data ID、不发布大值，也不移除非空根保护。
++完整 extension 记录必须满足真实目标上限，且至多 3952 字节（4032 字节 owner payload 减去 64 字节 slotted header 和 16 字节槽位）。extension 目录使用固定的 12+16 字节有序前缀／locator key；变长信封留在共享字段页，不进入内部 separator。真实成本须计入 48 字节信封及额外目录／值编码开销。目标缓冲区和规范编码工作区使用调用方 PMR；引用 media 容量及字段／目录解码须分别持有预约。已计费转换计划只能输出实际 inline-extension 成员，拒绝 COLUMN 来源和超限值。此 codec 不安装 extension 目录／字段页路由、不分配 data ID、不发布大值，也不移除非空根保护。
++
++## Extension 物理定位与私有字段页准备
++
++extension 的逻辑键仍为 owner u64/token u32，物理目录与 column 一样使用固定 16 字节 stable PageId/slot/slot-generation 定位值，完整 key-only 记录为 12+16 字节；48 字节信封和变长字段内容放在共享 slotted 字段页。不能把变长字段直接放进 B+Tree key 后缀：原生内部 separator 保留整个 key，会复制大字段并降低扇出。新增定位值及所选字段页读取必须计入完整空间成本和点查保护指标，不据此预判性能准入。复用现有固定 map，不保留新增通用变长 B+Tree map。未采纳的私有变长 key 试验仅用于核查 separator／容量机制，不作为时延收益或完成项。
++
++`HybridPropertyPageImage` 为页图像、记录复制和序列化缓冲区使用明确分配账户，准备中立的原生 SlottedPage 图像；group、column 和变长 extension 记录以 stable PageId/slot/slot-generation 引用共享打包。它尚未安装 pool/格式、不分配 ID，绝不能作为普通 ROW 页持久化。后续仍须在同一次发布中，由元数据先分配 data ID，再规划目录 key。
++
++共享池物理 generation 与语义提交代数必须分开：data pool 的复用代数不会每次图提交都增长。列语义代数 7 可以合法存于物理代数 1 的 data pool，只要满足 group／descriptor／snapshot 的语义上界；描述符元数据帧的物理代数仍遵循其独立发布规则。私有 clone／overwrite 保持稳定槽位，erase／reuse 推进 slot generation。这些图像检查不代替原生图路由、最终权威／完整性、scratch 准入、分配／退役及 R3.2 完整生命周期验收。
++
++## 普通图事务发布骨架
++
++`NativeGraphHybridPropertyRootMutation` 是类型化的最终根请求，包含预期数据库／旧根、replace／clear 模式及八个命名空间 IndexId，不新增通用图回调或物理权限。writer 在准备图数据前验证数据库／旧根，并认证已存在的旧描述符；最终阶段从本次候选的最终树根或当前保留目录解析引用，拒绝缺失／已退役／重名命名空间，使用真实 batch generation。描述符和普通 Index 数据沿用同一次 data fence → inactive A/B → superblock fence → 确认；此请求不需要 bulk scratch，既有 bulk 早期 hook 的 scratch 合同不变。
++
++隔离构建目前仍只允许空描述符发布／清除；非空描述符即使在普通 Index 页已准备后也会拒绝，旧图继续有效。尚无生产调用方暂存该请求。这是发布骨架，不是已安装字段池、转换或完整属性路由。locator key 规划前仍须接通元数据持有的字段协调器来分配 data ID，不能为了套用既有 early hook 而制造此前一次 ID 提交或 bulk scratch。
++
++有界转换分类和反向投影现仅由存储模块 `HybridPropertyGroupConversion.hpp` 实现；输入是协调器认证、持续持有且不可变的 ROW 根。固定 workspace 只分配一次，必须通过持续持有的 PMR owner 计费，不回退默认资源；64 owner／4096 成员／85 列及 workspace ≤1 MiB 的上限不变。源根／堆字段、输出编码和原生发布由各自账户持有。取消、超限和输入错误释放 workspace，不修改 ROW 源。规划器不发布 ID／字段／根。benchmark 的 `ReservedGroupConversion` 现仅为复用此实现的实验视图适配器，额外视图存储单独计费；生产存储不包含 benchmark 或 query execution 头。元数据持有的早期字段协调器须在最终 locator／map 规划前使用该原生规划器；迁移本身不代表 R3.2 验收。
++
++元数据模块现由 `HybridPropertyConversionPreparation` 持有私有早期 ID 准备；构造入口仅向原生 metadata store 和测试访问器开放，不向普通图调用方暴露。要求转换语义代数等于真实 batch generation，在同一个 `MetadataWriteBatch` 内按需取得逻辑 PageId，打包只追加的 group／column／inline-extension，并生成最终 owner／column／extension／group 槽位定位。它不分配物理池，不发布 map／字段／ID，不提供通用规划回调。中性物理代际 1 仅是私有图像占位，后续 owner 绑定必须安装实际池代际。取消或拒绝后必须丢弃整个 batch，局部消耗的 ID 不成为单独发布的预留。源根／规划器释放后，输出图像、定位缓冲和逃逸记录副本继续持有资源 owner。最终协调器须在既有 QUERY／WRITE 父账户下建立共享的 ≤1 MiB 转换子账户；私有 helper 无法推断任意 PMR 的额度。超大 inline 值明确拒绝，独立大值引用的创建／内容认证／退役仍待接通。这一私有准备尚未由普通图提交调用，不删除普通池／非空描述符保护。
++
++## 私有字段页 owner 绑定
++
++隔离格式为 HYBRID_PROPERTY 保留 PageOwnerKind 16；13–15 仍为退役邻接编码，必须继续拒绝。复用 SGK_PROPERTY_PAGE_POOL，不增加 SegmentKind。`bindPrivateOwner` 只消耗校验后的私有图像：要求 SEALED 的 PROPERTY catalog 项、池 owner／物理代际精确匹配、页身份／预期 LSN 一致、flags 为零、完整 SlottedPage payload 宽度。使用持续持有的账户枚举全部 live slots，认证类型化 group／column／extension 形状与语义可见性，全部成功后才以无分配操作 rebind。失败后原图像不变，可重试。大值引用信封检查仍需调用方准入，不认证内容，也不证明全局归属。
++
++这仍是私有绑定。普通池读取匹配和独立 allocate／append／replace／evacuate 入口即使在隔离构建中也拒绝 HYBRID_PROPERTY。元数据持有的类型化协调器、全部字段读写、integrity 和精确退役接通同一原子生命周期之前，不能允许字段发布，更不能以 ROW frame 冒充。pin 下的实际树认证与描述符 codec 各负其责；codec 已修正为允许独立正数池代际大于元数据／语义代数，同时保留元数据可见性校验。
+diff --git a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+index 0036c810..ca5bb0da 100644
+--- a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
++++ b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+@@ -7,18 +7,19 @@
+ #include "graph/query/execution/MaterializedByteBudget.hpp"
+ #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
+ #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
+-#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
+ 
+ namespace zyx::benchmark::subblock {
+-// Bounded conversion planning over immutable, caller-owned, authenticated ROW
+-// roots. This is not a persisted native layout: extension values remain borrowed
++// Laboratory view adapter over the single storage-owned conversion planner.
++// Classification and reverse projection are implemented only in storage.
++// Inputs are immutable, caller-owned, authenticated ROW roots. This is not a persisted native layout: extension values remain borrowed
+ // canonical PropertyValues, never invented LargeValue references. The caller
+ // must keep input roots and budget alive and separately charge their storage.
+ // No source value is copied or mutated while classifying the group.
+ class ReservedGroupConversion final {
+ public:
+-    static constexpr size_t MAX_MEMBERSHIPS = 4096;
+-    static constexpr size_t MAX_COLUMNS = MAX_MEMBERSHIPS / 48;
++    static constexpr size_t MAX_MEMBERSHIPS = graph::storage::HybridPropertyGroupConversion::MAX_MEMBERSHIPS;
++    static constexpr size_t MAX_COLUMNS = graph::storage::HybridPropertyGroupConversion::MAX_COLUMNS;
+     struct Member {
+         uint64_t owner = 0;
+         uint32_t token = 0;
+@@ -28,11 +29,17 @@ public:
+     };
+ private:
+     graph::query::execution::MaterializedByteReservation reservation_;
++    graph::storage::HybridPropertyGroupConversion native_;
+     GroupHeader group_;
+     std::array<Member, MAX_MEMBERSHIPS> members_{};
+     std::array<Column, MAX_COLUMNS> columns_{};
+     size_t member_count_ = 0, column_count_ = 0;
+ 
++    static graph::storage::EntityPropertyOwnerKind nativeKind(OwnerKind kind) {
++        require(valid(kind));
++        return kind == OwnerKind::HPK_NODE ? graph::storage::EntityPropertyOwnerKind::EPOK_NODE
++            : graph::storage::EntityPropertyOwnerKind::EPOK_EDGE;
++    }
+     static auto reserve(graph::query::execution::MaterializedByteBudget &budget) {
+         graph::query::execution::MaterializedByteReservation result(&budget);
+         // Fixed holder plus column construction and bounded sorting stack
+@@ -42,87 +49,32 @@ private:
+         static_assert(charge <= 1024 * 1024);
+         result.set(charge); return result;
+     }
+-    static std::optional<ScalarKind> primitive(const graph::PropertyValue &value) {
+-        if (std::holds_alternative<int64_t>(value.getVariant())) return ScalarKind::HPS_INT64;
+-        if (std::holds_alternative<double>(value.getVariant())) return ScalarKind::HPS_DOUBLE;
+-        if (std::holds_alternative<bool>(value.getVariant())) return ScalarKind::HPS_BOOL;
+-        return {};
+-    }
+-    static bool isNull(const graph::PropertyValue &value) {
+-        return std::holds_alternative<std::monostate>(value.getVariant());
+-    }
+-    static uint64_t bits(const graph::PropertyValue &value, ScalarKind kind) {
+-        if (kind == ScalarKind::HPS_INT64) return std::bit_cast<uint64_t>(std::get<int64_t>(value.getVariant()));
+-        if (kind == ScalarKind::HPS_DOUBLE) return std::bit_cast<uint64_t>(std::get<double>(value.getVariant()));
+-        return std::get<bool>(value.getVariant());
+-    }
+ public:
+     ReservedGroupConversion(graph::query::execution::MaterializedByteBudget &budget,
+         std::span<const graph::storage::PropertyCollectionRoot> roots, OwnerKind kind,
+         uint64_t group, uint64_t generation, size_t nativeRecordLimit,
+-        const std::function<void()> &checkpoint = {}) : reservation_(reserve(budget)) {
+-        require(valid(kind) && !roots.empty() && roots.size() <= 64 && generation);
+-        validGroup(group);
+-        if (nativeRecordLimit < 64) throw std::length_error("property conversion native group-header bound");
+-        group_.kind = kind; group_.group = group; group_.generation = generation;
+-        const uint32_t nativeKind = kind == OwnerKind::HPK_NODE ? graph::Node::typeId : graph::Edge::typeId;
+-        for (const auto &root : roots) {
+-            if (checkpoint) checkpoint();
+-            require(root.owner_entity_type == nativeKind && root.owner_entity_id &&
+-                root.owner_entity_id <= uint64_t(INT64_MAX) && groupFor(root.owner_entity_id) == group);
+-            const uint64_t bit = uint64_t{1} << slotFor(root.owner_entity_id);
+-            require(!(group_.live & bit)); group_.live |= bit;
+-            if (root.entries.size() > MAX_MEMBERSHIPS - member_count_)
+-                throw std::length_error("property conversion membership bound");
+-            uint32_t previous = 0;
+-            for (const auto &entry : root.entries) {
+-                require(entry.key_token > previous); previous = entry.key_token;
+-                members_[member_count_++] = {root.owner_entity_id, entry.key_token, &entry.value};
+-            }
++        const std::function<void()> &checkpoint = {}) : reservation_(reserve(budget)),
++        // Adapter lifetime remains strictly inside the caller's budget lifetime;
++        // production uses a genuinely owned resource, never this borrowed alias.
++        native_(std::shared_ptr<std::pmr::memory_resource>(&budget, [](auto *) {}), roots,
++            nativeKind(kind), group, graph::storage::Generation(generation), nativeRecordLimit, checkpoint) {
++        const auto &groupRecord = native_.group();
++        group_ = {kind, GroupMode::HPG_HYBRID, group, generation, groupRecord.live, groupRecord.memberships, groupRecord.columns};
++        member_count_ = native_.members().size(); column_count_ = native_.columns().size();
++        for (size_t i = 0; i < member_count_; ++i) {
++            const auto &member = native_.members()[i];
++            members_[i] = {member.owner, member.token, member.value,
++                member.source == graph::storage::HybridPropertySource::HPS_COLUMN ? Source::HPS_COLUMN : Source::HPS_EXTENSION,
++                member.column};
+         }
+-        auto end = members_.begin() + member_count_;
+-        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
+-            return a.token != b.token ? a.token < b.token : a.owner < b.owner;
+-        });
+-        for (size_t first = 0; first < member_count_;) {
+-            if (checkpoint) checkpoint();
+-            size_t last = first + 1;
+-            while (last < member_count_ && members_[last].token == members_[first].token) ++last;
+-            std::optional<ScalarKind> scalar;
+-            bool compatible = last - first >= 48;
+-            for (size_t i = first; compatible && i < last; ++i) {
+-                const auto &value = *members_[i].value;
+-                if (isNull(value)) continue;
+-                const auto current = primitive(value);
+-                if (!current || (scalar && current != scalar)) compatible = false;
+-                else scalar = current;
+-            }
+-            // An all-NULL new field has no inferred scalar type.
+-            if (compatible && scalar) {
+-                require(column_count_ < MAX_COLUMNS);
+-                Column &column = columns_[column_count_];
+-                column.identity = {kind, *scalar, group, members_[first].token, generation};
+-                column.live = group_.live;
+-                if (column.wireSize() > nativeRecordLimit || column.wireSize() > 4096)
+-                    throw std::length_error("property conversion native column bound");
+-                for (size_t i = first; i < last; ++i) {
+-                    auto &member = members_[i];
+-                    const unsigned slot = slotFor(member.owner);
+-                    const uint64_t bit = uint64_t{1} << slot;
+-                    column.presence |= bit;
+-                    if (isNull(*member.value)) column.nulls |= bit;
+-                    else column.words[slot] = bits(*member.value, *scalar);
+-                    member.source = Source::HPS_COLUMN; member.column = uint16_t(column_count_);
+-                }
+-                column.validate(); ++column_count_;
+-            }
+-            first = last;
++        for (size_t i = 0; i < column_count_; ++i) {
++            const auto &source = native_.columns()[i]; auto &column = columns_[i];
++            column.identity = {kind, static_cast<ScalarKind>(source.identity.scalar_kind), group,
++                source.identity.token, generation};
++            column.presence = source.presence; column.nulls = source.nulls; column.live = source.live;
++            column.words = source.words; column.validate();
+         }
+-        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
+-            return a.owner != b.owner ? a.owner < b.owner : a.token < b.token;
+-        });
+-        group_.memberships = uint32_t(member_count_); group_.columns = uint32_t(column_count_);
+-        group_.validate(); if (checkpoint) checkpoint();
++        group_.validate();
+     }
+     ReservedGroupConversion(const ReservedGroupConversion &) = delete;
+     ReservedGroupConversion &operator=(const ReservedGroupConversion &) = delete;
+@@ -132,46 +84,20 @@ public:
+     std::span<const Member> members() const && = delete;
+     [[nodiscard]] std::span<const Column> columns() const & noexcept { return {columns_.data(), column_count_}; }
+     std::span<const Column> columns() const && = delete;
+-    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
++    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes() + native_.retainedCharge(); }
+ 
+     // Emit the native typed payload, never the laboratory magic. The output
+     // buffer remains caller-owned/admitted. No PageId is allocated here and no
+     // root is published; that belongs to the single metadata coordinator.
+     [[nodiscard]] graph::storage::HybridPropertyGroupRecord nativeGroup() const {
+-        using namespace graph::storage;
+-        HybridPropertyGroupRecord result{
+-            group_.kind == OwnerKind::HPK_NODE ? EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE,
+-            HybridPropertyGroupMode::HPGM_HYBRID, group_.group, Generation(group_.generation),
+-            group_.live, group_.memberships, group_.columns};
+-        result.validate(); return result;
++        return native_.group();
+     }
+     void encodeNativeColumn(size_t ordinal, std::span<std::byte> output) const {
+-        using namespace graph::storage;
+-        require(ordinal < column_count_);
+-        const auto &source = columns_[ordinal];
+-        HybridPropertyColumnRecord record;
+-        // Existing conversion reservation includes one temporary Column and
+-        // 4096 stack bytes. Native encoding must fit that existing allowance.
+-        static_assert(sizeof(record) <= sizeof(Column));
+-        record.identity = {nativeGroup().owner_kind,
+-            source.identity.scalar_kind == ScalarKind::HPS_INT64 ? HybridPropertyScalarKind::HPSK_INT64 :
+-                source.identity.scalar_kind == ScalarKind::HPS_DOUBLE ? HybridPropertyScalarKind::HPSK_DOUBLE :
+-                    HybridPropertyScalarKind::HPSK_BOOL,
+-            source.identity.group, source.identity.token, Generation(source.identity.generation)};
+-        record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
+-        record.words = source.words; record.encode(output);
++        native_.encodeNativeColumn(ordinal, output);
+     }
+     [[nodiscard]] std::pmr::vector<std::byte> encodeNativeInlineExtension(uint64_t owner, uint32_t token,
+         size_t nativeRecordLimit, std::pmr::memory_resource &outputMemory) const {
+-        const auto end = members_.begin() + member_count_;
+-        const auto found = std::lower_bound(members_.begin(), end, std::pair(owner, token),
+-            [](const Member &member, const auto &key) {
+-                return std::pair(member.owner, member.token) < key;
+-            });
+-        require(found != end && found->owner == owner && found->token == token &&
+-            found->source == Source::HPS_EXTENSION && found->value);
+-        return graph::storage::HybridPropertyExtensionView::encodeInline({nativeGroup().owner_kind, owner}, token,
+-            graph::storage::Generation(group_.generation), *found->value, nativeRecordLimit, outputMemory);
++        return native_.encodeNativeInlineExtension(owner, token, nativeRecordLimit, outputMemory);
+     }
+ 
+     // Reverse projection visits only actual owner fields in token order. Heap
+@@ -179,23 +105,7 @@ public:
+     // from column bits. The synchronous visitor owns any copy/encoding charge.
+     // Property-less live owners are valid, dead/out-of-group owners are not.
+     void visitOwner(uint64_t owner, const std::function<void(uint32_t, const graph::PropertyValue &)> &visitor) const {
+-        require(owner && owner <= uint64_t(INT64_MAX) && groupFor(owner) == group_.group && visitor &&
+-            (group_.live & (uint64_t{1} << slotFor(owner))));
+-        auto found = std::lower_bound(members_.begin(), members_.begin() + member_count_, owner,
+-            [](const Member &member, uint64_t id) { return member.owner < id; });
+-        for (; found != members_.begin() + member_count_ && found->owner == owner; ++found) {
+-            if (found->source == Source::HPS_EXTENSION) { visitor(found->token, *found->value); continue; }
+-            const auto cell = cellAt(columns_[found->column], slotFor(owner));
+-            graph::PropertyValue value;
+-            switch (cell.kind) {
+-            case CellKind::HFC_NULL: break;
+-            case CellKind::HFC_INT64: value = graph::PropertyValue(std::bit_cast<int64_t>(cell.bits)); break;
+-            case CellKind::HFC_DOUBLE: value = graph::PropertyValue(std::bit_cast<double>(cell.bits)); break;
+-            case CellKind::HFC_BOOL: value = graph::PropertyValue(bool(cell.bits)); break;
+-            default: require(false);
+-            }
+-            visitor(found->token, value);
+-        }
++        native_.visitOwner(owner, visitor);
+     }
+ };
+ } // namespace zyx::benchmark::subblock
+diff --git a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+index a8d093a2..5184ce12 100644
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+@@ -264,6 +264,8 @@ Each admission record includes task IDs, before/after source/binary identity, hy
+ 
+ Read these existing records under `benchmarks/architecture-design/decisions/`: `20261014-a1-design-contract/` (identity/batch semantics), `20261014-a3-layout-contract/` (property authority/cost), `20261014-a4-adjacency-fault-contract/` (fault responsibility), `20261014-a5-isolation-contract/` and `20261014-s5-bounded-blind-rebase/` (isolation), `20261013-a7-format-boundary/` (format), `20261016-s53-budget-and-spill-acceptance/` (implemented resources/spill), and `20261018-immutable-route-branch-reuse/` (implemented publication reuse). Their historical progress is inactive. Explicitly supersede still-applicable contracts in new decisions rather than silently bypassing them in code.
+ 
+-R3.2 typed field-record preparation: `HybridPropertyRecords.hpp` defines bounded 64-byte group and 72/576-byte column codecs with native entity-ID limits, exact identities, generation/liveness checks and zeroed absent/NULL payloads. The charged conversion plan emits those native payloads without publishing roots. The 4096-membership ceiling remains a conversion-work bound; group counts retain the declared u32 wire range. Evidence: `benchmarks/architecture-design/decisions/20261019-r3-native-records/`, four necessary modules, 48/48 passing in each default and isolated build. This is payload preparation, not native field-page persistence or complete R3.2. Nonempty-root guards, admission requirements and 13/24 remain unchanged. No formal performance window ran.
++Current R3.2 implementation boundary: typed group/column/extension records, fixed owner/field/group maps, accounted private SlottedPage images and isolated owner kind 16 binding are prepared; retired codes 13–15 remain rejected. Extension entries use a 12+16-byte prefix/locator and keep variable bodies on shared field pages; admission must include the additional locator/read costs. Binding validates pool/page/LSN and all live records before mutation; ordinary pool entry points still reject field pages. The descriptor separates metadata/semantic generations from independent tree-pool physical epochs: an actual native tree at epoch 99 publishes/reads under lower metadata generations, while typed root publication rejects epoch 100. Future field readers must authenticate namespace/pin/actual root rather than trust a frame CRC. Evidence: `20261019-r3-native-records/`, `20261019-r3-native-extension/`, `20261019-r3-page-image/`, `20261019-r3-page-binding/` under the decision directory above; the last checkpoint passes 7 necessary modules, default 108/108 and isolated 122/122.
+ 
+-The same R3.2 preparation now includes a 48-byte typed extension envelope and charged conversion-plan encoding for actual inline extension members. Independent references reuse existing LargeValue codecs/media, with exactly one authenticated token/value required; multi-field rows cannot become one extension field. Borrowed inline inspection, PMR output and explicit retained-reference/directory/value admission are covered, including refusal/refund/retry. Evidence: `benchmarks/architecture-design/decisions/20261019-r3-native-extension/`, four necessary modules, 36/36 in each default/isolated build. Native variable-map routing, field-page publication and full graph lifecycle remain absent; none of the fixed five deliverables is complete and progress remains 13/24.
++Ordinary graph publication now accepts a typed expected-database/old-descriptor-root request, preparing an empty descriptor or clearing after final Index root assignment within the same publication, without bulk scratch. Nonempty roots remain rejected; historical old-pin/reopen/root-identity/A-B interruption evidence is in `20261019-r3-graph-root/`. Bounded classification/reverse projection now live in storage-owned `HybridPropertyGroupConversion.hpp`, using one retained, continuously charged PMR workspace. Benchmark code only adapts laboratory views rather than maintaining another classifier. Source roots/heap values and output/publication buffers have separate allocation owners; existing bounds are unchanged. Private metadata preparation now assigns PageIds from the same MetadataWriteBatch before packing typed images and final slot locators; it creates no physical pool or separate ID publication and is not yet wired into ordinary graph commits. Failure after ID assignment discards the private batch. Evidence: `20261019-r3-native-planner/`, 5 necessary modules pass 33/33 by default and 38/38 in the isolated build; original conversion semantic tests are unchanged. The final coordinator still needs the bounded shared conversion subaccount and independent large-reference writer.
++
++Still required: ordinary-transaction integration of metadata-owned early field IDs/coordinator, native field persistence, all property read/write/index/overlay paths, exact large-value ownership, both conversion directions and complete recovery/integrity/retirement/relocation/reuse lifecycle, plus complete actual-allocation costs and same-executor ROW control. Production properties remain ROW; do not remove nonempty-root or standalone field-publication guards. Fixed R3.2/R3.3/R5.1/R5.2/R5.3 remain unaccepted; progress stays 13/24 (54.2%). The final frozen formal performance/Kuzu window has not run; no percentage increase, commit or push.
+diff --git a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+index 3aeec9e5..0dd39c5c 100644
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+@@ -264,6 +264,8 @@ R7 冻结后先完成必要正确性，再统一计时。基础热态每场景
+ 
+ 优先阅读的既有决策均在 `benchmarks/architecture-design/decisions/`：`20261014-a1-design-contract/`（身份与批语义）、`20261014-a3-layout-contract/`（属性权威与成本）、`20261014-a4-adjacency-fault-contract/`（故障责任）、`20261014-a5-isolation-contract/` 与 `20261014-s5-bounded-blind-rebase/`（隔离边界）、`20261013-a7-format-boundary/`（格式）、`20261016-s53-budget-and-spill-acceptance/`（已实现资源/spill）、`20261018-immutable-route-branch-reuse/`（已实现发布复用）。它们的历史进度不生效；改变仍适用的合同须在新决策中明确替代关系，不能在实现中默默绕过。
+ 
+-R3.2 类型化字段记录准备：`HybridPropertyRecords.hpp` 已定义有界的 64 字节组头及 72/576 字节列编码，校验原生实体 ID 范围、准确身份、代际／存活位图及缺失／NULL 的零载荷。已计费的转换计划可以输出这些原生 payload，不发布根。4096 个字段归属仍仅限制一次转换工作，组头计数保留既定 u32 线格式范围。证据：`benchmarks/architecture-design/decisions/20261019-r3-native-records/`，四个必要模块在默认和隔离构建中分别 48/48 通过。这只是 payload 准备，尚未持久化原生字段数据页，也未完成 R3.2；非空根拒绝保护、准入条件及 13/24 均未改变，未运行正式性能窗口。
++R3.2 当前实现边界：类型化 group／column／extension 编码、固定 owner／field／group map、带账户的私有 SlottedPage 图像及实验 owner kind 16 绑定已准备；13–15 仍为退役编码。extension 使用 12+16 字节前缀／locator，变长内容留在共享字段页，新增定位及读页成本必须计入准入。绑定前检查池／页／LSN 和所有 live 记录；普通池读写继续拒绝字段页。描述符区分元数据／语义代数和独立的树池物理代际；实际池代际 99 的原生树可在较低元数据代数下发布／读取，错误代际 100 被类型化根发布拒绝。后续字段 reader 仍须认证 namespace／pin／实际根，不能只信 frame CRC。证据：`20261019-r3-native-records/`、`20261019-r3-native-extension/`、`20261019-r3-page-image/`、`20261019-r3-page-binding/`（均位于上述决策目录）；最后一个检查点的 7 个必要模块在默认／隔离构建分别 108/108、122/122 通过。
+ 
+-同一 R3.2 准备现已补充 48 字节类型化 extension 信封，以及实际 inline-extension 成员的计费转换计划编码。独立引用复用现有 LargeValue codec/media，但载荷必须恰好为一个已认证的 token/value，多字段整行不能当作一个 extension 字段。已覆盖 inline 借用检查、PMR 输出及引用／目录／字段持有准入，并验证超限退款与重试。证据：`benchmarks/architecture-design/decisions/20261019-r3-native-extension/`，四个必要模块在默认／隔离构建中分别 36/36 通过。原生 variable map 路由、字段页发布和完整图生命周期仍未安装；固定五项均尚未完成，总进度仍为 13/24。
++普通图发布已接入类型化的数据库／旧描述符根请求，在最终 Index 根分配后、同一次图发布内准备空描述符或清除，不需要 bulk scratch。非空根继续拒绝；旧 pin、重开、根身份和 A/B 中断的历史证据见 `20261019-r3-graph-root/`。当前有界分类／反向投影已迁到存储模块 `HybridPropertyGroupConversion.hpp`，使用单次、持续计费且持有 owner 的 PMR workspace；benchmark 只保留实验视图适配，不再维护第二份分类算法。源根／堆字段与输出／发布缓冲单独计费，不扩大既定上限。元数据私有准备现从同一个 MetadataWriteBatch 分配 PageId，再打包类型化图像和最终 slot locator，不分配物理池、不单独发布 ID，尚未接入普通图提交；ID 分配后失败须丢弃私有 batch。证据见 `20261019-r3-native-planner/`：5 个必要模块在默认／隔离构建分别 33/33、38/38 通过，原有转换语义测试不变。最终协调器仍须接通共享的有界转换子账户和独立大值引用 writer。
++
++仍须将元数据持有的早期字段 ID／协调器接入普通图事务、原生字段页持久化、全部属性读写／索引／overlay 路由、精确大值归属、双向转换与完整恢复／integrity／退役／搬迁／复用生命周期，以及实际分配的完整成本估计和同执行器 ROW 对照。当前生产属性仍为 ROW，不能删除非空根或独立字段发布保护；固定 R3.2/R3.3/R5.1/R5.2/R5.3 均未验收，总进度为 13/24（54.2%）。尚未运行最终冻结的正式性能／Kuzu 窗口，百分比未增长，不提交、不推送。
+diff --git a/include/graph/storage/relocatable/allocation/SharedPagePool.hpp b/include/graph/storage/relocatable/allocation/SharedPagePool.hpp
+index 2674daba..c1b7a2c5 100644
+--- a/include/graph/storage/relocatable/allocation/SharedPagePool.hpp
++++ b/include/graph/storage/relocatable/allocation/SharedPagePool.hpp
+@@ -72,6 +72,10 @@ namespace graph::storage {
+ 		POK_ENTITY_LABEL = 10,
+ 		POK_LARGE_VALUE_DATA = 11,
+ 		POK_LARGE_VALUE_MANIFEST = 12,
++        // Values 13..15 remain retired adjacency kinds and must not be reused.
++        // Reserved for isolated hybrid field-frame preparation. Ordinary pool
++        // publication/read matching remains disabled until full field routing.
++        POK_HYBRID_PROPERTY = 16,
+ 	};
+ 
+ 	struct SharedPagePoolHeader {
+diff --git a/include/graph/storage/relocatable/allocation/SlottedPage.hpp b/include/graph/storage/relocatable/allocation/SlottedPage.hpp
+index ac65a590..f8a95c68 100644
+--- a/include/graph/storage/relocatable/allocation/SlottedPage.hpp
++++ b/include/graph/storage/relocatable/allocation/SlottedPage.hpp
+@@ -123,6 +123,8 @@ namespace graph::storage {
+ 				case PageOwnerKind::POK_VECTOR_ADJACENCY:
+ 				case PageOwnerKind::POK_ENTITY_LABEL:
+ 					return true;
++                case PageOwnerKind::POK_HYBRID_PROPERTY:
++                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+ 				default:
+ 					return false;
+ 			}
+@@ -151,9 +153,18 @@ namespace graph::storage {
+ 		// owner header. Batch planners use it to reuse one pinned source page.
+ 		[[nodiscard]] SlottedPage clone() const;
+ 		[[nodiscard]] std::vector<std::byte> serialize() const;
++        // Copies retain their actual allocation owner through escape. A caller
++        // must supply its destination account; no borrowed accounting callback
++        // or uncharged default-allocator copy is required on these paths.
++        [[nodiscard]] utils::OwnedVector<std::byte> serializeOwned(
++            std::shared_ptr<std::pmr::memory_resource> memory) const;
++        [[nodiscard]] utils::OwnedVector<std::byte> readOwned(const SlottedSlotReference &reference,
++            std::shared_ptr<std::pmr::memory_resource> memory) const;
+ 		// Enumerates stable references for all currently live records. The caller
+ 		// still validates each decoded domain record before interpreting it.
+ 		[[nodiscard]] std::vector<SlottedSlotReference> liveSlots() const;
++        [[nodiscard]] utils::OwnedVector<SlottedSlotReference> liveSlotsOwned(
++            std::shared_ptr<std::pmr::memory_resource> memory) const;
+ 		// Rebinds the page to a replacement shared-pool owner without changing its
+ 		// stable Page ID or any slot reference.
+ 		void rebindOwner(const PageOwnerHeader &owner);
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index 9f98a62c..29ca352d 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -8,6 +8,7 @@
+ 
+ #pragma once
+ 
++#include <array>
+ #include <cstddef>
+ #include <cstdint>
+ #include <functional>
+@@ -993,6 +994,21 @@ namespace graph::storage {
+ 
+ 	using NativeGraphEarlyPublicationPlanner = std::function<void(const NativeGraphEarlyPublicationPlanningContext &)>;
+ 
++    enum class NativeHybridPropertyRootMode : uint8_t { NHPRM_REPLACE = 1, NHPRM_CLEAR = 2 };
++    // Typed late-root request, not a graph callback with metadata authority.
++    // IDs name the final Node owner/column/extension/group trees, then Edge.
++    // Zero means absent. Root references are resolved only after all index
++    // mutations receive their final identities in this same publication.
++    // Current isolated format still rejects nonempty descriptors until the
++    // complete native field lifecycle is installed; no production caller stages
++    // these requests yet. Ordinary graph commits require no scratch for this.
++    struct NativeGraphHybridPropertyRootMutation {
++        DatabaseId expected_database_id{};
++        PhysicalPageRef expected_root{};
++        NativeHybridPropertyRootMode mode = NativeHybridPropertyRootMode::NHPRM_REPLACE;
++        std::array<uint64_t, 8> replacement_index_ids{};
++    };
++
+ 	using NativeGraphDeferredIndexPlanner =
+ 			std::function<NativeGraphDeferredIndexPlan(const NativeGraphDeferredIndexPlanningContext &)>;
+ 	using NativeGraphDeferredIndexPlansPlanner =
+@@ -1303,7 +1319,8 @@ namespace graph::storage {
+ 				const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer = {},
+ 				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
+ 				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
+-				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {});
++				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {},
++                const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation = std::nullopt);
+ 		// Retires one fixed Entity page and removes matching Node or Edge Entity Map
+ 		// entries in the same publication. Prior snapshots retain the old directory
+ 		// roots and may continue reading the retired physical frame.
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+index 435c8679..49d4f0bb 100644
+--- a/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
++++ b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+@@ -32,7 +32,7 @@ enum class HybridPropertyRootOrdinal : uint8_t {
+ };
+ struct HybridPropertyTreeRoot {
+     PageId page_id{};
+-    Generation generation{};
++    Generation generation{}; // shared-pool physical epoch, not semantic commit generation
+     constexpr bool operator==(const HybridPropertyTreeRoot &) const = default;
+ };
+ struct HybridPropertyDescriptor {
+@@ -64,9 +64,13 @@ class HybridPropertyDescriptorCodec final {
+         const auto &descriptor = page.descriptor;
+         require(descriptor.database_id.isValid() && descriptor.semantic_generation.isValid() &&
+             descriptor.semantic_generation <= page.generation, "hybrid descriptor has an invalid semantic identity");
++        // Tree epochs belong to independently reused shared pools. Comparing
++        // them numerically with metadata/semantic generations is invalid.
++        // A routed reader must authenticate each nonempty reference against
++        // its pinned directory and actual B+Tree root page (as BTreeIndex does).
+         for (const auto &root : descriptor.roots)
+-            require(root.page_id.isValid() == root.generation.isValid() &&
+-                root.generation <= descriptor.semantic_generation, "hybrid descriptor has a partial or future tree root");
++            require(root.page_id.isValid() == root.generation.isValid(),
++                "hybrid descriptor has a partial tree root");
+         for (size_t i = 0; i < descriptor.roots.size(); ++i)
+             for (size_t j = 0; j < i; ++j)
+                 require(!descriptor.roots[i].page_id.isValid() || descriptor.roots[i].page_id != descriptor.roots[j].page_id,
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp b/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp
+index 1bec6dd7..d4f710d4 100644
+--- a/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp
++++ b/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp
+@@ -26,6 +26,7 @@ constexpr uint64_t RSS_HYBRID_MAX_GROUP_ID = 1 + (RSS_HYBRID_MAX_ENTITY_ID - 1)
+ 
+ enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3 };
+ enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1 };
++enum class HybridPropertySource : uint8_t { HPS_COLUMN = 1, HPS_EXTENSION = 2 };
+ 
+ namespace hybrid_property_detail {
+ inline void require(bool value, const char *message) {
+@@ -159,9 +160,10 @@ struct HybridPropertyColumnRecord {
+             LittleEndianCodec::writeU64(bytes, 64, bits);
+         } else for (unsigned slot = 0; slot < 64; ++slot) LittleEndianCodec::writeU64(bytes, 64 + slot * 8, words[slot]);
+     }
+-    [[nodiscard]] static HybridPropertyColumnRecord decode(std::span<const std::byte> bytes,
+-        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
+-        Generation descriptorGeneration, Generation visibleGeneration) {
++    // Payload validation for a private page builder. Reading graph authority
++    // still requires decode() with its authenticated group/descriptor context.
++    [[nodiscard]] static HybridPropertyColumnRecord decodePayload(std::span<const std::byte> bytes,
++        const HybridPropertyColumnIdentity &expected) {
+         using namespace hybrid_property_detail;
+         header(bytes, RSS_HYBRID_COLUMN_MAGIC);
+         HybridPropertyColumnRecord result;
+@@ -177,12 +179,29 @@ struct HybridPropertyColumnRecord {
+         for (unsigned slot = 0; slot < 64; ++slot)
+             result.words[slot] = result.identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL ?
+                 (LittleEndianCodec::readU64(bytes, 64) >> slot) & 1U : LittleEndianCodec::readU64(bytes, 64 + slot * 8);
+-        result.validate(); group.validate();
+-        require(group.owner_kind == result.identity.owner_kind && group.group_id == result.identity.group_id &&
+-            group.columns && group.memberships >= uint32_t(std::popcount(result.presence)) &&
+-            !(result.presence & ~group.live) && result.identity.semantic_generation <= group.semantic_generation &&
++        result.validate(); return result;
++    }
++    void validateInGroup(const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
++        Generation visibleGeneration) const {
++        validate(); validateGroupContext(group, descriptorGeneration, visibleGeneration);
++    }
++private:
++    void validateGroupContext(const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
++        Generation visibleGeneration) const {
++        using namespace hybrid_property_detail;
++        group.validate();
++        require(group.owner_kind == identity.owner_kind && group.group_id == identity.group_id &&
++            group.columns && group.memberships >= uint32_t(std::popcount(presence)) &&
++            !(presence & ~group.live) && identity.semantic_generation <= group.semantic_generation &&
+             group.semantic_generation <= descriptorGeneration && descriptorGeneration.isValid() &&
+             descriptorGeneration <= visibleGeneration, "hybrid column does not belong to its visible group");
++    }
++public:
++    [[nodiscard]] static HybridPropertyColumnRecord decode(std::span<const std::byte> bytes,
++        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
++        Generation descriptorGeneration, Generation visibleGeneration) {
++        auto result = decodePayload(bytes, expected);
++        result.validateGroupContext(group, descriptorGeneration, visibleGeneration);
+         return result;
+     }
+ };
+diff --git a/src/storage/relocatable/allocation/SharedPagePool.cpp b/src/storage/relocatable/allocation/SharedPagePool.cpp
+index 6576cb1d..0d85f50c 100644
+--- a/src/storage/relocatable/allocation/SharedPagePool.cpp
++++ b/src/storage/relocatable/allocation/SharedPagePool.cpp
+@@ -66,6 +66,8 @@ namespace graph::storage {
+ 				case PageOwnerKind::POK_LARGE_VALUE_DATA:
+ 				case PageOwnerKind::POK_LARGE_VALUE_MANIFEST:
+ 					return true;
++                case PageOwnerKind::POK_HYBRID_PROPERTY:
++                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+ 				case PageOwnerKind::POK_NONE:
+ 					return false;
+ 			}
+diff --git a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+index babf945a..db991cac 100644
+--- a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
++++ b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+@@ -31,6 +31,12 @@ namespace graph::storage {
+ 			throw FormatException(error, message);
+ 		}
+ 
++        void rejectUninstalledHybridPublication(PageOwnerKind ownerKind) {
++            if (ownerKind == PageOwnerKind::POK_HYBRID_PROPERTY)
++                throwSharedPagePoolAllocatorError(FormatError::FERR_UNSUPPORTED_VERSION,
++                    "hybrid field publication requires the complete atomic field coordinator");
++        }
++
+ 		[[nodiscard]] bool isSharedPoolKind(SegmentKind poolKind) {
+ 			switch (poolKind) {
+ 				case SegmentKind::SGK_ENTITY_PAGE_POOL:
+@@ -54,6 +60,8 @@ namespace graph::storage {
+ 				case SegmentKind::SGK_ENTITY_PAGE_POOL:
+ 					return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
+ 				case SegmentKind::SGK_PROPERTY_PAGE_POOL:
++					// Keep hybrid frames out of ordinary reads/publications until
++                    // typed field routing and all lifetime consumers are installed.
+ 					return ownerKind == PageOwnerKind::POK_PROPERTY;
+ 				case SegmentKind::SGK_INDEX_PAGE_POOL:
+ 					return ownerKind == PageOwnerKind::POK_INDEX;
+@@ -243,6 +251,7 @@ namespace graph::storage {
+ 	SharedPagePoolAllocator::allocateNewPoolPage(SharedPagePoolAllocationRequest request, PhysicalSlotId firstSlot,
+ 												 PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
+ 												 const MetadataPublishOptions &options) {
++		rejectUninstalledHybridPublication(request.page_owner_kind);
+ 		validateRequest(request, checkpointLsn);
+ 		CatalogSlotReservationRequest catalogRequest;
+ 		catalogRequest.segment_id = request.segment_id;
+@@ -284,6 +293,7 @@ namespace graph::storage {
+ 	SharedPagePoolAllocation SharedPagePoolAllocator::appendPage(SharedPagePoolAppendRequest request,
+ 																 LogSequenceNumber checkpointLsn,
+ 																 const MetadataPublishOptions &options) {
++		rejectUninstalledHybridPublication(request.page_owner_kind);
+ 		reconcilePool(request.segment_id);
+ 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+ 		const CatalogEntry expectedPool = metadata_.findCatalog(snapshot, request.segment_id);
+@@ -995,6 +1005,7 @@ namespace graph::storage {
+ 	SharedPagePoolAllocation SharedPagePoolAllocator::replacePage(SharedPagePoolReplacementRequest request,
+ 																  LogSequenceNumber checkpointLsn,
+ 																  const MetadataPublishOptions &options) {
++		rejectUninstalledHybridPublication(request.page_owner_kind);
+ 		reconcilePool(request.segment_id);
+ 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+ 		const CatalogEntry expectedPool = metadata_.findCatalog(snapshot, request.segment_id);
+@@ -1107,6 +1118,7 @@ namespace graph::storage {
+ 			const std::optional<LargeValueManifestLocation> &expectedLargeValueManifest,
+ 			const std::optional<LargeValueManifestLocation> &replacementLargeValueManifest,
+ 			LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
++		rejectUninstalledHybridPublication(request.page_owner_kind);
+ 		reconcilePool(request.source_segment_id);
+ 		reconcilePool(request.destination_segment_id);
+ 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+diff --git a/src/storage/relocatable/allocation/SlottedPage.cpp b/src/storage/relocatable/allocation/SlottedPage.cpp
+index b53431fe..eee26edd 100644
+--- a/src/storage/relocatable/allocation/SlottedPage.cpp
++++ b/src/storage/relocatable/allocation/SlottedPage.cpp
+@@ -430,6 +430,22 @@ namespace graph::storage {
+ 		return {bytes_.begin(), bytes_.end()};
+ 	}
+ 
++    utils::OwnedVector<std::byte> SlottedPage::serializeOwned(std::shared_ptr<std::pmr::memory_resource> memory) const {
++        if (!memory) throw std::invalid_argument("slotted page serialization requires an allocation owner");
++        std::scoped_lock lock(latch_);
++        return {bytes_.begin(), bytes_.end(), utils::OwnedPmrAllocator<std::byte>(std::move(memory))};
++    }
++
++    utils::OwnedVector<std::byte> SlottedPage::readOwned(const SlottedSlotReference &reference,
++        std::shared_ptr<std::pmr::memory_resource> memory) const {
++        if (!memory) throw std::invalid_argument("slotted record read requires an allocation owner");
++        std::scoped_lock lock(latch_);
++        validateReferenceLocked(reference);
++        const Slot slot = readSlotLocked(reference.slot_id);
++        return {bytes_.begin() + slot.offset, bytes_.begin() + slot.offset + slot.value_bytes,
++            utils::OwnedPmrAllocator<std::byte>(std::move(memory))};
++    }
++
+ 	std::vector<SlottedSlotReference> SlottedPage::liveSlots() const {
+ 		std::scoped_lock lock(latch_);
+ 		std::vector<SlottedSlotReference> references;
+@@ -443,6 +459,19 @@ namespace graph::storage {
+ 		return references;
+ 	}
+ 
++    utils::OwnedVector<SlottedSlotReference> SlottedPage::liveSlotsOwned(
++        std::shared_ptr<std::pmr::memory_resource> memory) const {
++        if (!memory) throw std::invalid_argument("slotted enumeration requires an allocation owner");
++        std::scoped_lock lock(latch_);
++        utils::OwnedVector<SlottedSlotReference> result{utils::OwnedPmrAllocator<SlottedSlotReference>(std::move(memory))};
++        result.reserve(header_.live_slot_count);
++        for (uint16_t slotId = 0; slotId < header_.slot_count; ++slotId) {
++            const auto slot = readSlotLocked(slotId);
++            if (slot.isLive()) result.push_back({header_.page_id, slotId, slot.generation});
++        }
++        return result;
++    }
++
+ 	void SlottedPage::rebindOwner(const PageOwnerHeader &owner) {
+ 		validateSlottedPageOwner(owner);
+ 		if (owner.flags != 0U) {
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+index e2c6950b..8b2c856b 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -254,13 +255,31 @@ namespace graph::storage {
+ 			const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer,
+ 			const NativeGraphDeferredIndexPlanner &deferredIndexPlanner,
+ 			const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner,
+-			const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner) {
++			const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner,
++            const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation) {
+ 		debug::ScopedPerfTimer timer("native_graph.metadata_publish");
++        if (hybridPropertyRootMutation) {
++            const auto &request = *hybridPropertyRootMutation;
++            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !request.expected_database_id.isValid() ||
++                (request.expected_root != PhysicalPageRef{} && !request.expected_root.isValid()) ||
++                (request.mode != NativeHybridPropertyRootMode::NHPRM_REPLACE &&
++                    request.mode != NativeHybridPropertyRootMode::NHPRM_CLEAR) ||
++                (request.mode == NativeHybridPropertyRootMode::NHPRM_CLEAR && !request.expected_root.isValid()))
++                throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid root request is disabled or invalid");
++            for (size_t i = 0; i < request.replacement_index_ids.size(); ++i) {
++                const auto id = request.replacement_index_ids[i];
++                if (id && request.mode == NativeHybridPropertyRootMode::NHPRM_CLEAR)
++                    throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid root clear names replacement trees");
++                for (size_t j = 0; id && j < i; ++j)
++                    if (request.replacement_index_ids[j] == id)
++                        throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid root request aliases namespaces");
++            }
++        }
+ 		const bool hasLargeValueRetirements = !retiredLargeValuePages.empty() || !erasedLargeValueIds.empty();
+ 		if (!preparer ||
+ 			(requests.empty() && appendRequests.empty() && newPoolRequests.empty() && propertyReplacements.empty() &&
+ 			 propertyPageBatchRequests.empty() && largeValues.empty() && !hasLargeValueRetirements &&
+-			 derivedState.empty() && logicalIdReservation.empty()) ||
++			 derivedState.empty() && logicalIdReservation.empty() && !hybridPropertyRootMutation) ||
+ 			!checkpointLsn.isValid()) {
+ 			throw FormatException(FormatError::FERR_INVALID_HEADER,
+ 								  "native graph page transaction requires work, a checkpoint LSN, and a preparer");
+@@ -821,6 +840,12 @@ namespace graph::storage {
+ 			throw FormatException(FormatError::FERR_INVALID_STATE,
+ 								  "native graph metadata publication no longer matches its pinned generation");
+ 		}
++        if (hybridPropertyRootMutation &&
++            (hybridPropertyRootMutation->expected_database_id != current.database_id ||
++                hybridPropertyRootMutation->expected_root != current.hybrid_property_descriptor_root))
++            throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid root no longer matches its database and graph fence");
++        if (hybridPropertyRootMutation && current.hybrid_property_descriptor_root.isValid())
++            static_cast<void>(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current));
+ 		for (const LargeValueRef &reference: derivedState.reused_large_values) {
+ 			// A prior snapshot authenticated the bytes. This writer-side fence only
+ 			// proves that the immutable Manifest remains current before its small
+@@ -4214,6 +4239,32 @@ namespace graph::storage {
+ 		if (!publishedLargeValueManifests.empty() || !erasedLargeValueIds.empty()) {
+ 			locations_.prepareReplaceLargeValueManifests(batch, publishedLargeValueManifests, erasedLargeValueIds);
+ 		}
++        if (hybridPropertyRootMutation) {
++            const auto &request = *hybridPropertyRootMutation;
++            if (request.mode == NativeHybridPropertyRootMode::NHPRM_CLEAR) {
++                batch.setHybridPropertyDescriptorRoot({});
++            } else {
++                HybridPropertyDescriptor descriptor{current.database_id, batch.generation(), {}};
++                static_assert(RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT ==
++                    std::tuple_size<decltype(request.replacement_index_ids)>::value);
++                for (size_t i = 0; i < descriptor.roots.size(); ++i) {
++                    const auto id = request.replacement_index_ids[i];
++                    if (!id) continue;
++                    if (std::ranges::binary_search(erasedDerivedIndexRootIds, id))
++                        throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid descriptor names a retired tree");
++                    const auto found = std::ranges::find(publishedDerivedIndexRoots, id, &IndexRootLocation::index_id);
++                    const auto root = found != publishedDerivedIndexRoots.end() ? std::optional(*found) :
++                        locations_.findIndexRootOptional(current, id);
++                    if (!root)
++                        throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid descriptor names an absent tree");
++                    descriptor.roots[i] = {root->root_page_id, root->root_generation};
++                }
++                // Preparation remains fail-closed for nonempty field routing.
++                // This late position uses final roots and actual batch identity,
++                // while preserving the existing common durability fences.
++                pages_.prepareHybridPropertyDescriptor(batch, descriptor);
++            }
++        }
+ 		{
+ 			debug::ScopedPerfTimer publishTimer("native_graph.mutation.batch_publish");
+ 			publishBatch(batch, writer, options);
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp
+index 4913c0d1..89f0f585 100644
+--- a/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp
+@@ -41,19 +41,17 @@ TEST(HybridPropertyDescriptorTest, ValidChecksumsDoNotAuthorizeWrongDatabaseGene
+     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(8), Generation(12), LogSequenceNumber(20)), FormatException);
+     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(8), LogSequenceNumber(20)), FormatException);
+     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(12), LogSequenceNumber(16)), FormatException);
+-    for (size_t offset : {size_t(8), size_t(16), size_t(32 + 8), size_t(32 + 16), size_t(32 + 72)}) {
++    for (size_t offset : {size_t(8), size_t(16), size_t(32 + 8), size_t(32 + 16)}) {
+         auto wrong = bytes; LittleEndianCodec::writeU64(wrong, offset, UINT64_MAX); reseal(wrong);
+         EXPECT_THROW(decode(wrong), FormatException) << offset;
+     }
+ }
+-TEST(HybridPropertyDescriptorTest, PartialFutureAndAliasedRootReferencesFailClosed) {
++TEST(HybridPropertyDescriptorTest, PartialAndAliasedRootReferencesFailClosed) {
+     for (size_t index = 0; index < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++index) {
+         auto page = sample(); page.descriptor.roots[index].generation = Generation{};
+         EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
+         page = sample(); page.descriptor.roots[index].page_id = PageId{};
+         EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
+-        page = sample(); page.descriptor.roots[index].generation = Generation(8);
+-        EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
+     }
+     auto page = sample(); page.descriptor.roots[7] = page.descriptor.roots[0];
+     EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
+@@ -61,6 +59,20 @@ TEST(HybridPropertyDescriptorTest, PartialFutureAndAliasedRootReferencesFailClos
+     LittleEndianCodec::writeU64(bytes, 32 + 176, 101); reseal(bytes);
+     EXPECT_THROW(decode(bytes), FormatException);
+ }
++TEST(HybridPropertyDescriptorTest, IndependentTreePoolEpochsAreNotSemanticVisibilityBounds) {
++    auto page = sample();
++    for (size_t index = 0; index < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++index)
++        page.descriptor.roots[index].generation = Generation(99 + index);
++    // These epochs exceed both metadata generation 9 and visible generation 12.
++    // The frame codec authenticates metadata, not the referenced tree pages.
++    EXPECT_EQ(decode(HybridPropertyDescriptorCodec::encode(page)), page);
++    auto bytes = HybridPropertyDescriptorCodec::encode(page);
++    LittleEndianCodec::writeU64(bytes, 32 + 72, UINT64_MAX); reseal(bytes);
++    EXPECT_EQ(decode(bytes).descriptor.roots[0].generation, Generation(UINT64_MAX));
++    // Semantic visibility remains a separate, enforced constraint.
++    page.descriptor.semantic_generation = Generation(10);
++    EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
++}
+ TEST(HybridPropertyDescriptorTest, ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted) {
+     const auto original = HybridPropertyDescriptorCodec::encode(sample());
+     for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(32), size_t(36), size_t(38),
+diff --git a/include/graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp b/include/graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp
+new file mode 100644
+index 00000000..f35d731b
+--- /dev/null
++++ b/include/graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp
+@@ -0,0 +1,99 @@
++/**
++ * @file HybridPropertyConversionPreparation.hpp
++ * @brief Metadata-owned private field images and final logical slot locators.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyPageImage.hpp"
++
++namespace graph::storage {
++class RelocatableMetadataStore;
++class HybridPropertyConversionPreparationTestAccess;
++
++// Private early preparation only. The native metadata writer owns the batch;
++// ordinary graph callers cannot reserve IDs through this type. Physical pools,
++// map trees and final descriptor still need the complete atomic coordinator.
++// On failure discard the enclosing batch: no ID or field is separately
++// published, and the old graph remains authoritative. Large-reference creation
++// is deliberately absent; oversized inline fields refuse without truncation.
++// The eventual writer must supply the plan's shared conversion account with
++// the documented <=1 MiB staging cap as well as its parent QUERY/WRITE limit.
++// This private helper does not infer a quota from an arbitrary PMR resource.
++class HybridPropertyConversionPreparation final {
++    friend class RelocatableMetadataStore;
++    friend class HybridPropertyConversionPreparationTestAccess;
++    utils::OwnedVector<HybridPropertyPageImage> pages_;
++    utils::OwnedVector<HybridPropertyOwnerMap::Entry> owners_;
++    utils::OwnedVector<HybridPropertyFieldDirectoryMap::Entry> columns_, extensions_;
++    HybridPropertyGroupDirectoryMap::Entry group_{};
++
++    HybridPropertyConversionPreparation(MetadataWriteBatch &batch, const HybridPropertyGroupConversion &plan,
++        const std::function<void()> &checkpoint = {})
++        : pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(plan.memoryOwner())),
++          owners_(utils::OwnedPmrAllocator<HybridPropertyOwnerMap::Entry>(plan.memoryOwner())),
++          columns_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
++          extensions_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())) {
++        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
++            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native field preparation is disabled");
++        const auto &group = plan.group();
++        hybrid_property_detail::require(group.semantic_generation == batch.generation() &&
++            batch.candidate().database_id.isValid(), "native field preparation has a stale publication generation");
++        if (checkpoint) checkpoint();
++        owners_.reserve(plan.members().size()); columns_.reserve(plan.columns().size());
++        const auto extensionCount = std::count_if(plan.members().begin(), plan.members().end(), [](const auto &member) {
++            return member.source == HybridPropertySource::HPS_EXTENSION;
++        });
++        extensions_.reserve(size_t(extensionCount));
++        const auto destination = [&](size_t bytes) -> HybridPropertyPageImage & {
++            hybrid_property_detail::require(bytes <= RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
++                "native field record exceeds a fresh slotted frame");
++            if (pages_.empty() || pages_.back().stats().contiguous_free_bytes < bytes + RSS_SLOTTED_PAGE_SLOT_BYTES) {
++                // Grow the charged holder before consuming an identity. These
++                // pages are append-only, so contiguous free is exact here.
++                if (pages_.size() == pages_.capacity()) pages_.reserve(pages_.empty() ? 1U : pages_.size() * 2U);
++                const auto id = batch.allocateLogicalPageId();
++                // Neutral physical epoch is never persisted. Later private
++                // owner binding installs the actual assigned pool epoch.
++                pages_.push_back(HybridPropertyPageImage::create(id, Generation(1), batch.generation(), plan.memoryOwner()));
++            }
++            return pages_.back();
++        };
++        const auto groupSlot = destination(64).appendGroup(group);
++        group_ = {HybridPropertyDirectoryCodec::groupKey(group.group_id), HybridPropertyDirectoryCodec::locatorValue(groupSlot)};
++        for (const auto &column : plan.columns()) {
++            if (checkpoint) checkpoint();
++            const auto slot = destination(column.wireSize()).appendColumn(column, group, batch.generation());
++            columns_.push_back({HybridPropertyDirectoryCodec::columnKey(group.group_id, column.identity.token),
++                HybridPropertyDirectoryCodec::locatorValue(slot)});
++        }
++        for (const auto &member : plan.members()) {
++            if (checkpoint) checkpoint();
++            const EntityPropertyKey owner{group.owner_kind, member.owner};
++            owners_.push_back({HybridPropertyDirectoryCodec::ownerKey(owner, member.token),
++                HybridPropertyDirectoryCodec::sourceValue(member.source)});
++            if (member.source != HybridPropertySource::HPS_EXTENSION) continue;
++            const auto bytes = plan.encodeNativeInlineExtension(member.owner, member.token,
++                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *plan.memoryOwner());
++            const auto slot = destination(bytes.size()).appendExtension(bytes, owner, member.token, group, batch.generation());
++            extensions_.push_back({HybridPropertyDirectoryCodec::ownerKey(owner, member.token),
++                HybridPropertyDirectoryCodec::locatorValue(slot)});
++        }
++    }
++public:
++    HybridPropertyConversionPreparation(const HybridPropertyConversionPreparation &) = delete;
++    HybridPropertyConversionPreparation &operator=(const HybridPropertyConversionPreparation &) = delete;
++    [[nodiscard]] std::span<const HybridPropertyPageImage> pages() const & noexcept { return pages_; }
++    std::span<const HybridPropertyPageImage> pages() const && = delete;
++    [[nodiscard]] std::span<const HybridPropertyOwnerMap::Entry> owners() const & noexcept { return owners_; }
++    std::span<const HybridPropertyOwnerMap::Entry> owners() const && = delete;
++    [[nodiscard]] std::span<const HybridPropertyFieldDirectoryMap::Entry> columns() const & noexcept { return columns_; }
++    std::span<const HybridPropertyFieldDirectoryMap::Entry> columns() const && = delete;
++    [[nodiscard]] std::span<const HybridPropertyFieldDirectoryMap::Entry> extensions() const & noexcept { return extensions_; }
++    std::span<const HybridPropertyFieldDirectoryMap::Entry> extensions() const && = delete;
++    [[nodiscard]] const HybridPropertyGroupDirectoryMap::Entry &group() const & noexcept { return group_; }
++    const HybridPropertyGroupDirectoryMap::Entry &group() const && = delete;
++};
++} // namespace graph::storage
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp b/include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp
+new file mode 100644
+index 00000000..6b5938a2
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp
+@@ -0,0 +1,89 @@
++/**
++ * @file HybridPropertyDirectory.hpp
++ * @brief Typed fixed directory fields for private hybrid-property preparation.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include "graph/storage/relocatable/allocation/SlottedPage.hpp"
++#include "graph/storage/relocatable/index/FixedBTreeMap.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
++
++namespace graph::storage {
++// These maps install no root or reserved IndexId. The enclosing coordinator
++// must bind each to the descriptor's correct Node/Edge namespace and authenticate
++// the selected data page/record, not reinterpret an arbitrary generic tree.
++using HybridPropertyOwnerMap = FixedBTreeMap<12, 4>;
++using HybridPropertyFieldDirectoryMap = FixedBTreeMap<12, 16>;
++using HybridPropertyGroupDirectoryMap = FixedBTreeMap<8, 16>;
++
++class HybridPropertyDirectoryCodec final {
++public:
++    struct OwnerField {
++        EntityPropertyKey owner;
++        uint32_t token = 0;
++        constexpr bool operator==(const OwnerField &) const = default;
++    };
++    struct GroupField {
++        uint64_t group = 0;
++        uint32_t token = 0;
++        constexpr bool operator==(const GroupField &) const = default;
++    };
++    [[nodiscard]] static HybridPropertyOwnerMap::Key ownerKey(EntityPropertyKey owner, uint32_t token) {
++        hybrid_property_detail::require(owner.isValid() && token, "hybrid owner directory key is invalid");
++        HybridPropertyOwnerMap::Key result{};
++        writeBig(std::span(result).first(8), owner.entity_id); writeBig(std::span(result).subspan(8), token); return result;
++    }
++    [[nodiscard]] static OwnerField decodeOwnerKey(const HybridPropertyOwnerMap::Key &key, EntityPropertyOwnerKind kind) {
++        OwnerField result{{kind, readBig(std::span(key).first(8))}, uint32_t(readBig(std::span(key).subspan(8)))};
++        hybrid_property_detail::require(result.owner.isValid() && result.token, "hybrid owner directory contains an invalid key");
++        return result;
++    }
++    [[nodiscard]] static HybridPropertyFieldDirectoryMap::Key columnKey(uint64_t group, uint32_t token) {
++        hybrid_property_detail::validateGroup(group, 0);
++        hybrid_property_detail::require(token, "hybrid column directory token is zero");
++        HybridPropertyFieldDirectoryMap::Key result{};
++        writeBig(std::span(result).first(8), group); writeBig(std::span(result).subspan(8), token); return result;
++    }
++    [[nodiscard]] static GroupField decodeColumnKey(const HybridPropertyFieldDirectoryMap::Key &key) {
++        GroupField result{readBig(std::span(key).first(8)), uint32_t(readBig(std::span(key).subspan(8)))};
++        static_cast<void>(columnKey(result.group, result.token)); return result;
++    }
++    [[nodiscard]] static HybridPropertyGroupDirectoryMap::Key groupKey(uint64_t group) {
++        hybrid_property_detail::validateGroup(group, 0);
++        HybridPropertyGroupDirectoryMap::Key result{}; writeBig(result, group); return result;
++    }
++    [[nodiscard]] static uint64_t decodeGroupKey(const HybridPropertyGroupDirectoryMap::Key &key) {
++        const auto result = readBig(key); hybrid_property_detail::validateGroup(result, 0); return result;
++    }
++    [[nodiscard]] static HybridPropertyOwnerMap::Value sourceValue(HybridPropertySource source) {
++        hybrid_property_detail::require(source == HybridPropertySource::HPS_COLUMN ||
++            source == HybridPropertySource::HPS_EXTENSION, "unknown hybrid field source");
++        return {std::byte(uint8_t(source)), std::byte{}, std::byte{}, std::byte{}};
++    }
++    [[nodiscard]] static HybridPropertySource decodeSource(const HybridPropertyOwnerMap::Value &bytes) {
++        hybrid_property_detail::zero(bytes, 1, 4);
++        const auto result = HybridPropertySource(std::to_integer<uint8_t>(bytes[0]));
++        static_cast<void>(sourceValue(result)); return result;
++    }
++    [[nodiscard]] static HybridPropertyFieldDirectoryMap::Value locatorValue(const SlottedSlotReference &reference) {
++        hybrid_property_detail::require(reference.isValid(), "hybrid field locator is invalid");
++        HybridPropertyFieldDirectoryMap::Value result{};
++        LittleEndianCodec::writeU64(result, 0, reference.page_id.value());
++        LittleEndianCodec::writeU16(result, 8, reference.slot_id);
++        LittleEndianCodec::writeU32(result, 12, reference.generation); return result;
++    }
++    [[nodiscard]] static SlottedSlotReference decodeLocator(const HybridPropertyFieldDirectoryMap::Value &bytes) {
++        hybrid_property_detail::zero(bytes, 10, 12);
++        SlottedSlotReference result{PageId(LittleEndianCodec::readU64(bytes, 0)), LittleEndianCodec::readU16(bytes, 8),
++            LittleEndianCodec::readU32(bytes, 12)};
++        hybrid_property_detail::require(result.isValid(), "hybrid field locator contains an invalid slot identity"); return result;
++    }
++private:
++    static void writeBig(std::span<std::byte> bytes, uint64_t value) {
++        for (size_t i = 0; i < bytes.size(); ++i) bytes[i] = std::byte((value >> ((bytes.size() - 1 - i) * 8)) & 255U);
++    }
++    static uint64_t readBig(std::span<const std::byte> bytes) {
++        uint64_t result = 0; for (const auto byte : bytes) result = (result << 8U) | std::to_integer<uint8_t>(byte); return result;
++    }
++};
++} // namespace graph::storage
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp b/include/graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp
+new file mode 100644
+index 00000000..394e45d2
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp
+@@ -0,0 +1,202 @@
++/**
++ * @file HybridPropertyGroupConversion.hpp
++ * @brief Accounted, bounded conversion planning over authenticated ROW inputs.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include <algorithm>
++#include <array>
++#include <bit>
++#include <cstddef>
++#include <cstdint>
++#include <functional>
++#include <memory>
++#include <memory_resource>
++#include <optional>
++#include <span>
++#include <stdexcept>
++#include <type_traits>
++#include <utility>
++#include <vector>
++#include "graph/core/Node.hpp"
++#include "graph/core/Edge.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
++#include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
++
++namespace graph::storage {
++
++// The enclosing metadata coordinator owns/authenticates the ROW roots and keeps
++// them immutable and alive until this plan is destroyed. Extension values are
++// borrowed, never fabricated LargeValue references. This plan allocates no IDs,
++// installs no roots and grants no conversion/space/performance admission.
++class HybridPropertyGroupConversion final {
++public:
++    static constexpr size_t MAX_MEMBERSHIPS = 4096;
++    static constexpr size_t MAX_COLUMNS = MAX_MEMBERSHIPS / 48;
++    struct Member {
++        uint64_t owner = 0;
++        uint32_t token = 0;
++        const PropertyValue *value = nullptr;
++        HybridPropertySource source = HybridPropertySource::HPS_EXTENSION;
++        uint16_t column = 0;
++    };
++private:
++    struct State {
++        HybridPropertyGroupRecord group;
++        std::array<Member, MAX_MEMBERSHIPS> members{};
++        std::array<HybridPropertyColumnRecord, MAX_COLUMNS> columns{};
++        size_t member_count = 0, column_count = 0;
++        // Charge the bounded sorting/temporary column allowance while the plan
++        // lives. Source roots, output encoding and publication have other owners.
++        std::array<std::byte, 4096 + sizeof(HybridPropertyColumnRecord)> workspace{};
++    };
++    static_assert(sizeof(State) <= 1024 * 1024);
++    struct Deleter {
++        std::shared_ptr<std::pmr::memory_resource> memory;
++        void operator()(State *state) const noexcept {
++            if (state) { std::destroy_at(state); memory->deallocate(state, sizeof(State), alignof(State)); }
++        }
++    };
++    std::unique_ptr<State, Deleter> state_;
++    static void require(bool valid) {
++        if (!valid) throw std::invalid_argument("invalid native hybrid group conversion input");
++    }
++    static std::optional<HybridPropertyScalarKind> primitive(const PropertyValue &value) {
++        if (std::holds_alternative<int64_t>(value.getVariant())) return HybridPropertyScalarKind::HPSK_INT64;
++        if (std::holds_alternative<double>(value.getVariant())) return HybridPropertyScalarKind::HPSK_DOUBLE;
++        if (std::holds_alternative<bool>(value.getVariant())) return HybridPropertyScalarKind::HPSK_BOOL;
++        return {};
++    }
++    static bool isNull(const PropertyValue &value) {
++        return std::holds_alternative<std::monostate>(value.getVariant());
++    }
++    static uint64_t bits(const PropertyValue &value, HybridPropertyScalarKind kind) {
++        if (kind == HybridPropertyScalarKind::HPSK_INT64) return std::bit_cast<uint64_t>(std::get<int64_t>(value.getVariant()));
++        if (kind == HybridPropertyScalarKind::HPSK_DOUBLE) return std::bit_cast<uint64_t>(std::get<double>(value.getVariant()));
++        return std::get<bool>(value.getVariant());
++    }
++public:
++    HybridPropertyGroupConversion(std::shared_ptr<std::pmr::memory_resource> memory,
++        std::span<const PropertyCollectionRoot> roots, EntityPropertyOwnerKind kind,
++        uint64_t group, Generation generation, size_t nativeRecordLimit,
++        const std::function<void()> &checkpoint = {}) : state_(nullptr, Deleter{std::move(memory)}) {
++        require(bool(state_.get_deleter().memory));
++        // Retain the exact allocation owner; allocation/refusal is exception safe
++        // before any borrowed source is inspected or transformed.
++        static_assert(std::is_nothrow_default_constructible_v<State>);
++        state_.reset(std::construct_at(static_cast<State *>(state_.get_deleter().memory->allocate(sizeof(State), alignof(State)))));
++        require(hybrid_property_detail::validKind(kind) && !roots.empty() && roots.size() <= 64 &&
++            generation.isValid() && group && group <= RSS_HYBRID_MAX_GROUP_ID);
++        if (nativeRecordLimit < 64) throw std::length_error("property conversion native group-header bound");
++        auto &s = *state_; s.group = {kind, HybridPropertyGroupMode::HPGM_HYBRID, group, generation, 0, 0, 0};
++        const uint32_t nativeKind = kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
++        for (const auto &root : roots) {
++            if (checkpoint) checkpoint();
++            const EntityPropertyKey owner{kind, root.owner_entity_id};
++            require(root.owner_entity_type == nativeKind && owner.isValid() && hybridPropertyGroupFor(owner) == group);
++            const uint64_t bit = UINT64_C(1) << hybridPropertySlotFor(owner);
++            require(!(s.group.live & bit)); s.group.live |= bit;
++            if (root.entries.size() > MAX_MEMBERSHIPS - s.member_count)
++                throw std::length_error("property conversion membership bound");
++            uint32_t previous = 0;
++            for (const auto &entry : root.entries) {
++                require(entry.key_token > previous); previous = entry.key_token;
++                s.members[s.member_count++] = {root.owner_entity_id, entry.key_token, &entry.value};
++            }
++        }
++        const auto end = s.members.begin() + s.member_count;
++        std::sort(s.members.begin(), end, [](const Member &a, const Member &b) {
++            return a.token != b.token ? a.token < b.token : a.owner < b.owner;
++        });
++        for (size_t first = 0; first < s.member_count;) {
++            if (checkpoint) checkpoint();
++            size_t last = first + 1;
++            while (last < s.member_count && s.members[last].token == s.members[first].token) ++last;
++            std::optional<HybridPropertyScalarKind> scalar;
++            bool compatible = last - first >= 48;
++            for (size_t i = first; compatible && i < last; ++i) {
++                const auto &value = *s.members[i].value;
++                if (isNull(value)) continue;
++                const auto current = primitive(value);
++                if (!current || (scalar && current != scalar)) compatible = false;
++                else scalar = current;
++            }
++            if (compatible && scalar) { // all-NULL new fields have no inferred type
++                require(s.column_count < MAX_COLUMNS);
++                auto &column = s.columns[s.column_count];
++                column.identity = {kind, *scalar, group, s.members[first].token, generation};
++                column.live = s.group.live;
++                if (column.wireSize() > nativeRecordLimit || column.wireSize() > 4096)
++                    throw std::length_error("property conversion native column bound");
++                for (size_t i = first; i < last; ++i) {
++                    auto &member = s.members[i];
++                    const auto slot = hybridPropertySlotFor({kind, member.owner});
++                    const uint64_t bit = UINT64_C(1) << slot;
++                    column.presence |= bit;
++                    if (isNull(*member.value)) column.nulls |= bit;
++                    else column.words[slot] = bits(*member.value, *scalar);
++                    member.source = HybridPropertySource::HPS_COLUMN; member.column = uint16_t(s.column_count);
++                }
++                column.validate(); ++s.column_count;
++            }
++            first = last;
++        }
++        std::sort(s.members.begin(), end, [](const Member &a, const Member &b) {
++            return a.owner != b.owner ? a.owner < b.owner : a.token < b.token;
++        });
++        s.group.memberships = uint32_t(s.member_count); s.group.columns = uint32_t(s.column_count);
++        s.group.validate(); if (checkpoint) checkpoint();
++    }
++    HybridPropertyGroupConversion(const HybridPropertyGroupConversion &) = delete;
++    HybridPropertyGroupConversion &operator=(const HybridPropertyGroupConversion &) = delete;
++    [[nodiscard]] const HybridPropertyGroupRecord &group() const & noexcept { return state_->group; }
++    const HybridPropertyGroupRecord &group() const && = delete;
++    [[nodiscard]] std::span<const Member> members() const & noexcept { return {state_->members.data(), state_->member_count}; }
++    std::span<const Member> members() const && = delete;
++    [[nodiscard]] std::span<const HybridPropertyColumnRecord> columns() const & noexcept {
++        return {state_->columns.data(), state_->column_count};
++    }
++    std::span<const HybridPropertyColumnRecord> columns() const && = delete;
++    [[nodiscard]] size_t retainedCharge() const noexcept { return sizeof(State); }
++    [[nodiscard]] const std::shared_ptr<std::pmr::memory_resource> &memoryOwner() const & noexcept {
++        return state_.get_deleter().memory;
++    }
++    const std::shared_ptr<std::pmr::memory_resource> &memoryOwner() const && = delete;
++    void encodeNativeColumn(size_t ordinal, std::span<std::byte> output) const {
++        require(ordinal < state_->column_count); state_->columns[ordinal].encode(output);
++    }
++    [[nodiscard]] std::pmr::vector<std::byte> encodeNativeInlineExtension(uint64_t owner, uint32_t token,
++        size_t nativeRecordLimit, std::pmr::memory_resource &outputMemory) const {
++        const auto members = this->members();
++        const auto found = std::lower_bound(members.begin(), members.end(), std::pair(owner, token),
++            [](const Member &member, const auto &key) { return std::pair(member.owner, member.token) < key; });
++        require(found != members.end() && found->owner == owner && found->token == token &&
++            found->source == HybridPropertySource::HPS_EXTENSION && found->value);
++        return HybridPropertyExtensionView::encodeInline({group().owner_kind, owner}, token,
++            group().semantic_generation, *found->value, nativeRecordLimit, outputMemory);
++    }
++    void visitOwner(uint64_t owner, const std::function<void(uint32_t, const PropertyValue &)> &visitor) const {
++        const EntityPropertyKey key{group().owner_kind, owner};
++        require(key.isValid() && hybridPropertyGroupFor(key) == group().group_id && visitor &&
++            (group().live & (UINT64_C(1) << hybridPropertySlotFor(key))));
++        const auto members = this->members();
++        auto found = std::lower_bound(members.begin(), members.end(), owner,
++            [](const Member &member, uint64_t id) { return member.owner < id; });
++        for (; found != members.end() && found->owner == owner; ++found) {
++            if (found->source == HybridPropertySource::HPS_EXTENSION) { visitor(found->token, *found->value); continue; }
++            const auto &column = state_->columns[found->column]; const auto slot = hybridPropertySlotFor(key);
++            const uint64_t bit = UINT64_C(1) << slot; PropertyValue value;
++            require(column.presence & bit);
++            if (!(column.nulls & bit)) {
++                if (column.identity.scalar_kind == HybridPropertyScalarKind::HPSK_INT64)
++                    value = PropertyValue(std::bit_cast<int64_t>(column.words[slot]));
++                else if (column.identity.scalar_kind == HybridPropertyScalarKind::HPSK_DOUBLE)
++                    value = PropertyValue(std::bit_cast<double>(column.words[slot]));
++                else value = PropertyValue(bool(column.words[slot]));
++            }
++            visitor(found->token, value);
++        }
++    }
++};
++} // namespace graph::storage
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp b/include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp
+new file mode 100644
+index 00000000..14dc23bb
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp
+@@ -0,0 +1,189 @@
++/**
++ * @file HybridPropertyPageImage.hpp
++ * @brief Private shared slotted-page preparation for bounded hybrid fields.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
++#include "graph/storage/relocatable/metadata/Catalog.hpp"
++#include "graph/utils/OwnedPmrAllocator.hpp"
++
++namespace graph::storage {
++
++// Prepublication images ONLY. Logical PageIds must ultimately come from the
++// metadata-owned early coordinator in the SAME publication as their locators.
++// This class allocates no IDs or file/pool/directory/descriptor. Its private
++// owner binding consumes only a metadata-supplied header and writes no file.
++// Its neutral SlottedPage must never be written as an ordinary ROW page.
++// Full authenticated pool binding/routing/retirement is still required before
++// nonempty descriptor guards can be removed. Fixed temporary codec/compaction
++// workspace remains part of the enclosing bounded writer's scratch admission.
++class HybridPropertyPageImage final {
++public:
++    [[nodiscard]] static HybridPropertyPageImage create(PageId id, Generation physicalPoolGeneration,
++        Generation visibleGeneration, std::shared_ptr<std::pmr::memory_resource> memory) {
++        require(bool(memory) && visibleGeneration.isValid(), "private hybrid image requires an account and visible identity");
++        utils::OwnedAllocationScope scope(memory);
++        return HybridPropertyPageImage(SlottedPage::create(id, physicalPoolGeneration), visibleGeneration, std::move(memory));
++    }
++    [[nodiscard]] static HybridPropertyPageImage open(std::span<const std::byte> bytes, PageId expectedPage,
++        Generation expectedPhysicalPoolGeneration, Generation visibleGeneration,
++        std::shared_ptr<std::pmr::memory_resource> memory) {
++        require(bool(memory) && visibleGeneration.isValid() && expectedPage.isValid() &&
++            expectedPhysicalPoolGeneration.isValid() && bytes.size() == RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
++            "private hybrid image context is invalid");
++        require(LittleEndianCodec::readU64(bytes, 8) == expectedPage.value() &&
++            LittleEndianCodec::readU64(bytes, 16) == expectedPhysicalPoolGeneration.value(),
++            "private hybrid image has a foreign page or physical generation");
++        auto page = SlottedPage::open(bytes, memory); // authenticates CRC/layout/slot generations
++        return HybridPropertyPageImage(std::move(page), visibleGeneration, std::move(memory));
++    }
++    HybridPropertyPageImage(const HybridPropertyPageImage &) = delete;
++    HybridPropertyPageImage &operator=(const HybridPropertyPageImage &) = delete;
++    HybridPropertyPageImage(HybridPropertyPageImage &&) noexcept = default;
++    HybridPropertyPageImage &operator=(HybridPropertyPageImage &&) noexcept = default;
++
++    [[nodiscard]] HybridPropertyPageImage clone(Generation visibleGeneration,
++        std::shared_ptr<std::pmr::memory_resource> memory) const {
++        require(bool(memory) && visibleGeneration >= visible_generation_, "private hybrid clone has invalid admission or visibility");
++        utils::OwnedAllocationScope scope(memory);
++        return HybridPropertyPageImage(page_.clone(), visibleGeneration, std::move(memory));
++    }
++    [[nodiscard]] PageId pageId() const { return page_.pageId(); }
++    [[nodiscard]] Generation physicalPoolGeneration() const { return page_.pageGeneration(); }
++    [[nodiscard]] SlottedPageStats stats() const { return page_.stats(); }
++    [[nodiscard]] utils::OwnedVector<std::byte> serialize() const { return page_.serializeOwned(memory_); }
++    [[nodiscard]] utils::OwnedVector<std::byte> readRecord(const SlottedSlotReference &reference) const {
++        return page_.readOwned(reference, memory_);
++    }
++    [[nodiscard]] SlottedSlotReference appendGroup(const HybridPropertyGroupRecord &group) {
++        group.validate(); require(group.semantic_generation <= visible_generation_, "hybrid group is not visible");
++        return page_.insert(group.encode());
++    }
++    [[nodiscard]] SlottedSlotReference appendColumn(const HybridPropertyColumnRecord &column,
++        const HybridPropertyGroupRecord &group, Generation descriptorGeneration) {
++        column.validateInGroup(group, descriptorGeneration, visible_generation_);
++        std::array<std::byte, 576> encoded{}; auto bytes = std::span(encoded).first(column.wireSize());
++        column.encode(bytes); return page_.insert(bytes);
++    }
++    [[nodiscard]] SlottedSlotReference appendExtension(std::span<const std::byte> bytes, EntityPropertyKey owner,
++        uint32_t token, const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
++        const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission = {}) {
++        validateExtension(bytes, owner, token, group, descriptorGeneration, referenceAdmission);
++        return page_.insert(bytes);
++    }
++    [[nodiscard]] HybridPropertyGroupRecord readGroup(const SlottedSlotReference &reference,
++        EntityPropertyOwnerKind kind, uint64_t group, Generation descriptorGeneration) const {
++        const auto bytes = readRecord(reference);
++        return HybridPropertyGroupRecord::decode(bytes, kind, group, descriptorGeneration, visible_generation_);
++    }
++    [[nodiscard]] HybridPropertyColumnRecord readColumn(const SlottedSlotReference &reference,
++        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
++        Generation descriptorGeneration) const {
++        const auto bytes = readRecord(reference);
++        return HybridPropertyColumnRecord::decode(bytes, expected, group, descriptorGeneration, visible_generation_);
++    }
++    void replaceGroup(const SlottedSlotReference &reference, const HybridPropertyGroupRecord &replacement,
++        Generation descriptorGeneration) {
++        const auto previous = readGroup(reference, replacement.owner_kind, replacement.group_id, descriptorGeneration);
++        replacement.validate();
++        require(replacement.semantic_generation >= previous.semantic_generation &&
++            replacement.semantic_generation <= descriptorGeneration && descriptorGeneration <= visible_generation_,
++            "hybrid group replacement moves semantic identity backwards or into the future");
++        page_.overwrite(reference, replacement.encode());
++    }
++    void replaceColumn(const SlottedSlotReference &reference, const HybridPropertyColumnIdentity &expectedPrevious,
++        const HybridPropertyColumnRecord &replacement, const HybridPropertyGroupRecord &group,
++        Generation descriptorGeneration) {
++        const auto previousBytes = readRecord(reference);
++        static_cast<void>(HybridPropertyColumnRecord::decodePayload(previousBytes, expectedPrevious));
++        const auto &identity = replacement.identity;
++        require(identity.owner_kind == expectedPrevious.owner_kind && identity.scalar_kind == expectedPrevious.scalar_kind &&
++            identity.group_id == expectedPrevious.group_id && identity.token == expectedPrevious.token &&
++            identity.semantic_generation >= expectedPrevious.semantic_generation,
++            "hybrid column replacement changes field identity or requires demotion");
++        replacement.validateInGroup(group, descriptorGeneration, visible_generation_);
++        std::array<std::byte, 576> encoded{}; auto bytes = std::span(encoded).first(replacement.wireSize());
++        replacement.encode(bytes); page_.overwrite(reference, bytes);
++    }
++    void replaceExtension(const SlottedSlotReference &reference, std::span<const std::byte> replacement,
++        EntityPropertyKey owner, uint32_t token, const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
++        const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission = {}) {
++        const auto previous = readRecord(reference);
++        validateExtension(previous, owner, token, group, descriptorGeneration, referenceAdmission);
++        validateExtension(replacement, owner, token, group, descriptorGeneration, referenceAdmission);
++        require(LittleEndianCodec::readU64(replacement, 24) >= LittleEndianCodec::readU64(previous, 24),
++            "hybrid extension replacement moves semantic identity backwards");
++        page_.overwrite(reference, replacement);
++    }
++    // Consume a private image into its metadata-assigned physical frame owner.
++    // This binds bytes only: ordinary pool publication/read matching still
++    // rejects this kind until the complete atomic field coordinator is installed.
++    [[nodiscard]] SlottedPage bindPrivateOwner(const PageOwnerHeader &owner, const CatalogEntry &pool,
++        LogSequenceNumber expectedLsn,
++        const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission = {}) && {
++        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
++            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid private owner binding is disabled");
++        require(pool.segment_id.isValid() && pool.physical_slot.isValid() &&
++            pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL && pool.state == SegmentState::SGS_SEALED &&
++            pool.owner_id && owner.owner_id == pool.owner_id && pool.generation.isValid() &&
++            owner.generation == pool.generation && pool.committed_lsn.isValid() &&
++            expectedLsn.isValid() && pool.committed_lsn <= expectedLsn && owner.committed_lsn == expectedLsn &&
++            owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY && owner.flags == 0 &&
++            owner.page_id == page_.pageId(), "hybrid private frame owner does not match its assigned pool/publication");
++        SlottedPage::validateOwner(owner);
++        // Validate every live record before changing the image's physical
++        // generation. Allocation/refusal leaves the original private image
++        // unchanged. This is local shape/visibility, not global graph authority.
++        const auto references = page_.liveSlotsOwned(memory_);
++        for (const auto &reference : references) validatePrivateRecord(readRecord(reference), referenceAdmission);
++        page_.rebindOwner(owner); // no allocation after the successful checks
++        return std::move(page_);
++    }
++    void erase(const SlottedSlotReference &reference) { page_.erase(reference); }
++    void compact() { page_.compact(); }
++private:
++    static void require(bool value, const char *message) { hybrid_property_detail::require(value, message); }
++    HybridPropertyPageImage(SlottedPage page, Generation visible, std::shared_ptr<std::pmr::memory_resource> memory)
++        : page_(std::move(page)), visible_generation_(visible), memory_(std::move(memory)) {}
++    void validateExtension(std::span<const std::byte> bytes, EntityPropertyKey owner, uint32_t token,
++        const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
++        const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission) const {
++        group.validate();
++        require(group.owner_kind == owner.owner_kind && group.group_id == hybridPropertyGroupFor(owner) &&
++            group.memberships && (group.live & (UINT64_C(1) << hybridPropertySlotFor(owner))),
++            "hybrid extension has no live owner in its expected group");
++        static_cast<void>(HybridPropertyExtensionView::open(bytes, owner, token, group.semantic_generation,
++            descriptorGeneration, visible_generation_, referenceAdmission));
++    }
++    void validatePrivateRecord(std::span<const std::byte> bytes,
++        const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission) const {
++        require(bytes.size() >= sizeof(uint32_t), "hybrid private slot has no typed record envelope");
++        const auto magic = LittleEndianCodec::readU32(bytes, 0);
++        if (magic == RSS_HYBRID_GROUP_MAGIC) {
++            require(bytes.size() >= 64, "hybrid private group record is truncated");
++            static_cast<void>(HybridPropertyGroupRecord::decode(bytes,
++                EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])), LittleEndianCodec::readU64(bytes, 8),
++                visible_generation_, visible_generation_));
++        } else if (magic == RSS_HYBRID_COLUMN_MAGIC) {
++            require(bytes.size() >= 64, "hybrid private column record is truncated");
++            const auto record = HybridPropertyColumnRecord::decodePayload(bytes,
++                {EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])),
++                    HybridPropertyScalarKind(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
++                    LittleEndianCodec::readU32(bytes, 16), Generation(LittleEndianCodec::readU64(bytes, 24))});
++            require(record.identity.semantic_generation <= visible_generation_, "hybrid private column is not visible");
++        } else if (magic == RSS_HYBRID_EXTENSION_MAGIC) {
++            require(bytes.size() >= RSS_HYBRID_EXTENSION_HEADER_BYTES, "hybrid private extension record is truncated");
++            static_cast<void>(HybridPropertyExtensionView::open(bytes,
++                {EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])), LittleEndianCodec::readU64(bytes, 8)},
++                LittleEndianCodec::readU32(bytes, 16), visible_generation_, visible_generation_, visible_generation_,
++                referenceAdmission));
++        } else require(false, "hybrid private page contains an unknown record kind");
++    }
++    SlottedPage page_;
++    // Semantic visibility is independent of the shared pool's physical reuse
++    // generation. A normal later commit need not change that pool generation.
++    Generation visible_generation_;
++    std::shared_ptr<std::pmr::memory_resource> memory_;
++};
++} // namespace graph::storage
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp
+new file mode 100644
+index 00000000..91c95fd9
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp
+@@ -0,0 +1,195 @@
++#include <gtest/gtest.h>
++#include "graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++namespace graph::storage {
++class HybridPropertyConversionPreparationTestAccess final {
++public:
++    static auto prepare(MetadataWriteBatch &batch, const HybridPropertyGroupConversion &plan,
++        const std::function<void()> &checkpoint = {}) {
++        return std::unique_ptr<HybridPropertyConversionPreparation>(new HybridPropertyConversionPreparation(batch, plan, checkpoint));
++    }
++};
++}
++namespace {
++using Access = HybridPropertyConversionPreparationTestAccess;
++using Plan = HybridPropertyGroupConversion;
++constexpr auto NODE = EntityPropertyOwnerKind::EPOK_NODE;
++class NoPhysicalAllocator final : public MetadataPageAllocator {
++public:
++    MetadataPageId allocateMetadataPageId() override { throw std::logic_error("unexpected physical metadata allocation"); }
++    MetadataPageAllocation allocatePage(Generation, LogSequenceNumber, std::span<const PhysicalSlotId>) override {
++        throw std::logic_error("unexpected physical metadata allocation");
++    }
++    void abandonPage(PhysicalPageRef) noexcept override {}
++};
++Superblock sourceRoot() {
++    Superblock result; result.database_id = DatabaseId(33); result.generation = Generation(8);
++    result.checkpoint_lsn = LogSequenceNumber(8); result.next_logical_page_id = 100; return result;
++}
++std::vector<PropertyCollectionRoot> inputRows(size_t fields, bool mixed = false) {
++    std::vector<PropertyCollectionRoot> roots;
++    for (size_t id = 1; id <= 64; ++id) {
++        PropertyCollectionRoot row; row.owner_entity_id = id; row.owner_entity_type = graph::Node::typeId;
++        for (size_t token = 1; token <= fields; ++token)
++            row.entries.push_back({uint32_t(token), mixed && token == fields ? PropertyValue(std::string(100, 'x'))
++                : PropertyValue(int64_t(id + token))});
++        roots.push_back(std::move(row));
++    }
++    return roots;
++}
++TEST(HybridPropertyConversionPreparationTest, FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation) {
++    NoPhysicalAllocator allocator; const auto current = sourceRoot();
++    MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9));
++    const auto roots = inputRows(1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    Plan plan(memory, roots, NODE, 1, batch.generation(), 3952);
++    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
++        const auto prepared = Access::prepare(batch, plan);
++        ASSERT_EQ(prepared->pages().size(), 1U); EXPECT_EQ(prepared->pages()[0].pageId(), PageId(100));
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 101U);
++        EXPECT_EQ(prepared->owners().size(), 64U); EXPECT_EQ(prepared->columns().size(), 1U);
++    } else {
++        try { static_cast<void>(Access::prepare(batch, plan)); FAIL() << "default format accepted native fields"; }
++        catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_UNSUPPORTED_VERSION); }
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 100U);
++    }
++    EXPECT_EQ(batch.current(), current); EXPECT_EQ(current.next_logical_page_id, 100U);
++    EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
++}
++#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++const HybridPropertyPageImage &imageFor(const HybridPropertyConversionPreparation &prepared, PageId id) {
++    const auto found = std::find_if(prepared.pages().begin(), prepared.pages().end(),
++        [id](const auto &image) { return image.pageId() == id; });
++    if (found == prepared.pages().end()) throw std::logic_error("unbound native locator");
++    return *found;
++}
++TEST(HybridPropertyConversionPreparationTest, MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories) {
++    NoPhysicalAllocator allocator; MetadataWriteBatch batch(allocator, sourceRoot(), LogSequenceNumber(9));
++    const auto roots = inputRows(3, true); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    Plan plan(memory, roots, NODE, 1, batch.generation(), 3952);
++    const auto prepared = Access::prepare(batch, plan);
++    ASSERT_GT(prepared->pages().size(), 1U); ASSERT_EQ(prepared->owners().size(), 192U);
++    ASSERT_EQ(prepared->columns().size(), 2U); ASSERT_EQ(prepared->extensions().size(), 64U);
++    const auto groupSlot = HybridPropertyDirectoryCodec::decodeLocator(prepared->group().value);
++    EXPECT_EQ(imageFor(*prepared, groupSlot.page_id).readGroup(groupSlot, NODE, 1, batch.generation()), plan.group());
++    for (size_t i = 0; i < prepared->pages().size(); ++i) EXPECT_EQ(prepared->pages()[i].pageId(), PageId(100 + i));
++    EXPECT_EQ(batch.candidate().next_logical_page_id, 100 + prepared->pages().size());
++    for (size_t i = 0; i < prepared->columns().size(); ++i) {
++        const auto &entry = prepared->columns()[i]; const auto slot = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
++        EXPECT_EQ(HybridPropertyDirectoryCodec::decodeColumnKey(entry.key).token, i + 1);
++        EXPECT_EQ(imageFor(*prepared, slot.page_id).readColumn(slot, plan.columns()[i].identity,
++            plan.group(), batch.generation()), plan.columns()[i]);
++    }
++    for (const auto &entry : prepared->extensions()) {
++        const auto owner = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, NODE);
++        const auto slot = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
++        const auto bytes = imageFor(*prepared, slot.page_id).readRecord(slot);
++        const auto view = HybridPropertyExtensionView::open(bytes, owner.owner, owner.token,
++            batch.generation(), batch.generation(), batch.generation());
++        EXPECT_EQ(view.decodeInline([](const auto &) {}), roots[owner.owner.entity_id - 1].entries[2].value);
++    }
++    for (const auto &entry : prepared->owners()) {
++        const auto owner = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, NODE);
++        EXPECT_EQ(HybridPropertyDirectoryCodec::decodeSource(entry.value), owner.token == 3 ?
++            HybridPropertySource::HPS_EXTENSION : HybridPropertySource::HPS_COLUMN);
++    }
++    EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
++}
++TEST(HybridPropertyConversionPreparationTest, CompleteMembershipBoundPacksIntoActualSlottedPageCapacity) {
++    NoPhysicalAllocator allocator; MetadataWriteBatch batch(allocator, sourceRoot(), LogSequenceNumber(9));
++    const auto roots = inputRows(64); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    {
++        Plan plan(memory, roots, NODE, 1, batch.generation(), 3952);
++        const auto prepared = Access::prepare(batch, plan);
++        EXPECT_EQ(prepared->owners().size(), 4096U); EXPECT_EQ(prepared->columns().size(), 64U);
++        EXPECT_TRUE(prepared->extensions().empty()); EXPECT_EQ(prepared->pages().size(), 11U);
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 111U);
++        EXPECT_LE(memory->used(), 1024U * 1024U);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyConversionPreparationTest, PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner) {
++    NoPhysicalAllocator allocator; MetadataWriteBatch batch(allocator, sourceRoot(), LogSequenceNumber(9));
++    auto roots = inputRows(2, true); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    std::weak_ptr<MaterializedByteBudget> weak = memory;
++    std::unique_ptr<HybridPropertyConversionPreparation> prepared;
++    { Plan plan(memory, roots, NODE, 1, batch.generation(), 3952); prepared = Access::prepare(batch, plan); }
++    roots.clear(); roots.shrink_to_fit(); memory.reset(); EXPECT_FALSE(weak.expired());
++    const auto slot = HybridPropertyDirectoryCodec::decodeLocator(prepared->extensions()[0].value);
++    {
++        const auto bytes = imageFor(*prepared, slot.page_id).readRecord(slot);
++        EXPECT_EQ(HybridPropertyExtensionView::open(bytes, {NODE, 1}, 2, batch.generation(), batch.generation(),
++            batch.generation()).decodeInline([](const auto &) {}), PropertyValue(std::string(100, 'x')));
++        prepared.reset(); EXPECT_FALSE(weak.expired()); // escaped record owns the account
++    }
++    EXPECT_TRUE(weak.expired());
++}
++TEST(HybridPropertyConversionPreparationTest, StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing) {
++    NoPhysicalAllocator allocator; const auto current = sourceRoot();
++    auto roots = inputRows(1, true); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    {
++        MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9));
++        Plan stale(memory, roots, NODE, 1, Generation(8), 3952);
++        EXPECT_THROW(Access::prepare(batch, stale), FormatException);
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 100U);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++    roots[0].entries[0].value = PropertyValue(std::string(8192, 'x'));
++    {
++        MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9));
++        Plan plan(memory, roots, NODE, 1, batch.generation(), 3952); const auto charge = memory->used();
++        EXPECT_THROW(Access::prepare(batch, plan), FormatException);
++        EXPECT_EQ(memory->used(), charge); EXPECT_EQ(batch.current(), current);
++        EXPECT_EQ(batch.allocatedPageCount(), 0U);
++    }
++    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(current.next_logical_page_id, 100U);
++    roots[0].entries[0].value = PropertyValue(std::string(100, 'x'));
++    MetadataWriteBatch retry(allocator, current, LogSequenceNumber(9));
++    Plan plan(memory, roots, NODE, 1, retry.generation(), 3952);
++    EXPECT_EQ(Access::prepare(retry, plan)->pages()[0].pageId(), PageId(100));
++}
++class FailingResource final : public std::pmr::memory_resource {
++public:
++    std::shared_ptr<MaterializedByteBudget> budget = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    size_t calls = 0, fail_on = 0;
++private:
++    void *do_allocate(size_t bytes, size_t alignment) override {
++        if (++calls == fail_on) throw std::bad_alloc();
++        return budget->allocate(bytes, alignment);
++    }
++    void do_deallocate(void *pointer, size_t bytes, size_t alignment) override { budget->deallocate(pointer, bytes, alignment); }
++    bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
++};
++TEST(HybridPropertyConversionPreparationTest, AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate) {
++    NoPhysicalAllocator allocator; const auto current = sourceRoot(); const auto roots = inputRows(3, true);
++    auto memory = std::make_shared<FailingResource>();
++    Plan plan(memory, roots, NODE, 1, Generation(9), 3952); const auto charge = memory->budget->used();
++    {
++        MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9));
++        // Three exact directory reservations, one page holder, then the first
++        // page buffer: fail after the batch has assigned its logical identity.
++        memory->fail_on = memory->calls + 5;
++        EXPECT_THROW(Access::prepare(batch, plan), std::bad_alloc);
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 101U);
++        EXPECT_EQ(batch.current(), current); EXPECT_EQ(batch.allocatedPageCount(), 0U);
++        EXPECT_EQ(memory->budget->used(), charge);
++    }
++    memory->fail_on = 0;
++    {
++        MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9)); size_t seen = 0;
++        EXPECT_THROW(Access::prepare(batch, plan, [&] {
++            if (++seen == 2) throw std::runtime_error("cancel prepared native fields");
++        }), std::runtime_error);
++        EXPECT_EQ(batch.candidate().next_logical_page_id, 101U);
++        EXPECT_EQ(batch.current(), current); EXPECT_EQ(memory->budget->used(), charge);
++    }
++    MetadataWriteBatch retry(allocator, current, LogSequenceNumber(9));
++    const auto prepared = Access::prepare(retry, plan);
++    EXPECT_EQ(prepared->pages()[0].pageId(), PageId(100));
++    EXPECT_EQ(roots, inputRows(3, true)); EXPECT_EQ(current.next_logical_page_id, 100U);
++}
++#endif
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp
+new file mode 100644
+index 00000000..6e84b5f2
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp
+@@ -0,0 +1,229 @@
++#include <gtest/gtest.h>
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
++#include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
++#include "graph/storage/relocatable/index/BTreeIndex.hpp"
++#include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
++
++using namespace graph::storage;
++namespace {
++using Request = NativeGraphHybridPropertyRootMutation;
++using Mode = NativeHybridPropertyRootMode;
++constexpr uint64_t MARKER = 0x4850524F4F545055ULL; // generic test index, no hybrid field routing
++template<class Operation>
++void expectError(Operation operation, FormatError expected) {
++    try { operation(); FAIL() << "expected a typed native format error"; }
++    catch (const FormatException &error) { EXPECT_EQ(error.error(), expected) << error.what(); }
++}
++class HybridPropertyGraphPublicationTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
++protected:
++    Request request() {
++        const auto sb = metadata_->openSnapshot().superblock();
++        return {sb.database_id, sb.hybrid_property_descriptor_root, Mode::NHPRM_REPLACE, {}};
++    }
++    HybridPropertyDescriptorPage descriptor(const MetadataSnapshotPin &pin) {
++        MetadataPageFile pages(io_, pin.superblock());
++        return pages.readHybridPropertyDescriptor(pin.superblock().hybrid_property_descriptor_root, pin.superblock());
++    }
++    Superblock publish(const Request &root, uint64_t marker = 0, const MetadataPublishOptions &options = {},
++        size_t *preparations = nullptr, bool retireMarker = false, const MetadataSnapshotPin *source = nullptr) {
++        std::optional<MetadataSnapshotPin> ownedPin;
++        if (!source) ownedPin.emplace(metadata_->openSnapshot());
++        const auto &pin = source ? *source : *ownedPin; const auto current = pin.superblock();
++        const auto lsn = LogSequenceNumber(current.checkpoint_lsn.value() + 1);
++        NativeGraphDerivedStateMutation derived;
++        std::optional<BTreeInitialTreeMutationPlan> plan;
++        std::optional<BTreeTreeRetirementPlan> retirement;
++        if (marker && retireMarker) {
++            retirement.emplace(btree_pages_->planTreeRetirement(pin, marker, 32));
++            NativeGraphIndexTreeMutation mutation; mutation.index_id = marker;
++            mutation.expected_root = retirement->expected_root; mutation.pool_requests = retirement->pool_requests;
++            mutation.retire_root = true; derived.index_tree_mutations.push_back(std::move(mutation));
++        } else if (marker) {
++            const BTreePageEntry entry{{std::byte{1}}, 7};
++            plan.emplace(btree_pages_->planInitialTreeMutation(pin, marker, std::span(&entry, 1)));
++            NativeGraphIndexTreeMutation mutation; mutation.index_id = marker;
++            for (const auto &pool : plan->new_pool_mutations)
++                mutation.new_pool_requests.push_back({PhysicalSlotId(40), PhysicalSlotId(80), pool.owner_id, pool.appended_page_count});
++            mutation.replacement_root = {plan->root_page.pool_ordinal, plan->root_page.appended_page_ordinal, true};
++            derived.index_tree_mutations.push_back(std::move(mutation));
++        }
++        return metadata_->mutateNativeGraphPagesWithLargeValues({}, {}, {}, {}, {}, {}, derived, lsn,
++            [](auto, auto, auto, auto, auto, auto) {},
++            [&](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
++                if (plan) {
++                    if (preparations) ++*preparations;
++                    plan->preparer(batches.at(0), lsn);
++                } else if (retirement) {
++                    if (preparations) ++*preparations;
++                    retirement->preparer(batches.at(0), lsn);
++                }
++            }, {}, {}, {}, {}, {}, options, {}, current.generation, {}, {}, {}, {}, {}, root);
++    }
++};
++TEST_F(HybridPropertyGraphPublicationTest, FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication) {
++    const auto before = metadata_->openSnapshot().superblock(); const auto size = io_->fileSize(); const auto root = request();
++    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
++        const auto after = publish(root);
++        EXPECT_EQ(after.generation.value(), before.generation.value() + 1);
++        EXPECT_TRUE(after.hybrid_property_descriptor_root.isValid());
++        const auto pin = metadata_->openSnapshot(); EXPECT_EQ(descriptor(pin).descriptor.semantic_generation, after.generation);
++    } else {
++        EXPECT_THROW(publish(root), FormatException);
++        EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), size);
++    }
++}
++TEST_F(HybridPropertyGraphPublicationTest, InvalidRequestsRejectBeforeAnyDerivedPagePreparation) {
++    const auto before = metadata_->openSnapshot().superblock(); const auto size = io_->fileSize();
++    for (unsigned bad = 0; bad < 6; ++bad) {
++        auto root = request();
++        if (bad == 0) root.expected_database_id = DatabaseId{};
++        if (bad == 1) root.expected_root = {PhysicalSlotId(2), 0, Generation(1)};
++        if (bad == 2) root.mode = Mode(255);
++        if (bad == 3) root.mode = Mode::NHPRM_CLEAR;
++        if (bad == 4) { root.replacement_index_ids[0] = MARKER; root.replacement_index_ids[1] = MARKER; }
++        if (bad == 5) {
++            root.mode = Mode::NHPRM_CLEAR; root.expected_root = {PhysicalSlotId(2), 1, Generation(1)};
++            root.replacement_index_ids[0] = MARKER;
++        }
++        size_t preparations = 0;
++        EXPECT_THROW(publish(root, MARKER, {}, &preparations), FormatException) << bad;
++        EXPECT_EQ(preparations, 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++        EXPECT_EQ(io_->fileSize(), size);
++    }
++}
++TEST_F(HybridPropertyGraphPublicationTest, TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility) {
++    PageOwnerHeader owner;
++    owner.page_id = PageId(101); owner.owner_id = MARKER; owner.kind = PageOwnerKind::POK_INDEX;
++    owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
++    owner.generation = Generation(99); owner.committed_lsn = LogSequenceNumber(2);
++    BTreePageHeader header;
++    header.index_id = MARKER; header.page_id = owner.page_id; header.generation = owner.generation;
++    auto page = BTreePage::create(owner, header);
++    const std::array key{std::byte{1}}; page.insert({{key.begin(), key.end()}, 7});
++    SlottedPagePoolAllocationRequest allocation;
++    allocation.segment_id = SegmentId(71); allocation.pool_kind = SegmentKind::SGK_INDEX_PAGE_POOL;
++    allocation.pool_owner_id = MARKER; allocation.generation = owner.generation;
++    allocation.page_id = owner.page_id; allocation.page_owner_id = MARKER;
++    allocation.page_owner_kind = PageOwnerKind::POK_INDEX;
++    ASSERT_TRUE(btree_pages_->allocate(allocation, page, PhysicalSlotId(40), PhysicalSlotId(80),
++        owner.committed_lsn).has_value());
++    const IndexRootLocation root{MARKER, owner.page_id, owner.generation};
++    static_cast<void>(btree_pages_->publishRoots(std::span(&root, 1), {}, LogSequenceNumber(3)));
++    auto old = metadata_->openSnapshot();
++    ASSERT_LT(old.superblock().generation.value(), root.root_generation.value());
++    BTreeIndex index(MARKER, *btree_pages_, *metadata_); EXPECT_EQ(index.find(old, key), 7U);
++    HybridPropertyDescriptorPage frame;
++    frame.generation = old.superblock().generation; frame.committed_lsn = old.superblock().checkpoint_lsn;
++    frame.descriptor.database_id = old.superblock().database_id;
++    frame.descriptor.semantic_generation = frame.generation;
++    frame.descriptor.roots[0] = {root.root_page_id, root.root_generation};
++    EXPECT_EQ(HybridPropertyDescriptorCodec::decode(HybridPropertyDescriptorCodec::encode(frame),
++        frame.descriptor.database_id, frame.generation, frame.generation, frame.committed_lsn), frame);
++    auto wrong = root; wrong.root_generation = Generation(100);
++    expectError([&] { static_cast<void>(btree_pages_->publishRoots(std::span(&wrong, 1), {},
++        LogSequenceNumber(4))); }, FormatError::FERR_INVALID_STATE);
++    // The typed publisher retains the old authoritative directory on refusal.
++    auto current = metadata_->openSnapshot();
++    EXPECT_EQ(current.superblock(), old.superblock());
++    EXPECT_EQ(index.find(current, key), 7U);
++    EXPECT_EQ(index.find(old, key), 7U);
++}
++#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++TEST_F(HybridPropertyGraphPublicationTest, OrdinaryIndexDataAndDescriptorPublishInOneGenerationAndOldPinSurvives) {
++    auto old = metadata_->openSnapshot(); const auto before = old.superblock();
++    size_t preparations = 0; const auto after = publish(request(), MARKER, {}, &preparations);
++    EXPECT_EQ(preparations, 1U); EXPECT_EQ(after.generation.value(), before.generation.value() + 1);
++    EXPECT_EQ(after.checkpoint_lsn.value(), before.checkpoint_lsn.value() + 1);
++    BTreeIndex marker(MARKER, *btree_pages_, *metadata_); const std::array key{std::byte{1}};
++    auto fresh = metadata_->openSnapshot(); EXPECT_FALSE(marker.find(old, key)); EXPECT_EQ(marker.find(fresh, key), 7U);
++    EXPECT_EQ(descriptor(fresh).descriptor.semantic_generation, after.generation);
++    EXPECT_EQ(descriptor(fresh).generation, after.generation);
++    EXPECT_EQ(before.entity_property_directory_root, after.entity_property_directory_root);
++    old.release(); fresh.release(); reopenNativeStores();
++    auto recovered = metadata_->openSnapshot(); BTreeIndex reopened(MARKER, *btree_pages_, *metadata_);
++    EXPECT_EQ(reopened.find(recovered, key), 7U); EXPECT_EQ(descriptor(recovered).descriptor.semantic_generation, after.generation);
++}
++TEST_F(HybridPropertyGraphPublicationTest, ClearSharesThePublicationAndOldDescriptorRemainsReadable) {
++    publish(request()); auto old = metadata_->openSnapshot(); const auto previous = descriptor(old);
++    auto clear = request(); clear.mode = Mode::NHPRM_CLEAR;
++    const auto after = publish(clear, MARKER); EXPECT_EQ(after.generation.value(), old.superblock().generation.value() + 1);
++    EXPECT_EQ(after.hybrid_property_descriptor_root, PhysicalPageRef{}); EXPECT_EQ(descriptor(old), previous);
++    auto fresh = metadata_->openSnapshot(); EXPECT_TRUE(metadata_->findIndexRootOptional(fresh, MARKER));
++    old.release(); fresh.release(); reopenNativeStores();
++    EXPECT_EQ(metadata_->openSnapshot().superblock().hybrid_property_descriptor_root, PhysicalPageRef{});
++}
++TEST_F(HybridPropertyGraphPublicationTest, WrongDatabaseOrStaleRootFencesBeforePreparingGraphData) {
++    const auto stale = request(); publish(stale); const auto current = metadata_->openSnapshot().superblock();
++    size_t preparations = 0;
++    EXPECT_THROW(publish(stale, MARKER, {}, &preparations), FormatException);
++    auto wrong = request(); wrong.expected_database_id = DatabaseId(current.database_id.value() + 1);
++    EXPECT_THROW(publish(wrong, MARKER, {}, &preparations), FormatException);
++    EXPECT_EQ(preparations, 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), current);
++}
++TEST_F(HybridPropertyGraphPublicationTest, UninstalledNonemptyRootsAbortAlreadyPreparedDataWithoutPublishingIt) {
++    auto root = request(); root.replacement_index_ids[0] = MARKER;
++    const auto before = metadata_->openSnapshot().superblock(); size_t preparations = 0;
++    expectError([&] { publish(root, MARKER, {}, &preparations); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    EXPECT_EQ(preparations, 1U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++    EXPECT_FALSE(metadata_->findIndexRootOptional(metadata_->openSnapshot(), MARKER));
++    reopenNativeStores(); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++    EXPECT_FALSE(metadata_->findIndexRootOptional(metadata_->openSnapshot(), MARKER));
++    EXPECT_NO_THROW(publish(request(), MARKER));
++}
++TEST_F(HybridPropertyGraphPublicationTest, MissingRetainedTreeFailsClosedWithoutManufacturingDescriptorReferences) {
++    auto root = request(); root.replacement_index_ids[0] = MARKER + 1;
++    const auto before = metadata_->openSnapshot().superblock();
++    expectError([&] { publish(root); }, FormatError::FERR_INVALID_STATE);
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++}
++TEST_F(HybridPropertyGraphPublicationTest, RetainedRootResolvesButNonemptyRoutingStillCannotBePublished) {
++    publish(request(), MARKER); const auto before = metadata_->openSnapshot().superblock();
++    auto root = request(); root.replacement_index_ids[0] = MARKER; size_t preparations = 0;
++    expectError([&] { publish(root, 0, {}, &preparations); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    EXPECT_EQ(preparations, 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++    BTreeIndex marker(MARKER, *btree_pages_, *metadata_); const std::array key{std::byte{1}};
++    auto current = metadata_->openSnapshot(); EXPECT_EQ(marker.find(current, key), 7U);
++}
++TEST_F(HybridPropertyGraphPublicationTest, DescriptorCannotBindATreeRetiredByTheSameCandidate) {
++    publish(request(), MARKER); const auto before = metadata_->openSnapshot().superblock();
++    auto root = request(); root.replacement_index_ids[0] = MARKER; size_t preparations = 0;
++    expectError([&] { publish(root, MARKER, {}, &preparations, true); }, FormatError::FERR_INVALID_STATE);
++    EXPECT_EQ(preparations, 1U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++    BTreeIndex marker(MARKER, *btree_pages_, *metadata_); const std::array key{std::byte{1}};
++    auto current = metadata_->openSnapshot(); EXPECT_EQ(marker.find(current, key), 7U); current.release();
++    reopenNativeStores(); auto recovered = metadata_->openSnapshot(); BTreeIndex reopened(MARKER, *btree_pages_, *metadata_);
++    EXPECT_EQ(reopened.find(recovered, key), 7U); EXPECT_EQ(recovered.superblock(), before);
++}
++TEST_F(HybridPropertyGraphPublicationTest, WriterAuthenticatesTheExpectedOldRootBeforePreparingUnrelatedData) {
++    publish(request()); auto pin = metadata_->openSnapshot(); const auto before = pin.superblock();
++    Request root{before.database_id, before.hybrid_property_descriptor_root, Mode::NHPRM_CLEAR, {}};
++    const auto original = descriptor(pin); auto wrong = original;
++    wrong.descriptor.database_id = DatabaseId(before.database_id.value() + 1);
++    MetadataPageFile pages(io_, before); const auto offset = pages.pageOffset(before.hybrid_property_descriptor_root);
++    const auto corrupted = HybridPropertyDescriptorCodec::encode(wrong);
++    io_->writeAt({offset, before.hybrid_property_descriptor_root.generation.value()}, corrupted.data(), corrupted.size()); io_->sync();
++    size_t preparations = 0;
++    expectError([&] { publish(root, MARKER, {}, &preparations, false, &pin); }, FormatError::FERR_INVALID_HEADER);
++    EXPECT_EQ(preparations, 0U);
++    const auto restored = HybridPropertyDescriptorCodec::encode(original);
++    io_->writeAt({offset, before.hybrid_property_descriptor_root.generation.value()}, restored.data(), restored.size()); io_->sync();
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++    EXPECT_FALSE(metadata_->findIndexRootOptional(metadata_->openSnapshot(), MARKER));
++    EXPECT_NO_THROW(publish(root, MARKER));
++}
++TEST_F(HybridPropertyGraphPublicationTest, EachBootstrapInterruptionRecoversACompleteDataAndDescriptorPair) {
++    uint64_t markerId = MARKER;
++    for (auto failpoint : {BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE,
++        BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
++        MetadataPublishOptions options; options.bootstrap_failpoint = failpoint;
++        EXPECT_THROW(publish(request(), markerId, options), BootstrapPublishInterrupted);
++        reopenNativeStores(); auto recovered = metadata_->openSnapshot();
++        const bool completeNew = failpoint == BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
++        EXPECT_EQ(metadata_->findIndexRootOptional(recovered, markerId).has_value(), completeNew);
++        EXPECT_EQ(recovered.superblock().hybrid_property_descriptor_root.isValid(), completeNew);
++        if (completeNew) EXPECT_EQ(descriptor(recovered).descriptor.semantic_generation, recovered.superblock().generation);
++        ++markerId;
++    }
++}
++#endif
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp
+new file mode 100644
+index 00000000..d8889e57
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp
+@@ -0,0 +1,99 @@
++#include <gtest/gtest.h>
++#include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++namespace {
++std::vector<PropertyCollectionRoot> nativeRows(size_t owners, size_t fields) {
++    std::vector<PropertyCollectionRoot> result;
++    for (size_t owner = 1; owner <= owners; ++owner) {
++        PropertyCollectionRoot root;
++        root.owner_entity_id = owner; root.owner_entity_type = graph::Node::typeId;
++        for (size_t token = 1; token <= fields; ++token)
++            root.entries.push_back({uint32_t(token), PropertyValue(int64_t(owner + token))});
++        result.push_back(std::move(root));
++    }
++    return result;
++}
++using Plan = HybridPropertyGroupConversion;
++constexpr auto NODE = EntityPropertyOwnerKind::EPOK_NODE;
++TEST(HybridPropertyGroupConversionTest, RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed) {
++    const auto roots = nativeRows(48, 1);
++    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    std::weak_ptr<MaterializedByteBudget> weak = memory;
++    auto plan = std::make_unique<Plan>(memory, roots, NODE, 1, Generation(7), 3952);
++    EXPECT_EQ(memory->used(), plan->retainedCharge());
++    EXPECT_LE(plan->retainedCharge(), 1024U * 1024U);
++    EXPECT_EQ(plan->members()[0].value, &roots[0].entries[0].value);
++    memory.reset(); EXPECT_FALSE(weak.expired());
++    EXPECT_EQ(plan->columns()[0].identity.semantic_generation, Generation(7));
++    plan.reset(); EXPECT_TRUE(weak.expired());
++}
++TEST(HybridPropertyGroupConversionTest, MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection) {
++    const auto roots = nativeRows(48, 85);
++    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    {
++        Plan plan(memory, roots, NODE, 1, Generation(7), 3952);
++        ASSERT_EQ(plan.columns().size(), 85U); ASSERT_EQ(plan.members().size(), 4080U);
++        EXPECT_EQ(plan.group().columns, 85U); EXPECT_EQ(plan.group().memberships, 4080U);
++        for (size_t i = 0; i < plan.columns().size(); ++i) {
++            std::array<std::byte, 576> bytes{}; plan.encodeNativeColumn(i, bytes);
++            const auto &column = plan.columns()[i];
++            EXPECT_EQ(HybridPropertyColumnRecord::decode(bytes, column.identity, plan.group(),
++                Generation(7), Generation(7)), column);
++        }
++        for (const auto &root : roots) {
++            size_t seen = 0;
++            plan.visitOwner(root.owner_entity_id, [&](uint32_t token, const PropertyValue &value) {
++                ASSERT_LT(seen, root.entries.size());
++                EXPECT_EQ(token, root.entries[seen].key_token); EXPECT_EQ(value, root.entries[seen].value); ++seen;
++            });
++            EXPECT_EQ(seen, root.entries.size());
++        }
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyGroupConversionTest, QuotaCancellationAndShapeRefusalsRefundBeforeRetry) {
++    const auto roots = nativeRows(64, 1);
++    auto tiny = std::make_shared<MaterializedByteBudget>(1);
++    EXPECT_THROW((Plan(tiny, roots, NODE, 1, Generation(7), 3952)),
++        graph::query::execution::MaterializedByteLimitExceeded);
++    EXPECT_EQ(tiny->used(), 0U);
++    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    size_t calls = 0;
++    EXPECT_THROW((Plan(memory, roots, NODE, 1, Generation(7), 3952,
++        [&] { if (++calls == 65) throw std::runtime_error("cancel native conversion"); })), std::runtime_error);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_THROW((Plan(memory, roots, NODE, 1, Generation(7), 575)), std::length_error);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_THROW((Plan({}, roots, NODE, 1, Generation(7), 3952)), std::invalid_argument);
++    EXPECT_EQ(roots, nativeRows(64, 1));
++    { Plan retry(memory, roots, NODE, 1, Generation(7), 576); EXPECT_EQ(retry.columns().size(), 1U); }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyGroupConversionTest, NullMixedAndHeapExtensionsRemainBorrowedAndOrdered) {
++    auto roots = nativeRows(64, 4);
++    for (size_t i = 0; i < roots.size(); ++i) {
++        roots[i].entries[1].value = PropertyValue{};
++        roots[i].entries[2].value = i == 0 ? PropertyValue(1.0) : PropertyValue(int64_t(1));
++        roots[i].entries[3].value = PropertyValue(std::string(8192, 'x'));
++    }
++    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
++    {
++        Plan plan(memory, roots, NODE, 1, Generation(7), 3952);
++        ASSERT_EQ(plan.columns().size(), 1U);
++        for (const auto &member : plan.members()) {
++            EXPECT_EQ(member.source, member.token == 1 ? HybridPropertySource::HPS_COLUMN : HybridPropertySource::HPS_EXTENSION);
++            EXPECT_EQ(member.value, &roots[member.owner - 1].entries[member.token - 1].value);
++        }
++        size_t seen = 0;
++        plan.visitOwner(1, [&](uint32_t token, const PropertyValue &value) {
++            EXPECT_EQ(token, ++seen); EXPECT_EQ(value, roots[0].entries[token - 1].value);
++        });
++        EXPECT_EQ(seen, 4U); EXPECT_EQ(memory->used(), plan.retainedCharge());
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp
+new file mode 100644
+index 00000000..5307107a
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp
+@@ -0,0 +1,186 @@
++#include <gtest/gtest.h>
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyPageImage.hpp"
++#include "graph/utils/ChecksumUtils.hpp"
++#include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
++
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++using graph::query::execution::MaterializedByteLimitExceeded;
++using graph::query::execution::MaterializedByteReservation;
++namespace {
++CatalogEntry pool() {
++    return {SegmentId(3), PhysicalSlotId(40), SegmentKind::SGK_PROPERTY_PAGE_POOL, 902,
++        Generation(3), SegmentState::SGS_SEALED, LogSequenceNumber(2)};
++}
++PageOwnerHeader owner() {
++    return {PageId(41), 902, PageOwnerKind::POK_HYBRID_PROPERTY, 0,
++        RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(3), LogSequenceNumber(9)};
++}
++HybridPropertyGroupRecord group() {
++    return {EntityPropertyOwnerKind::EPOK_NODE, HybridPropertyGroupMode::HPGM_HYBRID,
++        1, Generation(8), UINT64_MAX, 49, 1};
++}
++HybridPropertyColumnRecord column() {
++    HybridPropertyColumnRecord result;
++    result.identity = {EntityPropertyOwnerKind::EPOK_NODE, HybridPropertyScalarKind::HPSK_INT64, 1, 1, Generation(7)};
++    result.live = UINT64_MAX; result.presence = (UINT64_C(1) << 48) - 1;
++    for (unsigned i = 0; i < 48; ++i) result.words[i] = 100 + i;
++    return result;
++}
++template<class Operation> void expectError(Operation operation, FormatError expected) {
++    try { operation(); FAIL() << "expected typed format refusal"; }
++    catch (const FormatException &error) { EXPECT_EQ(error.error(), expected) << error.what(); }
++}
++TEST(HybridPropertyPageBindingTest, OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat) {
++    auto row = owner(); row.kind = PageOwnerKind::POK_PROPERTY;
++    auto encoded = PageOwnerHeaderCodec::encode(row);
++    LittleEndianCodec::writeU16(encoded, 24, uint16_t(PageOwnerKind::POK_HYBRID_PROPERTY));
++    LittleEndianCodec::writeU32(encoded, 48, 0);
++    LittleEndianCodec::writeU32(encoded, 48, graph::utils::calculateCrc(encoded.data(), encoded.size()));
++    EXPECT_EQ(SlottedPage::supportsOwnerKind(PageOwnerKind::POK_HYBRID_PROPERTY), RSS_HYBRID_PROPERTY_FORMAT_ENABLED);
++    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
++        const auto decoded = PageOwnerHeaderCodec::decode(encoded);
++        EXPECT_EQ(decoded.kind, PageOwnerKind::POK_HYBRID_PROPERTY); EXPECT_EQ(decoded.page_id, PageId(41));
++        EXPECT_EQ(PageOwnerHeaderCodec::encode(decoded), encoded);
++    } else {
++        EXPECT_THROW(PageOwnerHeaderCodec::encode(owner()), FormatException);
++        EXPECT_THROW(PageOwnerHeaderCodec::decode(encoded), FormatException);
++    }
++}
++TEST(HybridPropertyPageBindingTest, FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    image.appendGroup(group()); const auto before = image.serialize();
++    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
++        expectError([&] { std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)); }, FormatError::FERR_UNSUPPORTED_VERSION);
++        EXPECT_EQ(image.serialize(), before);
++    }
++    auto ordinary = SlottedPage::create(PageId(1), Generation(1)); const std::array value{std::byte{1}};
++    const auto first = ordinary.insert(value); const auto second = ordinary.insert(value); ordinary.erase(first);
++    auto tiny = std::make_shared<MaterializedByteBudget>(1);
++    EXPECT_THROW(ordinary.liveSlotsOwned({}), std::invalid_argument);
++    EXPECT_THROW(ordinary.liveSlotsOwned(tiny), MaterializedByteLimitExceeded); EXPECT_EQ(tiny->used(), 0U);
++    {
++        const auto refs = ordinary.liveSlotsOwned(memory); ASSERT_EQ(refs.size(), 1U); EXPECT_EQ(refs[0], second);
++        EXPECT_EQ(ordinary.readOwned(second, memory).size(), 1U);
++    }
++}
++#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++TEST(HybridPropertyPageBindingTest, MixedNodeAndEdgeFieldsBindAsOneTypedFrameAndRetainSemanticVisibility) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    {
++        auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++        const auto g = group(); const auto c = column(); image.appendGroup(g);
++        const auto columnSlot = image.appendColumn(c, g, Generation(9));
++        const auto nodeBytes = HybridPropertyExtensionView::encodeInline({g.owner_kind, 1}, 2, Generation(7),
++            PropertyValue("node"), 3952, *memory);
++        image.appendExtension(nodeBytes, {g.owner_kind, 1}, 2, g, Generation(9));
++        auto edgeGroup = g; edgeGroup.owner_kind = EntityPropertyOwnerKind::EPOK_EDGE;
++        edgeGroup.live = 1; edgeGroup.memberships = 1; edgeGroup.columns = 0; image.appendGroup(edgeGroup);
++        const auto edgeBytes = HybridPropertyExtensionView::encodeInline({edgeGroup.owner_kind, 1}, 2, Generation(7),
++            PropertyValue("edge"), 3952, *memory);
++        const auto edgeSlot = image.appendExtension(edgeBytes, {edgeGroup.owner_kind, 1}, 2, edgeGroup, Generation(9));
++        auto bound = std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9));
++        EXPECT_EQ(bound.ownerKind(), PageOwnerKind::POK_HYBRID_PROPERTY);
++        EXPECT_EQ(bound.pageGeneration(), Generation(3)); EXPECT_EQ(bound.ownerCommittedLsn(), LogSequenceNumber(9));
++        const auto bytes = bound.serializeOwned(memory); const auto view = SlottedPageReadView::open(owner(), bytes);
++        EXPECT_EQ(HybridPropertyColumnRecord::decode(view.read(columnSlot), c.identity, g, Generation(9), Generation(9)), c);
++        const auto edge = HybridPropertyExtensionView::open(view.read(edgeSlot), {edgeGroup.owner_kind, 1}, 2,
++            Generation(8), Generation(9), Generation(9));
++        EXPECT_EQ(edge.decodeInline([](const auto &) {}), PropertyValue("edge"));
++        EXPECT_THROW(HybridPropertyExtensionView::open(view.read(edgeSlot), {g.owner_kind, 1}, 2,
++            Generation(8), Generation(9), Generation(9)), FormatException);
++        auto downgrade = owner(); downgrade.kind = PageOwnerKind::POK_PROPERTY;
++        EXPECT_THROW(bound.rebindOwner(downgrade), FormatException);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyPageBindingTest, BadPoolOwnerGenerationLsnAndRoleRejectBeforeChangingThePrivateImage) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    image.appendGroup(group()); const auto before = image.serialize();
++    for (unsigned bad = 0; bad < 10; ++bad) {
++        auto target = owner(); auto destination = pool();
++        if (bad == 0) target.page_id = PageId(42);
++        if (bad == 1) target.owner_id++;
++        if (bad == 2) target.generation = Generation(4);
++        if (bad == 3) target.committed_lsn = LogSequenceNumber(10);
++        if (bad == 4) target.kind = PageOwnerKind::POK_PROPERTY;
++        if (bad == 5) target.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
++        if (bad == 6) target.payload_bytes--;
++        if (bad == 7) destination.state = SegmentState::SGS_RETIRED;
++        if (bad == 8) destination.kind = SegmentKind::SGK_INDEX_PAGE_POOL;
++        if (bad == 9) destination.committed_lsn = LogSequenceNumber(10);
++        EXPECT_THROW(std::move(image).bindPrivateOwner(target, destination, LogSequenceNumber(9)), FormatException) << bad;
++        EXPECT_EQ(image.physicalPoolGeneration(), Generation(1)); EXPECT_EQ(image.serialize(), before);
++    }
++}
++TEST(HybridPropertyPageBindingTest, ValidSlottedCrcDoesNotAuthorizeUnknownOrFutureRecordPayloads) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    for (unsigned bad = 0; bad < 3; ++bad) {
++        auto raw = SlottedPage::create(PageId(41), Generation(1));
++        if (bad == 0) { const std::array unknown{std::byte{1}}; raw.insert(unknown); }
++        if (bad == 1) { auto g = group(); g.semantic_generation = Generation(10); raw.insert(g.encode()); }
++        if (bad == 2) {
++            auto c = column(); c.identity.semantic_generation = Generation(10);
++            std::array<std::byte,576> bytes{}; c.encode(bytes); raw.insert(bytes);
++        }
++        const auto bytes = raw.serializeOwned(memory);
++        auto image = HybridPropertyPageImage::open(bytes, PageId(41), Generation(1), Generation(9), memory);
++        const auto before = image.serialize();
++        EXPECT_THROW(std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)), FormatException) << bad;
++        EXPECT_EQ(image.serialize(), before);
++    }
++}
++TEST(HybridPropertyPageBindingTest, BindingQuotaRefusalRefundsItsEnumerationAndPreservesRetry) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    image.appendGroup(group()); const auto before = image.serialize(); const auto baseline = memory->used();
++    {
++        MaterializedByteReservation held(memory.get()); held.set(memory->available());
++        EXPECT_THROW(std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)), MaterializedByteLimitExceeded);
++    }
++    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(image.serialize(), before);
++    auto bound = std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9));
++    EXPECT_EQ(bound.ownerKind(), PageOwnerKind::POK_HYBRID_PROPERTY);
++}
++TEST(HybridPropertyPageBindingTest, LargeReferenceBindingRequiresRetainedAdmissionAndRefundsBeforeRetry) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    LargeValueRef reference; reference.value_id = LargeValueId(11); reference.generation = Generation(7);
++    reference.logical_bytes = 8192; reference.content_hash[0] = std::byte{1};
++    reference.kind = LargeValueKind::LVK_BYTES; reference.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
++    const auto encodedReference = LargeValueRefCodec::encode(reference);
++    MaterializedByteReservation media(memory.get()); const auto admit = [&](size_t n) { media.set(n); };
++    const auto bytes = HybridPropertyExtensionView::encodeReference({EntityPropertyOwnerKind::EPOK_NODE, 1}, 2,
++        Generation(7), encodedReference, 3952, *memory, admit);
++    image.appendExtension(bytes, {EntityPropertyOwnerKind::EPOK_NODE, 1}, 2, group(), Generation(9), admit);
++    media.set(0); const auto before = image.serialize(); const auto baseline = memory->used();
++    EXPECT_THROW(std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)), FormatException);
++    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(image.serialize(), before);
++    EXPECT_THROW(std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9),
++        [](size_t) { throw MaterializedByteLimitExceeded(); }), MaterializedByteLimitExceeded);
++    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(image.serialize(), before);
++    auto bound = std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9), admit);
++    EXPECT_GT(media.bytes(), 0U); media.set(0);
++    EXPECT_EQ(bound.ownerKind(), PageOwnerKind::POK_HYBRID_PROPERTY);
++}
++#endif
++class HybridPropertyPublicationGuardTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {};
++TEST_F(HybridPropertyPublicationGuardTest, OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation) {
++    SharedPagePoolAllocator allocator(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION);
++    const auto before = metadata_->openSnapshot().superblock(); const auto bytes = io_->fileSize();
++    SharedPagePoolAllocationRequest allocation; allocation.page_owner_kind = PageOwnerKind::POK_HYBRID_PROPERTY;
++    SharedPagePoolAppendRequest append; append.page_owner_kind = PageOwnerKind::POK_HYBRID_PROPERTY;
++    SharedPagePoolReplacementRequest replace; replace.page_owner_kind = PageOwnerKind::POK_HYBRID_PROPERTY;
++    SharedPagePoolEvacuationRequest evacuate; evacuate.page_owner_kind = PageOwnerKind::POK_HYBRID_PROPERTY;
++    // Missing pool identities would fail differently if reconciliation ran.
++    expectError([&] { allocator.allocateNewPoolPage(allocation, PhysicalSlotId(40), PhysicalSlotId(80), LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    expectError([&] { allocator.appendPage(append, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    expectError([&] { allocator.replacePage(replace, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    expectError([&] { allocator.evacuatePage(evacuate, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
++}
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp
+new file mode 100644
+index 00000000..f1eb6698
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp
+@@ -0,0 +1,271 @@
++#include <gtest/gtest.h>
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyPageImage.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
++
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++using graph::query::execution::MaterializedByteLimitExceeded;
++using graph::query::execution::MaterializedByteReservation;
++namespace {
++HybridPropertyGroupRecord group() {
++    return {EntityPropertyOwnerKind::EPOK_NODE, HybridPropertyGroupMode::HPGM_HYBRID, 1,
++        Generation(8), UINT64_MAX, 97, 2};
++}
++HybridPropertyColumnRecord column(bool boolean = false) {
++    HybridPropertyColumnRecord result;
++    result.identity = {EntityPropertyOwnerKind::EPOK_NODE, boolean ? HybridPropertyScalarKind::HPSK_BOOL :
++        HybridPropertyScalarKind::HPSK_INT64, 1, boolean ? 2U : 1U, Generation(7)};
++    result.live = UINT64_MAX; result.presence = (UINT64_C(1) << 48) - 1;
++    for (unsigned i = 0; i < 48; ++i) result.words[i] = boolean ? i % 2 : 100 + i;
++    return result;
++}
++auto extension(std::pmr::memory_resource &memory, Generation generation = Generation(7), size_t length = 30) {
++    return HybridPropertyExtensionView::encodeInline({EntityPropertyOwnerKind::EPOK_NODE, 1}, 3, generation,
++        PropertyValue(std::string(length, 'x')), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, memory);
++}
++TEST(HybridPropertyPageImageTest, SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    {
++        auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++        EXPECT_GE(memory->used(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
++        const auto g = group(); const auto scalar = column(); const auto boolean = column(true);
++        const auto groupSlot = image.appendGroup(g); const auto scalarSlot = image.appendColumn(scalar, g, Generation(9));
++        const auto boolSlot = image.appendColumn(boolean, g, Generation(9));
++        const auto bytes = extension(*memory);
++        const auto fieldSlot = image.appendExtension(bytes, {g.owner_kind, 1}, 3, g, Generation(9));
++        auto secondGroup = g; secondGroup.group_id = 2; secondGroup.live = 1;
++        secondGroup.memberships = 1; secondGroup.columns = 0;
++        const auto secondGroupSlot = image.appendGroup(secondGroup);
++        const auto secondBytes = HybridPropertyExtensionView::encodeInline({g.owner_kind, 65}, 3, Generation(7),
++            PropertyValue("other group"), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *memory);
++        const auto secondField = image.appendExtension(secondBytes, {g.owner_kind, 65}, 3, secondGroup, Generation(9));
++        EXPECT_EQ(groupSlot.page_id, scalarSlot.page_id); EXPECT_EQ(scalarSlot.page_id, fieldSlot.page_id);
++        EXPECT_EQ(secondField.page_id, groupSlot.page_id); EXPECT_EQ(secondGroupSlot.page_id, groupSlot.page_id);
++        EXPECT_EQ(image.stats().live_slot_count, 6U); EXPECT_EQ(image.physicalPoolGeneration(), Generation(1));
++        EXPECT_EQ(image.readGroup(groupSlot, g.owner_kind, 1, Generation(9)), g);
++        EXPECT_EQ(image.readColumn(scalarSlot, scalar.identity, g, Generation(9)), scalar);
++        EXPECT_EQ(image.readColumn(boolSlot, boolean.identity, g, Generation(9)), boolean);
++        const auto owned = image.readRecord(fieldSlot);
++        const auto view = HybridPropertyExtensionView::open(owned, {g.owner_kind, 1}, 3, g.semantic_generation, Generation(9), Generation(9));
++        EXPECT_EQ(view.decodeInline([](const auto &) {}), PropertyValue(std::string(30, 'x')));
++        const auto serialized = image.serialize();
++        auto reopened = HybridPropertyPageImage::open(serialized, PageId(41), Generation(1), Generation(9), memory);
++        EXPECT_EQ(reopened.readColumn(scalarSlot, scalar.identity, g, Generation(9)), scalar);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyPageImageTest, PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    {
++        auto original = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++        const auto g = group(); const auto scalar = column(); const auto other = column(true);
++        const auto groupSlot = original.appendGroup(g); const auto selected = original.appendColumn(scalar, g, Generation(9));
++        const auto untouched = original.appendColumn(other, g, Generation(9)); const auto before = original.serialize();
++        auto candidate = original.clone(Generation(10), memory);
++        auto newGroup = g; newGroup.semantic_generation = Generation(10);
++        auto changed = scalar; changed.identity.semantic_generation = Generation(10); changed.words[11] = 900;
++        candidate.replaceColumn(selected, scalar.identity, changed, newGroup, Generation(10));
++        candidate.replaceGroup(groupSlot, newGroup, Generation(10));
++        EXPECT_EQ(original.serialize(), before);
++        EXPECT_EQ(original.readColumn(selected, scalar.identity, g, Generation(9)), scalar);
++        EXPECT_EQ(candidate.readColumn(selected, changed.identity, newGroup, Generation(10)), changed);
++        EXPECT_EQ(candidate.readColumn(untouched, other.identity, newGroup, Generation(10)), other);
++        EXPECT_EQ(candidate.physicalPoolGeneration(), Generation(1));
++        const auto bytes = candidate.serialize();
++        auto reopened = HybridPropertyPageImage::open(bytes, PageId(41), Generation(1), Generation(10), memory);
++        EXPECT_EQ(reopened.readGroup(groupSlot, g.owner_kind, 1, Generation(10)), newGroup);
++        EXPECT_EQ(reopened.readColumn(selected, changed.identity, newGroup, Generation(10)), changed);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyPageImageTest, ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    const auto g = group(); const auto scalar = column(); const auto slot = image.appendColumn(scalar, g, Generation(9));
++    const auto before = image.serialize();
++    for (unsigned bad = 0; bad < 4; ++bad) {
++        auto changed = scalar;
++        if (bad == 0) changed.identity.token++;
++        if (bad == 1) changed.identity.scalar_kind = HybridPropertyScalarKind::HPSK_DOUBLE;
++        if (bad == 2) { changed.presence &= ~UINT64_C(1); changed.words[0] = 0; }
++        if (bad == 3) changed.identity.semantic_generation = Generation(10);
++        EXPECT_THROW(image.replaceColumn(slot, scalar.identity, changed, g, Generation(9)), FormatException) << bad;
++        EXPECT_EQ(image.serialize(), before);
++    }
++    auto wrongPrevious = scalar.identity; wrongPrevious.semantic_generation = Generation(6);
++    EXPECT_THROW(image.replaceColumn(slot, wrongPrevious, scalar, g, Generation(9)), FormatException);
++    auto future = g; future.semantic_generation = Generation(10);
++    EXPECT_THROW(image.appendGroup(future), FormatException);
++    EXPECT_THROW(image.clone(Generation(8), memory), FormatException);
++    EXPECT_EQ(image.serialize(), before);
++}
++TEST(HybridPropertyPageImageTest, EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto old = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    const auto g = group(); const auto scalar = column(); const auto first = old.appendColumn(scalar, g, Generation(9));
++    const auto bytes = extension(*memory); const auto retained = old.appendExtension(bytes, {g.owner_kind, 1}, 3, g, Generation(9));
++    auto candidate = old.clone(Generation(10), memory); candidate.erase(first);
++    EXPECT_THROW(candidate.readRecord(first), FormatException);
++    const auto reused = candidate.appendColumn(scalar, g, Generation(9));
++    EXPECT_EQ(reused.page_id, first.page_id); EXPECT_EQ(reused.slot_id, first.slot_id); EXPECT_GT(reused.generation, first.generation);
++    candidate.compact(); EXPECT_EQ(candidate.readRecord(retained), old.readRecord(retained));
++    EXPECT_EQ(old.readColumn(first, scalar.identity, g, Generation(9)), scalar);
++    EXPECT_THROW(candidate.readColumn(first, scalar.identity, g, Generation(9)), FormatException);
++}
++TEST(HybridPropertyPageImageTest, ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    const auto g = group(); const auto bytes = extension(*memory);
++    const auto slot = image.appendExtension(bytes, {g.owner_kind, 1}, 3, g, Generation(9));
++    auto nextGroup = g; nextGroup.semantic_generation = Generation(9); const auto larger = extension(*memory, Generation(9), 1000);
++    image.replaceExtension(slot, larger, {g.owner_kind, 1}, 3, nextGroup, Generation(9));
++    EXPECT_EQ(image.readRecord(slot).size(), larger.size()); const auto before = image.serialize();
++    auto dead = nextGroup; dead.live &= ~UINT64_C(1);
++    EXPECT_THROW(image.replaceExtension(slot, larger, {g.owner_kind, 1}, 3, dead, Generation(9)), FormatException);
++    EXPECT_THROW(image.replaceExtension(slot, larger, {g.owner_kind, 2}, 3, nextGroup, Generation(9)), FormatException);
++    EXPECT_THROW(image.replaceExtension(slot, bytes, {g.owner_kind, 1}, 3, nextGroup, Generation(9)), FormatException);
++    EXPECT_EQ(image.serialize(), before);
++}
++TEST(HybridPropertyPageImageTest, OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource) {
++    auto tiny = std::make_shared<MaterializedByteBudget>(4031);
++    EXPECT_THROW(HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), tiny), MaterializedByteLimitExceeded);
++    EXPECT_EQ(tiny->used(), 0U);
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    {
++        auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++        const auto g = group(); const auto scalar = column(); const auto slot = image.appendColumn(scalar, g, Generation(9));
++        const auto before = image.serialize(); const auto baseline = memory->used();
++        {
++            MaterializedByteReservation hold(memory.get()); hold.set(memory->available());
++            EXPECT_THROW(image.readRecord(slot), MaterializedByteLimitExceeded);
++            EXPECT_THROW(image.serialize(), MaterializedByteLimitExceeded);
++        }
++        EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(image.serialize(), before);
++        EXPECT_EQ(image.readColumn(slot, scalar.identity, g, Generation(9)), scalar);
++    }
++    EXPECT_EQ(memory->used(), 0U);
++}
++TEST(HybridPropertyPageImageTest, PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    std::optional<graph::utils::OwnedVector<std::byte>> escaped;
++    std::weak_ptr<MaterializedByteBudget> weak = memory;
++    {
++        auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++        image.appendGroup(group()); const auto bytes = image.serialize(); const auto baseline = memory->used();
++        EXPECT_THROW(HybridPropertyPageImage::open(bytes, PageId(42), Generation(1), Generation(9), memory), FormatException);
++        EXPECT_THROW(HybridPropertyPageImage::open(bytes, PageId(41), Generation(2), Generation(9), memory), FormatException);
++        auto damaged = bytes; damaged.back() ^= std::byte{1};
++        const auto withCopy = memory->used();
++        EXPECT_THROW(HybridPropertyPageImage::open(damaged, PageId(41), Generation(1), Generation(9), memory), FormatException);
++        EXPECT_EQ(memory->used(), withCopy); EXPECT_GE(withCopy, baseline);
++        escaped.emplace(image.serialize());
++    }
++    EXPECT_GE(memory->used(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
++    memory.reset(); EXPECT_FALSE(weak.expired()); escaped.reset(); EXPECT_TRUE(weak.expired());
++}
++TEST(HybridPropertyPageImageTest, FullPageRefusesExtraRecordWithoutChangingOtherRecords) {
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    auto g = group(); g.columns = 7; g.memberships = 7 * 48;
++    const auto scalar = column(); std::vector<SlottedSlotReference> slots;
++    for (unsigned i = 0; i < 6; ++i) {
++        auto field = scalar; field.identity.token = i + 1;
++        slots.push_back(image.appendColumn(field, g, Generation(9)));
++    }
++    const auto before = image.serialize();
++    auto extra = scalar; extra.identity.token = 7;
++    EXPECT_THROW(image.appendColumn(extra, g, Generation(9)), FormatException);
++    EXPECT_EQ(image.serialize(), before);
++    for (size_t i = 0; i < slots.size(); ++i) {
++        auto expected = scalar; expected.identity.token = uint32_t(i + 1);
++        EXPECT_EQ(image.readColumn(slots[i], expected.identity, g, Generation(9)), expected);
++    }
++}
++TEST(HybridPropertyPageImageTest, SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource) {
++    auto page = SlottedPage::create(PageId(41), Generation(1));
++    const std::array<std::byte, 4> payload{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
++    const auto slot = page.insert(payload); const auto before = page.serialize();
++    EXPECT_THROW(page.readOwned(slot, {}), std::invalid_argument);
++    EXPECT_THROW(page.serializeOwned({}), std::invalid_argument);
++    auto tiny = std::make_shared<MaterializedByteBudget>(1);
++    EXPECT_THROW(page.readOwned(slot, tiny), MaterializedByteLimitExceeded);
++    EXPECT_THROW(page.serializeOwned(tiny), MaterializedByteLimitExceeded);
++    EXPECT_EQ(tiny->used(), 0U); EXPECT_EQ(page.serialize(), before);
++    auto target = std::make_shared<MaterializedByteBudget>(65536);
++    {
++        const auto copy = page.readOwned(slot, target);
++        EXPECT_EQ(copy.size(), payload.size()); EXPECT_GE(target->used(), payload.size());
++        EXPECT_TRUE(std::equal(copy.begin(), copy.end(), payload.begin(), payload.end()));
++        const auto serialized = page.serializeOwned(target);
++        EXPECT_EQ(std::span<const std::byte>(serialized).size(), before.size());
++        EXPECT_TRUE(std::equal(serialized.begin(), serialized.end(), before.begin(), before.end()));
++        EXPECT_GE(target->used(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + payload.size());
++    }
++    EXPECT_EQ(target->used(), 0U); EXPECT_EQ(page.serialize(), before);
++}
++TEST(HybridPropertyPageImageTest, FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators) {
++    using Codec = HybridPropertyDirectoryCodec;
++    auto memory = std::make_shared<MaterializedByteBudget>(65536);
++    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
++    const auto g = group(); const auto groupSlot = image.appendGroup(g); const auto bytes = extension(*memory);
++    const auto fieldSlot = image.appendExtension(bytes, {g.owner_kind, 1}, 3, g, Generation(9));
++    const auto key = Codec::ownerKey({g.owner_kind, 1}, 3);
++    const auto encoded = HybridPropertyFieldDirectoryMap::encode(key, Codec::locatorValue(fieldSlot));
++    EXPECT_EQ(encoded.size(), 28U); EXPECT_LT(encoded.size(), bytes.size());
++    BTreePageEntry record{{encoded.begin(), encoded.end()}, 0};
++    const auto directory = HybridPropertyFieldDirectoryMap::decode(record);
++    const auto identity = Codec::decodeOwnerKey(directory.key, g.owner_kind);
++    const auto selected = Codec::decodeLocator(directory.value); EXPECT_EQ(selected, fieldSlot);
++    const auto body = image.readRecord(selected);
++    const auto view = HybridPropertyExtensionView::open(body, identity.owner, identity.token,
++        g.semantic_generation, Generation(9), Generation(9));
++    EXPECT_EQ(view.decodeInline([](const auto &) {}), PropertyValue(std::string(30, 'x')));
++    // The CRC-valid page and valid slot locator do not authorize the wrong
++    // record role: a column reader must reject a group header at that slot.
++    const auto wrong = Codec::decodeLocator(Codec::locatorValue(groupSlot));
++    EXPECT_THROW(image.readColumn(wrong, column().identity, g, Generation(9)), FormatException);
++    auto foreign = selected; foreign.page_id = PageId(42);
++    EXPECT_THROW(image.readRecord(foreign), FormatException);
++}
++TEST(HybridPropertyPageImageTest, NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity) {
++    using Codec = HybridPropertyDirectoryCodec;
++    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_EDGE, UINT64_C(0x0102030405060708)};
++    const auto encoded = Codec::ownerKey(owner, 0x090a0b0c);
++    for (size_t i = 0; i < encoded.size(); ++i) EXPECT_EQ(encoded[i], std::byte(i + 1));
++    EXPECT_EQ(Codec::decodeOwnerKey(encoded, owner.owner_kind), (Codec::OwnerField{owner, 0x090a0b0c}));
++    EXPECT_LT(Codec::ownerKey({owner.owner_kind, 255}, UINT32_MAX), Codec::ownerKey({owner.owner_kind, 256}, 1));
++    EXPECT_LT(Codec::columnKey(256, 255), Codec::columnKey(256, 256));
++    EXPECT_EQ(Codec::decodeColumnKey(Codec::columnKey(37, 19)), (Codec::GroupField{37, 19}));
++    EXPECT_EQ(Codec::decodeGroupKey(Codec::groupKey(RSS_HYBRID_MAX_GROUP_ID)), RSS_HYBRID_MAX_GROUP_ID);
++    const SlottedSlotReference slot{PageId(UINT64_C(0x1122334455667788)), 0x1234, 0x56789abc};
++    const auto locator = Codec::locatorValue(slot);
++    EXPECT_EQ(locator[0], std::byte{0x88}); EXPECT_EQ(locator[7], std::byte{0x11});
++    EXPECT_EQ(locator[8], std::byte{0x34}); EXPECT_EQ(locator[9], std::byte{0x12});
++    EXPECT_EQ(locator[12], std::byte{0xbc}); EXPECT_EQ(Codec::decodeLocator(locator), slot);
++    for (auto source : {HybridPropertySource::HPS_COLUMN, HybridPropertySource::HPS_EXTENSION})
++        EXPECT_EQ(Codec::decodeSource(Codec::sourceValue(source)), source);
++}
++TEST(HybridPropertyPageImageTest, NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership) {
++    using Codec = HybridPropertyDirectoryCodec;
++    const SlottedSlotReference slot{PageId(41), 0, 1}; const auto valid = Codec::locatorValue(slot);
++    for (size_t offset : {size_t(10), size_t(11)}) {
++        auto bad = valid; bad[offset] = std::byte{1}; EXPECT_THROW(Codec::decodeLocator(bad), FormatException);
++    }
++    for (auto bad : {SlottedSlotReference{PageId{}, 0, 1}, SlottedSlotReference{PageId(41), RSS_SLOTTED_PAGE_NO_SLOT, 1},
++        SlottedSlotReference{PageId(41), 0, 0}}) EXPECT_THROW(Codec::locatorValue(bad), FormatException);
++    auto badLocator = valid; LittleEndianCodec::writeU16(badLocator, 8, RSS_SLOTTED_PAGE_NO_SLOT);
++    EXPECT_THROW(Codec::decodeLocator(badLocator), FormatException);
++    auto source = Codec::sourceValue(HybridPropertySource::HPS_EXTENSION);
++    for (size_t offset : {size_t(1), size_t(2), size_t(3)}) {
++        auto bad = source; bad[offset] = std::byte{1}; EXPECT_THROW(Codec::decodeSource(bad), FormatException);
++    }
++    source[0] = std::byte{3}; EXPECT_THROW(Codec::decodeSource(source), FormatException);
++    EXPECT_THROW(Codec::ownerKey({EntityPropertyOwnerKind::EPOK_NODE, UINT64_C(1) << 63}, 1), FormatException);
++    EXPECT_THROW(Codec::ownerKey({EntityPropertyOwnerKind::EPOK_NODE, 1}, 0), FormatException);
++    EXPECT_THROW(Codec::groupKey(RSS_HYBRID_MAX_GROUP_ID + 1), FormatException);
++    EXPECT_THROW(Codec::columnKey(1, 0), FormatException);
++    HybridPropertyOwnerMap::Key zero{}; EXPECT_THROW(Codec::decodeOwnerKey(zero, EntityPropertyOwnerKind::EPOK_NODE), FormatException);
++}
++} // namespace

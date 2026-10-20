@@ -1,0 +1,21 @@
+{
+  "scope": "Only LargeValueStore.cpp instrumented; one corrupt-index test run; instrumented object linked first",
+  "variants": {
+    "old": {
+      "variant": "old",
+      "returncode": 86,
+      "expected": 86,
+      "instrumented_template_definitions_first": true,
+      "full_suite": false,
+      "source_sha256": "9163307e3b79e45ec070d61433aae64e181c29d56c69dc16cf1186c4e744231f"
+    },
+    "fixed": {
+      "variant": "fixed",
+      "returncode": 0,
+      "expected": 0,
+      "instrumented_template_definitions_first": true,
+      "full_suite": false,
+      "source_sha256": "7bcf13659432381651dc8adf0624f202acca825ab3a05717ed94c3898ed82935"
+    }
+  }
+}

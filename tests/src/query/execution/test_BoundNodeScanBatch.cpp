@@ -6,7 +6,7 @@
 
 namespace graph::query::execution::detail {
 namespace {
-class ScanBatchSnapshot final : public storage::LogicalGraphReadSnapshot {
+class ScanBatchSnapshot : public storage::LogicalGraphReadSnapshot {
 public:
 	std::optional<storage::LogicalGraphSchemaIdentity> identity{storage::LogicalGraphSchemaIdentity{1U, 2U, {}, 0U, 0U}};
 	std::optional<storage::LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override { return identity; }
@@ -163,6 +163,75 @@ TEST(DirectPropertyColumnsTest, StringAndMixedTypePredicatesMatchLegacyScalarOrd
             for (size_t row = 0; row < values.size(); ++row) EXPECT_EQ(actual.includes(row), expected.includes(row));
         }
     }
+}
+
+TEST(DirectPropertyColumnsTest, RawScalarsPreserveIeeeBitsNullAndBudgetWithoutValueDecode) {
+    ScanBatchSnapshot snapshot; MaterializedByteBudget budget(65536);
+    {
+        DirectPropertyColumns columns(snapshot, 6, 1, budget);
+        graph::property_decode::AllocationScope forbid(nullptr, [](void *, size_t) {
+            throw std::logic_error("raw scalar must not allocate a PropertyValue");
+        });
+        constexpr uint64_t nan = UINT64_C(0x7ff8000000000042), negativeZero = UINT64_C(0x8000000000000000);
+        columns.appendScalar(0, 0, PropertyType::INTEGER, std::bit_cast<uint64_t>(int64_t(-7)), [] {});
+        columns.appendScalar(1, 0, PropertyType::DOUBLE, nan, [] {});
+        columns.appendScalar(2, 0, PropertyType::DOUBLE, negativeZero, [] {});
+        columns.appendScalar(3, 0, PropertyType::BOOLEAN, 1, [] {});
+        columns.appendScalar(4, 0, PropertyType::NULL_TYPE, 0, [] {});
+        columns.seal();
+        EXPECT_EQ(std::get<int64_t>(columns.cell(0, columns.rowId(0)).data), -7);
+        EXPECT_EQ(std::bit_cast<uint64_t>(std::get<double>(columns.cell(0, columns.rowId(1)).data)), nan);
+        EXPECT_EQ(std::bit_cast<uint64_t>(std::get<double>(columns.cell(0, columns.rowId(2)).data)), negativeZero);
+        EXPECT_TRUE(std::get<bool>(columns.cell(0, columns.rowId(3)).data));
+        EXPECT_EQ(columns.cell(0, columns.rowId(4)).state, ColumnCellState::CCS_NULL);
+        EXPECT_EQ(columns.cell(0, columns.rowId(5)).state, ColumnCellState::CCS_MISSING);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+    {
+        DirectPropertyColumns denied(snapshot, 8, 1, budget);
+        MaterializedByteReservation hold(&budget); hold.set(budget.available());
+        EXPECT_THROW(denied.appendScalar(0, 0, PropertyType::INTEGER, 1, [] {}), MaterializedByteLimitExceeded);
+        EXPECT_THROW(denied.seal(), std::logic_error);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+    for (const auto type : {PropertyType::BOOLEAN, PropertyType::NULL_TYPE, PropertyType::STRING}) {
+        DirectPropertyColumns invalid(snapshot, 1, 1, budget);
+        EXPECT_THROW(invalid.appendScalar(0, 0, type, 2, [] {}), std::invalid_argument);
+        EXPECT_THROW(invalid.seal(), std::logic_error);
+    }
+}
+
+TEST(DirectPropertyColumnsTest, ScalarGatherRestoresDuplicateIdsAndUsesOwningFallbackForOtherReaders) {
+    class ScalarSnapshot final : public ScanBatchSnapshot {
+    public:
+        bool raw = true;
+        mutable size_t oldCalls = 0, rawCalls = 0;
+        void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view>, const PropertyCellSink &sink,
+            const std::function<void(size_t)> &admit) const override {
+            ++oldCalls;
+            for (size_t i = 0; i < ids.size(); ++i) { admit(18); sink(i, 0, PropertyValue(int64_t(ids[i]))); }
+        }
+        void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &sink,
+            const storage::PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admit) const override {
+            if (!raw) { storage::LogicalGraphReadSnapshot::readNodePropertyCellsWithScalarsSortedWithAdmission(
+                ids, keys, sink, scalars, admit); return; }
+            ++rawCalls;
+            for (size_t i = 0; i < ids.size(); ++i) { admit(18); scalars(i, 0, PropertyType::INTEGER, ids[i]); }
+        }
+    } snapshot;
+    const std::array<uint64_t, 4> ids{4, 2, 4, 1};
+    const std::array<std::string_view, 1> keys{"rank"};
+    MaterializedByteBudget budget(65536);
+    for (bool raw : {true, false}) {
+        snapshot.raw = raw;
+        DirectPropertyColumns columns(snapshot, ids.size(), 1, budget);
+        columns.readGather(ids, keys, [](size_t) {}, [] {});
+        for (size_t i = 0; i < ids.size(); ++i)
+            EXPECT_EQ(std::get<int64_t>(columns.cell(0, columns.rowId(i)).data), int64_t(ids[i]));
+    }
+    EXPECT_EQ(snapshot.rawCalls, 1U); EXPECT_EQ(snapshot.oldCalls, 1U); EXPECT_EQ(budget.used(), 0U);
 }
 
 }

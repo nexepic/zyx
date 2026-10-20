@@ -1,0 +1,21 @@
+{
+  "source_basis": "uncommitted working tree",
+  "base_commit": "6a3fedf13ecfa2a7a6447863f4b1ccc3eb9c822c",
+  "code_checkpoint": null,
+  "accepted_progress_changed": false,
+  "files": {
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md": "99a34676531ee059b2ae2c3b2dffadea128dad9b7d89a4497fcdee99031fa346",
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md": "c8fd8157193128194d61107b1f38d40cbb75ff2d47114142ce93fa9025985ed7",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "4d4721d7269825ee95531af1ac84984a16fb9bcac9a9249ce41c5b81d39d7d77",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "35d743e9ab431a3c387fa5e8c1d948ed8bfd192d02adb7957e6dc1b9e2e84955",
+    "include/graph/storage/relocatable/allocation/SlottedPage.hpp": "b45ccf90510d349c0700c967124b88bfeb9e6801a527c8a01d54d2f4f5a4c1ea",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "863bb1e872509c25f64adae649e0ce33c931ed0441cb07209961c577d69cfd77",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp": "163989d95a86df76e6ec734cb3fd2e703c7903d7eecd1bafaceac3b3c3dc8b2d",
+    "include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp": "0b27b5f4f69e34ea33936570bf624c182de1315f00dffc022852aad664590dee",
+    "include/graph/storage/relocatable/property/HybridPropertyRecords.hpp": "840ce69b0ff294fee4a2e3b54e03b48c55f368cfe09d95f90a4822a4e8c782be",
+    "src/storage/relocatable/allocation/SlottedPage.cpp": "afb36e696be66c3a79f7637669bb5f82a618c119c592c9ada012815a98ae41ae",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "e14db2c3108f7a92e7f255bc6b533077f80ea546d87ed63c28fd663aa896fea9",
+    "tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp": "dc9f1359fc1a00adf8367c9c510ea7b2c32dbcd24df9e1a03effa9aee6805268",
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp": "29aeb2c07acf423584fdb1c4c33d68196183f985ae8da85d92bf57a035285666"
+  }
+}

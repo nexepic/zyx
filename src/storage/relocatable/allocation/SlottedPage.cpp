@@ -430,6 +430,22 @@ namespace graph::storage {
 		return {bytes_.begin(), bytes_.end()};
 	}
 
+    utils::OwnedVector<std::byte> SlottedPage::serializeOwned(std::shared_ptr<std::pmr::memory_resource> memory) const {
+        if (!memory) throw std::invalid_argument("slotted page serialization requires an allocation owner");
+        std::scoped_lock lock(latch_);
+        return {bytes_.begin(), bytes_.end(), utils::OwnedPmrAllocator<std::byte>(std::move(memory))};
+    }
+
+    utils::OwnedVector<std::byte> SlottedPage::readOwned(const SlottedSlotReference &reference,
+        std::shared_ptr<std::pmr::memory_resource> memory) const {
+        if (!memory) throw std::invalid_argument("slotted record read requires an allocation owner");
+        std::scoped_lock lock(latch_);
+        validateReferenceLocked(reference);
+        const Slot slot = readSlotLocked(reference.slot_id);
+        return {bytes_.begin() + slot.offset, bytes_.begin() + slot.offset + slot.value_bytes,
+            utils::OwnedPmrAllocator<std::byte>(std::move(memory))};
+    }
+
 	std::vector<SlottedSlotReference> SlottedPage::liveSlots() const {
 		std::scoped_lock lock(latch_);
 		std::vector<SlottedSlotReference> references;
@@ -442,6 +458,19 @@ namespace graph::storage {
 		}
 		return references;
 	}
+
+    utils::OwnedVector<SlottedSlotReference> SlottedPage::liveSlotsOwned(
+        std::shared_ptr<std::pmr::memory_resource> memory) const {
+        if (!memory) throw std::invalid_argument("slotted enumeration requires an allocation owner");
+        std::scoped_lock lock(latch_);
+        utils::OwnedVector<SlottedSlotReference> result{utils::OwnedPmrAllocator<SlottedSlotReference>(std::move(memory))};
+        result.reserve(header_.live_slot_count);
+        for (uint16_t slotId = 0; slotId < header_.slot_count; ++slotId) {
+            const auto slot = readSlotLocked(slotId);
+            if (slot.isLive()) result.push_back({header_.page_id, slotId, slot.generation});
+        }
+        return result;
+    }
 
 	void SlottedPage::rebindOwner(const PageOwnerHeader &owner) {
 		validateSlottedPageOwner(owner);
@@ -470,6 +499,11 @@ namespace graph::storage {
 		std::scoped_lock lock(latch_);
 		return insertLocked(value);
 	}
+
+    std::shared_ptr<std::pmr::memory_resource> SlottedPage::memoryOwner() const {
+        std::scoped_lock lock(latch_);
+        return bytes_.get_allocator().owner();
+    }
 
 	size_t SlottedPage::retainedBufferBytes() const {
 		std::scoped_lock lock(latch_);

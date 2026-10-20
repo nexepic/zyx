@@ -15,6 +15,7 @@
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "tests/src/storage/relocatable/index/RelocatableBTreePageStoreTestUtils.hpp"
 
 using namespace graph::storage;
@@ -697,4 +698,49 @@ TEST_F(RelocatableBTreePageStoreTest, NativeBulkPlansRejectEverySecondPassDiverg
 	std::vector<BTreePageEntry> extraSecondPass = firstPass;
 	extraSecondPass.push_back({smallKey(9U), 9U});
 	rejectsChangedSecondPass(89U, sourceWithChangedSecondPass(firstPass, std::move(extraSecondPass)));
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeBulkPlanRetainsItsAccountOutsideTheAllocationScopeAndAcrossCopies) {
+    using graph::query::execution::MaterializedByteBudget;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+    SlottedPagePool pages(io, *metadata); BTreePageStore store(pages, *metadata);
+    auto snapshot = metadata->openSnapshot(); const auto before = snapshot.superblock();
+    const auto epoch = io->dataMutationEpoch(); const auto bytes = io->fileSize();
+    // Caller-owned source bytes are separate from the builder's planning state.
+    const auto source = sourceFor(poolSizedEntries(1800));
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    std::weak_ptr<MaterializedByteBudget> weak = memory;
+    std::optional<BTreeInitialTreeMutationPlan> plan;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        plan.emplace(BulkBTreeBuilder::planNativeTree(store, *metadata, snapshot, INDEX_ID, source, options()));
+    }
+    const auto retained = memory->used(); EXPECT_GT(retained, 0U);
+    std::vector<IndexTreeMutationPoolBatch> invalidAssignments;
+    EXPECT_THROW(plan->preparer(invalidAssignments, LogSequenceNumber(2)), FormatException);
+    EXPECT_EQ(memory->used(), retained);
+    EXPECT_GT(plan->new_pool_mutations.size(), 1U);
+    auto copy = plan; EXPECT_GT(memory->used(), retained);
+    plan.reset(); EXPECT_GT(memory->used(), 0U);
+    memory.reset(); EXPECT_FALSE(weak.expired());
+    EXPECT_EQ(metadata->openSnapshot().superblock(), before);
+    EXPECT_EQ(io->fileSize(), bytes); EXPECT_EQ(io->dataMutationEpoch(), epoch);
+    copy.reset(); EXPECT_TRUE(weak.expired());
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeBulkPlanningRefusesItsBudgetAndRefundsWithoutPublishing) {
+    using namespace graph::query::execution;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+    SlottedPagePool pages(io, *metadata); BTreePageStore store(pages, *metadata);
+    auto snapshot = metadata->openSnapshot(); const auto before = snapshot.superblock();
+    const auto epoch = io->dataMutationEpoch(); const auto bytes = io->fileSize();
+    const auto source = sourceFor(wideEntries(500));
+    auto memory = std::make_shared<MaterializedByteBudget>(16384);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(BulkBTreeBuilder::planNativeTree(store, *metadata, snapshot, INDEX_ID, source, options()),
+            MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata->openSnapshot().superblock(), before);
+    EXPECT_EQ(io->fileSize(), bytes); EXPECT_EQ(io->dataMutationEpoch(), epoch);
 }

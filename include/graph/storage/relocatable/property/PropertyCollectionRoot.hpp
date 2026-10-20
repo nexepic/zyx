@@ -136,6 +136,11 @@ namespace graph::storage {
 	class EntityPropertyLargeValuePayloadCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(std::span<const PropertyCollectionRootEntry> entries);
+        // Identical version-3 wire bytes for one field, with all output and
+        // canonical sorting workspace on the supplied resource. That resource
+        // must outlive the returned PMR vector.
+        [[nodiscard]] static std::pmr::vector<std::byte> encodeSingleField(uint32_t token,
+            const PropertyValue &value, std::pmr::memory_resource &memory);
 		[[nodiscard]] static std::vector<PropertyCollectionRootEntry> decode(std::span<const std::byte> bytes,
 				const SelectedPropertyReadAdmission *admission = nullptr,
 				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);

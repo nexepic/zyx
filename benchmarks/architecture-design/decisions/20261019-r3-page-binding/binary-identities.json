@@ -1,0 +1,10 @@
+{
+  "default": {
+    "path": "/workspace/zyx-r3-page-binding-20261019/default-final/records-test",
+    "sha256": "f48fadfb531a5f6db286dd8c625c2e2498653d21a361647760fc3b222ba7c19c"
+  },
+  "candidate": {
+    "path": "/workspace/zyx-r3-page-binding-20261019/candidate-final/records-test",
+    "sha256": "5bb06f00f833185afd95a5753cec54d7554acd7f6108bbba50f88082a12e41ff"
+  }
+}

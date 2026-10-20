@@ -2,6 +2,7 @@
 #include <array>
 #include <vector>
 #include "graph/storage/relocatable/index/FixedBTreeMap.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/index/InitialBTreeBuilder.hpp"
 #include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
@@ -83,6 +84,9 @@ TEST_F(PropertySubblockDirectoryTest, PrefixDuplicationIsCorruptionEvenWhenNativ
     create(entries); Directory map(DIRECTORY_INDEX,*btree_pages_,*metadata_); auto pin=metadata_->openSnapshot();
     EXPECT_THROW(map.find(pin,key(1,1)),FormatException);
     EXPECT_FALSE(map.find(pin,key(1,2)));
+    size_t emitted = 0;
+    EXPECT_THROW(map.visitAll(pin, 2, [&](const auto &) { ++emitted; return true; }), FormatException);
+    EXPECT_EQ(emitted, 0U);
 }
 TEST_F(PropertySubblockDirectoryTest, ExplicitLeafLayoutCannotChangeWithinOneTransaction) {
     const auto original=entry(1,1,{101,3,7}); create(std::span(&original,1));
@@ -137,6 +141,20 @@ TEST_F(PropertySubblockDirectoryTest, AdmissionFailurePreventsEmissionAndAllowsC
     const auto target=Directory::decode(records.back()).key;
     EXPECT_THROW(map.find(current,target,[&](size_t bytes){++callbacks;if(bytes)throw std::length_error("test admission");}),std::length_error);
     EXPECT_GT(callbacks,0U); EXPECT_TRUE(map.find(current,target));
+    size_t delivered = 0;
+    EXPECT_THROW(map.visitPrefix(current, target, 1, [&](const auto &) { ++delivered; return true; },
+        [](size_t bytes) { if (bytes) throw std::length_error("prefix boundary admission"); }), std::length_error);
+    EXPECT_EQ(delivered, 0U);
+    class CancelPrefix final : public CancellationCheckpoint {
+    public: void check() const override { throw std::logic_error("cancel owner enumeration"); }
+    } cancellation;
+    EXPECT_THROW(map.visitPrefix(current, target, 1, [&](const auto &) { ++delivered; return true; },
+        {}, &cancellation), std::logic_error);
+    EXPECT_EQ(delivered, 0U);
+    EXPECT_THROW(map.find(current, target, {}, &cancellation), std::logic_error);
+    EXPECT_TRUE(map.find(current, target));
+    EXPECT_TRUE(map.visitPrefix(current, target, 1, [&](const auto &) { ++delivered; return true; }));
+    EXPECT_EQ(delivered, 1U);
 }
 TEST_F(PropertySubblockDirectoryTest, ExhaustedPinnedPoolRebuildPreservesKeyOnlyLayoutAndAllOldGenerations) {
     auto currentEntry=entry(1,1,{101,0,1}); create(std::span(&currentEntry,1));
@@ -209,4 +227,162 @@ TEST_F(PropertySubblockDirectoryTest, ExistingU64TreeCannotBeReinterpretedAsAKey
     EXPECT_THROW(txn.commit(),FormatException);
     auto fresh=metadata_->openSnapshot(); EXPECT_EQ(fresh.superblock().generation,generation);
     BTreeIndex u64(DIRECTORY_INDEX,*btree_pages_,*metadata_); EXPECT_EQ(u64.find(fresh,record.key),1U);
+}
+
+TEST_F(PropertySubblockDirectoryTest, OwnerPrefixEnumerationIsBoundedAndDoesNotVisitAnotherOwner) {
+    std::vector<BTreePageEntry> records;
+    for (uint32_t token = 1; token <= 600; ++token) records.push_back(entry(1, token, {100 + token, 0, 1}));
+    records.push_back(entry(2, 1, {900, 0, 1})); create(records);
+    Directory map(DIRECTORY_INDEX, *btree_pages_, *metadata_); auto pin = metadata_->openSnapshot();
+    const auto lower = key(1, 0); const auto prefix = std::span(lower).first(8);
+    size_t visited = 0;
+    EXPECT_FALSE(map.visitPrefix(pin, prefix, 3, [&](const auto &item) {
+        EXPECT_EQ(item.key, key(1, uint32_t(++visited))); return true;
+    }));
+    EXPECT_EQ(visited, 3U);
+    visited = 0;
+    EXPECT_TRUE(map.visitPrefix(pin, prefix, 600, [&](const auto &item) {
+        EXPECT_EQ(item.key, key(1, uint32_t(++visited))); return true;
+    }));
+    EXPECT_EQ(visited, 600U);
+    visited = 0;
+    EXPECT_FALSE(map.visitPrefix(pin, prefix, 600, [&](const auto &) { ++visited; return false; }));
+    EXPECT_EQ(visited, 1U);
+    const auto missing = key(3, 0);
+    EXPECT_TRUE(map.visitPrefix(pin, std::span(missing).first(8), 1, [&](const auto &) { ADD_FAILURE(); return true; }));
+    EXPECT_THROW(map.visitPrefix(pin, {}, 1, [](const auto &) { return true; }), FormatException);
+    EXPECT_THROW(map.visitPrefix(pin, prefix, 0, [](const auto &) { return true; }), FormatException);
+    EXPECT_THROW(map.visitPrefix(pin, prefix, (std::numeric_limits<size_t>::max)(), [](const auto &) { return true; }), FormatException);
+}
+TEST_F(PropertySubblockDirectoryTest, PrefixEnumerationRejectsDuplicateOwnershipAcrossLeavesBeforeDelivery) {
+    using WideMap = FixedBTreeMap<12, 1800>;
+    std::vector<BTreePageEntry> records;
+    for (const auto [token, suffix] : {std::pair{1U, 1U}, std::pair{2U, 1U}, std::pair{2U, 2U}}) {
+        WideMap::Value value{}; value[0] = std::byte(suffix);
+        const auto bytes = WideMap::encode(key(1, token), value);
+        records.push_back({std::vector<std::byte>(bytes.begin(), bytes.end()), 0});
+    }
+    create(records); auto pin = metadata_->openSnapshot();
+    const auto root = btree_pages_->read(pin, metadata_->findIndexRoot(pin, DIRECTORY_INDEX).root_page_id);
+    ASSERT_EQ(root.header().kind, BTreeNodeKind::BPN_INTERNAL);
+    const auto left = btree_pages_->read(pin, root.header().leftmost_child);
+    ASSERT_EQ(left.entries().size(), 2U);
+    EXPECT_EQ(WideMap::decode(left.entries().back()).key, key(1, 2));
+    WideMap map(DIRECTORY_INDEX, *btree_pages_, *metadata_); size_t delivered = 0;
+    const auto target = key(1, 2);
+    EXPECT_THROW(map.visitPrefix(pin, target, 1, [&](const auto &) { ++delivered; return true; }), FormatException);
+    EXPECT_EQ(delivered, 0U);
+}
+
+TEST_F(PropertySubblockDirectoryTest, TypedOwnerEnumerationValidatesSourcesAndKeepsTokenOrder) {
+    using Codec = HybridPropertyDirectoryCodec;
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 65};
+    const EntityPropertyKey nextOwner{EntityPropertyOwnerKind::EPOK_NODE, 66};
+    std::vector<BTreePageEntry> entries;
+    for (const auto token : {1U, 256U, UINT32_MAX}) {
+        const auto bytes = HybridPropertyOwnerMap::encode(Codec::ownerKey(owner, token),
+            Codec::sourceValue(token == 256 ? HybridPropertySource::HPS_EXTENSION : HybridPropertySource::HPS_COLUMN));
+        entries.push_back({std::vector<std::byte>(bytes.begin(), bytes.end()), 0});
+    }
+    const auto other = HybridPropertyOwnerMap::encode(Codec::ownerKey(nextOwner, 1),
+        Codec::sourceValue(HybridPropertySource::HPS_COLUMN));
+    entries.push_back({std::vector<std::byte>(other.begin(), other.end()), 0});
+    create(entries);
+    HybridPropertyOwnerMap map(DIRECTORY_INDEX, *btree_pages_, *metadata_);
+    const auto pin = metadata_->openSnapshot();
+    std::vector<uint32_t> tokens;
+    EXPECT_TRUE(Codec::visitOwner(map, pin, owner, 3, [&](uint32_t token, HybridPropertySource source) {
+        tokens.push_back(token);
+        EXPECT_EQ(source, token == 256 ? HybridPropertySource::HPS_EXTENSION : HybridPropertySource::HPS_COLUMN);
+        return true;
+    }));
+    EXPECT_EQ(tokens, (std::vector<uint32_t>{1, 256, UINT32_MAX}));
+    size_t count = 0;
+    EXPECT_FALSE(Codec::visitOwner(map, pin, owner, 2, [&](auto, auto) { ++count; return true; }));
+    EXPECT_EQ(count, 2U);
+    EXPECT_THROW(Codec::visitOwner(map, pin, {}, 3, [](auto, auto) { return true; }), FormatException);
+}
+TEST_F(PropertySubblockDirectoryTest, MalformedOwnerMembershipCannotReachTypedVisitor) {
+    using Codec = HybridPropertyDirectoryCodec;
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_EDGE, 1};
+    auto value = Codec::sourceValue(HybridPropertySource::HPS_COLUMN);
+    value[1] = std::byte{1};
+    const auto bytes = HybridPropertyOwnerMap::encode(Codec::ownerKey(owner, 1), value);
+    const BTreePageEntry malformed{std::vector<std::byte>(bytes.begin(), bytes.end()), 0};
+    create(std::span(&malformed, 1));
+    HybridPropertyOwnerMap map(DIRECTORY_INDEX, *btree_pages_, *metadata_);
+    const auto pin = metadata_->openSnapshot();
+    size_t visited = 0;
+    EXPECT_THROW(Codec::visitOwner(map, pin, owner, 1, [&](auto, auto) { ++visited; return true; }), FormatException);
+    EXPECT_EQ(visited, 0U);
+}
+
+TEST_F(PropertySubblockDirectoryTest, BoundDirectoryRejectsAnotherSnapshotDespiteStableLogicalRootAndEpoch) {
+    const auto original = entry(1, 1, {101, 0, 1});
+    create(std::span(&original, 1));
+    const auto old = metadata_->openSnapshot();
+    const auto root = metadata_->findIndexRoot(old, DIRECTORY_INDEX);
+    const BTreeRootReadBinding binding{old.superblock().database_id, old.superblock().generation, root};
+    Directory bound(DIRECTORY_INDEX, *btree_pages_, *metadata_, binding);
+    EXPECT_EQ(*bound.find(old, key(1, 1)), Directory::decode(original).value);
+    BTreeIndex boundIndex(DIRECTORY_INDEX, *btree_pages_, *metadata_, BTreeLeafValueLayout::BLVL_EMPTY, binding);
+    const auto changed = entry(1, 1, {102, 0, 2});
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
+    auto txn = planner.beginTransaction(); stage(txn, original, changed); ASSERT_TRUE(txn.commit().committed());
+    const auto fresh = metadata_->openSnapshot();
+    EXPECT_EQ(metadata_->findIndexRoot(fresh, DIRECTORY_INDEX), root);
+    EXPECT_NE(fresh.superblock().generation, old.superblock().generation);
+    EXPECT_THROW(bound.find(fresh, key(1, 1)), FormatException);
+    size_t visited = 0;
+    EXPECT_THROW(bound.visitPrefix(fresh, key(1, 1), 1, [&](const auto &) { ++visited; return true; }), FormatException);
+    EXPECT_EQ(visited, 0U);
+    // orderedSource clones the index; it must retain the same root binding.
+    auto invalidSource = boundIndex.orderedSource(fresh, 1); auto invalidCursor = invalidSource();
+    EXPECT_THROW(invalidCursor(), FormatException);
+    auto validSource = boundIndex.orderedSource(old, 1); auto validCursor = validSource();
+    ASSERT_TRUE(validCursor());
+    EXPECT_EQ(*bound.find(old, key(1, 1)), Directory::decode(original).value);
+    Directory current(DIRECTORY_INDEX, *btree_pages_, *metadata_,
+        BTreeRootReadBinding{fresh.superblock().database_id, fresh.superblock().generation, root});
+    EXPECT_EQ(*current.find(fresh, key(1, 1)), Directory::decode(changed).value);
+}
+TEST_F(PropertySubblockDirectoryTest, BoundDirectoryRejectsForeignDatabaseRootPageEpochAndAbsentTree) {
+    const auto original = entry(1, 1, {101, 0, 1}); create(std::span(&original, 1));
+    const auto pin = metadata_->openSnapshot();
+    const BTreeRootReadBinding valid{pin.superblock().database_id, pin.superblock().generation,
+        metadata_->findIndexRoot(pin, DIRECTORY_INDEX)};
+    for (unsigned bad = 0; bad < 4; ++bad) {
+        auto binding = valid;
+        if (bad == 0) binding.database_id = DatabaseId(valid.database_id.value() + 1);
+        if (bad == 1) binding.root.root_page_id = PageId(valid.root.root_page_id.value() + 1);
+        if (bad == 2) binding.root.root_generation = Generation(valid.root.root_generation.value() + 1);
+        if (bad == 3) binding.root.index_id = DIRECTORY_INDEX + 1;
+        Directory bound(binding.root.index_id, *btree_pages_, *metadata_, binding);
+        EXPECT_THROW(bound.find(pin, key(1, 1)), FormatException) << bad;
+    }
+    auto incomplete = valid; incomplete.root.root_page_id = {};
+    EXPECT_THROW((Directory(DIRECTORY_INDEX, *btree_pages_, *metadata_, incomplete)), std::invalid_argument);
+    incomplete = valid; incomplete.root.index_id++;
+    EXPECT_THROW((Directory(DIRECTORY_INDEX, *btree_pages_, *metadata_, incomplete)), std::invalid_argument);
+}
+
+TEST_F(PropertySubblockDirectoryTest, WholeMapIntegrityCursorKeepsBoundsOrderAndAdmissionAcrossLeaves) {
+    std::vector<BTreePageEntry> records;
+    for (uint64_t i = 1; i <= 600; ++i) records.push_back(entry(i, 1, {100 + i, 1, 1}));
+    create(records); const auto pin = metadata_->openSnapshot();
+    Directory map(DIRECTORY_INDEX, *btree_pages_, *metadata_);
+    size_t emitted = 0;
+    EXPECT_FALSE(map.visitAll(pin, 1, [&](const auto &value) {
+        ++emitted; EXPECT_EQ(value.key, key(1, 1)); return true;
+    }));
+    EXPECT_EQ(emitted, 1U); emitted = 0;
+    EXPECT_TRUE(map.visitAll(pin, 600, [&](const auto &value) {
+        ++emitted; EXPECT_EQ(value.key, key(emitted, 1)); return true;
+    }));
+    EXPECT_EQ(emitted, 600U); emitted = 0;
+    EXPECT_THROW(map.visitAll(pin, 600, [&](const auto &) { ++emitted; return true; },
+        [](size_t) { throw std::length_error("deny map cursor boundary"); }), std::length_error);
+    EXPECT_EQ(emitted, 0U);
+    EXPECT_THROW(map.visitAll(pin, 0, [](const auto &) { return true; }), FormatException);
+    EXPECT_THROW(map.visitAll(pin, (std::numeric_limits<size_t>::max)(), [](const auto &) { return true; }), FormatException);
 }

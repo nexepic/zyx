@@ -1,0 +1,7 @@
+# Ordinary conversion preparation checkpoint
+
+Uncommitted source based on 6a3fedf1; no accepted task or production layout. Default 37/37 and isolated 59/59 necessary tests pass. The request authenticates the graph fence, source Node/Edge records and property headers before decoding values. A two-pass preflight bounds complete membership to 4096, with a shared ≤1 MiB account and parent WRITE admission. Read-only adapters attach before the writer lock; the writer pin and the same MetadataWriteBatch own source preparation and private logical IDs. Physical publication remains explicitly refused before file mutation.
+
+Tests include cancellation, stale fence, foreign ROW owner, namespace isolation, retained account charges, parent resource rejection, propertyless owners and intact LargeValue-backed ROW fallback. Initial candidate had three fixture failures: reserve followed by automatic creation allocated different IDs. The fixture now explicitly creates with reserved IDs; original public contract tests are unchanged. Initial failures and fixture are retained.
+
+Still required: physical field pools, typed directory trees, final descriptor, all read/write/index/overlay/LargeValue ownership routes, recovery/integrity/retirement, complete allocation cost and same-executor ROW comparison. R3.2/R3.3/R5.1/R5.2/R5.3 remain incomplete, overall 13/24. No full suite or formal performance/Kuzu window was run. Linux x86_64 only.

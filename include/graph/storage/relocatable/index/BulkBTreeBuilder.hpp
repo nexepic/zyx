@@ -45,6 +45,15 @@ namespace graph::storage {
 	// not call per-entry upsert, so build cost is linear in input plus output
 	// pages and root publication occurs exactly once.
 	class BulkBTreeBuilder final {
+        friend class RelocatableMetadataStore;
+        // Metadata-owned image preparation before any data write/cost admission.
+        // Ordinary callers retain the existing write-through native preparer.
+        using NativeImageSink = utils::OwnedFunction<void(const CatalogEntry &, std::span<BTreePage>,
+            std::span<PageLocation>, LogSequenceNumber)>;
+        [[nodiscard]] static BTreeInitialTreeMutationPlan planNativeTreeWithImageSink(
+            BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
+            uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options,
+            NativeImageSink sink);
 	public:
 		// Plans the same dense two-pass tree without making any metadata root
 		// reachable. The returned fresh-pool plan can be consumed by a native graph

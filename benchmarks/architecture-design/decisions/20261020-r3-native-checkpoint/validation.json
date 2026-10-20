@@ -1,0 +1,33 @@
+{
+  "full_suite": false,
+  "platform": "Linux x86_64",
+  "accepted_stages": 13,
+  "total_stages": 24,
+  "profiles": {
+    "default": {
+      "tests": 316,
+      "suites": 30,
+      "modules": 25,
+      "parts": {
+        "main": 265,
+        "additional": 51
+      },
+      "failures": 0,
+      "errors": 0,
+      "disabled": 0
+    },
+    "candidate": {
+      "tests": 389,
+      "suites": 30,
+      "modules": 25,
+      "parts": {
+        "main": 329,
+        "additional": 60
+      },
+      "failures": 0,
+      "errors": 0,
+      "disabled": 0
+    }
+  },
+  "asan": "Old comparison reproduces heap-buffer-overflow; fixed comparison passes the same single test."
+}

@@ -677,6 +677,35 @@ namespace graph::storage {
 		return result;
 	}
 
+
+    std::pmr::vector<std::byte> EntityPropertyLargeValuePayloadCodec::encodeSingleField(uint32_t token,
+        const PropertyValue &value, std::pmr::memory_resource &memory) {
+        if (!token) throwRootError(FormatError::FERR_INVALID_HEADER, "single-field LargeValue requires a nonzero token");
+        constexpr size_t directoryBytes = sizeof(uint32_t) * 2U, tokenBytes = sizeof(uint32_t);
+        const size_t valueBytes = CanonicalPropertyValueCodec::encodedSize(value);
+        if (valueBytes > (std::numeric_limits<uint32_t>::max)() - directoryBytes - tokenBytes)
+            throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "single-field LargeValue payload exceeds its wire size");
+        const size_t payloadBytes = directoryBytes + tokenBytes + valueBytes;
+        if (payloadBytes > (std::numeric_limits<size_t>::max)() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES)
+            throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "single-field LargeValue output size overflowed");
+        const size_t total = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes;
+        std::pmr::vector<std::byte> result(&memory);
+        result.reserve(total);
+        result.resize(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes + tokenBytes);
+        LittleEndianCodec::writeU32(result, 0, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC);
+        LittleEndianCodec::writeU16(result, 4, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION);
+        LittleEndianCodec::writeU16(result, 6, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+        LittleEndianCodec::writeU32(result, 8, 1U);
+        LittleEndianCodec::writeU32(result, 12, uint32_t(payloadBytes));
+        LittleEndianCodec::writeU32(result, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES, token);
+        LittleEndianCodec::writeU32(result, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + sizeof(uint32_t), uint32_t(directoryBytes));
+        LittleEndianCodec::writeU32(result, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes, token);
+        CanonicalPropertyValueCodec::append(result, value);
+        if (result.size() != total)
+            throwRootError(FormatError::FERR_INVALID_STATE, "single-field LargeValue input changed during encoding");
+        return result;
+    }
+
 	std::vector<EntityPropertyLargeValueEntryLocation>
 	EntityPropertyLargeValuePayloadCodec::decodeDirectory(const std::span<const std::byte> bytes,
 		const SelectedPropertyReadAdmission *slotsAdmission, const CancellationCheckpoint *cancellation) {

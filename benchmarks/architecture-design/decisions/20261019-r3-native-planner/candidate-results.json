@@ -1,0 +1,446 @@
+{
+  "tests": 38,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T11:28:41Z",
+  "time": "0.046s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyConversionPreparationTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T11:28:41Z",
+      "time": "0.013s",
+      "testsuite": [
+        {
+          "name": "FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 44,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:41Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 69,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:41Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "CompleteMembershipBoundPacksIntoActualSlottedPageCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:41Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyGroupConversionTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T11:28:42Z",
+      "time": "0.006s",
+      "testsuite": [
+        {
+          "name": "RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 22,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 34,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.006s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "QuotaCancellationAndShapeRefusalsRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 58,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "NullMixedAndHeapExtensionsRemainBorrowedAndOrdered",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockGroupConversionTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T11:28:42Z",
+      "time": "0.022s",
+      "testsuite": [
+        {
+          "name": "Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.001s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 50,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.002s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "MaximumMembershipsAndPropertylessOwnersStayBounded",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0.016s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 138,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "ParentAccountOwnsThePlanAndFailureRefundsBothCounters",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyExtensionTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T11:28:42Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "InlineValuesRoundTripCanonicalTypesAndBorrowBytesWithoutWholeRowCopies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 36,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "WrongIdentityVisibilityModeReservedAndCanonicalTrailingDataReject",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "NativeUsableRecordLimitAndAccountFailurePrecedeDestinationAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "ValueAdmissionRefusalDoesNotChangeBorrowedSourceAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 89,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "LargeReferenceReusesExistingCodecAndExactlyOneTokenValuePayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "WholeRowsWrongTokensTrailingDataAndWrongLargeMediaNeverBecomeOneField",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "RealDecodeAccountsRefundReferenceDirectoryAndValueRefusalBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 132,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "BoundedGroupPlanEncodesOnlyActualExtensionMembersAgainstOutputAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyPageImageTest",
+      "tests": 12,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T11:28:42Z",
+      "time": "0.002s",
+      "testsuite": [
+        {
+          "name": "SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 83,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 104,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 131,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "FullPageRefusesExtraRecordWithoutChangingOtherRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 168,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 232,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T11:28:42Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        }
+      ]
+    }
+  ]
+}

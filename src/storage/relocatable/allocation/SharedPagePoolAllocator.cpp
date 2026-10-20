@@ -31,6 +31,12 @@ namespace graph::storage {
 			throw FormatException(error, message);
 		}
 
+        void rejectUninstalledHybridPublication(PageOwnerKind ownerKind) {
+            if (ownerKind == PageOwnerKind::POK_HYBRID_PROPERTY)
+                throwSharedPagePoolAllocatorError(FormatError::FERR_UNSUPPORTED_VERSION,
+                    "hybrid field publication requires the complete atomic field coordinator");
+        }
+
 		[[nodiscard]] bool isSharedPoolKind(SegmentKind poolKind) {
 			switch (poolKind) {
 				case SegmentKind::SGK_ENTITY_PAGE_POOL:
@@ -54,6 +60,8 @@ namespace graph::storage {
 				case SegmentKind::SGK_ENTITY_PAGE_POOL:
 					return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
 				case SegmentKind::SGK_PROPERTY_PAGE_POOL:
+					// Keep hybrid frames out of ordinary reads/publications until
+                    // typed field routing and all lifetime consumers are installed.
 					return ownerKind == PageOwnerKind::POK_PROPERTY;
 				case SegmentKind::SGK_INDEX_PAGE_POOL:
 					return ownerKind == PageOwnerKind::POK_INDEX;
@@ -243,6 +251,7 @@ namespace graph::storage {
 	SharedPagePoolAllocator::allocateNewPoolPage(SharedPagePoolAllocationRequest request, PhysicalSlotId firstSlot,
 												 PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
 												 const MetadataPublishOptions &options) {
+		rejectUninstalledHybridPublication(request.page_owner_kind);
 		validateRequest(request, checkpointLsn);
 		CatalogSlotReservationRequest catalogRequest;
 		catalogRequest.segment_id = request.segment_id;
@@ -284,6 +293,7 @@ namespace graph::storage {
 	SharedPagePoolAllocation SharedPagePoolAllocator::appendPage(SharedPagePoolAppendRequest request,
 																 LogSequenceNumber checkpointLsn,
 																 const MetadataPublishOptions &options) {
+		rejectUninstalledHybridPublication(request.page_owner_kind);
 		reconcilePool(request.segment_id);
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const CatalogEntry expectedPool = metadata_.findCatalog(snapshot, request.segment_id);
@@ -995,6 +1005,7 @@ namespace graph::storage {
 	SharedPagePoolAllocation SharedPagePoolAllocator::replacePage(SharedPagePoolReplacementRequest request,
 																  LogSequenceNumber checkpointLsn,
 																  const MetadataPublishOptions &options) {
+		rejectUninstalledHybridPublication(request.page_owner_kind);
 		reconcilePool(request.segment_id);
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const CatalogEntry expectedPool = metadata_.findCatalog(snapshot, request.segment_id);
@@ -1107,6 +1118,7 @@ namespace graph::storage {
 			const std::optional<LargeValueManifestLocation> &expectedLargeValueManifest,
 			const std::optional<LargeValueManifestLocation> &replacementLargeValueManifest,
 			LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
+		rejectUninstalledHybridPublication(request.page_owner_kind);
 		reconcilePool(request.source_segment_id);
 		reconcilePool(request.destination_segment_id);
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
@@ -1213,7 +1225,7 @@ namespace graph::storage {
 
 	SharedPagePoolContents SharedPagePoolAllocator::readKnownLocation(
 			const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
-			const BufferPoolReadHint hint) const {
+			const BufferPoolReadHint hint, const bool hybridFieldOnly) const {
 		if (!isKnownReadHint(hint)) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
 					"relocatable shared known-location read has an unknown Buffer Pool hint");
@@ -1280,7 +1292,10 @@ namespace graph::storage {
 		std::copy_n(pageBytes.begin(), ownerBytes.size(), ownerBytes.begin());
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
 		if (owner.page_id != location.page_id || owner.generation != location.generation ||
-			!matchesPoolAndOwnerKind(pool.kind, owner.kind)) {
+			(hybridFieldOnly
+                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                    owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
+                : !matchesPoolAndOwnerKind(pool.kind, owner.kind))) {
 			throwSharedPagePoolAllocatorError(
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared page owner header disagrees with its location mapping");
@@ -1310,7 +1325,7 @@ namespace graph::storage {
 
 	std::optional<SharedPagePoolPinnedView> SharedPagePoolAllocator::readPinnedKnownLocation(
 			const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
-			const BufferPoolReadHint hint) const {
+			const BufferPoolReadHint hint, const bool hybridFieldOnly) const {
 		if (!isKnownReadHint(hint)) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
 					"relocatable shared pinned known-location read has an unknown Buffer Pool hint");
@@ -1389,7 +1404,10 @@ namespace graph::storage {
 		const std::span<const std::byte, RSS_PAGE_SIZE> pageBytes = pagePin->bytes();
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(pageBytes.first(RSS_PAGE_OWNER_HEADER_BYTES));
 		if (owner.page_id != location.page_id || owner.generation != location.generation ||
-			!matchesPoolAndOwnerKind(pool.kind, owner.kind)) {
+			(hybridFieldOnly
+                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                    owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
+                : !matchesPoolAndOwnerKind(pool.kind, owner.kind))) {
 			throwSharedPagePoolAllocatorError(
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared pinned page owner header disagrees with its location mapping");

@@ -1,0 +1,10 @@
+{
+  "default": {
+    "path": "/tmp/zyx-r3-namespaces-20261019/default/records-test",
+    "sha256": "544415f9c44a362b0d155094bc121707ad68855fbaf33d8ab5d6bb94241cea9d"
+  },
+  "candidate": {
+    "path": "/tmp/zyx-r3-namespaces-20261019/candidate/records-test",
+    "sha256": "0840b3d60f2375e102b4a2ac217ff7faa841d1994fe97196e8326260af477b24"
+  }
+}

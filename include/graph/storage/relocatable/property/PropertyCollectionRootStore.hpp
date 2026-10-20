@@ -14,6 +14,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include "graph/storage/PropertyScalarReadSink.hpp"
 
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/Catalog.hpp"
@@ -195,6 +196,16 @@ namespace graph::storage {
 	private:
 		friend class PropertyCollectionRootScanCursor;
 		friend class PropertyCollectionRootStoreTestAccess;
+        // Returns false when the existing ROW merge must still run. Hybrid
+        // output positions have already been filled and must be preserved.
+        [[nodiscard]] bool readHybridSelectedBatch(const MetadataSnapshotPin &snapshot,
+            std::span<const EntityPropertyKey> keys, std::span<const uint32_t> tokens,
+            std::span<std::optional<PropertyCollectionRootEntry>> values,
+            std::span<std::optional<size_t>> counts, const CancellationCheckpoint *cancellation,
+            const SelectedPropertyReadAdmission *admission = nullptr,
+            const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
+            const PropertyScalarReadSink *scalars = nullptr) const;
+
 		[[nodiscard]] PropertyCollectionRoot decodeEntityRoot(const MetadataSnapshotPin &snapshot,
 															  const EntityPropertyKey &key,
 															  const EntityPropertyLocation &location,
@@ -266,7 +277,8 @@ namespace graph::storage {
 				std::span<const uint32_t> keyTokens,
 				std::span<std::optional<PropertyCollectionRootEntry>> results,
 				bool columnBatch = true, const SelectedPropertyReadAdmission *admission = nullptr,
-				const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr);
+				const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
+            const PropertyScalarReadSink *scalars = nullptr);
 		// Cursor-preserving counterpart used by indexed candidate streams. It keeps
 		// the owner-directory route across adjacent batches while returning the
 		// selected values and root counts required by the same validation pass.

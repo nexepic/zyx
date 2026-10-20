@@ -23,6 +23,16 @@ namespace graph::storage {
 
 	class RelocatableMetadataStore;
 
+    // A descriptor-bound read must resolve exactly this root under exactly this
+    // metadata generation. PageId/pool epoch alone can remain unchanged across
+    // COW updates, so they cannot replace the pinned semantic context.
+    struct BTreeRootReadBinding {
+        DatabaseId database_id{};
+        Generation snapshot_generation{};
+        IndexRootLocation root{};
+    };
+
+
 	// This read-only layer is deliberately separate from structural mutation.
 	// One snapshot pins the Index Root and Page directories for the entire
 	// traversal, so every PageId resolves against one metadata generation.
@@ -59,7 +69,8 @@ namespace graph::storage {
 		};
 
 		BTreeIndex(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
-					   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+					   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64,
+            std::optional<BTreeRootReadBinding> rootBinding = {});
 
 		[[nodiscard]] std::optional<uint64_t> find(const MetadataSnapshotPin &snapshot,
 												   std::span<const std::byte> key) const;
@@ -136,6 +147,7 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state,
 				const std::function<void(size_t)> &boundaryKeyAdmission) const;
 
+		std::optional<BTreeRootReadBinding> root_binding_;
 		uint64_t index_id_ = 0;
 		BTreePageStore &pages_;
 		RelocatableMetadataStore &metadata_;

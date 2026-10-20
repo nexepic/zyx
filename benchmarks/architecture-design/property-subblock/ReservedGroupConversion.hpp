@@ -7,18 +7,19 @@
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
-#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
 
 namespace zyx::benchmark::subblock {
-// Bounded conversion planning over immutable, caller-owned, authenticated ROW
-// roots. This is not a persisted native layout: extension values remain borrowed
+// Laboratory view adapter over the single storage-owned conversion planner.
+// Classification and reverse projection are implemented only in storage.
+// Inputs are immutable, caller-owned, authenticated ROW roots. This is not a persisted native layout: extension values remain borrowed
 // canonical PropertyValues, never invented LargeValue references. The caller
 // must keep input roots and budget alive and separately charge their storage.
 // No source value is copied or mutated while classifying the group.
 class ReservedGroupConversion final {
 public:
-    static constexpr size_t MAX_MEMBERSHIPS = 4096;
-    static constexpr size_t MAX_COLUMNS = MAX_MEMBERSHIPS / 48;
+    static constexpr size_t MAX_MEMBERSHIPS = graph::storage::HybridPropertyGroupConversion::MAX_MEMBERSHIPS;
+    static constexpr size_t MAX_COLUMNS = graph::storage::HybridPropertyGroupConversion::MAX_COLUMNS;
     struct Member {
         uint64_t owner = 0;
         uint32_t token = 0;
@@ -28,11 +29,17 @@ public:
     };
 private:
     graph::query::execution::MaterializedByteReservation reservation_;
+    graph::storage::HybridPropertyGroupConversion native_;
     GroupHeader group_;
     std::array<Member, MAX_MEMBERSHIPS> members_{};
     std::array<Column, MAX_COLUMNS> columns_{};
     size_t member_count_ = 0, column_count_ = 0;
 
+    static graph::storage::EntityPropertyOwnerKind nativeKind(OwnerKind kind) {
+        require(valid(kind));
+        return kind == OwnerKind::HPK_NODE ? graph::storage::EntityPropertyOwnerKind::EPOK_NODE
+            : graph::storage::EntityPropertyOwnerKind::EPOK_EDGE;
+    }
     static auto reserve(graph::query::execution::MaterializedByteBudget &budget) {
         graph::query::execution::MaterializedByteReservation result(&budget);
         // Fixed holder plus column construction and bounded sorting stack
@@ -42,87 +49,32 @@ private:
         static_assert(charge <= 1024 * 1024);
         result.set(charge); return result;
     }
-    static std::optional<ScalarKind> primitive(const graph::PropertyValue &value) {
-        if (std::holds_alternative<int64_t>(value.getVariant())) return ScalarKind::HPS_INT64;
-        if (std::holds_alternative<double>(value.getVariant())) return ScalarKind::HPS_DOUBLE;
-        if (std::holds_alternative<bool>(value.getVariant())) return ScalarKind::HPS_BOOL;
-        return {};
-    }
-    static bool isNull(const graph::PropertyValue &value) {
-        return std::holds_alternative<std::monostate>(value.getVariant());
-    }
-    static uint64_t bits(const graph::PropertyValue &value, ScalarKind kind) {
-        if (kind == ScalarKind::HPS_INT64) return std::bit_cast<uint64_t>(std::get<int64_t>(value.getVariant()));
-        if (kind == ScalarKind::HPS_DOUBLE) return std::bit_cast<uint64_t>(std::get<double>(value.getVariant()));
-        return std::get<bool>(value.getVariant());
-    }
 public:
     ReservedGroupConversion(graph::query::execution::MaterializedByteBudget &budget,
         std::span<const graph::storage::PropertyCollectionRoot> roots, OwnerKind kind,
         uint64_t group, uint64_t generation, size_t nativeRecordLimit,
-        const std::function<void()> &checkpoint = {}) : reservation_(reserve(budget)) {
-        require(valid(kind) && !roots.empty() && roots.size() <= 64 && generation);
-        validGroup(group);
-        if (nativeRecordLimit < 64) throw std::length_error("property conversion native group-header bound");
-        group_.kind = kind; group_.group = group; group_.generation = generation;
-        const uint32_t nativeKind = kind == OwnerKind::HPK_NODE ? graph::Node::typeId : graph::Edge::typeId;
-        for (const auto &root : roots) {
-            if (checkpoint) checkpoint();
-            require(root.owner_entity_type == nativeKind && root.owner_entity_id &&
-                root.owner_entity_id <= uint64_t(INT64_MAX) && groupFor(root.owner_entity_id) == group);
-            const uint64_t bit = uint64_t{1} << slotFor(root.owner_entity_id);
-            require(!(group_.live & bit)); group_.live |= bit;
-            if (root.entries.size() > MAX_MEMBERSHIPS - member_count_)
-                throw std::length_error("property conversion membership bound");
-            uint32_t previous = 0;
-            for (const auto &entry : root.entries) {
-                require(entry.key_token > previous); previous = entry.key_token;
-                members_[member_count_++] = {root.owner_entity_id, entry.key_token, &entry.value};
-            }
+        const std::function<void()> &checkpoint = {}) : reservation_(reserve(budget)),
+        // Adapter lifetime remains strictly inside the caller's budget lifetime;
+        // production uses a genuinely owned resource, never this borrowed alias.
+        native_(std::shared_ptr<std::pmr::memory_resource>(&budget, [](auto *) {}), roots,
+            nativeKind(kind), group, graph::storage::Generation(generation), nativeRecordLimit, checkpoint) {
+        const auto &groupRecord = native_.group();
+        group_ = {kind, GroupMode::HPG_HYBRID, group, generation, groupRecord.live, groupRecord.memberships, groupRecord.columns};
+        member_count_ = native_.members().size(); column_count_ = native_.columns().size();
+        for (size_t i = 0; i < member_count_; ++i) {
+            const auto &member = native_.members()[i];
+            members_[i] = {member.owner, member.token, member.value,
+                member.source == graph::storage::HybridPropertySource::HPS_COLUMN ? Source::HPS_COLUMN : Source::HPS_EXTENSION,
+                member.column};
         }
-        auto end = members_.begin() + member_count_;
-        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
-            return a.token != b.token ? a.token < b.token : a.owner < b.owner;
-        });
-        for (size_t first = 0; first < member_count_;) {
-            if (checkpoint) checkpoint();
-            size_t last = first + 1;
-            while (last < member_count_ && members_[last].token == members_[first].token) ++last;
-            std::optional<ScalarKind> scalar;
-            bool compatible = last - first >= 48;
-            for (size_t i = first; compatible && i < last; ++i) {
-                const auto &value = *members_[i].value;
-                if (isNull(value)) continue;
-                const auto current = primitive(value);
-                if (!current || (scalar && current != scalar)) compatible = false;
-                else scalar = current;
-            }
-            // An all-NULL new field has no inferred scalar type.
-            if (compatible && scalar) {
-                require(column_count_ < MAX_COLUMNS);
-                Column &column = columns_[column_count_];
-                column.identity = {kind, *scalar, group, members_[first].token, generation};
-                column.live = group_.live;
-                if (column.wireSize() > nativeRecordLimit || column.wireSize() > 4096)
-                    throw std::length_error("property conversion native column bound");
-                for (size_t i = first; i < last; ++i) {
-                    auto &member = members_[i];
-                    const unsigned slot = slotFor(member.owner);
-                    const uint64_t bit = uint64_t{1} << slot;
-                    column.presence |= bit;
-                    if (isNull(*member.value)) column.nulls |= bit;
-                    else column.words[slot] = bits(*member.value, *scalar);
-                    member.source = Source::HPS_COLUMN; member.column = uint16_t(column_count_);
-                }
-                column.validate(); ++column_count_;
-            }
-            first = last;
+        for (size_t i = 0; i < column_count_; ++i) {
+            const auto &source = native_.columns()[i]; auto &column = columns_[i];
+            column.identity = {kind, static_cast<ScalarKind>(source.identity.scalar_kind), group,
+                source.identity.token, generation};
+            column.presence = source.presence; column.nulls = source.nulls; column.live = source.live;
+            column.words = source.words; column.validate();
         }
-        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
-            return a.owner != b.owner ? a.owner < b.owner : a.token < b.token;
-        });
-        group_.memberships = uint32_t(member_count_); group_.columns = uint32_t(column_count_);
-        group_.validate(); if (checkpoint) checkpoint();
+        group_.validate();
     }
     ReservedGroupConversion(const ReservedGroupConversion &) = delete;
     ReservedGroupConversion &operator=(const ReservedGroupConversion &) = delete;
@@ -132,46 +84,20 @@ public:
     std::span<const Member> members() const && = delete;
     [[nodiscard]] std::span<const Column> columns() const & noexcept { return {columns_.data(), column_count_}; }
     std::span<const Column> columns() const && = delete;
-    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
+    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes() + native_.retainedCharge(); }
 
     // Emit the native typed payload, never the laboratory magic. The output
     // buffer remains caller-owned/admitted. No PageId is allocated here and no
     // root is published; that belongs to the single metadata coordinator.
     [[nodiscard]] graph::storage::HybridPropertyGroupRecord nativeGroup() const {
-        using namespace graph::storage;
-        HybridPropertyGroupRecord result{
-            group_.kind == OwnerKind::HPK_NODE ? EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE,
-            HybridPropertyGroupMode::HPGM_HYBRID, group_.group, Generation(group_.generation),
-            group_.live, group_.memberships, group_.columns};
-        result.validate(); return result;
+        return native_.group();
     }
     void encodeNativeColumn(size_t ordinal, std::span<std::byte> output) const {
-        using namespace graph::storage;
-        require(ordinal < column_count_);
-        const auto &source = columns_[ordinal];
-        HybridPropertyColumnRecord record;
-        // Existing conversion reservation includes one temporary Column and
-        // 4096 stack bytes. Native encoding must fit that existing allowance.
-        static_assert(sizeof(record) <= sizeof(Column));
-        record.identity = {nativeGroup().owner_kind,
-            source.identity.scalar_kind == ScalarKind::HPS_INT64 ? HybridPropertyScalarKind::HPSK_INT64 :
-                source.identity.scalar_kind == ScalarKind::HPS_DOUBLE ? HybridPropertyScalarKind::HPSK_DOUBLE :
-                    HybridPropertyScalarKind::HPSK_BOOL,
-            source.identity.group, source.identity.token, Generation(source.identity.generation)};
-        record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
-        record.words = source.words; record.encode(output);
+        native_.encodeNativeColumn(ordinal, output);
     }
     [[nodiscard]] std::pmr::vector<std::byte> encodeNativeInlineExtension(uint64_t owner, uint32_t token,
         size_t nativeRecordLimit, std::pmr::memory_resource &outputMemory) const {
-        const auto end = members_.begin() + member_count_;
-        const auto found = std::lower_bound(members_.begin(), end, std::pair(owner, token),
-            [](const Member &member, const auto &key) {
-                return std::pair(member.owner, member.token) < key;
-            });
-        require(found != end && found->owner == owner && found->token == token &&
-            found->source == Source::HPS_EXTENSION && found->value);
-        return graph::storage::HybridPropertyExtensionView::encodeInline({nativeGroup().owner_kind, owner}, token,
-            graph::storage::Generation(group_.generation), *found->value, nativeRecordLimit, outputMemory);
+        return native_.encodeNativeInlineExtension(owner, token, nativeRecordLimit, outputMemory);
     }
 
     // Reverse projection visits only actual owner fields in token order. Heap
@@ -179,23 +105,7 @@ public:
     // from column bits. The synchronous visitor owns any copy/encoding charge.
     // Property-less live owners are valid, dead/out-of-group owners are not.
     void visitOwner(uint64_t owner, const std::function<void(uint32_t, const graph::PropertyValue &)> &visitor) const {
-        require(owner && owner <= uint64_t(INT64_MAX) && groupFor(owner) == group_.group && visitor &&
-            (group_.live & (uint64_t{1} << slotFor(owner))));
-        auto found = std::lower_bound(members_.begin(), members_.begin() + member_count_, owner,
-            [](const Member &member, uint64_t id) { return member.owner < id; });
-        for (; found != members_.begin() + member_count_ && found->owner == owner; ++found) {
-            if (found->source == Source::HPS_EXTENSION) { visitor(found->token, *found->value); continue; }
-            const auto cell = cellAt(columns_[found->column], slotFor(owner));
-            graph::PropertyValue value;
-            switch (cell.kind) {
-            case CellKind::HFC_NULL: break;
-            case CellKind::HFC_INT64: value = graph::PropertyValue(std::bit_cast<int64_t>(cell.bits)); break;
-            case CellKind::HFC_DOUBLE: value = graph::PropertyValue(std::bit_cast<double>(cell.bits)); break;
-            case CellKind::HFC_BOOL: value = graph::PropertyValue(bool(cell.bits)); break;
-            default: require(false);
-            }
-            visitor(found->token, value);
-        }
+        native_.visitOwner(owner, visitor);
     }
 };
 } // namespace zyx::benchmark::subblock

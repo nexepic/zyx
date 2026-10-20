@@ -1,0 +1,256 @@
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyDescriptorTest.*:HybridPropertyGraphPublicationTest.*:HybridPropertyPageBindingTest.*:HybridPropertyPageImageTest.*:HybridPropertyPublicationGuardTest.*:PoolPreparationRunPrototypeTest.*:RelocatableSharedPagePoolAllocatorTest.*:RelocatableSharedPagePoolTest.*:RelocatableSlottedPageTest.*
+[==========] Running 108 tests from 9 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from HybridPropertyDescriptorTest
+[ RUN      ] HybridPropertyDescriptorTest.Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip
+[       OK ] HybridPropertyDescriptorTest.Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility
+[       OK ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed
+[       OK ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds
+[       OK ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted
+[       OK ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration
+[       OK ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration (32 ms)
+[----------] 6 tests from HybridPropertyDescriptorTest (33 ms total)
+
+[----------] 3 tests from HybridPropertyGraphPublicationTest
+[ RUN      ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication
+[       OK ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication (4 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation
+[       OK ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation (6 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility
+[       OK ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility (14 ms)
+[----------] 3 tests from HybridPropertyGraphPublicationTest (25 ms total)
+
+[----------] 2 tests from HybridPropertyPageBindingTest
+[ RUN      ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat
+[       OK ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal
+[       OK ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal (0 ms)
+[----------] 2 tests from HybridPropertyPageBindingTest (0 ms total)
+
+[----------] 1 test from HybridPropertyPublicationGuardTest
+[ RUN      ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation
+[       OK ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation (3 ms)
+[----------] 1 test from HybridPropertyPublicationGuardTest (3 ms total)
+
+[----------] 21 tests from RelocatableSlottedPageTest
+[ RUN      ] RelocatableSlottedPageTest.CreatesRoundTripsAndReportsEmptyStats
+[       OK ] RelocatableSlottedPageTest.CreatesRoundTripsAndReportsEmptyStats (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.DefinesThePublicSlotReferenceAndOwnerKindDomains
+[       OK ] RelocatableSlottedPageTest.DefinesThePublicSlotReferenceAndOwnerKindDomains (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.BindsVariablePageBytesToTheirSharedPoolOwner
+[       OK ] RelocatableSlottedPageTest.BindsVariablePageBytesToTheirSharedPoolOwner (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.ReadViewAuthenticatesBorrowedSlotBytesAndStableReferences
+[       OK ] RelocatableSlottedPageTest.ReadViewAuthenticatesBorrowedSlotBytesAndStableReferences (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableSlottedPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (2294 ms)
+[ RUN      ] RelocatableSlottedPageTest.RebindsAnActiveOwnerWithoutChangingStableSlotReferences
+[       OK ] RelocatableSlottedPageTest.RebindsAnActiveOwnerWithoutChangingStableSlotReferences (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.ExposesBoundOwnerAndOnlyCurrentLiveSlotReferences
+[       OK ] RelocatableSlottedPageTest.ExposesBoundOwnerAndOnlyCurrentLiveSlotReferences (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.InsertsReadsAndUsesAllOverwritePlacementStrategies
+[       OK ] RelocatableSlottedPageTest.InsertsReadsAndUsesAllOverwritePlacementStrategies (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.DeletesReusesSlotAndRejectsStaleReferences
+[       OK ] RelocatableSlottedPageTest.DeletesReusesSlotAndRejectsStaleReferences (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.CompactsFragmentationWithoutChangingLiveReferences
+[       OK ] RelocatableSlottedPageTest.CompactsFragmentationWithoutChangingLiveReferences (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.CompactsForLargeReplacementAndRejectsFullPageWrites
+[       OK ] RelocatableSlottedPageTest.CompactsForLargeReplacementAndRejectsFullPageWrites (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.RejectsTruncationChecksumAndValidatedCorruption
+[       OK ] RelocatableSlottedPageTest.RejectsTruncationChecksumAndValidatedCorruption (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.RetiresGenerationExhaustedSlotAndAllocatesANewDirectorySlot
+[       OK ] RelocatableSlottedPageTest.RetiresGenerationExhaustedSlotAndAllocatesANewDirectorySlot (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.RejectsEveryHeaderAndSlotIntegrityViolationBeforeExposingValues
+[       OK ] RelocatableSlottedPageTest.RejectsEveryHeaderAndSlotIntegrityViolationBeforeExposingValues (1 ms)
+[ RUN      ] RelocatableSlottedPageTest.RejectsOversizedValuesInvalidReferencesAndSupportsMoveOperations
+[       OK ] RelocatableSlottedPageTest.RejectsOversizedValuesInvalidReferencesAndSupportsMoveOperations (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.OpensZeroLengthPayloadsAndMixedLiveFreeSlots
+[       OK ] RelocatableSlottedPageTest.OpensZeroLengthPayloadsAndMixedLiveFreeSlots (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.MatchesReferenceModelAcrossMixedOperationsAndReopen
+[       OK ] RelocatableSlottedPageTest.MatchesReferenceModelAcrossMixedOperationsAndReopen (30 ms)
+[ RUN      ] RelocatableSlottedPageTest.SlotReadAdmissionRejectsBeforeAllocationAndPreservesRetry
+[       OK ] RelocatableSlottedPageTest.SlotReadAdmissionRejectsBeforeAllocationAndPreservesRetry (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.OwnedPageCloneAndMoveRetainTheAllocationDomain
+[       OK ] RelocatableSlottedPageTest.OwnedPageCloneAndMoveRetainTheAllocationDomain (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.DeniedClonePreservesTheSourceAndMalformedOpenRefundsItsBuffer
+[       OK ] RelocatableSlottedPageTest.DeniedClonePreservesTheSourceAndMalformedOpenRefundsItsBuffer (0 ms)
+[ RUN      ] RelocatableSlottedPageTest.OwnedPagesAreNotChargedAgainByLegacyReadAdmission
+[       OK ] RelocatableSlottedPageTest.OwnedPagesAreNotChargedAgainByLegacyReadAdmission (0 ms)
+[----------] 21 tests from RelocatableSlottedPageTest (2330 ms total)
+
+[----------] 7 tests from RelocatableSharedPagePoolTest
+[ RUN      ] RelocatableSharedPagePoolTest.PoolHeaderRoundTripsAndUsesEveryFixedField
+[       OK ] RelocatableSharedPagePoolTest.PoolHeaderRoundTripsAndUsesEveryFixedField (0 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.PoolHeaderRejectsMalformedDiskBytesAndInvalidValues
+[       OK ] RelocatableSharedPagePoolTest.PoolHeaderRejectsMalformedDiskBytesAndInvalidValues (0 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.FixedHeadersRejectOrExactlyRoundTripEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableSharedPagePoolTest.FixedHeadersRejectOrExactlyRoundTripEveryChecksumValidSingleBitMutation (2 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.OwnerHeaderRoundTripsAndRejectsCorruption
+[       OK ] RelocatableSharedPagePoolTest.OwnerHeaderRoundTripsAndRejectsCorruption (0 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.OwnerHeaderValidatesBoundsBeforeEncoding
+[       OK ] RelocatableSharedPagePoolTest.OwnerHeaderValidatesBoundsBeforeEncoding (0 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.FrameMapAllocatesReleasesAndReusesEveryDataFrame
+[       OK ] RelocatableSharedPagePoolTest.FrameMapAllocatesReleasesAndReusesEveryDataFrame (0 ms)
+[ RUN      ] RelocatableSharedPagePoolTest.FrameMapRejectsInvalidHeaders
+[       OK ] RelocatableSharedPagePoolTest.FrameMapRejectsInvalidHeaders (0 ms)
+[----------] 7 tests from RelocatableSharedPagePoolTest (2 ms total)
+
+[----------] 54 tests from RelocatableSharedPagePoolAllocatorTest
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AtomicallyCreatesReadsAndReopensTheFirstSharedPage
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AtomicallyCreatesReadsAndReopensTheFirstSharedPage (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsUnknownDemandReadHintsBeforeRouteLookup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsUnknownDemandReadHintsBeforeRouteLookup (1 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys
+[       OK ] RelocatableSharedPagePoolAllocatorTest.KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidTypedPrefetchContractsBeforeRouteLookup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidTypedPrefetchContractsBeforeRouteLookup (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AuthenticatesBoundedPreparedPublicationFrames
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AuthenticatesBoundedPreparedPublicationFrames (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CoalescesAdjacentPreparedPublicationValidationReads
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CoalescesAdjacentPreparedPublicationValidationReads (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesPrivateAppendAndMutationPlansBeforePublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesPrivateAppendAndMutationPlansBeforePublication (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesAppendUnderAnExistingWriterFence
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesAppendUnderAnExistingWriterFence (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrCapacityInvalidCrossPoolBatchState
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrCapacityInvalidCrossPoolBatchState (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesCrossPoolAndSamePoolPreparedReplacements
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesCrossPoolAndSamePoolPreparedReplacements (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.EvacuatesIndexPageWithoutAnIndexRootBinding
+[       OK ] RelocatableSharedPagePoolAllocatorTest.EvacuatesIndexPageWithoutAnIndexRootBinding (9 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsAnUnpairedIndexRootBindingBeforeEvacuation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsAnUnpairedIndexRootBindingBeforeEvacuation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.OwnsPayloadBeforeMetadataPublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.OwnsPayloadBeforeMetadataPublication (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.PreservesEveryDeclaredSharedPoolAndOwnerKindPair
+[       OK ] RelocatableSharedPagePoolAllocatorTest.PreservesEveryDeclaredSharedPoolAndOwnerKindPair (58 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots (9 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame
+[       OK ] RelocatableSharedPagePoolAllocatorTest.EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame (12 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrUnplaceableCrossPoolEvacuationRequests
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrUnplaceableCrossPoolEvacuationRequests (115 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen (10 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch (10 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain (17 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsRetirementOfAPoolWithCurrentPages
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsRetirementOfAPoolWithCurrentPages (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots (7 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold (130 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock (7 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementDuringStartup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementDuringStartup (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsUnallocatedCurrentFrameDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsUnallocatedCurrentFrameDuringStartupRecovery (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsMismatchedCurrentOwnerDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsMismatchedCurrentOwnerDuringStartupRecovery (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicatePageIdsWithoutChangingThePoolBitmap
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicatePageIdsWithoutChangingThePoolBitmap (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendWhenTheAllocatorOpens
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendWhenTheAllocatorOpens (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendAndReusesItsFrame
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendAndReusesItsFrame (10 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ManuallyReconcilesAFrameWrittenBeforeFailedPublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ManuallyReconcilesAFrameWrittenBeforeFailedPublication (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidAppendsAndAFullSharedPool
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidAppendsAndAFullSharedPool (111 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconciliationFailsClosedForCorruptOrMismatchedFrames
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconciliationFailsClosedForCorruptOrMismatchedFrames (10 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock
+[       OK ] RelocatableSharedPagePoolAllocatorTest.LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RequiresTheMetadataDataStorageHandle
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RequiresTheMetadataDataStorageHandle (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.SupportsOnlyDeclaredOpenModes
+[       OK ] RelocatableSharedPagePoolAllocatorTest.SupportsOnlyDeclaredOpenModes (1 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CountsOnlyCurrentSealedSharedPools
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CountsOnlyCurrentSealedSharedPools (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot (1 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsValidButInconsistentPoolAndOwnerHeaders
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsValidButInconsistentPoolAndOwnerHeaders (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces (5 ms)
+[----------] 54 tests from RelocatableSharedPagePoolAllocatorTest (681 ms total)
+
+[----------] 2 tests from PoolPreparationRunPrototypeTest
+[ RUN      ] PoolPreparationRunPrototypeTest.CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments
+[       OK ] PoolPreparationRunPrototypeTest.CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments (0 ms)
+[ RUN      ] PoolPreparationRunPrototypeTest.RejectsEveryChangedCatalogIdentityWithoutAdvancing
+[       OK ] PoolPreparationRunPrototypeTest.RejectsEveryChangedCatalogIdentityWithoutAdvancing (0 ms)
+[----------] 2 tests from PoolPreparationRunPrototypeTest (0 ms total)
+
+[----------] 12 tests from HybridPropertyPageImageTest
+[ RUN      ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration
+[       OK ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots
+[       OK ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource
+[       OK ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration
+[       OK ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot
+[       OK ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource
+[       OK ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount
+[       OK ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords
+[       OK ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators
+[       OK ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity
+[       OK ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership
+[       OK ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership (0 ms)
+[----------] 12 tests from HybridPropertyPageImageTest (2 ms total)
+
+[----------] Global test environment tear-down
+[==========] 108 tests from 9 test suites ran. (3080 ms total)
+[  PASSED  ] 108 tests.

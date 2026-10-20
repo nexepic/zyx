@@ -108,29 +108,32 @@ public:
     }
     [[nodiscard]] PropertyCollectionRootEntry decodeLargePayload(std::span<const std::byte> authenticatedPayload,
         const std::function<void(const CanonicalPropertyValueCodec::DecodeShape &)> &valueAdmission,
-        const SelectedPropertyReadAdmission &slotsAdmission) const {
-        hybrid_property_detail::require(mode_ == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE &&
-            reference_ && authenticatedPayload.size() == reference_->logical_bytes &&
-            bool(valueAdmission) && bool(slotsAdmission), "hybrid LargeValue decode lacks identity or admission");
-        // Reject whole-row counts before the directory decoder can allocate a
-        // count-sized vector. Then reuse its canonical directory validation.
-        hybrid_property_detail::require(authenticatedPayload.size() >=
-            RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES &&
-            LittleEndianCodec::readU32(authenticatedPayload, 8) == 1,
-            "hybrid LargeValue must contain exactly one field");
-        const auto locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(authenticatedPayload, &slotsAdmission);
-        hybrid_property_detail::require(locations.size() == 1 && locations[0].key_token == token_ &&
-            authenticatedPayload.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES ==
-                LittleEndianCodec::readU32(authenticatedPayload, 12),
-            "hybrid LargeValue token does not match its extension");
-        const auto entry = authenticatedPayload.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
-            locations[0].offset, locations[0].length);
-        hybrid_property_detail::require(entry.size() >= 4 && LittleEndianCodec::readU32(entry, 0) == token_,
-            "hybrid LargeValue entry token does not match its directory");
-        size_t offset = 4;
-        auto value = CanonicalPropertyValueCodec::decodeNextWithAdmission(entry, offset, valueAdmission);
+        const SelectedPropertyReadAdmission &slotsAdmission,
+        const std::function<void()> &checkpoint = {}) const {
+        hybrid_property_detail::require(bool(valueAdmission), "hybrid LargeValue decode requires value admission");
+        const auto entry = checkedLargeValueBytes(authenticatedPayload, slotsAdmission);
+        size_t offset = 0;
+        auto value = CanonicalPropertyValueCodec::decodeNextWithAdmission(entry, offset, valueAdmission, checkpoint);
         hybrid_property_detail::require(offset == entry.size(), "hybrid LargeValue field has trailing bytes");
         return {token_, std::move(value)};
+    }
+
+    [[nodiscard]] CanonicalPropertyValueCodec::DecodeShape inspectLargePayload(
+        std::span<const std::byte> authenticatedPayload, const SelectedPropertyReadAdmission &slotsAdmission,
+        const std::function<void()> &checkpoint = {}) const {
+        const auto bytes = checkedLargeValueBytes(authenticatedPayload, slotsAdmission);
+        size_t offset = 0;
+        auto shape = CanonicalPropertyValueCodec::inspectNext(bytes, offset, checkpoint);
+        hybrid_property_detail::require(offset == bytes.size(), "hybrid LargeValue field has trailing bytes");
+        return shape;
+    }
+
+    // Membership/presence consumers inspect the authenticated single-field
+    // canonical header without allocating a PropertyValue tree.
+    [[nodiscard]] bool largePayloadIsNull(std::span<const std::byte> authenticatedPayload,
+        const SelectedPropertyReadAdmission &slotsAdmission) const {
+        const auto bytes = checkedLargeValueBytes(authenticatedPayload, slotsAdmission);
+        return CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size());
     }
 
     // Destination allocation and canonical map-ordering workspace use the
@@ -161,6 +164,28 @@ public:
         return result;
     }
 private:
+    [[nodiscard]] std::span<const std::byte> checkedLargeValueBytes(std::span<const std::byte> authenticatedPayload,
+        const SelectedPropertyReadAdmission &slotsAdmission) const {
+        hybrid_property_detail::require(mode_ == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE &&
+            reference_ && authenticatedPayload.size() == reference_->logical_bytes &&
+            bool(slotsAdmission), "hybrid LargeValue decode lacks identity or admission");
+        // Reject whole-row counts before the directory decoder can allocate a
+        // count-sized vector. Then reuse its canonical directory validation.
+        hybrid_property_detail::require(authenticatedPayload.size() >=
+            RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES &&
+            LittleEndianCodec::readU32(authenticatedPayload, 8) == 1,
+            "hybrid LargeValue must contain exactly one field");
+        const auto locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(authenticatedPayload, &slotsAdmission);
+        hybrid_property_detail::require(locations.size() == 1 && locations[0].key_token == token_ &&
+            authenticatedPayload.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES ==
+                LittleEndianCodec::readU32(authenticatedPayload, 12),
+            "hybrid LargeValue token does not match its extension");
+        const auto entry = authenticatedPayload.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
+            locations[0].offset, locations[0].length);
+        hybrid_property_detail::require(entry.size() >= 4 && LittleEndianCodec::readU32(entry, 0) == token_,
+            "hybrid LargeValue entry token does not match its directory");
+        return entry.subspan(4);
+    }
     HybridPropertyExtensionView(std::span<const std::byte> payload, EntityPropertyKey owner, uint32_t token,
         Generation generation, HybridPropertyExtensionMode mode)
         : payload_(payload), owner_(owner), token_(token), generation_(generation), mode_(mode) {}

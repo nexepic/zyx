@@ -35,24 +35,38 @@ TEST(HybridPropertyDescriptorTest, Exact192BytePayloadAndEightIndependentLogical
     auto empty = page; empty.descriptor.roots = {};
     EXPECT_EQ(decode(HybridPropertyDescriptorCodec::encode(empty)), empty);
 }
+TEST(HybridPropertyDescriptorTest, NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals) {
+    constexpr std::array<uint64_t, 8> expected{
+        UINT64_C(0x8000000000000030), UINT64_C(0x8000000000000031),
+        UINT64_C(0x8000000000000032), UINT64_C(0x8000000000000033),
+        UINT64_C(0x8000000000000034), UINT64_C(0x8000000000000035),
+        UINT64_C(0x8000000000000036), UINT64_C(0x8000000000000037)};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(i)), expected[i]);
+        EXPECT_TRUE(isHybridPropertyIndexId(expected[i]));
+    }
+    for (const auto id : std::array<uint64_t, 8>{0, 7, UINT64_C(0x8000000000000002),
+        UINT64_C(0x8000000000000020), expected.front() - 1, expected.back() + 1,
+        UINT64_C(0xA501000000000030), UINT64_MAX}) EXPECT_FALSE(isHybridPropertyIndexId(id));
+    EXPECT_THROW(hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(8)), FormatException);
+    EXPECT_THROW(hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(255)), FormatException);
+}
 TEST(HybridPropertyDescriptorTest, ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility) {
     const auto bytes = HybridPropertyDescriptorCodec::encode(sample());
     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, DatabaseId(2), Generation(9), Generation(12), LogSequenceNumber(20)), FormatException);
     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(8), Generation(12), LogSequenceNumber(20)), FormatException);
     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(8), LogSequenceNumber(20)), FormatException);
     EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(12), LogSequenceNumber(16)), FormatException);
-    for (size_t offset : {size_t(8), size_t(16), size_t(32 + 8), size_t(32 + 16), size_t(32 + 72)}) {
+    for (size_t offset : {size_t(8), size_t(16), size_t(32 + 8), size_t(32 + 16)}) {
         auto wrong = bytes; LittleEndianCodec::writeU64(wrong, offset, UINT64_MAX); reseal(wrong);
         EXPECT_THROW(decode(wrong), FormatException) << offset;
     }
 }
-TEST(HybridPropertyDescriptorTest, PartialFutureAndAliasedRootReferencesFailClosed) {
+TEST(HybridPropertyDescriptorTest, PartialAndAliasedRootReferencesFailClosed) {
     for (size_t index = 0; index < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++index) {
         auto page = sample(); page.descriptor.roots[index].generation = Generation{};
         EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
         page = sample(); page.descriptor.roots[index].page_id = PageId{};
-        EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
-        page = sample(); page.descriptor.roots[index].generation = Generation(8);
         EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
     }
     auto page = sample(); page.descriptor.roots[7] = page.descriptor.roots[0];
@@ -60,6 +74,20 @@ TEST(HybridPropertyDescriptorTest, PartialFutureAndAliasedRootReferencesFailClos
     auto bytes = HybridPropertyDescriptorCodec::encode(sample());
     LittleEndianCodec::writeU64(bytes, 32 + 176, 101); reseal(bytes);
     EXPECT_THROW(decode(bytes), FormatException);
+}
+TEST(HybridPropertyDescriptorTest, IndependentTreePoolEpochsAreNotSemanticVisibilityBounds) {
+    auto page = sample();
+    for (size_t index = 0; index < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++index)
+        page.descriptor.roots[index].generation = Generation(99 + index);
+    // These epochs exceed both metadata generation 9 and visible generation 12.
+    // The frame codec authenticates metadata, not the referenced tree pages.
+    EXPECT_EQ(decode(HybridPropertyDescriptorCodec::encode(page)), page);
+    auto bytes = HybridPropertyDescriptorCodec::encode(page);
+    LittleEndianCodec::writeU64(bytes, 32 + 72, UINT64_MAX); reseal(bytes);
+    EXPECT_EQ(decode(bytes).descriptor.roots[0].generation, Generation(UINT64_MAX));
+    // Semantic visibility remains a separate, enforced constraint.
+    page.descriptor.semantic_generation = Generation(10);
+    EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
 }
 TEST(HybridPropertyDescriptorTest, ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted) {
     const auto original = HybridPropertyDescriptorCodec::encode(sample());

@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyValueReader.hpp"
 
 #include <algorithm>
 #include <array>
@@ -253,12 +254,34 @@ namespace graph::storage {
 		}
 	}
 
+    bool PropertyCollectionRootStore::readHybridSelectedBatch(const MetadataSnapshotPin &snapshot,
+        std::span<const EntityPropertyKey> keys, std::span<const uint32_t> tokens,
+        std::span<std::optional<PropertyCollectionRootEntry>> values, std::span<std::optional<size_t>> counts,
+        const CancellationCheckpoint *cancellation, const SelectedPropertyReadAdmission *admission,
+        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars) const {
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
+                return HybridPropertyValueReader::readSelected(context, snapshot, keys, tokens, values, counts,
+                    large_values_, admission, sink, scalars);
+            }
+        }
+        return false;
+    }
+
 	PropertyCollectionRoot PropertyCollectionRootStore::readEntity(const MetadataSnapshotPin &snapshot,
 																   const EntityPropertyKey &key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property read requires a valid logical owner key");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                auto root = readEntityOptional(snapshot, key, admission, slotsAdmission);
+                if (!root) throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property read requires a present Property root");
+                return std::move(*root);
+            }
+        }
 		const EntityPropertyLocation location = metadata_.findEntityPropertyLocation(snapshot, key);
 		const SlottedPage page = pages_.read(snapshot, location.page_id);
 		const std::vector<std::byte> bytes = page.read({location.page_id, location.slot_id, location.slot_generation});
@@ -272,6 +295,15 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property read requires a valid logical owner key");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
+                auto root = HybridPropertyValueReader::readCollection(context, snapshot, key,
+                    key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId,
+                    large_values_, admission, slotsAdmission);
+                if (root.routed) return std::move(root.value);
+            }
+        }
 		const std::optional<EntityPropertyLocation> location =
 				metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location.has_value()) {
@@ -291,6 +323,13 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"selective Entity Property read requires a valid owner key and nonzero token");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
+                auto result = HybridPropertyValueReader::read(context, snapshot, key, keyToken, large_values_);
+                if (result.route != HybridPropertyReadContext::FieldRoute::HFR_ROW) return std::move(result.value);
+            }
+        }
 		const std::optional<EntityPropertyLocation> location =
 				metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location.has_value()) {
@@ -316,6 +355,13 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property presence read requires a valid owner key and nonzero token");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
+                if (const auto result = HybridPropertyValueReader::exists(context, snapshot, key, keyToken, requireNonNull, large_values_))
+                    return *result;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location =
 			metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location.has_value()) {
@@ -354,6 +400,9 @@ namespace graph::storage {
 			}
 			previousDirectoryId = directoryId;
 		}
+
+        if (readHybridSelectedBatch(snapshot, keys, std::span(&keyToken, 1), results,
+            std::span<std::optional<size_t>>{}, cancellation)) return;
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
@@ -425,6 +474,9 @@ namespace graph::storage {
 		if (keys.empty()) {
 			return;
 		}
+
+        if (readHybridSelectedBatch(snapshot, keys, keyTokens, results,
+            std::span<std::optional<size_t>>{}, cancellation)) return;
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
@@ -558,6 +610,9 @@ namespace graph::storage {
 			return;
 		}
 
+        if (readHybridSelectedBatch(snapshot, keys, keyTokens, results,
+            counts, cancellation, admission)) return;
+
 		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
 			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property owner batch slots overflowed");
 		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
@@ -570,7 +625,7 @@ namespace graph::storage {
 		};
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
 		for (size_t index = 0U; index < locations.size(); ++index)
-			if (!locations[index].has_value()) counts[index] = size_t{0U};
+			if (!locations[index].has_value() && !counts[index].has_value()) counts[index] = size_t{0U};
 		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation, transientBufferAdmission ? &admitTransient : nullptr);
 		ownerBytes = checkedLargeValueBuffers(ownerBytes, present.capacity() * sizeof(size_t));
 
@@ -672,6 +727,12 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"Entity Property count read requires a valid logical owner key");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
+                if (const auto count = context.count(key)) return *count;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location =
 				metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location.has_value()) {
@@ -697,6 +758,12 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 				"Entity Property token read requires an owned snapshot, valid owner and admissions");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
+                if (auto tokens = context.tokens(key, tokenAdmission, transientAdmission)) return std::move(*tokens);
+            }
+        }
 		const auto location = metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location) return {};
 		const auto decode = [&](PageId pageId, PageOwnerKind ownerKind, std::span<const std::byte> bytes) {
@@ -760,6 +827,9 @@ namespace graph::storage {
 		if (keys.empty()) {
 			return;
 		}
+
+        if (readHybridSelectedBatch(snapshot, keys, std::span<const uint32_t>{}, std::span<std::optional<PropertyCollectionRootEntry>>{},
+            results, cancellation)) return;
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
@@ -1178,6 +1248,14 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property scan read requires a valid logical owner key");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                if (cancellation_) cancellation_->check();
+                auto result = store_->readEntity(snapshot, key, admission, slotsAdmission);
+                if (cancellation_) cancellation_->check();
+                return result;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		if (!location.has_value()) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
@@ -1195,6 +1273,14 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property scan read requires a valid logical owner key");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                if (cancellation_) cancellation_->check();
+                auto result = store_->readEntityOptional(snapshot, key, admission, slotsAdmission);
+                if (cancellation_) cancellation_->check();
+                return result;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		return location.has_value() ? std::optional(readLocation(snapshot, key, *location, admission, slotsAdmission)) : std::nullopt;
 	}
@@ -1208,6 +1294,14 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"selective Entity Property scan read requires a valid owner key and nonzero token");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                if (cancellation_) cancellation_->check();
+                auto result = store_->readEntityPropertyOptional(snapshot, key, keyToken);
+                if (cancellation_) cancellation_->check();
+                return result;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		return location.has_value() ? readSelectedLocation(snapshot, key, *location, keyToken) : std::nullopt;
 	}
@@ -1219,6 +1313,14 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property presence scan requires a valid owner key and nonzero token");
 		}
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                if (cancellation_) cancellation_->check();
+                const auto result = store_->readEntityPropertyExists(snapshot, key, keyToken, requireNonNull).value_or(false);
+                if (cancellation_) cancellation_->check();
+                return result;
+            }
+        }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		if (!location.has_value()) {
 			return false;
@@ -1231,7 +1333,7 @@ namespace graph::storage {
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
 			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
-			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink) {
+			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars) {
 			validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
@@ -1256,6 +1358,7 @@ namespace graph::storage {
 			previousToken = token;
 		}
 		std::fill(results.begin(), results.end(), std::nullopt);
+        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, {}, cancellation_, admission, sink, scalars)) return;
 		if (sink && admission) {
 			constexpr size_t ownerBytes = sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t);
 			if (keys.size() > std::numeric_limits<size_t>::max() / ownerBytes ||
@@ -1397,6 +1500,8 @@ namespace graph::storage {
 			current_page_id_ = PageId{};
 		}
 
+        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, counts, cancellation_, admission)) return;
+
 		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
 			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property owner batch slots overflowed");
 		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
@@ -1413,7 +1518,7 @@ namespace graph::storage {
 									"Property scan combined batch contains an invalid owner key");
 			}
 			locations[index] = findLocationOptional(snapshot, keys[index]);
-			if (!locations[index].has_value()) {
+			if (!locations[index].has_value() && !counts[index].has_value()) {
 				counts[index] = size_t{0U};
 			}
 		}
@@ -1533,6 +1638,8 @@ namespace graph::storage {
 			return;
 		}
 
+        if (store_->readHybridSelectedBatch(snapshot, keys, {}, {}, results, cancellation_)) return;
+
 		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
 			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property count owner slots overflowed");
 		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
@@ -1548,7 +1655,7 @@ namespace graph::storage {
 				cancellation_->check();
 			}
 			locations[index] = findLocationOptional(snapshot, keys[index]);
-			if (!locations[index].has_value()) {
+			if (!locations[index].has_value() && !results[index].has_value()) {
 				results[index] = size_t{0U};
 			}
 		}

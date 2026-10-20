@@ -1,0 +1,261 @@
+{
+  "base_commit": "6a3fedf13ecfa2a7a6447863f4b1ccc3eb9c822c",
+  "files": {
+    "benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp": {
+      "sha256": "4a96283f3f1af7578ac343d86df6f432696aed24c67356db13d07bde612f0e15",
+      "bytes": 6515
+    },
+    "include/graph/storage/LogicalGraphRead.hpp": {
+      "sha256": "23d0a9956feaf354e683c275828ccdb647111dc6777962606f0a3e6b1d7c1371",
+      "bytes": 61841
+    },
+    "include/graph/storage/PropertyScalarReadSink.hpp": {
+      "sha256": "b212dd9664c9f07a0333b91dd302751b51902bc5161c7f26e0a72d222c4f226e",
+      "bytes": 637
+    },
+    "include/graph/storage/relocatable/allocation/SharedPagePool.hpp": {
+      "sha256": "e74e67d6d30679b997755dfb46bf7e15f1ff1fa1da98a1eac2ac7b1dccff5436",
+      "bytes": 4521
+    },
+    "include/graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp": {
+      "sha256": "c59a80b5d08e1e212fe883cf648edd3d70c09a433f91fa18203812b425d0c376",
+      "bytes": 22238
+    },
+    "include/graph/storage/relocatable/allocation/SlottedPage.hpp": {
+      "sha256": "8d299e5df9213f81f3790d56f10b97fbbed7c94eeac880f4b759432c86030b4b",
+      "bytes": 10422
+    },
+    "include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp": {
+      "sha256": "11797a4a71066ada5c7cd66a1572a57ce19f058628bbf5b6043ece09d894ab97",
+      "bytes": 22459
+    },
+    "include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp": {
+      "sha256": "3d5b4841486190f44005c3193a5546b222c9172f2bf33b41117df8518d5c347b",
+      "bytes": 16836
+    },
+    "include/graph/storage/relocatable/index/BTreeIndex.hpp": {
+      "sha256": "56d0f6df2bf5a45302cd24dc158a0d8200c15be879024c39efe4f3e05f1a6643",
+      "bytes": 7521
+    },
+    "include/graph/storage/relocatable/index/BTreePage.hpp": {
+      "sha256": "848e0ca0adf0fb612dfad6cb5346f5cae202e76c557cafcfcc4dc766e2d746a0",
+      "bytes": 8656
+    },
+    "include/graph/storage/relocatable/index/BTreePageStore.hpp": {
+      "sha256": "1a77fc3a13707770119d5d5196f9a36dc2ae0c8b30e039f8081341823599b7c8",
+      "bytes": 20473
+    },
+    "include/graph/storage/relocatable/index/BulkBTreeBuilder.hpp": {
+      "sha256": "c890a458188621168d4f3556449bf132fa85d2a3e145b44ad7ce4664911c0cbc",
+      "bytes": 3519
+    },
+    "include/graph/storage/relocatable/index/FixedBTreeMap.hpp": {
+      "sha256": "2ac6d8ed713dc3b06b875ace239c7c2ef2e07c374af506960a1ccda425708f2f",
+      "bytes": 7743
+    },
+    "include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "a4cd7011a21fde2cb321484fe1b27587aab6f838dfe33608ba30c4df1ed446aa",
+      "bytes": 10695
+    },
+    "include/graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp": {
+      "sha256": "592aa90368601c0046630afbd88ec5c27e68b7a2fe4af43d87dce96107fbf82b",
+      "bytes": 7613
+    },
+    "include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp": {
+      "sha256": "6fd115a5cd6f580649440615c5b4264f8930ea52d84ff78cfdf160a7c9df5e8b",
+      "bytes": 11708
+    },
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "28a50130e3f1fc027805a108ed6ac2bd4b22cfef9245e7ae223a9ae797da64b4",
+      "bytes": 106312
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "692310733e4ee49fa82d6428fa6ba6b04ac9483ee5690bee66acdf0aeea8d6eb",
+      "bytes": 10922
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp": {
+      "sha256": "3b03aba69600a03f9a77b46b0586725a9375719cce40f12af047689d09a5a694",
+      "bytes": 9496
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp": {
+      "sha256": "bfed08115fedfdbcfe81b4811baf76506587c55df2f31145254fbb3524737c5f",
+      "bytes": 8042
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp": {
+      "sha256": "f7fd9faf83b7c1e513bcd7caa4b9fd1dbaef516fc7dc21962f505bbad3982731",
+      "bytes": 21061
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyExtension.hpp": {
+      "sha256": "04140c784a05b629b94eff42213221b0edbeeabcbe9d0c9ca49b799bf7afb6e8",
+      "bytes": 14912
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyFieldPageStore.hpp": {
+      "sha256": "d0b65611d96d4da5d68e9d2095a9b0a495a549284031ef15e8eef0673ab36bea",
+      "bytes": 7080
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyFieldView.hpp": {
+      "sha256": "fb06f1a2c8301eddbc6081f79cc6ae446cb830cab9463b3d9c2c27e60a468dca",
+      "bytes": 5791
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp": {
+      "sha256": "5bb77117d45607969dbfa56f05f0dd1c315ad9e73b8e858a0456fcea8fa543ec",
+      "bytes": 11696
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyIndexIds.hpp": {
+      "sha256": "aad948cc6e1575fad6d869f3f39155b44b62983f04324046f3e2609698f13708",
+      "bytes": 1618
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyLargeFieldPreparation.hpp": {
+      "sha256": "70dbd6ac5f280cc08e4db8d16a1b6b8fcb546bb7532380a38cd7734a98205e21",
+      "bytes": 7319
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp": {
+      "sha256": "f8b21470439de9e738c4e8b48aec2784344ae46afe4f919f15aa32c7b0c538b0",
+      "bytes": 13670
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "a1fe370c22f9bebb9676a6c9a6cf83f17f74b83e73c5c147a69e144d39aaf73c",
+      "bytes": 13969
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyRecords.hpp": {
+      "sha256": "297eedf766fb7eea6d52d504a7d45945da786db19173316dc664b885bb44fb57",
+      "bytes": 12405
+    },
+    "include/graph/storage/relocatable/property/HybridPropertyValueReader.hpp": {
+      "sha256": "f0729c372c1f6a96b246349a8b201824a7947cd85d3e4912d0de39f04211c2a3",
+      "bytes": 17920
+    },
+    "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp": {
+      "sha256": "2dc9872679fab0ae7db4852a5fb3d4d2e9dcb5ff6218c619bb11139e2c5ce97c",
+      "bytes": 10409
+    },
+    "include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "c04301bdb0a09b7cd687802c9515b1345d78148af25512522dbe86e5800d4113",
+      "bytes": 21831
+    },
+    "src/query/execution/DirectPropertyColumns.hpp": {
+      "sha256": "f19ae7132cc230526dc9b7f0668b69627e243375b0d0f52f46a09534f6e49970",
+      "bytes": 13445
+    },
+    "src/query/execution/LogicalPlanReadRuntime.cpp": {
+      "sha256": "343580532d8da352d2223113083387e735d6c363acd5608a01b725d8d1cde73d",
+      "bytes": 908640
+    },
+    "src/storage/relocatable/allocation/SharedPagePool.cpp": {
+      "sha256": "d81aa68c5902bb9c0c5b380ff7009488edc27845eb5efd331e6fef594ec19f9d",
+      "bytes": 13467
+    },
+    "src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": {
+      "sha256": "a7c124ba14c885634666b673284924a4f666711efc67642b0b30c263e22243a1",
+      "bytes": 108595
+    },
+    "src/storage/relocatable/allocation/SlottedPage.cpp": {
+      "sha256": "739c88ae14819dc5eb85fef57a58fef84fc14bc3073d5373d087db9ed0ff2ee2",
+      "bytes": 35672
+    },
+    "src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp": {
+      "sha256": "40f62502ce69d1dd8cf73202ff533bbc2fca826178752775d1e044471140cd42",
+      "bytes": 32512
+    },
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "cd524d0a9f97cb3062a4c8f0d401b7fbaf8bc4e2efe70dce05d25d15b821303e",
+      "bytes": 197054
+    },
+    "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": {
+      "sha256": "511c812dd0bbe4a923c819513db1e80bff495b4ac75f49c06d6cdafce523b8cf",
+      "bytes": 112559
+    },
+    "src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp": {
+      "sha256": "80cadf6bd77232dd98d3528c86fcbbb1a9eab808e76f4d1f441e01dcc35401f2",
+      "bytes": 78496
+    },
+    "src/storage/relocatable/index/BTreeIndex.cpp": {
+      "sha256": "c64bf0094bedad666c3b71fce1d4713e249357d3894ac59ef0cdd323b6234b59",
+      "bytes": 33960
+    },
+    "src/storage/relocatable/index/BTreePage.cpp": {
+      "sha256": "d8c98c1608f2a41a0a3c39fb4b2ff8ff8927386e86252444a5fb980987969a7a",
+      "bytes": 43588
+    },
+    "src/storage/relocatable/index/BulkBTreeBuilder.cpp": {
+      "sha256": "bdb38467330f5f666494aef1ce569d2e1ee6bb91978d82b4aa2dc3864b34ed81",
+      "bytes": 31834
+    },
+    "src/storage/relocatable/metadata/MetadataWriteBatch.cpp": {
+      "sha256": "dcab3d785eff36a7ae53bde2915276e1b9a1c72b935ac228dc98c0ecf229abbe",
+      "bytes": 30916
+    },
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "1a0b53a5e4d07770c54dc209e1acdf76da06d444aa29f9d5486fde6ceb7b8fba",
+      "bytes": 310940
+    },
+    "src/storage/relocatable/property/LargeValueStore.cpp": {
+      "sha256": "7bcf13659432381651dc8adf0624f202acca825ab3a05717ed94c3898ed82935",
+      "bytes": 112205
+    },
+    "src/storage/relocatable/property/PropertyCollectionRoot.cpp": {
+      "sha256": "82ada89f564d41593a90c8a2b33b51b8e914e15aafa5f5b35172c284837a66b6",
+      "bytes": 49128
+    },
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "5a05a5502655a4d640294722b1cf3653c2e6e763e4504d54bcfffd6f8289c8a9",
+      "bytes": 140128
+    },
+    "tests/src/query/execution/test_BoundNodeScanBatch.cpp": {
+      "sha256": "07e82cc54201f59f2003591d169177484b73787f79173fd9bf99f24e70867e1f",
+      "bytes": 14768
+    },
+    "tests/src/storage/relocatable/index/test_BTreePage.cpp": {
+      "sha256": "f2f826b9c6e9b15dc03c80720deb5809c0b5b365a315fd4f6e3c71e2a6dc1ddc",
+      "bytes": 50378
+    },
+    "tests/src/storage/relocatable/index/test_BulkBTreeBuilder.cpp": {
+      "sha256": "4bacbe7ef25580e1f068b93ba3018a0873dace54faa961d3953cacb73f28587a",
+      "bytes": 33617
+    },
+    "tests/src/storage/relocatable/metadata/test_MetadataWriteBatch.cpp": {
+      "sha256": "a724d3c41fc52e23be2d9025fb96f6ca82205ba06b8fbfddb4e7720a76d1aaeb",
+      "bytes": 44972
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp": {
+      "sha256": "36c66d2b4cf86d154ca5521864ca7356067196c6cb19a7ccf8cd41c073acb059",
+      "bytes": 12140
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp": {
+      "sha256": "b314153f6476420abfb5e331e5dc9146fcdbb175d79af3db9570bd51d3554feb",
+      "bytes": 7773
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp": {
+      "sha256": "6b092c698dbedc090bdb612f84132f29f2010db2733b72103ba87977061ef92a",
+      "bytes": 26579
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp": {
+      "sha256": "a747b4a3f951318bb184e5f50c169ce12dbed2b58a41bd77397b582775e0dccb",
+      "bytes": 5204
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyLargeFieldPreparation.cpp": {
+      "sha256": "a168eca826640723c2ea8545821b6aee8e56c362303c74b8358e0216717412d6",
+      "bytes": 10381
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp": {
+      "sha256": "38696555aa747c3a16c93df4399348b7b4cc6d5c9fc7dbcf29f68d46c57f01fd",
+      "bytes": 25050
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp": {
+      "sha256": "9a00b85ff23522927102f4ca65c0a345c7620c0ee68a907983d2b573ee31dee6",
+      "bytes": 24029
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp": {
+      "sha256": "29aeb2c07acf423584fdb1c4c33d68196183f985ae8da85d92bf57a035285666",
+      "bytes": 19598
+    },
+    "tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp": {
+      "sha256": "b5af08922de8fe773bc0147b8503db5750816f090a358667ee9dedd89083cb7e",
+      "bytes": 71121
+    },
+    "tests/src/storage/relocatable/property/test_PropertySubblockDirectories.cpp": {
+      "sha256": "1a60405d425bf3defc4aa847683d9e33fdf6d584d77d2e5ab7ca28611486c86e",
+      "bytes": 25217
+    }
+  }
+}

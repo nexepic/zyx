@@ -1,0 +1,144 @@
+#include <gtest/gtest.h>
+#include "graph/storage/CancellationCheckpoint.hpp"
+#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
+
+using namespace graph::storage;
+using graph::PropertyValue;
+using graph::query::execution::MaterializedByteBudget;
+namespace {
+using Request = NativeGraphHybridPropertyRootMutation;
+constexpr auto NODE = EntityPropertyOwnerKind::EPOK_NODE;
+constexpr auto EDGE = EntityPropertyOwnerKind::EPOK_EDGE;
+class HybridPropertyOrdinaryConversionTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
+protected:
+    void seed(EntityPropertyOwnerKind kind, size_t owners = 49, size_t fields = 2) {
+        NativeGraphWritePlannerOptions options;
+        options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(80);
+        options.entity_pool_owner_id = 901; options.logical_id_lease_block_size = 1;
+        options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
+        NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+        auto transaction = planner.beginTransaction();
+        transaction.reserveNodeIds(kind == NODE ? owners : 2);
+        uint64_t source = 0, target = 0;
+        if (kind == EDGE) {
+            source = transaction.createNode({}); target = transaction.createNode({}); transaction.reserveEdgeIds(owners);
+        }
+        for (size_t i = 0; i < owners; ++i) {
+            const auto id = kind == NODE ? transaction.createNode({}) : transaction.createEdge(source, target, 7);
+            if (i == 48 && owners == 49) continue; // live owner without a Property root
+            PropertyCollectionRoot root{id, kind == NODE ? graph::Node::typeId : graph::Edge::typeId, {}};
+            for (size_t token = 1; token <= fields; ++token) root.entries.push_back({uint32_t(token), PropertyValue(int64_t(i + token))});
+            if (kind == NODE) transaction.replaceNodeProperty(std::move(root));
+            else transaction.replaceEdgeProperty(std::move(root));
+        }
+        ASSERT_TRUE(transaction.commit().committed());
+    }
+    Request request(EntityPropertyOwnerKind kind, std::shared_ptr<std::pmr::memory_resource> memory) {
+        const auto current = metadata_->openSnapshot().superblock();
+        return {current.database_id, current.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE,
+            {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr}};
+    }
+    void run(const Request &request, bool omitFence = false, std::optional<Generation> expected = {}) {
+        const auto current = metadata_->openSnapshot().superblock();
+        NativeGraphDerivedStateMutation derived;
+        static_cast<void>(metadata_->mutateNativeGraphPagesWithLargeValues({}, {}, {}, {}, {}, {}, derived,
+            LogSequenceNumber(current.checkpoint_lsn.value() + 1), [](auto, auto, auto, auto, auto, auto) {},
+            [](auto &) {}, {}, {}, {}, {}, {}, {}, {},
+            omitFence ? std::nullopt : std::optional(expected.value_or(current.generation)), {}, {}, {}, {}, {}, request));
+    }
+    void expectPreparedRefusal(const Request &request) {
+        try { run(request); FAIL() << "private conversion was published"; }
+        catch (const FormatException &error) {
+            EXPECT_EQ(error.error(), FormatError::FERR_UNSUPPORTED_VERSION) << error.what();
+            EXPECT_NE(std::string(error.what()).find("private field preparation completed"), std::string::npos) << error.what();
+        }
+    }
+};
+TEST_F(HybridPropertyOrdinaryConversionTest, FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication) {
+    seed(NODE, 2); const auto before = metadata_->openSnapshot().superblock();
+    const auto bytes = io_->fileSize(); const auto epoch = io_->dataMutationEpoch();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); const auto conversion = request(NODE, memory);
+    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) expectPreparedRefusal(conversion);
+    else EXPECT_THROW(run(conversion), FormatException);
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+}
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyOrdinaryConversionTest, WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners) {
+    for (const auto kind : {NODE, EDGE}) {
+        seed(kind); auto old = metadata_->openSnapshot(); const auto before = old.superblock();
+        const auto original = properties_->readEntity(old, {kind, 1}); const auto bytes = io_->fileSize();
+        const auto epoch = io_->dataMutationEpoch(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+        expectPreparedRefusal(request(kind, memory));
+        EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+        EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+        EXPECT_EQ(properties_->readEntity(old, {kind, 1}), original);
+        old.release(); reopenNativeStores(); auto reopened = metadata_->openSnapshot();
+        EXPECT_EQ(reopened.superblock(), before); EXPECT_EQ(properties_->readEntity(reopened, {kind, 1}), original);
+    }
+}
+TEST_F(HybridPropertyOrdinaryConversionTest, InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads) {
+    const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
+    for (unsigned bad = 0; bad < 8; ++bad) {
+        auto memory = std::make_shared<MaterializedByteBudget>(bad == 4 ? 2 * 1024 * 1024 : 1024 * 1024);
+        auto conversion = request(NODE, memory);
+        if (bad == 0) conversion.conversion->group_id = 0;
+        if (bad == 1) conversion.conversion->group_id = RSS_HYBRID_MAX_GROUP_ID + 1;
+        if (bad == 2) conversion.conversion->owner_kind = EntityPropertyOwnerKind(255);
+        if (bad == 3) conversion.conversion->memory.reset();
+        if (bad == 5) conversion.mode = NativeHybridPropertyRootMode::NHPRM_CLEAR;
+        if (bad == 6) conversion.replacement_index_ids[0] = hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_OWNER);
+        try { run(conversion, bad == 7); FAIL() << bad; }
+        catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_INVALID_HEADER) << bad; }
+        EXPECT_EQ(memory->used(), 0U);
+    }
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+}
+class CancelNow final : public CancellationCheckpoint {
+public: void check() const override { throw std::runtime_error("cancel ordinary native conversion"); }
+};
+TEST_F(HybridPropertyOrdinaryConversionTest, QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile) {
+    seed(NODE, 2); const auto before = metadata_->openSnapshot().superblock();
+    const auto bytes = io_->fileSize(); const auto epoch = io_->dataMutationEpoch();
+    auto tiny = std::make_shared<MaterializedByteBudget>(1);
+    EXPECT_THROW(run(request(NODE, tiny)), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(tiny->used(), 0U);
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    auto conversion = request(NODE, memory); CancelNow cancellation; conversion.conversion->cancellation = &cancellation;
+    EXPECT_THROW(run(conversion), std::runtime_error); EXPECT_EQ(memory->used(), 0U);
+    conversion = request(NODE, memory);
+    EXPECT_THROW(run(conversion, false, Generation(before.generation.value() - 1)), FormatException);
+    conversion.conversion->group_id = 2;
+    try { run(conversion); FAIL() << "empty group accepted"; }
+    catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE); }
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    expectPreparedRefusal(request(NODE, memory)); EXPECT_EQ(memory->used(), 0U);
+}
+TEST_F(HybridPropertyOrdinaryConversionTest, MembershipPreflightRejectsBeforeDecodingAnOverBoundSource) {
+    seed(NODE, 64, 65); const auto before = metadata_->openSnapshot().superblock();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    const auto bytes = io_->fileSize(); const auto epoch = io_->dataMutationEpoch();
+    EXPECT_THROW(run(request(NODE, memory)), std::length_error);
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+}
+TEST_F(HybridPropertyOrdinaryConversionTest, ChecksummedForeignRowOwnerCannotBecomeAConversionSource) {
+    seed(NODE, 2); auto old = metadata_->openSnapshot(); const auto original = properties_->readEntity(old, {NODE, 1});
+    const auto location = metadata_->findEntityPropertyLocation(old, {NODE, 1});
+    auto page = slotted_pages_->read(old, location.page_id); auto foreign = original; foreign.owner_entity_id = 999;
+    page.overwrite({location.page_id, location.slot_id, location.slot_generation}, EntityPropertyCollectionRootCodec::encode(foreign));
+    static_cast<void>(slotted_pages_->replacePage(page, LogSequenceNumber(old.superblock().checkpoint_lsn.value() + 1)));
+    const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    try { run(request(NODE, memory)); FAIL() << "foreign owner accepted"; }
+    catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE); }
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), original);
+}
+#endif
+} // namespace

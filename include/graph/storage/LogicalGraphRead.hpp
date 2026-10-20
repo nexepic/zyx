@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/storage/PropertyScalarReadSink.hpp"
 
 namespace graph::query::execution::detail { class DatabaseResourceBudget; }
 
@@ -477,6 +478,14 @@ namespace graph::storage {
 			const std::function<void(size_t)> &) const {
 			throw std::logic_error("logical graph reader does not support direct Property cells");
 		}
+        // Native scalar producers may bypass PropertyValue. Existing readers
+        // and overlays retain their owning-cell route through this fallback.
+        virtual void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const {
+            if (!values || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
+            readNodePropertyCellsSortedWithAdmission(ids, keys, values, admission);
+        }
 		// Readers advertising admission invoke it before selected entry payload
 		// reads/copies. Native storage reports canonical token + value wire bytes;
 		// these are source scratch estimates, not decoded object capacity or RSS.

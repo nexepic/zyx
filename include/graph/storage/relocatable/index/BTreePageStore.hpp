@@ -125,9 +125,9 @@ namespace graph::storage {
 		// layout so callers that require root absence for an empty tree can retain
 		// that invariant without materializing a temporary empty root.
 		uint64_t entry_count = 0U;
-		std::vector<BTreeNewIndexTreePoolMutation> new_pool_mutations;
+		utils::OwnedStdVector<BTreeNewIndexTreePoolMutation> new_pool_mutations;
 		IndexTreeMutationAppendedPageReference root_page;
-		BTreeStructuralMutationPreparer preparer;
+        utils::OwnedFunction<void(std::vector<IndexTreeMutationPoolBatch> &, LogSequenceNumber)> preparer;
 	};
 
 	// One immutable structural tree plan. It carries the complete Page Directory

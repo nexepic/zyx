@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <span>
 #include "graph/storage/relocatable/format/Format.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -24,15 +25,9 @@ constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC = 0x4458595AU; // ZYXD
 constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = 1;
 constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES = 32;
 constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = 192;
-constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT = 8;
-
-enum class HybridPropertyRootOrdinal : uint8_t {
-    HPRO_NODE_OWNER = 0, HPRO_NODE_COLUMN, HPRO_NODE_EXTENSION, HPRO_NODE_GROUP,
-    HPRO_EDGE_OWNER, HPRO_EDGE_COLUMN, HPRO_EDGE_EXTENSION, HPRO_EDGE_GROUP,
-};
 struct HybridPropertyTreeRoot {
     PageId page_id{};
-    Generation generation{};
+    Generation generation{}; // shared-pool physical epoch, not semantic commit generation
     constexpr bool operator==(const HybridPropertyTreeRoot &) const = default;
 };
 struct HybridPropertyDescriptor {
@@ -64,9 +59,13 @@ class HybridPropertyDescriptorCodec final {
         const auto &descriptor = page.descriptor;
         require(descriptor.database_id.isValid() && descriptor.semantic_generation.isValid() &&
             descriptor.semantic_generation <= page.generation, "hybrid descriptor has an invalid semantic identity");
+        // Tree epochs belong to independently reused shared pools. Comparing
+        // them numerically with metadata/semantic generations is invalid.
+        // A routed reader must authenticate each nonempty reference against
+        // its pinned directory and actual B+Tree root page (as BTreeIndex does).
         for (const auto &root : descriptor.roots)
-            require(root.page_id.isValid() == root.generation.isValid() &&
-                root.generation <= descriptor.semantic_generation, "hybrid descriptor has a partial or future tree root");
+            require(root.page_id.isValid() == root.generation.isValid(),
+                "hybrid descriptor has a partial tree root");
         for (size_t i = 0; i < descriptor.roots.size(); ++i)
             for (size_t j = 0; j < i; ++j)
                 require(!descriptor.roots[i].page_id.isValid() || descriptor.roots[i].page_id != descriptor.roots[j].page_id,

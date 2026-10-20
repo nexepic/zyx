@@ -1,0 +1,1134 @@
+{
+  "tests": 104,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T10:15:05Z",
+  "time": "3.399s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyPageBindingTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:05Z",
+      "time": "0.004s",
+      "testsuite": [
+        {
+          "name": "OwnerCodecRecognizesThirteenOnlyInTheIsolatedFormat",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 36,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "MixedNodeAndEdgeFieldsBindAsOneTypedFrameAndRetainSemanticVisibility",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 71,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "BadPoolOwnerGenerationLsnAndRoleRejectBeforeChangingThePrivateImage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "ValidSlottedCrcDoesNotAuthorizeUnknownOrFutureRecordPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 120,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "BindingQuotaRefusalRefundsItsEnumerationAndPreservesRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 137,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageBindingTest"
+        },
+        {
+          "name": "LargeReferenceBindingRequiresRetainedAdmissionAndRefundsBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 149,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageBindingTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyPublicationGuardTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:05Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageBinding.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyPublicationGuardTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSlottedPageTest",
+      "tests": 21,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:05Z",
+      "time": "2.636s",
+      "testsuite": [
+        {
+          "name": "CreatesRoundTripsAndReportsEmptyStats",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "DefinesThePublicSlotReferenceAndOwnerKindDomains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "BindsVariablePageBytesToTheirSharedPoolOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "ReadViewAuthenticatesBorrowedSlotBytesAndStableReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 148,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:05Z",
+          "time": "2.598s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RebindsAnActiveOwnerWithoutChangingStableSlotReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 203,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "ExposesBoundOwnerAndOnlyCurrentLiveSlotReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 239,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "InsertsReadsAndUsesAllOverwritePlacementStrategies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 270,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "DeletesReusesSlotAndRejectsStaleReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "CompactsFragmentationWithoutChangingLiveReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 316,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "CompactsForLargeReplacementAndRejectsFullPageWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 343,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RejectsTruncationChecksumAndValidatedCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RetiresGenerationExhaustedSlotAndAllocatesANewDirectorySlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 392,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RejectsEveryHeaderAndSlotIntegrityViolationBeforeExposingValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 417,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "RejectsOversizedValuesInvalidReferencesAndSupportsMoveOperations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 508,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "OpensZeroLengthPayloadsAndMixedLiveFreeSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 529,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "MatchesReferenceModelAcrossMixedOperationsAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 545,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.033s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "SlotReadAdmissionRejectsBeforeAllocationAndPreservesRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 599,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "OwnedPageCloneAndMoveRetainTheAllocationDomain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 634,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "DeniedClonePreservesTheSourceAndMalformedOpenRefundsItsBuffer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 654,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        },
+        {
+          "name": "OwnedPagesAreNotChargedAgainByLegacyReadAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPage.cpp",
+          "line": 674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPageTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSharedPagePoolTest",
+      "tests": 7,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:08Z",
+      "time": "0.006s",
+      "testsuite": [
+        {
+          "name": "PoolHeaderRoundTripsAndUsesEveryFixedField",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest"
+        },
+        {
+          "name": "PoolHeaderRejectsMalformedDiskBytesAndInvalidValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 80,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest"
+        },
+        {
+          "name": "FixedHeadersRejectOrExactlyRoundTripEveryChecksumValidSingleBitMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolTest"
+        },
+        {
+          "name": "OwnerHeaderRoundTripsAndRejectsCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 152,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp:196\nFailed\nExpected FormatException\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OwnerHeaderValidatesBoundsBeforeEncoding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest"
+        },
+        {
+          "name": "FrameMapAllocatesReleasesAndReusesEveryDataFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 231,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest"
+        },
+        {
+          "name": "FrameMapRejectsInvalidHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePool.cpp",
+          "line": 251,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSharedPagePoolAllocatorTest",
+      "tests": 54,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:08Z",
+      "time": "0.746s",
+      "testsuite": [
+        {
+          "name": "AtomicallyCreatesReadsAndReopensTheFirstSharedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsUnknownDemandReadHintsBeforeRouteLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 207,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 216,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsInvalidTypedPrefetchContractsBeforeRouteLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "AuthenticatesBoundedPreparedPublicationFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 314,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "CoalescesAdjacentPreparedPublicationValidationReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "MaterializesPrivateAppendAndMutationPlansBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 399,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "MaterializesAppendUnderAnExistingWriterFence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 488,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.002s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 540,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 567,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsStaleOrCapacityInvalidCrossPoolBatchState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 613,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "MaterializesCrossPoolAndSamePoolPreparedReplacements",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 679,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "EvacuatesIndexPageWithoutAnIndexRootBinding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 730,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.009s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsAnUnpairedIndexRootBindingBeforeEvacuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 761,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "OwnsPayloadBeforeMetadataPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 773,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 790,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "PreservesEveryDeclaredSharedPoolAndOwnerKindPair",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 813,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.057s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 862,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.009s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 905,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.013s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsStaleOrUnplaceableCrossPoolEvacuationRequests",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 955,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.124s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 998,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.01s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1034,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.01s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1070,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.02s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsRetirementOfAPoolWithCurrentPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.004s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1125,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.148s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1181,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1199,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1231,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconcilesInterruptedReplacementDuringStartup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsUnallocatedCurrentFrameDuringStartupRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1291,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsMismatchedCurrentOwnerDuringStartupRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.004s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsDuplicatePageIdsWithoutChangingThePoolBitmap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1330,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.004s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconcilesAnInterruptedAppendWhenTheAllocatorOpens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1348,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconcilesAnInterruptedAppendAndReusesItsFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1373,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.012s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ManuallyReconcilesAFrameWrittenBeforeFailedPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1411,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1436,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsInvalidAppendsAndAFullSharedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1522,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.124s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReconciliationFailsClosedForCorruptOrMismatchedFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1558,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.011s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1602,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RequiresTheMetadataDataStorageHandle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1732,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "SupportsOnlyDeclaredOpenModes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1739,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1746,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "CountsOnlyCurrentSealedSharedPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1759,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1789,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.001s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1797,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.007s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsValidButInconsistentPoolAndOwnerHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.004s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1866,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1884,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        },
+        {
+          "name": "CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1897,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0.006s",
+          "classname": "RelocatableSharedPagePoolAllocatorTest"
+        }
+      ]
+    },
+    {
+      "name": "PoolPreparationRunPrototypeTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:08Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1941,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "PoolPreparationRunPrototypeTest"
+        },
+        {
+          "name": "RejectsEveryChangedCatalogIdentityWithoutAdvancing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocator.cpp",
+          "line": 1954,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "PoolPreparationRunPrototypeTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyPageImageTest",
+      "tests": 12,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T10:15:08Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 83,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 104,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 131,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "FullPageRefusesExtraRecordWithoutChangingOtherRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 168,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 232,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        },
+        {
+          "name": "NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPageImage.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T10:15:08Z",
+          "time": "0s",
+          "classname": "HybridPropertyPageImageTest"
+        }
+      ]
+    }
+  ]
+}

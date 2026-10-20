@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <bit>
 #include <string_view>
 #include <variant>
 #include "graph/storage/LogicalGraphRead.hpp"
@@ -75,8 +76,7 @@ public:
             guard();
             if (unique.empty() || unique.back() != ids[order[i]]) { unique.push_back(ids[order[i]]); starts.push_back(i); }
         }
-        snapshot_.readNodePropertyCellsSortedWithAdmission(unique, keys,
-            [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+        const auto emitValue = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                 if (row >= unique.size() || column >= keys.size()) throw std::invalid_argument("direct gather producer ordinal changed");
                 const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
                 for (size_t i = starts[row]; i < end; ++i) {
@@ -87,8 +87,43 @@ public:
                         append(order[i], column, copyPropertyValueGuarded(*value, guard), guard);
                     }
                 }
-            }, admitSource);
+            };
+        const auto emitScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+                if (row >= unique.size() || column >= keys.size()) throw std::invalid_argument("direct scalar producer ordinal changed");
+                const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
+                for (size_t i = starts[row]; i < end; ++i) appendScalar(order[i], column, type, bits, guard);
+            };
+        snapshot_.readNodePropertyCellsWithScalarsSortedWithAdmission(unique, keys,
+            std::ref(emitValue), std::ref(emitScalar), admitSource);
         seal();
+        attempt.complete = true;
+    }
+
+    template<class Guard>
+    void appendScalar(size_t row, size_t ordinal, PropertyType type, uint64_t bits, Guard guard) {
+        ConstructionAttempt attempt{failed_};
+        guard(); validateSnapshot();
+        if (sealed_ || failed_ || row >= rows_) throw std::invalid_argument("direct scalar outside construction");
+        if ((type != PropertyType::INTEGER && type != PropertyType::DOUBLE && type != PropertyType::BOOLEAN &&
+            type != PropertyType::NULL_TYPE) || (type == PropertyType::BOOLEAN && bits > 1) ||
+            (type == PropertyType::NULL_TYPE && bits != 0)) throw std::invalid_argument("invalid direct scalar encoding");
+        auto &c = columns_.at(ordinal);
+        if (c.written[row]) throw std::invalid_argument("direct scalar producer emitted a duplicate cell");
+        switch (type) {
+            case PropertyType::INTEGER:
+                if (c.integers.empty()) c.integers.resize(rows_);
+                c.integers[row] = std::bit_cast<int64_t>(bits); break;
+            case PropertyType::DOUBLE:
+                if (c.doubles.empty()) c.doubles.resize(rows_);
+                c.doubles[row] = std::bit_cast<double>(bits); break;
+            case PropertyType::BOOLEAN:
+                if (c.booleans.empty()) c.booleans.resize(rows_);
+                c.booleans[row] = bits != 0; break;
+            default: break;
+        }
+        c.types[row] = type;
+        c.states[row] = type == PropertyType::NULL_TYPE ? ColumnCellState::CCS_NULL : ColumnCellState::CCS_VALUE;
+        c.written[row] = 1U;
         attempt.complete = true;
     }
 

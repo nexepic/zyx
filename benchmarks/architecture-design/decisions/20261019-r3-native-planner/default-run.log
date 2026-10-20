@@ -1,0 +1,94 @@
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyConversionPreparationTest.*:HybridPropertyExtensionTest.*:HybridPropertyGroupConversionTest.*:HybridPropertyPageImageTest.*:PropertySubblockGroupConversionTest.*
+[==========] Running 33 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[----------] 1 test from HybridPropertyConversionPreparationTest (0 ms total)
+
+[----------] 4 tests from HybridPropertyGroupConversionTest
+[ RUN      ] HybridPropertyGroupConversionTest.RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed
+[       OK ] HybridPropertyGroupConversionTest.RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed (0 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection
+[       OK ] HybridPropertyGroupConversionTest.MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection (10 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.QuotaCancellationAndShapeRefusalsRefundBeforeRetry
+[       OK ] HybridPropertyGroupConversionTest.QuotaCancellationAndShapeRefusalsRefundBeforeRetry (0 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.NullMixedAndHeapExtensionsRemainBorrowedAndOrdered
+[       OK ] HybridPropertyGroupConversionTest.NullMixedAndHeapExtensionsRemainBorrowedAndOrdered (0 ms)
+[----------] 4 tests from HybridPropertyGroupConversionTest (12 ms total)
+
+[----------] 8 tests from PropertySubblockGroupConversionTest
+[ RUN      ] PropertySubblockGroupConversionTest.Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip
+[       OK ] PropertySubblockGroupConversionTest.Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip (1 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues
+[       OK ] PropertySubblockGroupConversionTest.DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues (3 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount
+[       OK ] PropertySubblockGroupConversionTest.NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.MaximumMembershipsAndPropertylessOwnersStayBounded
+[       OK ] PropertySubblockGroupConversionTest.MaximumMembershipsAndPropertylessOwnersStayBounded (18 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge
+[       OK ] PropertySubblockGroupConversionTest.CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens
+[       OK ] PropertySubblockGroupConversionTest.RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace
+[       OK ] PropertySubblockGroupConversionTest.NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.ParentAccountOwnsThePlanAndFailureRefundsBothCounters
+[       OK ] PropertySubblockGroupConversionTest.ParentAccountOwnsThePlanAndFailureRefundsBothCounters (0 ms)
+[----------] 8 tests from PropertySubblockGroupConversionTest (26 ms total)
+
+[----------] 8 tests from HybridPropertyExtensionTest
+[ RUN      ] HybridPropertyExtensionTest.InlineValuesRoundTripCanonicalTypesAndBorrowBytesWithoutWholeRowCopies
+[       OK ] HybridPropertyExtensionTest.InlineValuesRoundTripCanonicalTypesAndBorrowBytesWithoutWholeRowCopies (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.WrongIdentityVisibilityModeReservedAndCanonicalTrailingDataReject
+[       OK ] HybridPropertyExtensionTest.WrongIdentityVisibilityModeReservedAndCanonicalTrailingDataReject (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.NativeUsableRecordLimitAndAccountFailurePrecedeDestinationAllocation
+[       OK ] HybridPropertyExtensionTest.NativeUsableRecordLimitAndAccountFailurePrecedeDestinationAllocation (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.ValueAdmissionRefusalDoesNotChangeBorrowedSourceAndCanRetry
+[       OK ] HybridPropertyExtensionTest.ValueAdmissionRefusalDoesNotChangeBorrowedSourceAndCanRetry (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.LargeReferenceReusesExistingCodecAndExactlyOneTokenValuePayload
+[       OK ] HybridPropertyExtensionTest.LargeReferenceReusesExistingCodecAndExactlyOneTokenValuePayload (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.WholeRowsWrongTokensTrailingDataAndWrongLargeMediaNeverBecomeOneField
+[       OK ] HybridPropertyExtensionTest.WholeRowsWrongTokensTrailingDataAndWrongLargeMediaNeverBecomeOneField (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.RealDecodeAccountsRefundReferenceDirectoryAndValueRefusalBeforeRetry
+[       OK ] HybridPropertyExtensionTest.RealDecodeAccountsRefundReferenceDirectoryAndValueRefusalBeforeRetry (0 ms)
+[ RUN      ] HybridPropertyExtensionTest.BoundedGroupPlanEncodesOnlyActualExtensionMembersAgainstOutputAccount
+[       OK ] HybridPropertyExtensionTest.BoundedGroupPlanEncodesOnlyActualExtensionMembersAgainstOutputAccount (0 ms)
+[----------] 8 tests from HybridPropertyExtensionTest (1 ms total)
+
+[----------] 12 tests from HybridPropertyPageImageTest
+[ RUN      ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration
+[       OK ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots
+[       OK ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource
+[       OK ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration
+[       OK ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot
+[       OK ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource
+[       OK ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount
+[       OK ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords
+[       OK ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators
+[       OK ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity
+[       OK ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership
+[       OK ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership (0 ms)
+[----------] 12 tests from HybridPropertyPageImageTest (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 33 tests from 5 test suites ran. (43 ms total)
+[  PASSED  ] 33 tests.

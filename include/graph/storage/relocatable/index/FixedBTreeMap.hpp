@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <span>
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -35,8 +36,9 @@ public:
     using Record = std::array<std::byte, KeyBytes + ValueBytes>;
     struct Entry { Key key; Value value; bool operator==(const Entry &) const = default; };
 
-    FixedBTreeMap(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata)
-        : index_(indexId, pages, metadata, BTreeLeafValueLayout::BLVL_EMPTY) {}
+    FixedBTreeMap(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
+        std::optional<BTreeRootReadBinding> binding = {})
+        : index_(indexId, pages, metadata, BTreeLeafValueLayout::BLVL_EMPTY, std::move(binding)) {}
 
     [[nodiscard]] static Record encode(const Key &key, const Value &value) {
         Record result{};
@@ -58,9 +60,11 @@ public:
     // key admission. Cursor/page/source memory follows existing native accounting;
     // returned key/value arrays require no dynamic allocation.
     [[nodiscard]] std::optional<Value> find(const MetadataSnapshotPin &snapshot, const Key &key,
-        const std::function<void(size_t)> &boundaryAdmission = {}) const {
+        const std::function<void(size_t)> &boundaryAdmission = {},
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        if (cancellation) cancellation->check();
         auto cursor = index_.openRangeCursor(snapshot, std::span<const std::byte>(key), 2,
-            BufferPoolReadHint::BPRH_NORMAL);
+            BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
         const auto first = cursor.next(boundaryAdmission);
         if (!first) return {};
         const auto entry = decode(*first);
@@ -68,6 +72,62 @@ public:
         if (const auto second = cursor.next(boundaryAdmission); second && decode(*second).key == key)
             throw FormatException(FormatError::FERR_INVALID_STATE, "fixed B+Tree map has duplicate logical ownership");
         return entry.value;
+    }
+    // Enumerate only one ordered logical-key prefix, with one native-record
+    // lookahead. This is the owner/token path: never enumerate every group or
+    // token just to reconstruct one owner. Authenticate duplicate ownership
+    // before delivering that entry, including duplicates across leaf pages.
+    // False means the explicit entry bound or visitor stopped enumeration;
+    // corruption/cancellation/admission exceptions are never missing results.
+    // Returned Entry arrays are fixed storage; cursor/page/output admission
+    // remains with existing owners. A caller must discard private output on error.
+    [[nodiscard]] bool visitPrefix(const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix,
+        size_t maximumEntries, const std::function<bool(const Entry &)> &visitor,
+        const std::function<void(size_t)> &boundaryAdmission = {},
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        if (prefix.empty() || prefix.size() > KeyBytes || !maximumEntries || !visitor)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed map prefix enumeration requires a prefix, bound and visitor");
+        return visitRange(snapshot, prefix, maximumEntries, visitor, boundaryAdmission, cancellation);
+    }
+    // Whole-map streaming is for explicit integrity/reclamation work, never an
+    // owner reconstruction fallback. It keeps the same bound, lookahead and
+    // duplicate-prefix authentication as the selected prefix path.
+    [[nodiscard]] bool visitAll(const MetadataSnapshotPin &snapshot, size_t maximumEntries,
+        const std::function<bool(const Entry &)> &visitor,
+        const std::function<void(size_t)> &boundaryAdmission = {},
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        if (!maximumEntries || !visitor)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed map scan requires a bound and visitor");
+        return visitRange(snapshot, {}, maximumEntries, visitor, boundaryAdmission, cancellation);
+    }
+private:
+    [[nodiscard]] bool visitRange(const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix,
+        size_t maximumEntries, const std::function<bool(const Entry &)> &visitor,
+        const std::function<void(size_t)> &boundaryAdmission, const CancellationCheckpoint *cancellation) const {
+        if (maximumEntries == (std::numeric_limits<size_t>::max)())
+            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "fixed map prefix lookahead bound overflowed");
+        auto cursor = index_.openRangeCursor(snapshot, prefix, maximumEntries + 1U,
+            BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
+        const auto matches = [prefix](const Entry &entry) {
+            return std::equal(prefix.begin(), prefix.end(), entry.key.begin());
+        };
+        auto first = cursor.next(boundaryAdmission);
+        if (!first) return true;
+        Entry pending = decode(*first);
+        if (!matches(pending)) return true;
+        size_t emitted = 0;
+        for (;;) {
+            if (cancellation) cancellation->check();
+            const auto following = cursor.next(boundaryAdmission);
+            const auto next = following ? std::optional(decode(*following)) : std::nullopt;
+            if (next && next->key == pending.key)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "fixed B+Tree map has duplicate logical ownership");
+            if (!visitor(pending)) return false;
+            ++emitted;
+            if (!next || !matches(*next)) return true;
+            if (emitted == maximumEntries) return false;
+            pending = *next;
+        }
     }
 private:
     BTreeIndex index_;

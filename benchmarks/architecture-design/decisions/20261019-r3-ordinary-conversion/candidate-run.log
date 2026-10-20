@@ -1,0 +1,149 @@
+ninja: Entering directory `/workspace/zyx-build-r3-native'
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+ninja: Entering directory `/workspace/zyx-build-r3-native'
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyConversionPreparationTest.*:HybridPropertyGraphPublicationTest.*:HybridPropertyOrdinaryConversionTest.*:NativeGraphWritePlannerOptionsTest.*:NativeGraphWritePlannerPublicContractsTest.*:NativeGraphWriteTransactionPublicContractsTest.*
+[==========] Running 59 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication
+[       OK ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication (11 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners
+[       OK ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners (105 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads
+[       OK ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads (4 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile
+[       OK ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile (17 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource
+[       OK ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource (43 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource
+[       OK ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource (66 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit
+[       OK ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit (12 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.LargeBackedRowIsAuthenticatedAndPreservedWhenInlineFieldPreparationRefuses
+[       OK ] HybridPropertyOrdinaryConversionTest.LargeBackedRowIsAuthenticatedAndPreservedWhenInlineFieldPreparationRefuses (23 ms)
+[----------] 8 tests from HybridPropertyOrdinaryConversionTest (285 ms total)
+
+[----------] 14 tests from HybridPropertyGraphPublicationTest
+[ RUN      ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication
+[       OK ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication (4 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation
+[       OK ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation (5 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.OrdinaryScalarStagingCannotClaimAnyReservedFieldNamespace
+[       OK ] HybridPropertyGraphPublicationTest.OrdinaryScalarStagingCannotClaimAnyReservedFieldNamespace (3 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility
+[       OK ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility (9 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.DescriptorNamespaceCannotBindAnotherRoleOrAnOrdinaryIndexBeforePreparation
+[       OK ] HybridPropertyGraphPublicationTest.DescriptorNamespaceCannotBindAnotherRoleOrAnOrdinaryIndexBeforePreparation (6 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.OrdinaryIndexDataAndDescriptorPublishInOneGenerationAndOldPinSurvives
+[       OK ] HybridPropertyGraphPublicationTest.OrdinaryIndexDataAndDescriptorPublishInOneGenerationAndOldPinSurvives (12 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.ClearSharesThePublicationAndOldDescriptorRemainsReadable
+[       OK ] HybridPropertyGraphPublicationTest.ClearSharesThePublicationAndOldDescriptorRemainsReadable (13 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.WrongDatabaseOrStaleRootFencesBeforePreparingGraphData
+[       OK ] HybridPropertyGraphPublicationTest.WrongDatabaseOrStaleRootFencesBeforePreparingGraphData (5 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.UninstalledNonemptyRootsAbortAlreadyPreparedDataWithoutPublishingIt
+[       OK ] HybridPropertyGraphPublicationTest.UninstalledNonemptyRootsAbortAlreadyPreparedDataWithoutPublishingIt (8 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.MissingRetainedTreeFailsClosedWithoutManufacturingDescriptorReferences
+[       OK ] HybridPropertyGraphPublicationTest.MissingRetainedTreeFailsClosedWithoutManufacturingDescriptorReferences (2 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.RetainedRootResolvesButNonemptyRoutingStillCannotBePublished
+[       OK ] HybridPropertyGraphPublicationTest.RetainedRootResolvesButNonemptyRoutingStillCannotBePublished (7 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.DescriptorCannotBindATreeRetiredByTheSameCandidate
+[       OK ] HybridPropertyGraphPublicationTest.DescriptorCannotBindATreeRetiredByTheSameCandidate (16 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.WriterAuthenticatesTheExpectedOldRootBeforePreparingUnrelatedData
+[       OK ] HybridPropertyGraphPublicationTest.WriterAuthenticatesTheExpectedOldRootBeforePreparingUnrelatedData (7 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.EachBootstrapInterruptionRecoversACompleteDataAndDescriptorPair
+[       OK ] HybridPropertyGraphPublicationTest.EachBootstrapInterruptionRecoversACompleteDataAndDescriptorPair (18 ms)
+[----------] 14 tests from HybridPropertyGraphPublicationTest (122 ms total)
+
+[----------] 6 tests from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories
+[       OK ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity
+[       OK ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity (5 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner
+[       OK ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing
+[       OK ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate
+[       OK ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate (1 ms)
+[----------] 6 tests from HybridPropertyConversionPreparationTest (12 ms total)
+
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState (8 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure (21 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes (8 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction (8 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication (19 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication (11 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint (14 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion (18 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection
+[       OK ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection (11 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease (8 ms)
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest (220 ms total)
+
+[----------] 1 test from NativeGraphWritePlannerOptionsTest
+[ RUN      ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections
+[       OK ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections (0 ms)
+[----------] 1 test from NativeGraphWritePlannerOptionsTest (0 ms total)
+
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest
+[ RUN      ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations
+[       OK ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations (0 ms)
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 59 tests from 6 test suites ran. (641 ms total)
+[  PASSED  ] 59 tests.

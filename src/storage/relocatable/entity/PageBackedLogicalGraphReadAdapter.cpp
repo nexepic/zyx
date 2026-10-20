@@ -900,9 +900,9 @@ namespace graph::storage {
 	void PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
 		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
 		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
-		const SelectedPropertyReadAdmission *admission) const {
+		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars) const {
 		validateNamedPropertyColumnRequest(ids, keys);
-		if (!sink) throw std::invalid_argument("direct named Property cells require a sink");
+		if (!sink || (scalars && !*scalars)) throw std::invalid_argument("direct named Property cells require a sink");
 		std::optional<NativeReadSession> local;
 		auto &active = activeSession(snapshot, session, local);
 		constexpr size_t tokenBytes = sizeof(std::pair<uint32_t, size_t>) + sizeof(uint32_t);
@@ -921,8 +921,15 @@ namespace graph::storage {
 		for (const auto &[token, column] : resolved)
 			if (tokens.empty() || tokens.back() != token) tokens.push_back(token);
 		if (tokens.empty()) return;
-		pages_.readNodePropertyCellsSorted(snapshot, ids, tokens,
-			[&](size_t row, size_t column, std::optional<PropertyValue> value) {
+        const auto mapScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+            const auto token = tokens.at(column);
+            auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
+                [](const auto &entry, uint32_t key) { return entry.first < key; });
+            for (auto it = first; it != resolved.end() && it->first == token; ++it)
+                (*scalars)(row, it->second, type, bits);
+        };
+        const PropertyScalarReadSink emitScalar = std::ref(mapScalar);
+		const auto mapValue = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
 				const auto token = tokens.at(column);
 				auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
 					[](const auto &entry, uint32_t key) { return entry.first < key; });
@@ -934,7 +941,9 @@ namespace graph::storage {
 						(*admission)(CanonicalPropertyValueCodec::encodedSize(*value) + sizeof(uint32_t));
 					sink(row, it->second, last ? std::move(value) : value);
 				}
-			}, &active, admission);
+			};
+        pages_.readNodePropertyCellsSorted(snapshot, ids, tokens, std::ref(mapValue),
+            &active, admission, scalars ? &emitScalar : nullptr);
 	}
 
 	PropertyValue PageBackedLogicalGraphReadAdapter::readEdgeProperty(const MetadataSnapshotPin &snapshot,

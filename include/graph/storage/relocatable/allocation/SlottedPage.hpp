@@ -123,6 +123,8 @@ namespace graph::storage {
 				case PageOwnerKind::POK_VECTOR_ADJACENCY:
 				case PageOwnerKind::POK_ENTITY_LABEL:
 					return true;
+                case PageOwnerKind::POK_HYBRID_PROPERTY:
+                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
 				default:
 					return false;
 			}
@@ -151,15 +153,27 @@ namespace graph::storage {
 		// owner header. Batch planners use it to reuse one pinned source page.
 		[[nodiscard]] SlottedPage clone() const;
 		[[nodiscard]] std::vector<std::byte> serialize() const;
+        // Copies retain their actual allocation owner through escape. A caller
+        // must supply its destination account; no borrowed accounting callback
+        // or uncharged default-allocator copy is required on these paths.
+        [[nodiscard]] utils::OwnedVector<std::byte> serializeOwned(
+            std::shared_ptr<std::pmr::memory_resource> memory) const;
+        [[nodiscard]] utils::OwnedVector<std::byte> readOwned(const SlottedSlotReference &reference,
+            std::shared_ptr<std::pmr::memory_resource> memory) const;
 		// Enumerates stable references for all currently live records. The caller
 		// still validates each decoded domain record before interpreting it.
 		[[nodiscard]] std::vector<SlottedSlotReference> liveSlots() const;
+        [[nodiscard]] utils::OwnedVector<SlottedSlotReference> liveSlotsOwned(
+            std::shared_ptr<std::pmr::memory_resource> memory) const;
 		// Rebinds the page to a replacement shared-pool owner without changing its
 		// stable Page ID or any slot reference.
 		void rebindOwner(const PageOwnerHeader &owner);
 
 		[[nodiscard]] SlottedSlotReference insert(std::span<const std::byte> value);
 		[[nodiscard]] size_t retainedBufferBytes() const;
+        // Keep typed read temporaries and escaped decodes on the source account
+        // when no newer caller-owned allocation scope is installed.
+        [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> memoryOwner() const;
 		// Owned allocations already belong to their arena; read callbacks must
 		// charge only buffers that have no allocation-domain owner.
 		[[nodiscard]] size_t unaccountedReadBufferBytes() const;

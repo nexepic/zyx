@@ -854,7 +854,7 @@ namespace graph::storage {
 			const std::vector<std::byte> candidateBytes = read(snapshot, candidateReference);
 			const uint8_t invalidContent =
 					identityMismatch | static_cast<uint8_t>(candidateBytes.size() != bytes.size()) |
-					static_cast<uint8_t>(!std::equal(candidateBytes.begin(), candidateBytes.end(), bytes.begin()));
+					static_cast<uint8_t>(!std::equal(candidateBytes.begin(), candidateBytes.end(), bytes.begin(), bytes.end()));
 			if (invalidContent != 0U) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue content-index candidate does not reproduce its indexed logical bytes");

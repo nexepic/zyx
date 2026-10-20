@@ -78,8 +78,12 @@ namespace graph::storage {
 	}
 
 	BTreeIndex::BTreeIndex(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
-						   BTreeLeafValueLayout leafValueLayout) :
-		index_id_(indexId), pages_(pages), metadata_(metadata), leaf_value_layout_(leafValueLayout) {
+						   BTreeLeafValueLayout leafValueLayout, std::optional<BTreeRootReadBinding> rootBinding) :
+        root_binding_(std::move(rootBinding)), index_id_(indexId), pages_(pages), metadata_(metadata), leaf_value_layout_(leafValueLayout) {
+        if (root_binding_ && (!root_binding_->database_id.isValid() ||
+            !root_binding_->snapshot_generation.isValid() || root_binding_->root.index_id != indexId ||
+            !root_binding_->root.root_page_id.isValid() || !root_binding_->root.root_generation.isValid()))
+            throw std::invalid_argument("relocatable bound B+Tree requires an exact database, snapshot and root identity");
 		if (index_id_ == 0U) {
 			throw std::invalid_argument("relocatable B+Tree index requires a valid Index ID");
 		}
@@ -95,6 +99,11 @@ namespace graph::storage {
 	std::optional<BTreePage> BTreeIndex::resolveRoot(const MetadataSnapshotPin &snapshot,
 			utils::OwnedStdVector<BTreePageEntry> *decodedEntries) const {
 		const std::optional<IndexRootLocation> root = metadata_.findIndexRootOptional(snapshot, index_id_);
+        if (root_binding_ && (snapshot.superblock().database_id != root_binding_->database_id ||
+            snapshot.superblock().generation != root_binding_->snapshot_generation || !root ||
+            *root != root_binding_->root))
+            throwBTreeIndexError(FormatError::FERR_INVALID_STATE,
+                "descriptor-bound B+Tree root disagrees with its pinned namespace or snapshot");
 		if (!root.has_value()) {
 			return std::nullopt;
 		}
@@ -650,7 +659,7 @@ namespace graph::storage {
 			throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable B+Tree ordered source has an invalid cursor batch bound");
 		}
-		auto index = utils::makeSharedOwned<BTreeIndex>(index_id_, pages_, metadata_, leaf_value_layout_);
+		auto index = utils::makeSharedOwned<BTreeIndex>(index_id_, pages_, metadata_, leaf_value_layout_, root_binding_);
 		return [index = std::move(index), snapshot = &snapshot, maximumEntries] {
             utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
                 : (snapshot->readContext() ? snapshot->readContext()->memoryOwner() : nullptr));

@@ -1,0 +1,11 @@
+# Gated native hybrid property checkpoint
+
+This checkpoint is committed and pushed at the user's explicit request. Accepted roadmap progress remains 13/24 (54.2%); none of the fixed ten pending stages is newly accepted. Earlier checkpoint folders retain their original historical status and source manifests.
+
+The change prepares actual native field pages and fixed namespace trees under the metadata writer, binds source reads to the database and snapshot generation, and connects full/selected/count/presence reads plus typed scalar delivery. Compatible column changes coalesce private COW images. Forward directory checks and per-page reverse ownership checks cover selectors, physical locators and LargeValue reference emission.
+
+Independent large fields retain the existing single-field envelope. Published content is fully authenticated before reuse; new identical carriers in a private conversion batch share a proposed value identity. Both ends of the dedup body comparison are bounded, fixing a corrupt-index heap-buffer-overflow. Selected physical pools now enter the same batch's slot reservation lookup; reservation vectors and tree nodes retain an explicit account through batch teardown. The account covers reservation storage, not every metadata allocation.
+
+The 25 affected modules / 30 suites pass 316/316 default and 389/389 candidate tests; results are recorded in validation.json and the scoped result files. Only affected modules run, on Linux x86_64. ASAN evidence instruments LargeValueStore.cpp and puts its object before other objects so its instrumented weak template definitions are selected. The old comparison reproduces heap-buffer-overflow; the fixed comparison passes the same test. This is a memory-safety check, not a full ASAN suite or performance evidence.
+
+Production properties remain ROW. Nonempty-layout publication/read admission guards remain. Atomic physical data/manifest/content-index/field publication, all authoritative writes and demotion/deletion/reverse conversion, global recovery/integrity/reclamation/relocation/reuse, full actual costs and same-executor ROW comparison still require implementation and acceptance. The final frozen performance/Kuzu window has not run.

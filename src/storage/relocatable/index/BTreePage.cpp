@@ -17,6 +17,36 @@
 namespace graph::storage {
 
 	namespace {
+        // Index decoding owns temporary byte/slot buffers in the active native
+        // resource. They must not accumulate in the caller's decoded-Property
+        // output ledger. Consumers return owning results, never borrowed spans.
+        template<class Consumer>
+        decltype(auto) withIndexRecord(const SlottedPage &page, const SlottedSlotReference &reference,
+            Consumer &&consume) {
+            auto memory = utils::OwnedAllocationScope::owner();
+            if (!memory) memory = page.memoryOwner();
+            if (memory) {
+                utils::OwnedAllocationScope allocation(memory);
+                const auto bytes = page.readOwned(reference, std::move(memory));
+                return consume(std::span<const std::byte>(bytes));
+            }
+            // No native authority was supplied: preserve the legacy unbounded
+            // read, without borrowing decoded-Property output admission.
+            const auto bytes = page.read(reference, [](size_t) {});
+            return consume(std::span<const std::byte>(bytes));
+        }
+        template<class Consumer>
+        decltype(auto) withIndexSlots(const SlottedPage &page, Consumer &&consume) {
+            auto memory = utils::OwnedAllocationScope::owner();
+            if (!memory) memory = page.memoryOwner();
+            if (memory) {
+                utils::OwnedAllocationScope allocation(memory);
+                const auto slots = page.liveSlotsOwned(std::move(memory));
+                return consume(std::span<const SlottedSlotReference>(slots));
+            }
+            const auto slots = page.liveSlots();
+            return consume(std::span<const SlottedSlotReference>(slots));
+        }
 
 		constexpr size_t MAGIC_OFFSET = 0;
 		constexpr size_t VERSION_OFFSET = 4;
@@ -730,11 +760,11 @@ namespace graph::storage {
 
 	BTreePageHeader BTreePage::header() const {
 		const SlottedSlotReference reference{page_.pageId(), 0, 1};
-		return BTreePageHeaderCodec::decode(page_.read(reference));
+		return withIndexRecord(page_, reference, [](auto bytes) { return BTreePageHeaderCodec::decode(bytes); });
 	}
 
 	SlottedSlotReference BTreePage::validatePackedEnvelope() const {
-		const std::vector<SlottedSlotReference> slots = page_.liveSlots();
+		return withIndexSlots(page_, [&](std::span<const SlottedSlotReference> slots) {
 		if (slots.size() != 2U) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable packed B+Tree page must contain one header and one packed payload slot");
@@ -758,27 +788,31 @@ namespace graph::storage {
 			throwBTreePageError(FormatError::FERR_INVALID_STATE,
 								"relocatable B+Tree page owner disagrees with its persisted header");
 		}
-		if (PackedBTreePageCodec::entryCount(page_.read(slots[1])) != current.entry_count) {
+		if (withIndexRecord(page_, slots[1], [](auto bytes) { return PackedBTreePageCodec::entryCount(bytes); }) != current.entry_count) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable B+Tree page entry count disagrees with its packed payload");
 		}
 		return slots[1];
+        });
 	}
 
 	utils::OwnedStdVector<BTreePageEntry> BTreePage::packedEntries() const {
 		const SlottedSlotReference payload = validatePackedEnvelope();
 		const BTreePageHeader current = header();
-		return PackedBTreePageCodec::decode(current.kind, page_.read(payload), current.leaf_value_layout);
+		return withIndexRecord(page_, payload, [&](auto bytes) {
+            return PackedBTreePageCodec::decode(current.kind, bytes, current.leaf_value_layout);
+        });
 	}
 
 	void BTreePage::writePackedEntries(std::span<const BTreePageEntry> entries) {
-		const std::vector<SlottedSlotReference> slots = page_.liveSlots();
+		withIndexSlots(page_, [&](std::span<const SlottedSlotReference> slots) {
 		if (slots.size() != 2U || slots[1].slot_id != 1U || slots[1].generation != 1U) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree page has no stable payload slot");
 		}
 		const BTreePageHeader current = header();
 		page_.overwrite(slots[1], PackedBTreePageCodec::encode(current.kind, entries, current.leaf_value_layout));
+        });
 	}
 
 	void BTreePage::validateLayout() const {
@@ -796,7 +830,9 @@ namespace graph::storage {
 	std::optional<BTreePageEntry> BTreePage::find(std::span<const std::byte> key) const {
 		const SlottedSlotReference payload = validatePackedEnvelope();
 		const BTreePageHeader current = header();
-		return PackedBTreePageCodec::find(current.kind, page_.read(payload), key, current.leaf_value_layout);
+		return withIndexRecord(page_, payload, [&](auto bytes) {
+            return PackedBTreePageCodec::find(current.kind, bytes, key, current.leaf_value_layout);
+        });
 	}
 
 	BTreePage BTreePage::rebindOwner(const PageOwnerHeader &owner) const {
