@@ -1,0 +1,6 @@
+
+### 2026-10-21 R3.2: Public selected native property patches
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-public-native-patches/`. Property-only public SET/REMOVE batches now resolve existing names in the same snapshot and stage owned native cells without materializing unchanged fields into replacement roots. Existing field/scalar/constraint/Vector coordination publishes together. Unknown-name removals are no-ops; unknown-name sets and mixed ROW/native batches refuse. The original64-owner/64-field-operation/1MiB limits remain, with existing per-group lifecycle constraints. Caller cancellation and source-fence checks remain active.
+
+Five related modules: candidate192 and default111 passed. New public cases cover scalar updates plus field removal/restoration and old pins, embedding removal/recreation with exact Vector search, unknown-removal unchanged fence and required-field refusal with the actual constraint error; integrity and account refunds pass. Native creation, new property token allocation, mixed/detach/cross-group graph lifecycle, scratch startup recovery and production gates remain open, along with R5/R7. No full suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**

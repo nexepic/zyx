@@ -1,0 +1,6 @@
+
+### 2026-10-21 R3.2: Mixed Node/Edge native field publication
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-mixed-kind-lifecycle/`. Private lifecycle images now span Node and Edge groups, with separate owner/column/extension directory edits per namespace and a stable first-source namespace for legacy accessors. Equal Node/Edge IDs and token bytes cannot alias directories. Both kinds still share one admitted private page set and one physical/derived/descriptor publication. Public map replacement and patch staging can use this path; explicit namespace spans reject temporary-object access. Owner deletion and general topology/ROW mixing remain separately guarded.
+
+Eleven related modules passed: candidate 318, default 104. New mixed checks cover compatible columns, simultaneous field-local demotion, membership erase/reinsert, extension growth/removal on shared pages, one70KB identity with a surviving other-kind owner, public same-name token allocation, Node VECTOR plus Edge scalar changes, partial/completed header recovery of fields/token/Vector, and required-constraint failure publishing neither kind nor token. Existing snapshots and global integrity remain valid. No full repository suite or intermediate performance timing. **14/24 (58.3%); accepted growth0, no commit or push.**

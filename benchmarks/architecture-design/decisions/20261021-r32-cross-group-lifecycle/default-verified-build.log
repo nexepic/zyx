@@ -1,0 +1,87 @@
+[0/2] Re-checking globbed directories...
+[1/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp:1:
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyOrdinaryConversionTestFixture.hpp:53:133: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+   53 |             {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr, PhysicalSlotId(40), PhysicalSlotId(80), 903}};
+      |                                                                                                                                     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp:33:86: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   33 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                      ^
+2 warnings generated.
+[2/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp:1:
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyOrdinaryConversionTestFixture.hpp:53:133: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+   53 |             {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr, PhysicalSlotId(40), PhysicalSlotId(80), 903}};
+      |                                                                                                                                     ^
+1 warning generated.
+[3/6] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:25:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/ConstraintMutationValidator.hpp:21:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1051:113: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+ 1051 |         request.memory, request.cancellation, request.first_slot, request.last_slot, request.field_pool_owner_id};
+      |                                                                                                                 ^
+6 warnings generated.
+[4/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:53:59: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   53 |         for (uint64_t i = 1; i <= live_owner_count_; ++i) transaction.createNodeWithReservedId(i, {});
+      |                                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:55:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   55 |             transaction.createNodeWithReservedId(65, {});
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:223:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  223 |     EXPECT_THROW(reader.visitOwner({EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, [](auto, auto) { return true; }), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:235:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  235 |     transaction.createNodeWithReservedId(1, {}); ASSERT_TRUE(transaction.commit().committed());
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:237:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  237 |     EXPECT_THROW(reader.visitOwner({EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, [](auto, auto) { return true; }), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:268:25: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  268 |     } else EXPECT_THROW(HybridPropertyColumnDelta::planExistingColumn(context, pin,
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+6 warnings generated.
+[5/6] Linking CXX static library libzyx_core.a

@@ -49,8 +49,8 @@ public:
     // Fixed-size authenticated source for bounded inverse conversion. This
     // grants no write authority; the caller must retain/fence the same pin.
     [[nodiscard]] std::optional<HybridPropertyGroupRecord> groupRecord(EntityPropertyKey owner,
-        const std::function<void(size_t)> &boundaryAdmission = {}) const {
-        return findGroup(owner, boundaryAdmission);
+        const std::function<void(size_t)> &boundaryAdmission = {}, SlottedSlotReference *reference = nullptr) const {
+        return findGroup(owner, boundaryAdmission, reference);
     }
     // First actual membership owner beyond a stable logical cursor. Fieldless
     // live owners have no LargeValue references and need no maintenance visit.

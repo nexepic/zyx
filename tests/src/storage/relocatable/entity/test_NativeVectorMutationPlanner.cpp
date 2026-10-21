@@ -279,3 +279,19 @@ TEST_F(NativeVectorMutationPlannerTest, SkipsAnIndexedLabelWhosePropertyIsAbsent
 	EXPECT_TRUE(planner().planNode(snapshot, 11U, labels, &otherProperty, labels, &otherProperty).empty());
 	snapshot.release();
 }
+
+TEST_F(NativeVectorMutationPlannerTest, BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope) {
+    auto snapshot = metadata_->openSnapshot();
+    const std::array<uint64_t, 1> labels{7};
+    const auto previous = root(11, 1, 2), final = root(11, 1, 3);
+    size_t oldCalls = 0, newCalls = 0;
+    const auto oldValue = [&](uint32_t token) { ++oldCalls; EXPECT_EQ(token, 17U); return &previous.entries.front().value; };
+    const auto newValue = [&](uint32_t token) { ++newCalls; EXPECT_EQ(token, 17U); return &final.entries.front().value; };
+    EXPECT_EQ(planner().planNodeValues(snapshot, 11, labels, oldValue, labels, newValue),
+        planner().planNode(snapshot, 11, labels, &previous, labels, &final));
+    EXPECT_EQ(oldCalls, 1U); EXPECT_EQ(newCalls, 1U);
+    EXPECT_TRUE(planner().planNodeValues(snapshot, 11, {}, oldValue, {}, newValue).empty());
+    EXPECT_EQ(oldCalls, 1U); EXPECT_EQ(newCalls, 1U);
+    EXPECT_THROW((void)planner().planNodeValues(snapshot, 11, labels, {}, labels, newValue), std::invalid_argument);
+    EXPECT_THROW((void)planner().planNodeValues(snapshot, 0, labels, oldValue, labels, newValue), FormatException);
+}

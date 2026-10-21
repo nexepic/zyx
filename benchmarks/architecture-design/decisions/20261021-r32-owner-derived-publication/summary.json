@@ -1,0 +1,17 @@
+{
+  "parent": "benchmarks/architecture-design/decisions/20261021-r32-bearing-owner-publication",
+  "production_source_unchanged": true,
+  "candidate_new_lifecycle_selection": 56,
+  "default_module_compilation": "passed",
+  "prior_selected_modules": 10,
+  "prior_passed": {
+    "candidate": 219,
+    "default": 100
+  },
+  "accepted": 14,
+  "denominator": 24,
+  "progress": "58.3%",
+  "commit_push": false,
+  "benchmark": false,
+  "full_repository_tests": false
+}

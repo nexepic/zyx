@@ -1,0 +1,195 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableMetadataStoreTest.*:RelocatablePhysicalSegmentAllocatorTest.*:RelocatablePhysicalSegmentAllocatorTypedIOTest.*
+[==========] Running 59 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMismatchedLegacyPrivateScratchHeadersBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMismatchedLegacyPrivateScratchHeadersBeforeMaterialization (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsEveryMalformedPrivateScratchRequestBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsEveryMalformedPrivateScratchRequestBeforePublication (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInhomogeneousAndOvercommittedPrivateScratchCandidatesBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInhomogeneousAndOvercommittedPrivateScratchCandidatesBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedCompactPrivateScratchPlansBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedCompactPrivateScratchPlansBeforePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedDerivedIndexDefinitionsBeforeAnyMaterializer
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedDerivedIndexDefinitionsBeforeAnyMaterializer (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaHeadersAndUnmatchedMappingTransitionsBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaHeadersAndUnmatchedMappingTransitionsBeforeMaterialization (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication (0 ms)
+[----------] 9 tests from RelocatableMetadataStoreTest (17 ms total)
+
+[----------] 47 tests from RelocatablePhysicalSegmentAllocatorTest
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.AllocatesZeroesPublishesAndReadsOneFixedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.AllocatesZeroesPublishesAndReadsOneFixedSlot (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeSuccessfulAllocationUsesExactlyOneDataFenceAndOneSuperblockFence
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeSuccessfulAllocationUsesExactlyOneDataFenceAndOneSuperblockFence (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeAllocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteSegment
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeAllocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteSegment (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeShortDataSegmentWriteDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeShortDataSegmentWriteDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeDataSegmentDiskFullDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeDataSegmentDiskFullDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 40, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 40, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeShortMetadataPageWriteDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeShortMetadataPageWriteDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeMetadataPageDiskFullDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeMetadataPageDiskFullDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 40, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteDestination
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteDestination (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataShortWriteRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataShortWriteRetainsTheRetireQueueAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataDiskFullRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataDiskFullRetainsTheRetireQueueAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleasePrePublicationSyncFailureRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleasePrePublicationSyncFailureRetainsTheRetireQueueAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataShortWriteRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataShortWriteRetainsTheRetiredSlotAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataDiskFullRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataDiskFullRetainsTheRetiredSlotAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimPrePublicationSyncFailureRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimPrePublicationSyncFailureRetainsTheRetiredSlotAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 41, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 41, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 41, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 41, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativePrePublicationSyncFailureReclaimsTailAndReopensPriorGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativePrePublicationSyncFailureReclaimsTailAndReopensPriorGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PersistentNativeSyncFailurePoisonsWriterUntilReopenAndNeverPublishesTheCandidate
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PersistentNativeSyncFailurePoisonsWriterUntilReopenAndNeverPublishesTheCandidate (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeDiskFullFallsBackToTheEmergencyReserveThenRotatesItAtomically
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeDiskFullFallsBackToTheEmergencyReserveThenRotatesItAtomically (10 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationRetainsThePublishedDescriptorAcrossDiskFullAndPublicationBoundaries
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationRetainsThePublishedDescriptorAcrossDiskFullAndPublicationBoundaries (12 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry
+unknown file: Failure
+C++ exception with description "native recovery found an unallocated sealed pool" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry (9 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.OwnsCodecBytesBeforeMetadataPublication
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.OwnsCodecBytesBeforeMetadataPublication (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PersistsAndReadsExplicitSubtypeHeaderExtensions
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PersistsAndReadsExplicitSubtypeHeaderExtensions (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.AtomicallyAllocatesBatchesAndRejectsDuplicateLogicalIds
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.AtomicallyAllocatesBatchesAndRejectsDuplicateLogicalIds (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PublishesFullSegmentExtentBindingsAndRejectsMalformedBindings
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PublishesFullSegmentExtentBindingsAndRejectsMalformedBindings (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RetiresAfterPublicationAndReusesOnlyAfterTheLastSnapshotReleases
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RetiresAfterPublicationAndReusesOnlyAfterTheLastSnapshotReleases (8 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReusesAReleasedPhysicalSlotAcrossSegmentKindsAfterReopen
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReusesAReleasedPhysicalSlotAcrossSegmentKindsAfterReopen (8 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReusesOnePhysicalSlotAcrossEveryAllocatableKindOnlyAfterTheSnapshotReleases
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReusesOnePhysicalSlotAcrossEveryAllocatableKindOnlyAfterTheSnapshotReleases (61 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RelocatesWholeSegmentsAndDefersSourceReuseUntilSnapshotsRelease
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RelocatesWholeSegmentsAndDefersSourceReuseUntilSnapshotsRelease (9 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries
+/workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:1943: Failure
+Expected: static_cast<void>(beforePublication->reclaimRetiredPhysicalSlots( LogSequenceNumber(4), withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))) throws an exception of type BootstrapPublishInterrupted.
+  Actual: it throws graph::storage::FormatException with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 41, found 3 (kind 1)".
+
+/workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:1946: Failure
+Expected equality of these values:
+  reclaimed.superblock().generation
+    Which is: 8-byte object <03-00 00-00 00-00 00-00>
+  Generation(4)
+    Which is: 8-byte object <04-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:1947: Failure
+Value of: afterPublication->findRetireQueueEntryOptional(reclaimed, PhysicalSlotId(40)).has_value()
+  Actual: true
+Expected: false
+
+/workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:1948: Failure
+Value of: afterPublication->isPhysicalSlotAllocated(reclaimed, PhysicalSlotId(40))
+  Actual: true
+Expected: false
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReclaimsRetiredWholeSegmentsAfterReopenAndLastSnapshotRelease
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReclaimsRetiredWholeSegmentsAfterReopenAndLastSnapshotRelease (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptRelocationSourceWithoutPublishingTheDestination
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptRelocationSourceWithoutPublishingTheDestination (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication
+unknown file: Failure
+C++ exception with description "relocatable shared page-pool envelope disagrees with its Catalog mapping: expected 3 at slot 40, found 3 (kind 1)" thrown in the test body.
+
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.DoesNotWriteOrPublishWhenTheRequestedRangeCannotFitTheBatch
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.DoesNotWriteOrPublishWhenTheRequestedRangeCannotFitTheBatch (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsMalformedRequestsBeforeMetadataMutation
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsMalformedRequestsBeforeMetadataMutation (0 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptPayloadEnvelopeAndFreeSpaceMappings
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptPayloadEnvelopeAndFreeSpaceMappings (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReopensAndValidatesTheCatalogEnvelopeIdentity
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReopensAndValidatesTheCatalogEnvelopeIdentity (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.LeavesDataUnreachableWhenMetadataPublicationStopsBeforeTheInactiveSuperblockWrite
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.LeavesDataUnreachableWhenMetadataPublicationStopsBeforeTheInactiveSuperblockWrite (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.FailsClosedWhenMetadataReferencesAnUnwrittenPhysicalSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.FailsClosedWhenMetadataReferencesAnUnwrittenPhysicalSlot (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ValidatesStorageIdentityAndCheckedOffsets
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ValidatesStorageIdentityAndCheckedOffsets (0 ms)
+[----------] 47 tests from RelocatablePhysicalSegmentAllocatorTest (297 ms total)
+
+[----------] 3 tests from RelocatablePhysicalSegmentAllocatorTypedIOTest
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.WritesOnlyCompleteGenerationTaggedExtentPages
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.WritesOnlyCompleteGenerationTaggedExtentPages (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.RejectsAShortReadInAnUnusedTrailingExtentPage
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.RejectsAShortReadInAnUnusedTrailingExtentPage (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.SequentialExtentReadsDoNotRetainScanPages
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.SequentialExtentReadsDoNotRetainScanPages (2 ms)
+[----------] 3 tests from RelocatablePhysicalSegmentAllocatorTypedIOTest (5 ms total)
+
+[----------] Global test environment tear-down
+[==========] 59 tests from 3 test suites ran. (320 ms total)
+[  PASSED  ] 49 tests.
+[  FAILED  ] 10 tests, listed below:
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries
+[  FAILED  ] RelocatablePhysicalSegmentAllocatorTest.RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication
+
+10 FAILED TESTS

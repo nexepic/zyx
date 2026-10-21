@@ -1,0 +1,97 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPublicationTest.*
+[==========] Running 36 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 36 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField (177 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField (205 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit (287 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether (281 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit (318 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether (320 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodePublishesItsColumnAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodePublishesItsColumnAndEntityTogether (175 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgePublishesItsColumnAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgePublishesItsColumnAndEntityTogether (204 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeValueCanDemoteOnlyItsExistingField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeValueCanDemoteOnlyItsExistingField (348 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeValueCanDemoteOnlyItsExistingField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeValueCanDemoteOnlyItsExistingField (390 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeFieldPublicationRecoversNeitherEntityNorField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeFieldPublicationRecoversNeitherEntityNorField (293 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeFieldPublicationRecoversEntityAndFieldTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeFieldPublicationRecoversEntityAndFieldTogether (294 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeFieldPublicationRecoversNeitherEntityNorField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeFieldPublicationRecoversNeitherEntityNorField (330 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeFieldPublicationRecoversEntityAndFieldTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeFieldPublicationRecoversEntityAndFieldTogether (329 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewNodesMergeTheirColumnBitsInOnePublication
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewNodesMergeTheirColumnBitsInOnePublication (213 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewEdgesMergeTheirColumnBitsAndAdjacencyTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewEdgesMergeTheirColumnBitsAndAdjacencyTogether (228 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldWithoutAColumnUsesAnExtension
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldWithoutAColumnUsesAnExtension (208 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldWithoutAColumnUsesAnExtension
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldWithoutAColumnUsesAnExtension (242 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CatalogNodeCountAndNewNativeFieldPublishTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CatalogNodeCountAndNewNativeFieldPublishTogether (188 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CatalogEdgeTypeCountAndNativeFieldPublishTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CatalogEdgeTypeCountAndNativeFieldPublishTogether (215 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeLargeFieldPublishesItsValueAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeLargeFieldPublishesItsValueAndEntityTogether (242 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeLargeFieldPublishesItsValueAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeLargeFieldPublishesItsValueAndEntityTogether (265 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeLargeValueCanDemoteItsExistingColumn
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeLargeValueCanDemoteItsExistingColumn (381 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeLargeValueCanDemoteItsExistingColumn
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeLargeValueCanDemoteItsExistingColumn (409 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldNameAndValuePublishWithItsCatalogIdentity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldNameAndValuePublishWithItsCatalogIdentity (221 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldNameAndValuePublishWithItsCatalogIdentity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldNameAndValuePublishWithItsCatalogIdentity (250 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeNamePublicationLeavesNoCatalogTokenOrEntity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeNamePublicationLeavesNoCatalogTokenOrEntity (308 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeNamePublicationRecoversCatalogTokenAndEntity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeNamePublicationRecoversCatalogTokenAndEntity (360 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeNamePublicationLeavesNoCatalogTokenOrEntity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeNamePublicationLeavesNoCatalogTokenOrEntity (342 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeNamePublicationRecoversCatalogTokenAndEntity
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeNamePublicationRecoversCatalogTokenAndEntity (401 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNativeNodeAndScalarIndexPublishTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNativeNodeAndScalarIndexPublishTogether (198 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNativeEdgeAndScalarIndexPublishTogether
+unknown file: Failure
+C++ exception with description "relocatable index definition has an invalid kind-specific schema contract" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.NewNativeEdgeAndScalarIndexPublishTogether (12 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeIndexPublicationRecoversAllOldRoots
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeIndexPublicationRecoversAllOldRoots (306 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeIndexPublicationRecoversAllNewRoots
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeIndexPublicationRecoversAllNewRoots (309 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeIndexPublicationRecoversAllOldRoots
+unknown file: Failure
+C++ exception with description "relocatable index definition has an invalid kind-specific schema contract" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeIndexPublicationRecoversAllOldRoots (12 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeIndexPublicationRecoversAllNewRoots
+unknown file: Failure
+C++ exception with description "relocatable index definition has an invalid kind-specific schema contract" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeIndexPublicationRecoversAllNewRoots (12 ms)
+[----------] 36 tests from HybridPropertyOwnerInsertionPublicationTest (9290 ms total)
+
+[----------] Global test environment tear-down
+[==========] 36 tests from 1 test suite ran. (9290 ms total)
+[  PASSED  ] 33 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.NewNativeEdgeAndScalarIndexPublishTogether
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeIndexPublicationRecoversAllOldRoots
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeIndexPublicationRecoversAllNewRoots
+
+ 3 FAILED TESTS

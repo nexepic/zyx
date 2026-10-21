@@ -1,0 +1,634 @@
+{
+  "tests": 59,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T14:13:17Z",
+  "time": "0.282s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:13:17Z",
+      "time": "0.012s",
+      "testsuite": [
+        {
+          "name": "RejectsMismatchedLegacyPrivateScratchHeadersBeforeMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 17,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEveryMalformedPrivateScratchRequestBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 89,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInhomogeneousAndOvercommittedPrivateScratchCandidatesBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsMalformedCompactPrivateScratchPlansBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 246,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsMalformedDerivedIndexDefinitionsBeforeAnyMaterializer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 330,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 553,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 687,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsMalformedVectorDeltaHeadersAndUnmatchedMappingTransitionsBeforeMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation_PrivateScratchValidation.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreIdentity.cpp",
+          "line": 11,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatablePhysicalSegmentAllocatorTest",
+      "tests": 47,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:13:17Z",
+      "time": "0.264s",
+      "testsuite": [
+        {
+          "name": "AllocatesZeroesPublishesAndReadsOneFixedSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.003s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeSuccessfulAllocationUsesExactlyOneDataFenceAndOneSuperblockFence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeAllocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteSegment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeShortDataSegmentWriteDoesNotPublishAndReopenRetainsOldGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 245,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeDataSegmentDiskFullDoesNotPublishAndReopenRetainsOldGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.004s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.004s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeShortMetadataPageWriteDoesNotPublishAndReopenRetainsOldGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 312,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeMetadataPageDiskFullDoesNotPublishAndReopenRetainsOldGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 325,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 344,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteDestination",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 403,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.003s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetiredSegmentReleaseMetadataShortWriteRetainsTheRetireQueueAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 461,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetiredSegmentReleaseMetadataDiskFullRetainsTheRetireQueueAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 514,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetiredSegmentReleasePrePublicationSyncFailureRetainsTheRetireQueueAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 572,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetiredSegmentReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 625,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetireQueueReclaimMetadataShortWriteRetainsTheRetiredSlotAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 679,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetireQueueReclaimMetadataDiskFullRetainsTheRetiredSlotAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 729,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetireQueueReclaimPrePublicationSyncFailureRetainsTheRetiredSlotAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 784,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRetireQueueReclaimFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 834,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 887,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 947,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 997,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1052,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:17Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativePrePublicationSyncFailureReclaimsTailAndReopensPriorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.003s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "PersistentNativeSyncFailurePoisonsWriterUntilReopenAndNeverPublishesTheCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.003s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "OwnsCodecBytesBeforeMetadataPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "PersistsAndReadsExplicitSubtypeHeaderExtensions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "AtomicallyAllocatesBatchesAndRejectsDuplicateLogicalIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "PublishesFullSegmentExtentBindingsAndRejectsMalformedBindings",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1288,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RetiresAfterPublicationAndReusesOnlyAfterTheLastSnapshotReleases",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.007s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "ReusesAReleasedPhysicalSlotAcrossSegmentKindsAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1414,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.006s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "ReusesOnePhysicalSlotAcrossEveryAllocatableKindOnlyAfterTheSnapshotReleases",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1452,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.051s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RelocatesWholeSegmentsAndDefersSourceReuseUntilSnapshotsRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1511,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.007s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1575,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.007s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "ReclaimsRetiredWholeSegmentsAfterReopenAndLastSnapshotRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RejectsCorruptRelocationSourceWithoutPublishingTheDestination",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1633,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1658,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.005s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "DoesNotWriteOrPublishWhenTheRequestedRangeCannotFitTheBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1688,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RejectsMalformedRequestsBeforeMetadataMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1700,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "RejectsCorruptPayloadEnvelopeAndFreeSpaceMappings",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "ReopensAndValidatesTheCatalogEnvelopeIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1836,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "LeavesDataUnreachableWhenMetadataPublicationStopsBeforeTheInactiveSuperblockWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1869,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "FailsClosedWhenMetadataReferencesAnUnwrittenPhysicalSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1888,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "ValidatesStorageIdentityAndCheckedOffsets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocator.cpp",
+          "line": 1905,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "NativeDiskFullFallsBackToTheEmergencyReserveThenRotatesItAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorEmergencyReserve.cpp",
+          "line": 11,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.009s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "EmergencyReserveRotationRetainsThePublishedDescriptorAcrossDiskFullAndPublicationBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorEmergencyReserve.cpp",
+          "line": 80,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.011s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        },
+        {
+          "name": "EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorEmergencyReserve.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.01s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatablePhysicalSegmentAllocatorTypedIOTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:13:18Z",
+      "time": "0.005s",
+      "testsuite": [
+        {
+          "name": "WritesOnlyCompleteGenerationTaggedExtentPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorTypedIO.cpp",
+          "line": 90,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTypedIOTest"
+        },
+        {
+          "name": "RejectsAShortReadInAnUnusedTrailingExtentPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorTypedIO.cpp",
+          "line": 140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.002s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTypedIOTest"
+        },
+        {
+          "name": "SequentialExtentReadsDoNotRetainScanPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_PhysicalSegmentAllocatorTypedIO.cpp",
+          "line": 173,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:13:18Z",
+          "time": "0.001s",
+          "classname": "RelocatablePhysicalSegmentAllocatorTypedIOTest"
+        }
+      ]
+    }
+  ]
+}

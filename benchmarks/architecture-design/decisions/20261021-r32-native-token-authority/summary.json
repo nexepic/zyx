@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 6,
+  "passed": {
+    "default": 111,
+    "candidate": 204
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Native owner insertion/liveness and mixed/detach/cross-group lifecycle; full production/resource/space/steady-state and R5/R7 gates."
+}

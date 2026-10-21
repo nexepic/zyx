@@ -1,0 +1,6 @@
+
+### 2026-10-21 R3.2: Native bulk scratch retirement and deferred recovery
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-native-bulk-scratch-recovery/`. Native metadata retirement accepts bounded BULK_SCRATCH only after rejecting every current public Page/Extent route. The existing typed retired batch authenticates the retirement and source-pin barrier, preserves all shared-pool frame checks, and admits bulk scratch without interpreting it as a page pool. NativeBulkRunStore uses this exact release instead of broad native reclamation. Startup recovery drains bounded retired bulk batches left by older pins and stops when pins still block reuse.
+
+Seven related modules: candidate279 and default195 passed. Cases cover orphan bulk writable reopen with unchanged native fields/integrity; a held old pin keeps the physical slot allocated and old payload readable after retirement; after pins drain, recovery releases it. Query controls and ordinary bulk behavior remain covered. Source snapshots precede fresh native scratch allocation work. Native creation/new tokens/mixed/detach/cross-group lifecycle and production/R5/R7 gates remain open. No full suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**

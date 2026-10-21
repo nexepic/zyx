@@ -1,0 +1,4 @@
+
+### 2026-10-21 R3.2: New-owner Vector and constraint evidence
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-owner-derived-publication/`. Production source is identical to the preceding ten-module checkpoint (candidate219/default100); the enlarged lifecycle module passes56 candidate cases and compiles in the default format. New checks cover Node Vector bootstrap with native field demotion, partial/completed header recovery, UNIQUE support roots on Node/Edge, NOT NULL and integer-type constraints, duplicate private/source values, and failed required-field creation leaving no new Catalog name. Fault cases also make a subsequent write through the same handle with old pins held. These targeted correctness checks are not performance evidence. Named case options replace positional test booleans. Mixed/detach/cross-group and full admission remain open. **14/24 (58.3%); no accepted growth, commit or push.**

@@ -1,0 +1,194 @@
+{
+  "tests": 15,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T03:52:50Z",
+  "time": "2.278s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "NativeVectorMutationPlannerTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T03:52:50Z",
+      "time": "0.005s",
+      "testsuite": [
+        {
+          "name": "EmitsOrderedEraseThenInsertForChangedIndexedValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMissingIndexedPropertyTokenBeforeInferringMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineValuesAtBothSemanticBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EnforcesPerNodeMutationBudgetAcrossVectorIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeVectorMutationPlannerContractsTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T03:52:50Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "RejectsInvalidConstructorDefinitionsAndBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 194,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerContractsTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T03:52:50Z",
+      "time": "2.273s",
+      "testsuite": [
+        {
+          "name": "UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 555,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:50Z",
+          "time": "0.638s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 580,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:51Z",
+          "time": "0.923s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:52Z",
+          "time": "0.263s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 607,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:52Z",
+          "time": "0.223s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 611,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T03:52:52Z",
+          "time": "0.223s",
+          "classname": "HybridPropertyQueryParityTest"
+        }
+      ]
+    }
+  ]
+}

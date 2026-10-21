@@ -114,14 +114,25 @@ namespace graph::storage {
 													 const PropertyCollectionRoot *oldProperties,
 													 std::span<const uint64_t> newLabels,
 													 const PropertyCollectionRoot *newProperties) const {
+        validateProperties(nodeId, oldProperties);
+        validateProperties(nodeId, newProperties);
+        return planNodeValues(snapshot, nodeId, oldLabels,
+            [&](uint32_t token) { return findValue(oldProperties, token); }, newLabels,
+            [&](uint32_t token) { return findValue(newProperties, token); });
+    }
+
+    std::vector<NativeVectorMutation> NativeVectorMutationPlanner::planNodeValues(
+        const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+        std::span<const uint64_t> oldLabels, const PropertyValueLookup &oldValues,
+        std::span<const uint64_t> newLabels, const PropertyValueLookup &newValues) const {
+        if (!oldValues || !newValues)
+            throw std::invalid_argument("native Vector planning requires both borrowed value lookups");
 		if (nodeId == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native Vector mutation planner requires a nonzero Node ID");
 		}
 		validateLabels(oldLabels);
 		validateLabels(newLabels);
-		validateProperties(nodeId, oldProperties);
-		validateProperties(nodeId, newProperties);
 
 		std::vector<NativeVectorMutation> result;
 		for (const IndexDefinition &definition: definitions_) {
@@ -137,9 +148,9 @@ namespace graph::storage {
 					 "native Vector mutation planner cannot resolve an indexed Property-key Token");
 			}
 			const PropertyValue *oldValue =
-				hasLabel(oldLabels, definition.label_token_id) ? findValue(oldProperties, *propertyToken) : nullptr;
+				hasLabel(oldLabels, definition.label_token_id) ? oldValues(*propertyToken) : nullptr;
 			const PropertyValue *newValue =
-				hasLabel(newLabels, definition.label_token_id) ? findValue(newProperties, *propertyToken) : nullptr;
+				hasLabel(newLabels, definition.label_token_id) ? newValues(*propertyToken) : nullptr;
 			if (oldValue == nullptr && newValue == nullptr) {
 				continue;
 			}

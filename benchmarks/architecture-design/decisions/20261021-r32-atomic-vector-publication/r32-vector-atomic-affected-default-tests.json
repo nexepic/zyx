@@ -1,0 +1,565 @@
+{
+  "tests": 51,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T05:58:17Z",
+  "time": "4.707s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "NativeGraphWritePlannerVectorTest",
+      "tests": 27,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T05:58:17Z",
+      "time": "1.29s",
+      "testsuite": [
+        {
+          "name": "PublishesRawMappingsAndManifestInOneGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.009s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineBootstrapPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 277,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.004s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 397,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RefusesToOverwriteAPublishedVectorBootstrapState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 458,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 483,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.014s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineDeltaPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 666,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.015s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaInsertForANodeOutsideTheGraphSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 714,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaAfterStagingBootstrapForTheSameIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 741,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsSecondBootstrapForTheSameIndexInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 764,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsSecondDeltaForTheSameIndexInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 779,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesLogicalCreateAndReplacementThroughNativeVectorState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 808,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.019s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 870,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.04s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsVectorInsertionForANodeErasedByTheSameTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 944,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.008s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 986,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.022s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1061,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.016s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "AppendsAFullTailDeltaPageToItsExistingRawPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.016s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.022s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesANewRawPoolWhenTheCurrentRawPoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.02s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "MovesTheManifestToANewPoolWhenCowFramesAreExhausted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:17Z",
+          "time": "0.898s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.01s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1395,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.01s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1438,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.032s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1512,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.028s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1570,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.025s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RecoversNativeVectorDeltaAcrossSuperblockInterruptions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.037s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeVectorMutationPlannerTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T05:58:18Z",
+      "time": "0.013s",
+      "testsuite": [
+        {
+          "name": "EmitsOrderedEraseThenInsertForChangedIndexedValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.001s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMissingIndexedPropertyTokenBeforeInferringMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineValuesAtBothSemanticBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.008s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EnforcesPerNodeMutationBudgetAcrossVectorIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeVectorMutationPlannerContractsTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T05:58:18Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "RejectsInvalidConstructorDefinitionsAndBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 194,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerContractsTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 14,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T05:58:18Z",
+      "time": "3.403s",
+      "testsuite": [
+        {
+          "name": "ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.379s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 485,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.233s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 492,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:18Z",
+          "time": "0.168s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 499,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:19Z",
+          "time": "0.225s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 518,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:19Z",
+          "time": "0.258s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 540,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:19Z",
+          "time": "0.173s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReadControlDoesNotGrantAuthorityToAWritableBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 556,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:19Z",
+          "time": "0.18s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 563,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:19Z",
+          "time": "0.266s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 582,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:20Z",
+          "time": "0.066s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 593,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:20Z",
+          "time": "0.152s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 605,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:20Z",
+          "time": "0.304s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 648,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:20Z",
+          "time": "0.273s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:21Z",
+          "time": "0.376s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "DefaultProfileRemainsRow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 682,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:58:21Z",
+          "time": "0.344s",
+          "classname": "HybridPropertyQueryParityTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+
+### 2026-10-21 R3.2: ROW/native pool isolation
+
+ROW creation after a native field write reproduced an ordinary placement failure. The slotted allocation index now authenticates native field pages through its private typed route, validates page free-space hints and pool namespace consistency, and excludes all native frames from ordinary allocation candidates. Public creation, old snapshots, reopen and integrity pass; ordinary read authority remains refused. Eleven lifecycle modules: candidate332/default104 passed; the slotted allocation module passed32 in each format. Parent source checkpoint:20261021-r32-native-detach; only the two changed source files are snapshotted here. No benchmark or full suite. General mixed ROW/native transactions and shared LargeValue planning remain. **14/24 (58.3%); no accepted growth, commit or push.**

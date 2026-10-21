@@ -79,7 +79,7 @@ public:
         for (const auto *change : ordered) {
             checkpoint();
             const auto effects = change->effects();
-            require(!effects.memberships && !effects.columns && !effects.clear_live,
+            require(!effects.memberships && !effects.columns && !effects.clear_live && !effects.set_live,
                 "compatible column preparation cannot change group membership or liveness");
             if (groups.empty() || groups.back().reference != change->groupReference()) {
                 auto group = change->sourceGroup(); group.semantic_generation = next_generation_;

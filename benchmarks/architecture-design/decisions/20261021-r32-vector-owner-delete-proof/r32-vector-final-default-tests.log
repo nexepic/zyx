@@ -1,0 +1,33 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeVectorMutationPlanner*:HybridPropertyQueryParityTest.*Vector*:HybridPropertyQueryParityTest.*Deletion*
+[==========] Running 10 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from NativeVectorMutationPlannerTest
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue
+[       OK ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions
+[       OK ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties
+[       OK ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership
+[       OK ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries
+[       OK ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning
+[       OK ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes
+[       OK ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot
+[       OK ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope
+[       OK ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope (0 ms)
+[----------] 9 tests from NativeVectorMutationPlannerTest (5 ms total)
+
+[----------] 1 test from NativeVectorMutationPlannerContractsTest
+[ RUN      ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds
+[       OK ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds (0 ms)
+[----------] 1 test from NativeVectorMutationPlannerContractsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 2 test suites ran. (5 ms total)
+[  PASSED  ] 10 tests.

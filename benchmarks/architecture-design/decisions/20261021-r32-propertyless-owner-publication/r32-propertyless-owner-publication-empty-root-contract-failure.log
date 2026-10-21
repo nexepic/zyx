@@ -1,0 +1,25 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPublicationTest.*
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+unknown file: Failure
+C++ exception with description "Entity Property read requires a present Property root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField (44 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+unknown file: Failure
+C++ exception with description "Entity Property read requires a present Property root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField (54 ms)
+[----------] 2 tests from HybridPropertyOwnerInsertionPublicationTest (98 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (98 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+
+ 2 FAILED TESTS

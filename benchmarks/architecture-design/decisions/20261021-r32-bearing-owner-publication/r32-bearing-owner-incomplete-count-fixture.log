@@ -1,0 +1,61 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPublicationTest.*
+[==========] Running 20 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 20 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField (176 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField (202 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit (290 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether (286 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit (323 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether (327 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodePublishesItsColumnAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodePublishesItsColumnAndEntityTogether (176 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgePublishesItsColumnAndEntityTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgePublishesItsColumnAndEntityTogether (204 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeValueCanDemoteOnlyItsExistingField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeValueCanDemoteOnlyItsExistingField (354 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeValueCanDemoteOnlyItsExistingField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeValueCanDemoteOnlyItsExistingField (392 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeFieldPublicationRecoversNeitherEntityNorField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodeFieldPublicationRecoversNeitherEntityNorField (293 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeFieldPublicationRecoversEntityAndFieldTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodeFieldPublicationRecoversEntityAndFieldTogether (294 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeFieldPublicationRecoversNeitherEntityNorField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgeFieldPublicationRecoversNeitherEntityNorField (329 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeFieldPublicationRecoversEntityAndFieldTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgeFieldPublicationRecoversEntityAndFieldTogether (333 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewNodesMergeTheirColumnBitsInOnePublication
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewNodesMergeTheirColumnBitsInOnePublication (213 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewEdgesMergeTheirColumnBitsAndAdjacencyTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.SixteenNewEdgesMergeTheirColumnBitsAndAdjacencyTogether (227 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldWithoutAColumnUsesAnExtension
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewNodeFieldWithoutAColumnUsesAnExtension (208 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldWithoutAColumnUsesAnExtension
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.NewEdgeFieldWithoutAColumnUsesAnExtension (234 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CatalogNodeCountAndNewNativeFieldPublishTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CatalogNodeCountAndNewNativeFieldPublishTogether (189 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CatalogEdgeTypeCountAndNativeFieldPublishTogether
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:137: Failure
+Expected equality of these values:
+  catalog.readTokenCardinality(born, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, 7)
+    Which is: (nullopt)
+  std::optional<uint64_t>(64)
+    Which is: (64)
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CatalogEdgeTypeCountAndNativeFieldPublishTogether (215 ms)
+[----------] 20 tests from HybridPropertyOwnerInsertionPublicationTest (5277 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 1 test suite ran. (5277 ms total)
+[  PASSED  ] 19 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CatalogEdgeTypeCountAndNativeFieldPublishTogether
+
+ 1 FAILED TEST

@@ -1,0 +1,23 @@
+{
+  "accepted_total": 14,
+  "denominator": 24,
+  "progress": "58.3%",
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 59,
+  "tests": {
+    "default": {
+      "registered": 940,
+      "passed": 940,
+      "skipped": 0
+    },
+    "candidate": {
+      "registered": 1294,
+      "passed": 1293,
+      "skipped": 1
+    }
+  },
+  "full_repository_suite": false,
+  "performance_benchmark": false,
+  "source_note": "Source captured before subsequent public native-property routing edits."
+}

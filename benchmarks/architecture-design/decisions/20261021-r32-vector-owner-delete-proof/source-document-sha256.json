@@ -1,0 +1,10 @@
+{
+  "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "f8e265305cb94aa9bb7c2ed92fa803fcb4af9f9678fbe1f08ed33b336a207d48",
+  "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "b0f27abe3657a9f181f95a8bd859498ade226a3d09cd15f5ca10d123ad6d1052",
+  "include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": "17d73bd68b04f1dbd9c2f0636acc868abcd34b105ec09277ca97e1f54e3dee05",
+  "src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "ac8c61f0051a2c92bd5f9a1ab3fc8c0085c74f3762926dbaecb55a573fa10827",
+  "src/storage/relocatable/schema/SystemCatalog.cpp": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+  "tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+  "tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": "c053991a5e0b2831ebef454871540ed865cd1dff46c46dd3a631cd044c51300f"
+}

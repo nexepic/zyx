@@ -1,0 +1,342 @@
+{
+  "tests": 32,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T12:21:38Z",
+  "time": "1.827s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableSlottedPagePoolTest",
+      "tests": 32,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T12:21:38Z",
+      "time": "1.827s",
+      "testsuite": [
+        {
+          "name": "AtomicallyMaterializesAndReopensAnEmptyTypedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.008s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "PinsBorrowedSlottedRecordsWhenTheBufferPoolIsAvailable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 139,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.005s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "AtomicallyMaterializesAPopulatedPageOnlyAfterItsDirectoryPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsMismatchedOrUnreservablePopulatedPageAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 200,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.002s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "AppendsAPopulatedPageOnlyWhenItsOwnerMatchesTheRequest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 235,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "ReplacesTypedPagesAcrossRepeatedReclamationAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 266,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.123s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "PersistsAndSelectsBestFitContiguousFreeSpaceAcrossCowAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.016s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RetainsPeerWhenReplacingOnePageInASharedFreeSpaceBucket",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 354,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.007s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsOutOfRangeDurableFreeSpaceHintsBeforeSelection",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 382,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsTheBestFitPageAcrossPoolsFromOneMetadataSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 399,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.011s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsRecordPlacementUsingReusableDeadSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 456,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.007s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsRecordPlacementFromTheCallerSnapshotWithoutDowngradingNewerCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.007s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RebuildsRecordPlacementCacheAfterMetadataOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 564,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "NeverSelectsAVectorRawPoolForSlottedRecordPlacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 584,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.002s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsTightestRecordPlacementAcrossPoolsRegardlessOfCallerOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 603,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.009s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsTightestRecordPlacementWithinOnePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 637,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.014s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SelectsOnlyMatchingSlottedOwnerKindsInASharedEntityPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.007s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "EvacuatesTypedPagesAcrossPoolsWithoutChangingSlotReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 712,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.013s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsInvalidOrNonCurrentTypedPageEvacuations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 751,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsEvacuationOfAPageSupersededAfterItWasRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 769,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.007s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsReplacementAndEvacuationAfterTheCurrentOwnerIsRetired",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 797,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RetiresAndReleasesAnEmptyTypedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 825,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.01s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsWrongTypedOwnerAndNeverPublishesRawPagePayloadAsSlotted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 842,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.002s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "ReturnsEmptyWhenNoPhysicalSlotCanBeReserved",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 876,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.002s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "ReturnsNoBestFitWhenAnExistingPoolHasNoFreeFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 885,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.076s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsInvalidTypedPageSelectionBeforeOpeningMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 907,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsReplacementWithoutAnOwnedVersion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 928,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsAAllocatorDirectoryEntryThatDisagreesWithTheTypedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 936,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.004s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "KeepsTheSourceOwnerLiveAfterInterruptedPublicationUntilReplacementCommits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 955,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.009s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "ReconcilesInterruptedTypedReplacementBeforeRetryingItsPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 979,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "0.01s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEverySingleBitPageMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 1019,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:38Z",
+          "time": "1.432s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        },
+        {
+          "name": "SharedReadPayloadKeepsTheSnapshotAllocationGrantAfterMetadataCloses",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SlottedPagePool.cpp",
+          "line": 1052,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T12:21:40Z",
+          "time": "0.003s",
+          "classname": "RelocatableSlottedPagePoolTest"
+        }
+      ]
+    }
+  ]
+}

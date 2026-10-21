@@ -406,6 +406,7 @@ namespace graph::storage {
 							   const PageOwnerHeader &owner, std::span<const std::byte> payload,
 							   uint8_t frameIndex) const;
 		[[nodiscard]] PageOwnerHeader readPageOwner(const CatalogEntry &entry, uint8_t frameIndex) const;
+        [[nodiscard]] PageOwnerHeader readRecoveryPageOwner(const CatalogEntry &entry, uint8_t frameIndex, uint64_t fileBytes) const;
 		void writePreparedReplacement(const CatalogEntry &entry, const SharedPagePoolHeader &poolHeader,
 									  const PageOwnerHeader &oldOwner, uint8_t oldFrame,
 									  const PageOwnerHeader &newOwner, std::span<const std::byte> payload,

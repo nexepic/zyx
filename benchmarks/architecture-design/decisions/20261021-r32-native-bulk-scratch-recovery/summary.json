@@ -1,0 +1,15 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 7,
+  "passed": {
+    "default": 195,
+    "candidate": 279
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "source_note": "Captured before fresh native scratch allocation changes.",
+  "remaining": "Fresh native scratch allocation is continued separately; native owner creation/new tokens/mixed/detach/cross-group and production gates, R5/R7."
+}

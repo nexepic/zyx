@@ -1,0 +1,52 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeVectorMutationPlanner*:HybridPropertyQueryParityTest.*Vector*:HybridPropertyQueryParityTest.*Deletion*
+[==========] Running 18 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from NativeVectorMutationPlannerTest
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue
+[       OK ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions
+[       OK ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties
+[       OK ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership
+[       OK ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries
+[       OK ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning
+[       OK ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes
+[       OK ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot
+[       OK ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope
+[       OK ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope (0 ms)
+[----------] 9 tests from NativeVectorMutationPlannerTest (5 ms total)
+
+[----------] 1 test from NativeVectorMutationPlannerContractsTest
+[ RUN      ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds
+[       OK ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds (0 ms)
+[----------] 1 test from NativeVectorMutationPlannerContractsTest (0 ms total)
+
+[----------] 8 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses
+[       OK ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses (677 ms)
+[ RUN      ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion
+[       OK ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion (977 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo
+[       OK ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo (266 ms)
+[ RUN      ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex
+[       OK ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex (268 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication
+[       OK ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication (259 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+[       OK ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing (280 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors
+[       OK ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors (744 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes
+[       OK ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes (873 ms)
+[----------] 8 tests from HybridPropertyQueryParityTest (4348 ms total)
+
+[----------] Global test environment tear-down
+[==========] 18 tests from 3 test suites ran. (4354 ms total)
+[  PASSED  ] 18 tests.

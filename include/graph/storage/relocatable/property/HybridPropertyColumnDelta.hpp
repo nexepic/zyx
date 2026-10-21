@@ -34,6 +34,7 @@ public:
         int32_t memberships = 0;
         int32_t columns = 0;
         uint64_t clear_live = 0;
+        uint64_t set_live = 0;
     };
 private:
     struct State {
@@ -87,14 +88,15 @@ private:
         return left.kind != CellKind::HCC_EXTENSION && left.bits == right.bits;
     }
     static void change(State &state, EntityPropertyKey owner, const PropertyValue *replacement,
-        bool eraseOwner, size_t nativeRecordLimit) {
+        bool eraseOwner, size_t nativeRecordLimit, bool pendingOwner = false) {
         const auto slot = hybridPropertySlotFor(owner);
         const auto bit = UINT64_C(1) << slot;
         const auto value = incoming(replacement);
-        if (!eraseOwner && same(cellAt(state.source, slot), value)) return;
+        if (!eraseOwner && !pendingOwner && same(cellAt(state.source, slot), value)) return;
         state.changed_slots = bit;
         state.effects.memberships = int32_t(bool(replacement)) - int32_t(bool(state.source.presence & bit));
         state.effects.clear_live = eraseOwner ? bit : 0;
+        state.effects.set_live = pendingOwner ? bit : 0;
         auto &column = state.column;
         column.identity.semantic_generation = state.next_generation;
         if (eraseOwner) column.live &= ~bit;
@@ -168,6 +170,21 @@ public:
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
         const PropertyValue &replacement) {
+        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, false);
+    }
+    // Private images only: a pending logical owner has no Entity Map authority.
+    // Publication additionally needs its leased Entity/field/liveness coordinator.
+    [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planPendingOwnerColumnMember(
+        const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
+        uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
+        const PropertyValue &replacement) {
+        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, true);
+    }
+private:
+    [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planAbsentColumnMember(
+        const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
+        uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
+        const PropertyValue &replacement, bool pendingOwner) {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column insertion is disabled");
         const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
@@ -183,7 +200,8 @@ public:
         boundaryCredit.set(0); referenceCredit.set(0);
         SlottedSlotReference groupRef;
         const auto group = context.findGroup(owner, std::ref(boundary), &groupRef);
-        require(group && context.isLive(owner, *group), "native insertion requires a live group owner");
+        require(group && context.isLive(owner, *group) != pendingOwner,
+            "native insertion has inconsistent existing/pending owner liveness");
         if (context.hasRoot(owner.owner_kind, 2)) {
             const auto extensionBinding = context.bind(owner.owner_kind, 2);
             HybridPropertyFieldDirectoryMap extensions(extensionBinding.root.index_id, context.trees_, context.metadata_, extensionBinding);
@@ -200,16 +218,19 @@ public:
         const auto page = context.fields_.read(snapshot, ref.page_id);
         const auto column = page.view().readColumn(ref, *group, token, context.descriptor_->semantic_generation);
         const auto bit = UINT64_C(1) << hybridPropertySlotFor(owner);
-        require(!(column.presence & bit) && (column.live & bit), "native insertion conflicts with source column presence or liveness");
+        require(!(column.presence & bit) && (!pendingOwner || !(column.live & bit)),
+            "native insertion conflicts with source column presence or prior owner lifetime");
         Storage state(nullptr, Deleter{memory});
         state.reset(std::construct_at(static_cast<State *>(memory->allocate(sizeof(State), alignof(State)))));
         state->database_id = snapshot.superblock().database_id; state->source_generation = snapshot.superblock().generation;
         state->next_generation = nextGeneration; state->owner = owner; state->group_reference = groupRef;
         state->column_reference = ref; state->requested_slots = bit; state->group = *group;
         state->source = state->column = column;
-        change(*state, owner, &replacement, false, RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES);
+        state->column.live |= bit;
+        change(*state, owner, &replacement, false, RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, pendingOwner);
         context.check(); return HybridPropertyColumnDelta(std::move(state));
     }
+public:
     // Coalesce authenticated changes to ONE physical column before applying
     // the 48-slot threshold. Individual plans alone cannot decide the final
     // layout of several removals. Replacement values retain their original
@@ -247,6 +268,8 @@ public:
                 "native column merge has stale, foreign, inconsistent or overlapping plans");
             state.requested_slots |= part.requested_slots; state.changed_slots |= part.changed_slots;
             state.effects.clear_live |= part.effects.clear_live;
+            state.effects.set_live |= part.effects.set_live;
+            state.column.live |= part.column.live;
             for (unsigned slot = 0; slot < RSS_HYBRID_GROUP_CAPACITY; ++slot) {
                 if (!(part.changed_slots & (UINT64_C(1) << slot))) continue;
                 state.cells[slot] = part.action == Action::HCD_DEMOTE_FIELD ? part.cells[slot] : cellAt(part.column, slot);
@@ -255,7 +278,9 @@ public:
         if (state.changed_slots) {
             auto &column = state.column;
             column.identity.semantic_generation = state.next_generation;
-            column.live &= ~state.effects.clear_live;
+            hybrid_property_detail::require(!(state.effects.set_live & state.effects.clear_live),
+                "native merged owner cannot be inserted and deleted together");
+            column.live = (column.live | state.effects.set_live) & ~state.effects.clear_live;
             column.presence = column.nulls = 0; column.words.fill(0);
             bool compatible = true;
             for (unsigned slot = 0; slot < RSS_HYBRID_GROUP_CAPACITY; ++slot) {

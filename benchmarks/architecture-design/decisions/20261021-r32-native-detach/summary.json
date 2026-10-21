@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 11,
+  "passed": {
+    "candidate": 330,
+    "default": 104
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "ROW/native and combined graph/property work, full production/resource/space/steady-state/R5/R7 admission."
+}

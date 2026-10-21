@@ -1,0 +1,6 @@
+
+### 2026-10-21 R3.2: Pending-owner column plans without publication authority
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-pending-owner-columns/`. Private column planning can describe an absent pending owner in an installed group, separately recording the added group-live bit while retaining the exact old source fence. Compatible additions extend column liveness; incompatible values remain field-local demotions. Same-column merging unions final column masks and pending-live effects. Existing column-only and ordinary mixed preparation reject pending-live effects, including net-zero membership updates. This grants no Entity Map, logical-ID lease or publication authority. Older column-live snapshots can accept a missing field for an already live owner without rewriting unrelated fields.
+
+Two related modules: candidate12 and default2 passed. Cases cover63-to64 private column data, unchanged Entity Map/source bytes, field-local incompatible values, merge guards, quota/refunds, and ordinary inline mutation regressions. Group preparation and actual Entity/lease/derived publication remain unfinished, as do remaining mixed/detach/cross-group and production/R5/R7 gates. No full suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**

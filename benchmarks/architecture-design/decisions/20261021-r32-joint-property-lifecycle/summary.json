@@ -1,0 +1,12 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "passed": {
+    "candidate": 341,
+    "default": 104
+  },
+  "commit_push": false,
+  "modules": 11,
+  "full_repository_test_run": false,
+  "performance_benchmark": false
+}

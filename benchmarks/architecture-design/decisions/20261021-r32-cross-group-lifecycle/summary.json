@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 11,
+  "passed": {
+    "candidate": 308,
+    "default": 104
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Mixed Node/Edge and ROW/native fields, detach/owner lifecycle, full production/resource/space/steady-state/R5/R7 admission."
+}

@@ -18,6 +18,7 @@
 #include <span>
 #include <vector>
 #include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
@@ -235,6 +236,11 @@ namespace graph::storage {
 		// generation. A bounded plan prevents corrupt metadata from causing an
 		// unbounded traversal while DDL is being staged.
 		void stageScalarIndexDrop(BTreePageStore &index, uint64_t indexId, size_t maximumPages);
+        // Complete an already staged native field/map/owner mutation with its
+        // semantic Vector changes. Stores must outlive commit, as for ordinary
+        // Vector staging. A failed staging attempt seals commit until rollback.
+        void coordinateHybridPropertyVectors(VectorPageStore &rawPages, VectorManifestStore &manifests,
+            NativeGraphVectorDeltaOptions options);
 		// Stages first-use Vector state exclusively through native typed pages. The
 		// caller supplies a snapshot-derived graph scan; commit publishes the two
 		// mapping roots, raw locations, manifest, schema definition, and graph
@@ -257,6 +263,8 @@ namespace graph::storage {
 
 	private:
 		friend class NativeGraphWritePlanner;
+        friend class NativeGraphMutationExecutor;
+        friend class RelocatableStorageBackend;
 
 		struct NodeChange {
 			NodeEntityRecord record;
@@ -345,6 +353,10 @@ namespace graph::storage {
 		MetadataSnapshotPin snapshot_;
 		NativeGraphWriteTransactionState state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		uint64_t next_vector_id_ = 0U;
+        // Only the complete logical coordinator can authorize field-preserving
+        // ordinary graph work while native groups are active.
+        bool native_graph_coordinated_ = false;
+        bool native_schema_coordinated_ = false;
 		std::vector<NativeGraphLogicalIdLeaseRange> node_id_ranges_;
 		std::vector<NativeGraphLogicalIdLeaseRange> edge_id_ranges_;
 		std::map<uint64_t, NodeChange> nodes_;
@@ -362,8 +374,18 @@ namespace graph::storage {
 		// creation and replacement of an existing root.
 		bool global_adjacency_deferred_bulk_ = false;
 		std::map<uint64_t, PropertyCollectionRoot> properties_;
+        std::optional<utils::OwnedHeapReservation> hybrid_catalog_credit_;
+        std::optional<utils::OwnedVector<uint32_t>> hybrid_catalog_tokens_;
+        void adoptHybridPropertyCatalog(NativeGraphWriteTransaction &&catalog, utils::OwnedHeapReservation &&credit);
 		std::vector<StagedScalarIndexMutation> scalar_index_mutations_;
 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;
+        struct StagedHybridVectors {
+            utils::OwnedHeapReservation credit;
+            std::vector<NativeVectorMutation, utils::OwnedPmrAllocator<NativeVectorMutation>> semantics;
+        };
+        std::optional<StagedHybridVectors> hybrid_vectors_;
+        bool hybrid_vector_pending_ = false;
+        [[nodiscard]] bool isHybridPropertyOwner(EntityPropertyKey owner, const CancellationCheckpoint *cancellation) const;
 		std::vector<StagedVectorBootstrap> vector_bootstraps_;
 		std::vector<StagedVectorDelta> vector_deltas_;
         std::optional<NativeGraphHybridPropertyRootMutation> hybrid_conversion_;

@@ -1,0 +1,49 @@
+{
+  "base_commit": "e6822035f920b731111bf25b710edf9f19d840f2",
+  "scope": [
+    "R3.2",
+    "R6.1"
+  ],
+  "progress": "14/24 (58.3%)",
+  "accepted_total": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "related_module_count": 58,
+  "tests": {
+    "previous-related-default": {
+      "registered": 934,
+      "passed": 934,
+      "skipped": 0,
+      "failed": 0,
+      "binary_sha256": "6c906d7ecdddedc81ddba930a1baa4d93799e0b7bff316c64f00038522888ab3"
+    },
+    "previous-related-candidate": {
+      "registered": 1278,
+      "passed": 1276,
+      "skipped": 1,
+      "failed": 1,
+      "binary_sha256": "24c22e2ccda20a309e1d537234d0e1ea41c075d46dc61181a4693923a4c5c10c"
+    },
+    "current-affected-default": {
+      "registered": 51,
+      "passed": 51,
+      "skipped": 0,
+      "failed": 0,
+      "binary_sha256": "2dd855e9ba064c35ef76eeda30ac41b9a6f764c0f43573fcdb0e5a20acbcbbcf"
+    },
+    "current-affected-candidate": {
+      "registered": 13,
+      "passed": 13,
+      "skipped": 0,
+      "failed": 0,
+      "binary_sha256": "434e36ef43725d5ca92cb662c00a2cb32f0022ea1bdd1d9076c1d1fbdc8977f9"
+    }
+  },
+  "validation_note": "Prior broad run had one LargeValueStore read-fixture failure. Fixture binding and exception expectations were corrected; final signed-zero ROW normalization is verified by current affected runs. The broad candidate run is retained as failed, not recounted as a fresh pass.",
+  "excluded": "Unaffected mature multi-group allocation case retains separate frozen evidence.",
+  "full_repository_test_run": false,
+  "performance_timing_run": false,
+  "platform": "Linux only",
+  "remaining": "R3.2 ordinary native topology/public write routing; production space and complete resource/steady-state gates; remaining R5/R7."
+}

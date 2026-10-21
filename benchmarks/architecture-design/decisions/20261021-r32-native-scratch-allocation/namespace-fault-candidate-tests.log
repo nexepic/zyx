@@ -1,0 +1,12 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.NativeSegmentNamespaceReservationPreservesFieldsAcrossBothBootstrapFaults
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.NativeSegmentNamespaceReservationPreservesFieldsAcrossBothBootstrapFaults
+[       OK ] HybridPropertyQueryParityTest.NativeSegmentNamespaceReservationPreservesFieldsAcrossBothBootstrapFaults (3885 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (3885 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (3885 ms total)
+[  PASSED  ] 1 test.

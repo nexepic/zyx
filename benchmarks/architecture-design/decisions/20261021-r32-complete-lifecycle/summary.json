@@ -1,0 +1,24 @@
+{
+  "accepted_deliverable": "R3.2",
+  "previous_accepted": 14,
+  "accepted": 15,
+  "denominator": 24,
+  "progress": "62.5%",
+  "accepted_growth": 1,
+  "passed": {
+    "r32-native-schema-lifecycle:candidate": 363,
+    "r32-native-schema-lifecycle:default": 104,
+    "r32-schema-recovery-controls:candidate": 115,
+    "r32-schema-recovery-controls:default": 115,
+    "r32-native-pool-representation-controls:candidate": 61,
+    "r32-native-pool-representation-controls:default": 59,
+    "r32-final-query-parity:candidate": 76,
+    "r32-final-query-parity:default": 14
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "production_native_adoption": false,
+  "space_verdict": "reject",
+  "base_commit": "e6822035f920b731111bf25b710edf9f19d840f2",
+  "platform": "Linux execution; portable native I/O retained; macOS/Windows not executed"
+}

@@ -1,0 +1,31 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPlanTest.*
+[==========] Running 7 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 7 tests from HybridPropertyOwnerInsertionPlanTest
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages
+[       OK ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages (8 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingOwnerColumnCarriesSeparateLivenessWithoutPublishingAnEntity
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingOwnerColumnCarriesSeparateLivenessWithoutPublishingAnEntity (36 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.NetZeroMembershipMergeCannotBypassTheExistingLivenessPublicationGuard
+[       OK ] HybridPropertyOwnerInsertionPlanTest.NetZeroMembershipMergeCannotBypassTheExistingLivenessPublicationGuard (38 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.IncompatiblePendingValueDemotesOnlyItsFieldAndKeepsBorrowedValuesAlive
+[       OK ] HybridPropertyOwnerInsertionPlanTest.IncompatiblePendingValueDemotesOnlyItsFieldAndKeepsBorrowedValuesAlive (33 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingGroupPreparationCombinesColumnAndLiveBitWithoutPhysicalAllocation
+unknown file: Failure
+C++ exception with description "hybrid column identity or width mismatch" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerInsertionPlanTest.PendingGroupPreparationCombinesColumnAndLiveBitWithoutPhysicalAllocation (38 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PropertylessPendingOwnerPreservesOlderColumnBytesAndRejectsDuplicateDeclarations
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PropertylessPendingOwnerPreservesOlderColumnBytesAndRejectsDuplicateDeclarations (38 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingDemotionProducesCompleteDirectoriesAndRefundsPartialPreparationOnCancel
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingDemotionProducesCompleteDirectoriesAndRefundsPartialPreparationOnCancel (34 ms)
+[----------] 7 tests from HybridPropertyOwnerInsertionPlanTest (227 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 1 test suite ran. (227 ms total)
+[  PASSED  ] 6 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPlanTest.PendingGroupPreparationCombinesColumnAndLiveBitWithoutPhysicalAllocation
+
+ 1 FAILED TEST

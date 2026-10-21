@@ -1,0 +1,36 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.NativeVector*:HybridPropertyQueryParityTest.NativeIndexedOwnerDeletion*
+[==========] Running 13 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 13 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen
+[       OK ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen (1973 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic
+[       OK ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic (3593 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether
+[       OK ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether (2455 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback (291 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback (304 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries (480 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves
+[       OK ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves (1797 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount
+[       OK ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount (2469 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork
+[       OK ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork (1802 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication
+[       OK ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication (2181 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo
+[       OK ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo (1894 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin
+[       OK ] HybridPropertyQueryParityTest.NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin (3161 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo
+[       OK ] HybridPropertyQueryParityTest.NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo (1812 ms)
+[----------] 13 tests from HybridPropertyQueryParityTest (24218 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 1 test suite ran. (24218 ms total)
+[  PASSED  ] 13 tests.

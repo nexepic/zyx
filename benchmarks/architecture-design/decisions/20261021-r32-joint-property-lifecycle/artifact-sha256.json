@@ -1,0 +1,23 @@
+{
+  "source-sha256.json": "27ee3a71658274dd050d79c13fca55ec5be2ee44d52b2b79cd2a94af32562acb",
+  "run-module-tests.py": "e7dd4c08c772d0aa71818c55586354b1c5ce756220b8db9cd41b7a373dfc71e1",
+  "candidate-verified-build.log": "c2ed93ffd93c840755c0e91392ae593b1b52de9b7aaf6c208123feaceb1dde2e",
+  "zh.md": "e1dec67281402cd5a1d5464fbf9b2b3111c95d16c580043e15c71ce933e8eba2",
+  "default-verified-build.log": "ebba055bd061188b66c4f14d10978f00d2b9d0d38a459c03cbe80f6278388fd7",
+  "summary.json": "3c8dc980680809f52afa727c03b88a5fd2517427e0e3b30d95ddcf76a2438521",
+  "r32-joint-lifecycle-ten-focused-candidate-tests.log": "b8bb8256a134aac9b9ed91e8d3b39400bd52d9ea3ccea847700384dbf1b930c6",
+  "en.md": "f09fea6c2613dd12e9a31515ea1e4fea5e1902502eb6fdea5133c6b25ab42cfa",
+  "r32-joint-lifecycle-ten-focused-candidate-tests.json": "761fb54cb378cb20dc7d3b3674f24b07e4c5c7ea232075eec131597b15963836",
+  "candidate-tests.log": "fb05c1191faf477f331d6a142e543d1b1c9914171d1fc351e77267f6ba0cd02c",
+  "candidate-tests.json": "f6e3279473b1a8b3ae39d0247e0ab20615690df4b760d2bac8368535a0494e33",
+  "default-tests.json": "b60c7e4b325c99baedc1174ef12ff78bb4e56d73c43016c70b54d37eb8dc1a72",
+  "default-tests.log": "67cee1b245243ff9b4a2d4889ea169bc854126b30d811e7d892af5e10a73b5b8",
+  "snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "16b61225e68759837c04f7953677e97e92a763be8deb7e103ec8ddaa932b35a5",
+  "snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "ff7b9caff5e3001afb24d369a583bc5c0b2081e3b6d2059a9c473d056c3a508a",
+  "snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "7ff5a3bf5ddec92d9627d6c694fc3701fd89c1c6f864c899efb9ac37f4bd6fb8",
+  "snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "ce5ba1f54f8aadc281cb79ef9e340ab1bfd3f0977f65977af018b146fe123859",
+  "snapshot/include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp": "543d5526e86099fa9998bdc91059f26202544a32a9ff364f05348782f02ccc1d",
+  "snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "15866630930d081a2ae476bd85ce456a5a3d7926dc0ddd7c9faf558a66df47ab",
+  "snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": "9135b9101a116dce1ee4e7fb7a4e96c34993093c6bfc31b63f99d6e13d05eba7",
+  "snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": "ca2c6dfaeb4fa31f184e75102d806ac5a7aa7abcd76258b60ce507b4c6443a1b"
+}

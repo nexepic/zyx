@@ -1200,8 +1200,13 @@ namespace graph::storage {
 			static_cast<void>(metadata_.releaseQueryScratchSegments(requests, locations.front().transaction_id, checkpointLsn));
 			return;
 		}
+        const bool native = metadata_.openSnapshot().superblock().hybrid_property_descriptor_root.isValid();
 		static_cast<void>(metadata_.retireCatalogSegments(requests, checkpointLsn));
-		static_cast<void>(metadata_.reclaimRetiredPhysicalSlots(reclaimCheckpointLsn));
+        if (native) {
+            // Keep ordinary snapshot retirement fences. The typed batch validates
+            // scratch route absence without reclaiming unrelated native pools.
+            static_cast<void>(metadata_.tryReleaseRetiredCatalogSegments(requests, reclaimCheckpointLsn));
+        } else static_cast<void>(metadata_.reclaimRetiredPhysicalSlots(reclaimCheckpointLsn));
 	}
 
 	void NativeBulkRunStore::reclaimUnpublishedOnOpen(LogSequenceNumber checkpointLsn) {
@@ -1223,9 +1228,24 @@ namespace graph::storage {
 				}
 			});
 			snapshot.release();
-			if (candidates.empty()) {
-				return;
-			}
+            if (candidates.empty()) {
+                // A previous release may have retired scratch while a source pin
+                // still held it. Drain only this kind, in bounded batches, after
+                // the pin barrier permits actual physical reuse.
+                auto source = metadata_.openSnapshot();
+                const bool native = source.superblock().hybrid_property_descriptor_root.isValid();
+                std::vector<CatalogSegmentRetirementRequest> retired;
+                if (native && options_.scratch_kind == SegmentKind::SGK_BULK_SCRATCH) {
+                    retired.reserve(options_.maximum_batch_fragments);
+                    metadata_.visitCatalogEntries(source, [&](const CatalogEntry &entry) {
+                        if (retired.size() < options_.maximum_batch_fragments && entry.kind == options_.scratch_kind &&
+                            entry.state == SegmentState::SGS_RETIRED) retired.push_back({entry.segment_id, entry.generation});
+                    });
+                }
+                source.release();
+                if (retired.empty() || !metadata_.tryReleaseRetiredCatalogSegments(retired, nextLsn)) return;
+                nextLsn = advanceCheckpointLsn(nextLsn, 1U); continue;
+            }
 			releaseBatch(candidates, nextLsn);
 			nextLsn = advanceCheckpointLsn(nextLsn, 2U);
 		}

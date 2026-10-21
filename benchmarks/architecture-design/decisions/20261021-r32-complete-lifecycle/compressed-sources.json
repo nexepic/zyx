@@ -1,0 +1,1832 @@
+{
+  "archive": "source-checkpoints.tar.xz",
+  "sha256": "d536612211ddd6498a0f3ad976836ff7f35c71de102eecb10c0bb4ed966226b0",
+  "archive_bytes": 666776,
+  "uncompressed_bytes": 49899997,
+  "files": {
+    "20261021-r32-atomic-vector-publication/code.patch": {
+      "sha256": "d97fd47179446a16f2d911012efb318030d3d1c8a84120bb27ed967edec9eab9",
+      "bytes": 95144
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": {
+      "sha256": "aa22244452597fdfaf77834c9574292ce54c0b46b10cb7a2f50e7c13a62a1f21",
+      "bytes": 162120
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": {
+      "sha256": "33fd3db6b0cf87d135727408e35921b3c6173a9cb10c6cb58f40d089ba0778a8",
+      "bytes": 141941
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "b7f66a59c6dfe858116ecf46a5ec80c76ec20132ce3bf47bac44903bc82a3d5a",
+      "bytes": 23054
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "f2a0baa9cab6787cc59c14530225812055f7fe3668ce24aca8b0627b5e0da0d1",
+      "bytes": 116083
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "2b41957731409e20fdbf209373bebc58f6e62144832410b1efac932772ab3c08",
+      "bytes": 237827
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "be798a36b5b4f6f10a46a376bf53fed2059b0974ee0f55e83324e6c5b9a04716",
+      "bytes": 344532
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-atomic-vector-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "a3e0304f0d153197f8a0fe71b2c7ce46a72aee9570ae6a3f7432a89943d9dba9",
+      "bytes": 135380
+    },
+    "20261021-r32-bearing-owner-publication/code.patch": {
+      "sha256": "f4207e02f55d0e7551b841fd1dd15301129e9bbbb406e8b711a55148b80ed960",
+      "bytes": 302777
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "3096ae753e2217fdb241c696f97aa2098aff0794adf71d7620d27264c4962639",
+      "bytes": 30223
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "f7bab5edfedd9ea16e88edaa6ff59e2c735fb7bb58a7de2c4ae2d4c1f8721b41",
+      "bytes": 118397
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "657e788653d1b8b66b5fbfa2457c64c1995b2fed83b8c9ea20e50e10f7ee945e",
+      "bytes": 149444
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "6823d691fd4c5ab0512d10b56081220017848b5876a153fb54b7c37681da26cb",
+      "bytes": 248833
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "7b488216c78683666699f17fb8baab1377a14ec5f3494a31aeb6f0d5745badf5",
+      "bytes": 354378
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "a35ee443d0075be73c1a8f89dce4e54ea67c258043e359198afcb14b58524bbd",
+      "bytes": 149824
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "ba0aa6a1f9b7a2cacec7c3a7287ac510148f6be5b809d3b58647b691dacf5243",
+      "bytes": 22464
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-bearing-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-complete-lifecycle/code.patch": {
+      "sha256": "fb281eb5b86be64e577ee302fa0584eed5934a4ac49b42d50278a0dca54b2c5e",
+      "bytes": 744070
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp": {
+      "sha256": "4d70ef6e17e29d5be587df254e6935875e54b3d18a116cfec6279d37b8218fb2",
+      "bytes": 22647
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "457fbd15272d1a3696d7922338657649192e1f103ab34c87ad18e5d8a98e33de",
+      "bytes": 23786
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp": {
+      "sha256": "543d5526e86099fa9998bdc91059f26202544a32a9ff364f05348782f02ccc1d",
+      "bytes": 12805
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "b882bc768e7dcd421b8f5af91f0ba994db78a42d4f4971a1d6ff098b79b8a3e9",
+      "bytes": 45845
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp": {
+      "sha256": "1ddfe5f8b4ef7abaee596f53e3dc004158ad8dadc68b83561530f854b4af6bf9",
+      "bytes": 5859
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "ad5f0440f1c7fae1510f282a98e654612933c27af10cd912a8daed8999dcb479",
+      "bytes": 118680
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-complete-lifecycle/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": {
+      "sha256": "65da207c5bc382438baaa5886bff3f4cfba5dabcdd97282f0f41ea0a3e20dfaa",
+      "bytes": 110733
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/allocation/SlottedPagePool.cpp": {
+      "sha256": "e5c1ccc90a3f8dd71cd27378790c2bf19418ff6996c7226bd0824043f7dc91ec",
+      "bytes": 32965
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "8471504a0bb195280b1b4dab49aed8bb427addd3ad0da8253b5f3efb95a4cf48",
+      "bytes": 442595
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "657e788653d1b8b66b5fbfa2457c64c1995b2fed83b8c9ea20e50e10f7ee945e",
+      "bytes": 149444
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "c61d85209450daab1e8643f2e2056da6209e691358dddb3aeebd4342e8d73daa",
+      "bytes": 73557
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "60925e981adc4e4097b41f71c9de939941ea1c81efe209acf386821b0e4d8564",
+      "bytes": 250731
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp": {
+      "sha256": "f86daf4206691f2245210776a91aae7c82b06aa5ec9c6e6f97eb75a6cc9f0d6a",
+      "bytes": 11066
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "cbe75437d194c82b8c5bdf8f48ad928d019dc3c024322957f98e54d1b25fa649",
+      "bytes": 236463
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "79e4806e7807c8e2900b64c8ea1b206c4d03fe4bc2ee3d81b29fb4521aa87221",
+      "bytes": 358690
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "f8eaef24359e48259099c8fb16ec60139774ff069220e6a44c93a3354fe21598",
+      "bytes": 154861
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreNativePoolRecovery.cpp": {
+      "sha256": "63e88ac1e1dfc9b54ce4f7e12aa488cec0c4feb9511c0c7d09a50895982c4ba5",
+      "bytes": 7528
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-complete-lifecycle/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/include/storage/relocatable/allocation/PhysicalSegmentAllocatorTestFixture.hpp": {
+      "sha256": "4793eab45e82c0985fa8c756d4b7a4958c409638d4367b405cee91922126cb73",
+      "bytes": 4260
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp": {
+      "sha256": "8a7a27caee32ccfd25c350c1fa0eeed25ae94c4e52d250c1f82cd48e36eff246",
+      "bytes": 28809
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp": {
+      "sha256": "00dedf056e8680bcf1c112608082f0e0366b695b8f6160661e643a1a679368dd",
+      "bytes": 97562
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocatorEmergencyReserve.cpp": {
+      "sha256": "bdc21baa0594ddb0b6b41046d49668d4ca82eeb9b092a965b71582fd56244145",
+      "bytes": 11362
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp": {
+      "sha256": "b13fdfd8b70f33cdc7e23e289922c2c8faa81fcd747b3536e09fca6aa7001356",
+      "bytes": 27692
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp": {
+      "sha256": "a404b6d39ad276652d6a46e23e951f0d9d364ce91f80d26c105f925e56877f41",
+      "bytes": 55616
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_IndexContracts.cpp": {
+      "sha256": "8241bdb53e03588bf712ca111389cc0db7612986090361146ced6be1c43294c0",
+      "bytes": 91380
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp": {
+      "sha256": "1343a29c6bdc6bf66758652dd521cd9102a70000f7932a2cd32b7e547c2c88cc",
+      "bytes": 19255
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp": {
+      "sha256": "723c44eb07c7c418608178d5d35eefc64785fa2c141d489ee5142af2a14e9c9d",
+      "bytes": 55010
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp": {
+      "sha256": "3fff2314e436649189a12bece3ea70e2bc61b131e6dd1902afb665825f3ac72c",
+      "bytes": 49433
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "85d048b004c1dadf665eff479d9b1882336f19ad05d35431f75a159fa6f0b8c5",
+      "bytes": 17803
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "da932541482c1fb2492c309c1574c7afa7e0e2281782c03f1b6adafc6ba55293",
+      "bytes": 42639
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "7414a70163a6f22a81326c954fcf7fbea2c9a21749520cc5a6259ec1ba599cc6",
+      "bytes": 77588
+    },
+    "20261021-r32-complete-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-cross-group-lifecycle/code.patch": {
+      "sha256": "ba9edf9fb1a26fae5676af0e2ffc1fc9f7779e1dc2da64c2ff013034142010ef",
+      "bytes": 366144
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "8f059c11dda16e9f7ff31ddffb85e2b288333e7173922addf4a293608cbb677b",
+      "bytes": 33792
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "f7bab5edfedd9ea16e88edaa6ff59e2c735fb7bb58a7de2c4ae2d4c1f8721b41",
+      "bytes": 118397
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "657e788653d1b8b66b5fbfa2457c64c1995b2fed83b8c9ea20e50e10f7ee945e",
+      "bytes": 149444
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "7748e10991eadd4e0751c44217985a83c19eb10ab10acb129160113b63bc6777",
+      "bytes": 248735
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "7b488216c78683666699f17fb8baab1377a14ec5f3494a31aeb6f0d5745badf5",
+      "bytes": 354378
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "b682650634fa3b0d4994a5c4e964cfee1a98ae4624308ae4fb2b7bcf2a2a77d8",
+      "bytes": 152101
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp": {
+      "sha256": "c6de12026988342040a5ecfeca1cba9183b53b404b0287f683248b3b387b24d0",
+      "bytes": 44800
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "0250379202b8311aa7312301f4f00ea2e0894efbd68aaa1319cff5d3b947f8ba",
+      "bytes": 35672
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-cross-group-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp": {
+      "sha256": "543d5526e86099fa9998bdc91059f26202544a32a9ff364f05348782f02ccc1d",
+      "bytes": 12805
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "b882bc768e7dcd421b8f5af91f0ba994db78a42d4f4971a1d6ff098b79b8a3e9",
+      "bytes": 45845
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "8b54351d75801bc4dd6ca0e2d656447af846cdd2dec4586031d2c80925504661",
+      "bytes": 118623
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "c61d85209450daab1e8643f2e2056da6209e691358dddb3aeebd4342e8d73daa",
+      "bytes": 73557
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "000e0600c19514735b7828df52b1e5dfb58ef51f8becd9f1ff60ac5411ab4c95",
+      "bytes": 250140
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "8cafe2484e15462c497c3f9f8e195106f6682a1c58943da666f6eb163e622f53",
+      "bytes": 357965
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "f8eaef24359e48259099c8fb16ec60139774ff069220e6a44c93a3354fe21598",
+      "bytes": 154861
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "85d048b004c1dadf665eff479d9b1882336f19ad05d35431f75a159fa6f0b8c5",
+      "bytes": 17803
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "129d27d7d8e686b146b9c69974b6ccc508d2b9484f54916a6ddcf4ac3df1d868",
+      "bytes": 42635
+    },
+    "20261021-r32-joint-owner-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "ca64089740e4d8482a18ee7efdd798e9c0ed19fe651fa573b32eaa214a6de3bc",
+      "bytes": 68566
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp": {
+      "sha256": "543d5526e86099fa9998bdc91059f26202544a32a9ff364f05348782f02ccc1d",
+      "bytes": 12805
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "15866630930d081a2ae476bd85ce456a5a3d7926dc0ddd7c9faf558a66df47ab",
+      "bytes": 118475
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "ff7b9caff5e3001afb24d369a583bc5c0b2081e3b6d2059a9c473d056c3a508a",
+      "bytes": 73465
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "16b61225e68759837c04f7953677e97e92a763be8deb7e103ec8ddaa932b35a5",
+      "bytes": 249862
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "ce5ba1f54f8aadc281cb79ef9e340ab1bfd3f0977f65977af018b146fe123859",
+      "bytes": 356080
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "7ff5a3bf5ddec92d9627d6c694fc3701fd89c1c6f864c899efb9ac37f4bd6fb8",
+      "bytes": 154025
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "9135b9101a116dce1ee4e7fb7a4e96c34993093c6bfc31b63f99d6e13d05eba7",
+      "bytes": 37728
+    },
+    "20261021-r32-joint-property-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "ca2c6dfaeb4fa31f184e75102d806ac5a7aa7abcd76258b60ce507b4c6443a1b",
+      "bytes": 61419
+    },
+    "20261021-r32-mixed-kind-lifecycle/code.patch": {
+      "sha256": "9d45aa8a96c6ba2544a1c3bb10ca92d4e84e7d3f72c367db95f405942e972e11",
+      "bytes": 398618
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "5e93321aad7056dbe11368fcf7059c1bc65b0822764d9342c15a9df870c1b86e",
+      "bytes": 38009
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "f7bab5edfedd9ea16e88edaa6ff59e2c735fb7bb58a7de2c4ae2d4c1f8721b41",
+      "bytes": 118397
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "657e788653d1b8b66b5fbfa2457c64c1995b2fed83b8c9ea20e50e10f7ee945e",
+      "bytes": 149444
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "f5d1d5cd3ad875106d20fdee1b71d6ab2bfa2a64d9df2da6fe8ef7306cdc7afa",
+      "bytes": 248683
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "7b488216c78683666699f17fb8baab1377a14ec5f3494a31aeb6f0d5745badf5",
+      "bytes": 354378
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "35fc8f0346f0bd8bcd5d6db8a6f2495dad4bf8a2918579952179de8f72b3b362",
+      "bytes": 153094
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp": {
+      "sha256": "723c44eb07c7c418608178d5d35eefc64785fa2c141d489ee5142af2a14e9c9d",
+      "bytes": 55010
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "0250379202b8311aa7312301f4f00ea2e0894efbd68aaa1319cff5d3b947f8ba",
+      "bytes": 35672
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "d22932f80ab4cf8fc25eeb13b25b8892e540db9316b30dd11a040b39c56a8a71",
+      "bytes": 43692
+    },
+    "20261021-r32-mixed-kind-lifecycle/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-native-bulk-scratch-recovery/code.patch": {
+      "sha256": "d763ba4e05b7af546438626c0c01885ea53bfe90a3c68f0eae75bf49c2b8f567",
+      "bytes": 161591
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "d1829515f910be07f95972e933506933f076350157903b9645f64bfc1a068fc2",
+      "bytes": 69675
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "1543f02c94a39607fb6e4ced89ac6a4f8e5978d83dbd1e2b44b4f21c6c4ace5a",
+      "bytes": 234995
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-bulk-scratch-recovery/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "1af051f117d23a6f7475cc473ab96316ddda42162aefaf0f8e23601af35bd7bd",
+      "bytes": 160273
+    },
+    "20261021-r32-native-detach/code.patch": {
+      "sha256": "53899d068c0c9da94f8abbd64286136a7f3b6a06af99f8b66361bb6fe3ccd815",
+      "bytes": 437769
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "252be72b9c32f187d17bba308464a28f2973f275920adb6b232484a46633f52d",
+      "bytes": 41014
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "f7bab5edfedd9ea16e88edaa6ff59e2c735fb7bb58a7de2c4ae2d4c1f8721b41",
+      "bytes": 118397
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-native-detach/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "657e788653d1b8b66b5fbfa2457c64c1995b2fed83b8c9ea20e50e10f7ee945e",
+      "bytes": 149444
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "6d106f974f0ccbb49515f0fd71738a09b8a60220b419ff467488fcf39773526e",
+      "bytes": 73732
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "f5d1d5cd3ad875106d20fdee1b71d6ab2bfa2a64d9df2da6fe8ef7306cdc7afa",
+      "bytes": 248683
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "7b488216c78683666699f17fb8baab1377a14ec5f3494a31aeb6f0d5745badf5",
+      "bytes": 354378
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "86206733b95dcfc1bf2e7de4c40e6a328082191284650929616b8bb9394ca0cc",
+      "bytes": 153822
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-native-detach/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-detach/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyMultipleGroups.cpp": {
+      "sha256": "723c44eb07c7c418608178d5d35eefc64785fa2c141d489ee5142af2a14e9c9d",
+      "bytes": 55010
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp": {
+      "sha256": "3fff2314e436649189a12bece3ea70e2bc61b131e6dd1902afb665825f3ac72c",
+      "bytes": 49433
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "0250379202b8311aa7312301f4f00ea2e0894efbd68aaa1319cff5d3b947f8ba",
+      "bytes": 35672
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "dbaf29d997b1a0498ece2fa0d8a654c2d17ba7615b2f965e4fa13e25124ad032",
+      "bytes": 50663
+    },
+    "20261021-r32-native-detach/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-native-property-catalog/code.patch": {
+      "sha256": "526a222eade4aafa1dc9df636b707b0d190ad2405bdc9e016861fa0a9ffee14b",
+      "bytes": 220708
+    },
+    "20261021-r32-native-property-catalog/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-property-catalog/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "b1976b8aa62a478f707f870c01be422d045e06b582d2ada937d44dce728a4013",
+      "bytes": 23613
+    },
+    "20261021-r32-native-property-catalog/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-property-catalog/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "66f444403a8b9614cbfeb0fd820185af398e54a6f2dd888b3d518fc1eb7c07f3",
+      "bytes": 117464
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "412253952c680b65f842d109f16c9aaeafdd58fd06ec9cce4eafee83499313c1",
+      "bytes": 243246
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "2d7c8caad718e579207a64015d6fc29c3d1e9e7c09f8b1557945dc5d6a74038c",
+      "bytes": 350037
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-native-property-catalog/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-property-catalog/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-native-property-catalog/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-property-catalog/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "ddc3173044d99872edae233699c252758ae5d7152518327d635549423c01e97e",
+      "bytes": 33243
+    },
+    "20261021-r32-native-property-catalog/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-native-query-scratch-recovery/code.patch": {
+      "sha256": "955b7a8f0bee492293fc7b00ad0ca6dd3dcc83039668e593c50cf7865b6fd6d8",
+      "bytes": 152409
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "d1829515f910be07f95972e933506933f076350157903b9645f64bfc1a068fc2",
+      "bytes": 69675
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "3da7d2feaa1fe59d689e45344c93d6b0530b199487e12649c92f053f71258c24",
+      "bytes": 233116
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-query-scratch-recovery/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "5d7793eb397ad74afd23f842a158b0763a0831c1ce59c6f82da7dfc685b557e2",
+      "bytes": 157616
+    },
+    "20261021-r32-native-scratch-allocation/code.patch": {
+      "sha256": "9efe837a8c0f91e14f54012bf90facf26f1353285f025a1df49517853344ebec",
+      "bytes": 167222
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "d1829515f910be07f95972e933506933f076350157903b9645f64bfc1a068fc2",
+      "bytes": 69675
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-scratch-allocation/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "df719dd957652f69116ff95033c08365cdebbf4c6e3db03529826a7f1399f589",
+      "bytes": 162511
+    },
+    "20261021-r32-native-token-authority/code.patch": {
+      "sha256": "fe2c217931e5ccc301902491167636e8879c55ef517c134003ce4cb050b8f873",
+      "bytes": 227322
+    },
+    "20261021-r32-native-token-authority/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-native-token-authority/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-native-token-authority/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-native-token-authority/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "5965e745bd4c2329b37ef03caafc73c18ae67d3df175b2b763d6e53e82e7141c",
+      "bytes": 117639
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "5e1b6cda2f94564abc636ee0f30ef9ca092d2008b2cd97eea2c3860f992295a4",
+      "bytes": 244653
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "980e99e64b9c89e6acf8a87be8b08e6b3553f0e1a52ff2a9e32604ce116913b7",
+      "bytes": 350395
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "04d75597f566586b45594877f4533b639a1a999713ccb5ce4b67fae7497f8b97",
+      "bytes": 146528
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-native-token-authority/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-native-token-authority/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-native-token-authority/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-native-token-authority/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-native-token-authority/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-pending-owner-columns/code.patch": {
+      "sha256": "747a7f76c0147c59ee5204d626f5a0e8e08f54d3f6ca28591f4c2c1223a42119",
+      "bytes": 243956
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "fdc26113288af7f7eec9f0f5af8b05da8686599c2c4ca0f4bf834c1e148bea02",
+      "bytes": 26493
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "5965e745bd4c2329b37ef03caafc73c18ae67d3df175b2b763d6e53e82e7141c",
+      "bytes": 117639
+    },
+    "20261021-r32-pending-owner-columns/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "5e1b6cda2f94564abc636ee0f30ef9ca092d2008b2cd97eea2c3860f992295a4",
+      "bytes": 244653
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "980e99e64b9c89e6acf8a87be8b08e6b3553f0e1a52ff2a9e32604ce116913b7",
+      "bytes": 350395
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "04d75597f566586b45594877f4533b639a1a999713ccb5ce4b67fae7497f8b97",
+      "bytes": 146528
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-pending-owner-columns/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-pending-owner-columns/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-pending-owner-columns/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-pending-owner-columns/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "d7202902e350f5a26853287c12b5a270266ade8169ea55c41690bfb6e2e19ca4",
+      "bytes": 6875
+    },
+    "20261021-r32-pending-owner-columns/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-pending-owner-columns/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-pending-owner-groups/code.patch": {
+      "sha256": "68a68538d354514a1251633fb37ffb22572b2a2f66b4b4932cd4248e26603955",
+      "bytes": 257819
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "3096ae753e2217fdb241c696f97aa2098aff0794adf71d7620d27264c4962639",
+      "bytes": 30223
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "5965e745bd4c2329b37ef03caafc73c18ae67d3df175b2b763d6e53e82e7141c",
+      "bytes": 117639
+    },
+    "20261021-r32-pending-owner-groups/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "5e1b6cda2f94564abc636ee0f30ef9ca092d2008b2cd97eea2c3860f992295a4",
+      "bytes": 244653
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "980e99e64b9c89e6acf8a87be8b08e6b3553f0e1a52ff2a9e32604ce116913b7",
+      "bytes": 350395
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "04d75597f566586b45594877f4533b639a1a999713ccb5ce4b67fae7497f8b97",
+      "bytes": 146528
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-pending-owner-groups/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-pending-owner-groups/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-pending-owner-groups/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-pending-owner-groups/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-pending-owner-groups/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-pending-owner-groups/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-propertyless-owner-publication/code.patch": {
+      "sha256": "4280269f5a8808a35bfa8c46119d1cb8b27eb975b6f7f675ec94ed831cd92e38",
+      "bytes": 280751
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+      "bytes": 23689
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp": {
+      "sha256": "1ae5a60a3966b436ab6f76c0bd98d8cc340e96a901e53ca579783ead1f2801b1",
+      "bytes": 11056
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": {
+      "sha256": "3096ae753e2217fdb241c696f97aa2098aff0794adf71d7620d27264c4962639",
+      "bytes": 30223
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "ee1154f35b596779ae259de3ffceeb0912410535b00790017418da2d696c6be1",
+      "bytes": 117784
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp": {
+      "sha256": "85568da1b18bb58ec288f06d3217be934643bd58840eeaf60d304cc4844ab053",
+      "bytes": 22149
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": {
+      "sha256": "108d947f27adbcff608905c77032c8705ab48c80bfd24bf2d1950710ec8b5e1b",
+      "bytes": 16625
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": {
+      "sha256": "1b1760c66845f1608d2adfa4648ce07d9dcd89bdb94789433aa2f9d9e3b57ac7",
+      "bytes": 22659
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+      "bytes": 72532
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "2346ee8da844a957d4ac33136fd6273ac753c6ff75c07dec6c35297abd76cd31",
+      "bytes": 245434
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/index/NativeBulkRun.cpp": {
+      "sha256": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+      "bytes": 60934
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+      "bytes": 236128
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "108c30657893e4cdc6c03c0ea1d61cf38bf1452d5be3ff207069fdef23007924",
+      "bytes": 353183
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "ef65ac64e335fa9c153d23c3ac83fb8f32664a425eb0d765a3f431a992e273cf",
+      "bytes": 147639
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": {
+      "sha256": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+      "bytes": 7553
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/property/PropertyCollectionRootStore.cpp": {
+      "sha256": "07ec3ae04f662ce0ffe7ce69a83adea2d3bd936f5b38d569c3d3b5eafd82151b",
+      "bytes": 141986
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp": {
+      "sha256": "016dafcf65f14909f938a8093cb8356c7c014e92cee76c3198ea6f317694a569",
+      "bytes": 14554
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": {
+      "sha256": "d724cdb829c29bc40b5b4882eabe4e937681731aa17e2aeab629a8f24c16a5ed",
+      "bytes": 11455
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259",
+      "bytes": 35100
+    },
+    "20261021-r32-propertyless-owner-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-public-native-deletion/code.patch": {
+      "sha256": "1f2b18490a6887d229ce0b1200b9b8f34838c8a524f92bd591dc89ed0376763c",
+      "bytes": 141346
+    },
+    "20261021-r32-public-native-deletion/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-public-native-deletion/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-public-native-deletion/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-public-native-deletion/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "da573a76e26719b0eddd127f9b2c3d04d77fcb88007380389347cc12778a1a46",
+      "bytes": 65890
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "f305df49d6797efa662508c8847610655842dad1fe1198cd6a3058d7d748f329",
+      "bytes": 232821
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-public-native-deletion/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-public-native-deletion/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-public-native-deletion/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "f3b2818abb33a6ee9e27f9fb91f2ef2595b86550a8d8a2049941879d47070dec",
+      "bytes": 152495
+    },
+    "20261021-r32-public-native-patches/code.patch": {
+      "sha256": "3a47213e4a9cb2befc73de402f8076f1ff19fc3c1eb53ba9b02b1df588d90211",
+      "bytes": 148674
+    },
+    "20261021-r32-public-native-patches/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-public-native-patches/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-public-native-patches/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-public-native-patches/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "d1829515f910be07f95972e933506933f076350157903b9645f64bfc1a068fc2",
+      "bytes": 69675
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "f305df49d6797efa662508c8847610655842dad1fe1198cd6a3058d7d748f329",
+      "bytes": 232821
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-public-native-patches/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-public-native-patches/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-public-native-patches/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "7a307957077253f2052d3093db091253913c5dc5884d88a25f9ce83ded118e94",
+      "bytes": 155948
+    },
+    "20261021-r32-public-native-properties/code.patch": {
+      "sha256": "524e12303df04252268f94e98dc7dd138195995c36273fa587fa8195e5066ba1",
+      "bytes": 135306
+    },
+    "20261021-r32-public-native-properties/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-public-native-properties/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "17fc4fd0291c5f99393290f2eff6a8c362409db93954f7e5c938a2ec8137026f",
+      "bytes": 23420
+    },
+    "20261021-r32-public-native-properties/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-public-native-properties/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "49fe9ac4aabae3b0a931acab218d135831477e62f529f2845c9c1db83f7fb5f2",
+      "bytes": 63577
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "b415061ddfedf5287b01fbd652363dcaf3a634380b6e2f7ba4d280326de25ec4",
+      "bytes": 240199
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "f305df49d6797efa662508c8847610655842dad1fe1198cd6a3058d7d748f329",
+      "bytes": 232821
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-public-native-properties/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-public-native-properties/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-public-native-properties/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "e57580a8949a392a91f34fcdcebaf7b4ec9adf7e0d546848416ee927ad157fba",
+      "bytes": 148998
+    },
+    "20261021-r32-row-pool-isolation/snapshot/src/storage/relocatable/allocation/SlottedPagePool.cpp": {
+      "sha256": "e5c1ccc90a3f8dd71cd27378790c2bf19418ff6996c7226bd0824043f7dc91ec",
+      "bytes": 32965
+    },
+    "20261021-r32-row-pool-isolation/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "9a5df1c117f607fd11ad17102ac451d723793bd985ea8355959eba97b5a7bc5b",
+      "bytes": 53514
+    },
+    "20261021-r32-shared-batch-preparation/code.patch": {
+      "sha256": "152baa423b4de36c7ce61eac67d3f8a4e998f64bd34997183e35cd4af4236825",
+      "bytes": 37972
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": {
+      "sha256": "c8caeec490d165ed1027b69eb7f785ccff0733ab27441befffe5438e95a91393",
+      "bytes": 159288
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": {
+      "sha256": "3b11a2bf5e423087acb1253375bbfed659499eb114c7a5056d9a10a308bc3aa0",
+      "bytes": 139564
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "17d73bd68b04f1dbd9c2f0636acc868abcd34b105ec09277ca97e1f54e3dee05",
+      "bytes": 3302
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "64d900451a024b9863d29bc38324d6bc450ddbde9eb62848f1b8bb5c96beaa4b",
+      "bytes": 114826
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "1cb42d15ecbadcbd143d8a8558f22b339a56c826acefab11d7d18839cd234ede",
+      "bytes": 143756
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-shared-batch-preparation/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "c053991a5e0b2831ebef454871540ed865cd1dff46c46dd3a631cd044c51300f",
+      "bytes": 112904
+    },
+    "20261021-r32-shared-public-fixture/snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": {
+      "sha256": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+      "bytes": 40382
+    },
+    "20261021-r32-shared-public-fixture/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": {
+      "sha256": "d42fd53eda11e3d2fd8c3a132b304b0a6da4f931e71fea5ec1b19478ece466da",
+      "bytes": 25127
+    },
+    "20261021-r32-shared-public-fixture/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+      "bytes": 97369
+    },
+    "20261021-r32-topology-preservation/code.patch": {
+      "sha256": "1bdcbe495001bdff76bba3b96db978f7509e545a5773d96f8d45b078077aa815",
+      "bytes": 122437
+    },
+    "20261021-r32-topology-preservation/snapshot/include/graph/storage/relocatable/entity/EntityPageStore.hpp": {
+      "sha256": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+      "bytes": 26540
+    },
+    "20261021-r32-topology-preservation/snapshot/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": {
+      "sha256": "ea4a096e670130633cfe3e3432806e43bbfefb3bba3b93b2609e06351089059b",
+      "bytes": 23295
+    },
+    "20261021-r32-topology-preservation/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+      "bytes": 3416
+    },
+    "20261021-r32-topology-preservation/snapshot/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": {
+      "sha256": "70c2c3f0b38bef917e3c8174fc8476fe73e447d50363c1fdf3b03c00d1dcd9a6",
+      "bytes": 117366
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp": {
+      "sha256": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+      "bytes": 442305
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/entity/EntityPageStore.cpp": {
+      "sha256": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+      "bytes": 149165
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": {
+      "sha256": "d87e2af6df6d1be32a238eb687da6c25d0b94f45b94a1a01963b62f94d01a675",
+      "bytes": 58365
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": {
+      "sha256": "e1ea830ed5c097aff11ea962faa9a3ea5094984f8b254f91b95e7499f88ed3b3",
+      "bytes": 239901
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": {
+      "sha256": "f305df49d6797efa662508c8847610655842dad1fe1198cd6a3058d7d748f329",
+      "bytes": 232821
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": {
+      "sha256": "0772dad17efb3e08ff9e666c59ea076f5d47c6f14dea585b2e67b41cc4759e40",
+      "bytes": 349411
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "c50cfa23010d0811adcbb33a069830702eef66cfb326c67d92eb05b63cb8ca15",
+      "bytes": 145051
+    },
+    "20261021-r32-topology-preservation/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-topology-preservation/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-topology-preservation/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "ec7405c84b3911858b5745f7ec2e27acb870b7a33e1e8235ceb85c6e42190bc9",
+      "bytes": 143009
+    },
+    "20261021-r32-vector-independent-publication/code.patch": {
+      "sha256": "17412548f8a978ecfa639f6ed14144b8ce44a74e77e758402af66e0238822946",
+      "bytes": 26515
+    },
+    "20261021-r32-vector-independent-publication/snapshot/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": {
+      "sha256": "133715d4adab12a9fb901b9d5debb9768d94aca31ecc62d0a125434d3bb1d940",
+      "bytes": 156860
+    },
+    "20261021-r32-vector-independent-publication/snapshot/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": {
+      "sha256": "79dff2335773f7a4a93ac3736f9a4280ce9e54dbfbe67c4de3ecd4bb5f6ad67f",
+      "bytes": 137451
+    },
+    "20261021-r32-vector-independent-publication/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "17d73bd68b04f1dbd9c2f0636acc868abcd34b105ec09277ca97e1f54e3dee05",
+      "bytes": 3302
+    },
+    "20261021-r32-vector-independent-publication/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-vector-independent-publication/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "5ebde36e9acdf20b17515f98a962d683643bd62ebf0cbf04f351ed902173ce47",
+      "bytes": 141499
+    },
+    "20261021-r32-vector-independent-publication/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-vector-independent-publication/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-vector-independent-publication/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "f6b0e2162263e6204df856ec2778ce9a6375ff1e8400125bb48110c6f693c71a",
+      "bytes": 110439
+    },
+    "20261021-r32-vector-owner-delete-proof/code.patch": {
+      "sha256": "241f76318de3a5afa0abb686cd43ef36449326220d5e09e3cecaf72036626af6",
+      "bytes": 30997
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": {
+      "sha256": "f8e265305cb94aa9bb7c2ed92fa803fcb4af9f9678fbe1f08ed33b336a207d48",
+      "bytes": 158103
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": {
+      "sha256": "b0f27abe3657a9f181f95a8bd859498ade226a3d09cd15f5ca10d123ad6d1052",
+      "bytes": 138533
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": {
+      "sha256": "17d73bd68b04f1dbd9c2f0636acc868abcd34b105ec09277ca97e1f54e3dee05",
+      "bytes": 3302
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": {
+      "sha256": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+      "bytes": 8519
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": {
+      "sha256": "ac8c61f0051a2c92bd5f9a1ab3fc8c0085c74f3762926dbaecb55a573fa10827",
+      "bytes": 142283
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/src/storage/relocatable/schema/SystemCatalog.cpp": {
+      "sha256": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+      "bytes": 92121
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": {
+      "sha256": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+      "bytes": 13565
+    },
+    "20261021-r32-vector-owner-delete-proof/snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": {
+      "sha256": "c053991a5e0b2831ebef454871540ed865cd1dff46c46dd3a631cd044c51300f",
+      "bytes": 112904
+    }
+  }
+}

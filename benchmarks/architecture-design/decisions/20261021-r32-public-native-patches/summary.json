@@ -1,0 +1,15 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 5,
+  "passed": {
+    "default": 111,
+    "candidate": 192
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "implemented": "Public native selected property sets/removals with atomic scalar/constraint/Vector lifecycle and unknown-removal noop.",
+  "remaining": "New token allocation, native owner creation/liveness, mixed/detach/cross-group graph batches, orphan-scratch startup recovery, production space/resource gates and R5/R7."
+}

@@ -1,0 +1,793 @@
+{
+  "tests": 76,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T14:07:35Z",
+  "time": "62.728s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 41,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:07:35Z",
+      "time": "39.075s",
+      "testsuite": [
+        {
+          "name": "ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 5,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:35Z",
+          "time": "0.286s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 21,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:35Z",
+          "time": "0.216s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:35Z",
+          "time": "0.151s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:35Z",
+          "time": "0.205s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 54,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.206s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.154s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReadControlDoesNotGrantAuthorityToAWritableBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 92,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.154s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 99,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.25s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.063s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:36Z",
+          "time": "0.156s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 141,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:37Z",
+          "time": "0.288s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 184,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:37Z",
+          "time": "0.186s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 205,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:37Z",
+          "time": "0.283s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "DefaultProfileRemainsRow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 218,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:37Z",
+          "time": "2.256s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 236,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:40Z",
+          "time": "1.478s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 246,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:41Z",
+          "time": "1.515s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:43Z",
+          "time": "0.56s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 278,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:43Z",
+          "time": "0.872s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 286,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:44Z",
+          "time": "0.218s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:44Z",
+          "time": "0.187s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 309,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:44Z",
+          "time": "0.187s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 313,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:45Z",
+          "time": "0.227s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:45Z",
+          "time": "0.7s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 343,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:45Z",
+          "time": "1.706s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 348,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:47Z",
+          "time": "3.065s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:50Z",
+          "time": "2.339s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 364,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:53Z",
+          "time": "0.228s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 369,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:53Z",
+          "time": "0.226s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 374,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:53Z",
+          "time": "0.344s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 389,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:53Z",
+          "time": "1.719s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 394,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:55Z",
+          "time": "2.43s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 400,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:58Z",
+          "time": "1.716s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:07:59Z",
+          "time": "2.159s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:01Z",
+          "time": "1.905s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 429,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:03Z",
+          "time": "3.119s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:06Z",
+          "time": "1.764s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NonNullConstraintAllowsValidFieldPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:08Z",
+          "time": "0.877s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:09Z",
+          "time": "0.831s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "UnknownCatalogControlNamespaceCannotBypassFieldCoordination",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 458,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:10Z",
+          "time": "0.182s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 462,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:10Z",
+          "time": "3.645s",
+          "classname": "HybridPropertyQueryParityTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyIndexedLifecycleTest",
+      "tests": 35,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:08:14Z",
+      "time": "23.653s",
+      "testsuite": [
+        {
+          "name": "CompositeAndScalarKeysFollowFieldRemovalAndReinsertion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 604,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:14Z",
+          "time": "0.892s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 625,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:15Z",
+          "time": "0.797s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "ScalarIndexTracksCanonicalNumericTypeChange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 638,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:15Z",
+          "time": "0.272s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 652,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:16Z",
+          "time": "0.305s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 673,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:16Z",
+          "time": "0.253s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 689,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:16Z",
+          "time": "0.781s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 701,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:17Z",
+          "time": "0.214s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "ExistingNewGhostKeyRefusesFieldPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 704,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:17Z",
+          "time": "0.21s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 707,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:17Z",
+          "time": "0.222s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 732,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:18Z",
+          "time": "0.803s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 763,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:19Z",
+          "time": "0.714s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 784,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:19Z",
+          "time": "1.638s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 803,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:21Z",
+          "time": "0.25s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 821,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:21Z",
+          "time": "0.336s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "RelationshipTypeConstraintChecksFinalNativeEdgeValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 843,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:21Z",
+          "time": "0.263s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 865,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:22Z",
+          "time": "1.228s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 886,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:23Z",
+          "time": "0.332s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 918,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:23Z",
+          "time": "1.089s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 943,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:24Z",
+          "time": "0.341s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 957,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:25Z",
+          "time": "0.224s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 961,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:25Z",
+          "time": "0.229s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 966,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:25Z",
+          "time": "0.271s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 979,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:25Z",
+          "time": "0.244s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 991,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:26Z",
+          "time": "0.274s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1014,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:26Z",
+          "time": "1.237s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1037,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:27Z",
+          "time": "0.215s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1046,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:27Z",
+          "time": "1.065s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1068,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:28Z",
+          "time": "0.29s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1086,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:29Z",
+          "time": "0.218s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1090,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:29Z",
+          "time": "0.219s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1094,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:29Z",
+          "time": "0.308s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1115,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:30Z",
+          "time": "0.334s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:30Z",
+          "time": "2.268s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1144,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:32Z",
+          "time": "3.814s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        },
+        {
+          "name": "CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 1187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:08:36Z",
+          "time": "1.486s",
+          "classname": "HybridPropertyIndexedLifecycleTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "include/graph/storage/relocatable/entity/EntityPageStore.hpp": "85c2649f66602e9a37fa382909cb040a4ca5c13d978cff7be3f72982630ab45d",
+  "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "e498e7f82e057d77b03a1cc98db4aae93814ad61440e333c89df3e4225174268",
+  "include/graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp": "341d83037151a90d49187d524ee0471428e59ec25ddc342e0439057341833837",
+  "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "5965e745bd4c2329b37ef03caafc73c18ae67d3df175b2b763d6e53e82e7141c",
+  "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "506dc93ccded3405d160ed51246244a9c2fbe925669441c04327646d330521d7",
+  "src/storage/relocatable/entity/EntityPageStore.cpp": "1db80fe345fcacc9ace34676cb27f5122ed73f05ccdd6a1c2edc6d4ab77dc6e3",
+  "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "925a159e2ac22e195c5b972ed6c392dbbfab83b0a65bce709b825afdac658baf",
+  "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "5e1b6cda2f94564abc636ee0f30ef9ca092d2008b2cd97eea2c3860f992295a4",
+  "src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp": "b927956a09e7615837004db65bf2797d0c2433da17fcba8f1836f1765b7616dd",
+  "src/storage/relocatable/index/NativeBulkRun.cpp": "7cd5b561398006d5aabb60c14d6770764f4eef6e79edbaeb5ead2d6554a391f8",
+  "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "790b5a78de2d6c3926d246c71e20dc2236886b46969df84415d25619b8a0ff93",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "980e99e64b9c89e6acf8a87be8b08e6b3553f0e1a52ff2a9e32604ce116913b7",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "04d75597f566586b45594877f4533b639a1a999713ccb5ce4b67fae7497f8b97",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": "5ab0d823afb7cef12e19a974ac0e735d3cfdf305df34d914b7382a17ad3ac888",
+  "src/storage/relocatable/schema/SystemCatalog.cpp": "341df03c158da312efc906f90efc601801fc0fa13fc7c4257bf02952609adb8b",
+  "tests/src/storage/relocatable/entity/test_NativeVectorMutationPlanner.cpp": "d75eeab938058ad8945ed16a96b1bfd88197208e330a6b610ba30815b5842544",
+  "tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+  "tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c",
+  "tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": "1fc40037b003d08d3a00535b6821a125429478e22981144b47f203f7815df259"
+}

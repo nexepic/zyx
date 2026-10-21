@@ -1,0 +1,227 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp:3:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp:3:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1:
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp:230:83: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+  230 |             eraseOwner ? std::span(deleted) : std::span<const EntityPropertyKey>{}};
+      |                                                                                   ^
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp:281:87: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  281 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true};
+      |                                                                                       ^
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp:486:126: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+  486 |         NativeGraphHybridPropertyConversion conversion{kind, 1, memory, nullptr, PhysicalSlotId(40), PhysicalSlotId(180), 903};
+      |                                                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:580:96: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+  580 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, cancellation, true, {}};
+      |                                                                                                ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:592:97: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+  592 |             {}, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, cancellation, true, owners};
+      |                                                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:742:91: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+  742 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true, {}};
+      |                                                                                           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2655:7: note: in instantiation of function template specialization 'HybridPropertyIndexedLifecycleTest_MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys_Test::TestBody()::(anonymous class)::operator()<graph::storage::RelocatableMetadataStore, graph::storage::PropertyCollectionRootStore, graph::storage::BTreePageStore, graph::storage::SystemCatalog, graph::storage::MetadataSnapshotPin, const std::shared_ptr<graph::storage::StorageIO>>' requested here
+ 2655 |       std::declval<_Fn>()(std::declval<_Args>()...)
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2666:29: note: while substituting deduced template arguments into function template '_S_test' [with _Fn = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15) &, _Args = (no value)]
+ 2666 |       using type = decltype(_S_test<_Functor, _ArgTypes...>(0));
+      |                             ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2672:14: note: in instantiation of template class 'std::__result_of_impl<false, false, (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 2672 |     : public __result_of_impl<
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:3035:29: note: in instantiation of template class 'std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 3035 |                                __void_t<typename _Result::type>>
+      |                                                  ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: during template argument deduction for class template partial specialization '__is_invocable_impl<_Result, _Ret, true, __void_t<typename _Result::type>>' [with _Result = std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, _Ret = void]
+  349 |         : __is_invocable_impl<_Res2, _Res>::type
+      |           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: in instantiation of template class 'std::__is_invocable_impl<std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, void>' requested here
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:353:34: note: in instantiation of template class 'std::function<void (graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &)>::_Callable<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15)>' requested here
+  353 |         using _Requires = __enable_if_t<_Cond::value, _Tp>;
+      |                                         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:434:33: note: in instantiation of template type alias '_Requires' requested here
+  434 |                typename _Constraints = _Requires<_Callable<_Functor>>>
+      |                                        ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:435:2: note: in instantiation of default argument for 'function<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15)>' required here
+  435 |         function(_Functor&& __f)
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~
+  436 |         noexcept(_Handler<_Functor>::template _S_nothrow_init<_Functor>())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |         : _Function_base()
+      |         ~~~~~~~~~~~~~~~~~~
+  438 |         {
+      |         ~
+  439 |           static_assert(is_copy_constructible<__decay_t<_Functor>>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |               "std::function target must be copy-constructible");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  441 |           static_assert(is_constructible<__decay_t<_Functor>, _Functor>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  442 |               "std::function target must be constructible from the "
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  443 |               "constructor argument");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~
+  444 | 
+  445 |           using _My_handler = _Handler<_Functor>;
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  446 | 
+  447 |           if (_My_handler::_M_not_empty_function(__f))
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |             {
+      |             ~
+  449 |               _My_handler::_M_init_functor(_M_functor,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                                            std::forward<_Functor>(__f));
+      |                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15: note: while substituting deduced template arguments into function template 'function' [with _Functor = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:734:15), _Constraints = (no value)]
+  734 |     withStore([&](auto &metadata, auto &roots, auto &trees, auto &catalog, const auto &old, auto &) {
+      |               ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:901:95: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+  901 |                 cells, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true, {}};
+      |                                                                                               ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2655:7: note: in instantiation of function template specialization 'HybridPropertyIndexedLifecycleTest_CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate_Test::TestBody()::(anonymous class)::operator()<graph::storage::RelocatableMetadataStore, graph::storage::PropertyCollectionRootStore, graph::storage::BTreePageStore, graph::storage::SystemCatalog, graph::storage::MetadataSnapshotPin, const std::shared_ptr<graph::storage::StorageIO>>' requested here
+ 2655 |       std::declval<_Fn>()(std::declval<_Args>()...)
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2666:29: note: while substituting deduced template arguments into function template '_S_test' [with _Fn = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15) &, _Args = (no value)]
+ 2666 |       using type = decltype(_S_test<_Functor, _ArgTypes...>(0));
+      |                             ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2672:14: note: in instantiation of template class 'std::__result_of_impl<false, false, (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 2672 |     : public __result_of_impl<
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:3035:29: note: in instantiation of template class 'std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 3035 |                                __void_t<typename _Result::type>>
+      |                                                  ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: during template argument deduction for class template partial specialization '__is_invocable_impl<_Result, _Ret, true, __void_t<typename _Result::type>>' [with _Result = std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, _Ret = void]
+  349 |         : __is_invocable_impl<_Res2, _Res>::type
+      |           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: in instantiation of template class 'std::__is_invocable_impl<std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, void>' requested here
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:353:34: note: in instantiation of template class 'std::function<void (graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &)>::_Callable<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15)>' requested here
+  353 |         using _Requires = __enable_if_t<_Cond::value, _Tp>;
+      |                                         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:434:33: note: in instantiation of template type alias '_Requires' requested here
+  434 |                typename _Constraints = _Requires<_Callable<_Functor>>>
+      |                                        ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:435:2: note: in instantiation of default argument for 'function<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15)>' required here
+  435 |         function(_Functor&& __f)
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~
+  436 |         noexcept(_Handler<_Functor>::template _S_nothrow_init<_Functor>())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |         : _Function_base()
+      |         ~~~~~~~~~~~~~~~~~~
+  438 |         {
+      |         ~
+  439 |           static_assert(is_copy_constructible<__decay_t<_Functor>>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |               "std::function target must be copy-constructible");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  441 |           static_assert(is_constructible<__decay_t<_Functor>, _Functor>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  442 |               "std::function target must be constructible from the "
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  443 |               "constructor argument");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~
+  444 | 
+  445 |           using _My_handler = _Handler<_Functor>;
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  446 | 
+  447 |           if (_My_handler::_M_not_empty_function(__f))
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |             {
+      |             ~
+  449 |               _My_handler::_M_init_functor(_M_functor,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                                            std::forward<_Functor>(__f));
+      |                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15: note: while substituting deduced template arguments into function template 'function' [with _Functor = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:888:15), _Constraints = (no value)]
+  888 |     withStore([&](auto &metadata, auto &roots, auto &trees, auto &catalog, const auto &old, auto &io) {
+      |               ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1123:92: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+ 1123 |             {}, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true, owners};
+      |                                                                                            ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2655:7: note: in instantiation of function template specialization 'HybridPropertyIndexedLifecycleTest_CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots_Test::TestBody()::(anonymous class)::operator()<graph::storage::RelocatableMetadataStore, graph::storage::PropertyCollectionRootStore, graph::storage::BTreePageStore, graph::storage::SystemCatalog, graph::storage::MetadataSnapshotPin, const std::shared_ptr<graph::storage::StorageIO>>' requested here
+ 2655 |       std::declval<_Fn>()(std::declval<_Args>()...)
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2666:29: note: while substituting deduced template arguments into function template '_S_test' [with _Fn = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15) &, _Args = (no value)]
+ 2666 |       using type = decltype(_S_test<_Functor, _ArgTypes...>(0));
+      |                             ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2672:14: note: in instantiation of template class 'std::__result_of_impl<false, false, (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 2672 |     : public __result_of_impl<
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:3035:29: note: in instantiation of template class 'std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>' requested here
+ 3035 |                                __void_t<typename _Result::type>>
+      |                                                  ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: during template argument deduction for class template partial specialization '__is_invocable_impl<_Result, _Ret, true, __void_t<typename _Result::type>>' [with _Result = std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, _Ret = void]
+  349 |         : __is_invocable_impl<_Res2, _Res>::type
+      |           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: in instantiation of template class 'std::__is_invocable_impl<std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15) &, graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &>, void>' requested here
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:353:34: note: in instantiation of template class 'std::function<void (graph::storage::RelocatableMetadataStore &, graph::storage::PropertyCollectionRootStore &, graph::storage::BTreePageStore &, graph::storage::SystemCatalog &, const graph::storage::MetadataSnapshotPin &, const std::shared_ptr<graph::storage::StorageIO> &)>::_Callable<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15)>' requested here
+  353 |         using _Requires = __enable_if_t<_Cond::value, _Tp>;
+      |                                         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:434:33: note: in instantiation of template type alias '_Requires' requested here
+  434 |                typename _Constraints = _Requires<_Callable<_Functor>>>
+      |                                        ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:435:2: note: in instantiation of default argument for 'function<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15)>' required here
+  435 |         function(_Functor&& __f)
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~
+  436 |         noexcept(_Handler<_Functor>::template _S_nothrow_init<_Functor>())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |         : _Function_base()
+      |         ~~~~~~~~~~~~~~~~~~
+  438 |         {
+      |         ~
+  439 |           static_assert(is_copy_constructible<__decay_t<_Functor>>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |               "std::function target must be copy-constructible");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  441 |           static_assert(is_constructible<__decay_t<_Functor>, _Functor>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  442 |               "std::function target must be constructible from the "
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  443 |               "constructor argument");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~
+  444 | 
+  445 |           using _My_handler = _Handler<_Functor>;
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  446 | 
+  447 |           if (_My_handler::_M_not_empty_function(__f))
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |             {
+      |             ~
+  449 |               _My_handler::_M_init_functor(_M_functor,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                                            std::forward<_Functor>(__f));
+      |                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15: note: while substituting deduced template arguments into function template 'function' [with _Functor = (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1117:15), _Constraints = (no value)]
+ 1117 |     withStore([&](auto &metadata, auto &, auto &, auto &, const auto &, auto &io) {
+      |               ^
+14 warnings generated.

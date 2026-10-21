@@ -308,7 +308,8 @@ namespace graph::storage {
 				// escape into a public snapshot or logical transaction API.
 				const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer = {},
 				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
-				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {});
+                const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
+                const NativeHybridTopologyPublication *hybridTopology = nullptr);
 		[[nodiscard]] EntityPageMutationResult eraseNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 														 LogSequenceNumber checkpointLsn,
 														 const MetadataPublishOptions &options = {});
@@ -436,7 +437,8 @@ namespace graph::storage {
 				const NativeGraphPrivateSegmentImagePreparer *privateSegmentImagePreparer = nullptr,
 				const NativeGraphPrivateSegmentPreparer *privateSegmentPreparer = nullptr,
 				const NativeGraphDeferredIndexPlanner *deferredIndexPlanner = nullptr,
-				const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner = nullptr);
+                const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner = nullptr,
+                const NativeHybridTopologyPublication *hybridTopology = nullptr);
 
 		static void validateNewPoolRequest(const EntityPageNewPoolRequest &request, uint64_t entityId,
 										   EntityPageRecordKind kind, LogSequenceNumber checkpointLsn);

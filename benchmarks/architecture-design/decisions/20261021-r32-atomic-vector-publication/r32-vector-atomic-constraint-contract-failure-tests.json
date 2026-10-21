@@ -1,0 +1,138 @@
+{
+  "tests": 11,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T05:41:11Z",
+  "time": "18.628s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 11,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T05:41:11Z",
+      "time": "18.628s",
+      "testsuite": [
+        {
+          "name": "NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 791,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:11Z",
+          "time": "1.797s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 796,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:13Z",
+          "time": "3.186s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 806,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:16Z",
+          "time": "2.435s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 812,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:19Z",
+          "time": "0.263s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 817,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:19Z",
+          "time": "0.259s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 822,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:19Z",
+          "time": "0.397s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 837,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:20Z",
+          "time": "1.797s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 842,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:22Z",
+          "time": "2.495s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 848,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:24Z",
+          "time": "1.804s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 854,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:26Z",
+          "time": "2.279s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 864,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T05:41:28Z",
+          "time": "1.91s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp:372\nExpected: (void)ready.commit() throws an exception of type FormatException.\n  Actual: it throws std::runtime_error with description \"Constraint violation: 'unique_embedding' has a duplicate key\".\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

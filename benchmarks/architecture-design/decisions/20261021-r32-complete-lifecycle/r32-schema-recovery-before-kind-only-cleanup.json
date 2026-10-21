@@ -1,0 +1,1214 @@
+{
+  "tests": 115,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T13:55:29Z",
+  "time": "6.436s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendSchemaTest",
+      "tests": 85,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T13:55:29Z",
+      "time": "6.223s",
+      "testsuite": [
+        {
+          "name": "BuildsHistoricalScalarEntriesPublishesDefinitionsAndDropsThem",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.049s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "DerivesStableNamesForUnnamedScalarAndVectorIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 61,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.028s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsInvalidVectorMetricsBeforePublishingSchema",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 88,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.014s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsStaleSemanticManifestBeforeVectorTraining",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.031s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "MaintainsUniqueConstraintSupportTreeWithoutPublishingPublicIndexMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.052s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PersistsEveryLogicalConstraintKindAndPropertyType",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.204s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PublishesAndReopensDurableConfigurationWithoutMixingRuntimeStatistics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.034s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PublicGraphWritesReportPublicationFenceCountsAcrossIdLeaseReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 311,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.015s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "NormalReopenDoesNotScanTheLargeValueDataRegion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.373s",
+          "classname": "RelocatableStorageBackendSchemaTest",
+          "raw_payload_bytes": "2097152",
+          "reopen_read_bytes": "1076624",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp:370\nExpected: (openStatistics.read_bytes) < (PAYLOAD_BYTES \/ 2U), actual: 1076624 vs 1048576\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ExecutesNativeDbmsConfigurationAndStatisticsProcedures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 378,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.02s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ConfigurationCandidateShortWriteRetainsTheCompleteOldValueAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 429,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.022s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarIndexDdlCandidateShortWriteLeavesNoDefinitionAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 467,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.035s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarIndexDdlCandidateDiskFullLeavesNoDefinitionAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.035s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UniqueConstraintDdlCandidateShortWriteLeavesNoDefinitionOrSupportTreeAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 546,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.041s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UniqueConstraintDdlCandidateDiskFullLeavesNoDefinitionOrSupportTreeAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 584,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:29Z",
+          "time": "0.044s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "VectorIndexDdlCandidateShortWriteLeavesNoDefinitionOrManifestAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 627,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.042s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "VectorIndexDdlCandidateDiskFullLeavesNoDefinitionOrManifestAndReopenCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 684,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.041s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ConfigurationFinalPublicationSyncFailureReportsUncertainDurabilityAndReopensTheCompleteNewValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 744,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.022s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 805,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.029s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "VectorIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 876,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.033s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UniqueConstraintDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 961,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.04s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "GraphMutationFinalPublicationSyncFailureReopensOneCompleteLargeValueScalarIndexAndVectorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 1034,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.03s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 1124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:30Z",
+          "time": "0.752s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "AppliesDurableVariableLengthDepthAsAnUnbypassableExecutionCeiling",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema.cpp",
+          "line": 1142,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.05s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "LargeValueReclamationFinalPublicationSyncFailureRequiresReopenAndCanResume",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Durability.cpp",
+          "line": 44,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.043s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarIndexDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Durability.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.035s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UniqueConstraintDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Durability.cpp",
+          "line": 161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.036s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "VectorIndexDropMaintenanceFinalPublicationSyncFailureRequiresReopenAndCanRetryPhysicalRetirement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Durability.cpp",
+          "line": 226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.081s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "VectorIndexDropMaintenanceSecondPhaseFinalSyncFailureRequiresReopenAndResumesFromTheManifestRetirement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Durability.cpp",
+          "line": 288,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.081s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ResolvesExactUniqueNodeLookupsThroughThePinnedSupportTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.054s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPersistedUniqueSupportTreeEntriesWithMismatchedEntityValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.039s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPersistedScalarIndexEntriesWithMismatchedEntityValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.027s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.025s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPersistedScalarRangeIndexEntriesWithMismatchedEntityValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.033s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPersistedCompositeRangeIndexEntriesWithMismatchedEntityValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 195,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.029s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsIndexCandidatePagesWithMismatchedOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.043s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsIndexCandidatePagesWithChecksumCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 276,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.023s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.033s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ReusesTheSnapshotReadSessionForExactIndexCandidates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 405,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.018s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ReusesTheSnapshotReadSessionForScalarRangeIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.019s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarRangeVerificationUsesOneGlobalPropertyBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 496,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.043s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarRangeCandidateStreamStopsBeforeReadingLaterBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 538,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.066s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamsEnforceNodeResultBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 592,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.03s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamsEnforceProducerByteBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 623,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.029s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RangeIndexCandidatesRetainOnlyVerifiedIndexedProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 650,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.017s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarRangeCandidateStreamConsumesMultipleBatchesInLogicalOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 681,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.061s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ExactCandidateStreamDescendsIndexRootOnceAcrossBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 721,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:31Z",
+          "time": "0.072s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ScalarRangeCandidateStreamPreservesOrderWithinValueBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 772,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.129s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamsRemainBoundToTheirSnapshotAcrossIndexUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 807,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.051s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamKeepsConcurrentWriterInvisibleToPinnedSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 943,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.053s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamsApplyLivenessWithoutBreakingAnOlderSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1004,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.06s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CandidateStreamsRejectAnIndexedPropertyAfterReplacementAndPreserveOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.042s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UniqueCandidateStreamEnforcesProducerByteBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1168,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.032s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ReusesCatalogDescriptorAcrossEntityPagesDuringInsertionPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.091s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "GroupsBulkNodeInsertionsByBoundedEntityPageTargets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1230,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.07s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ResolvesBulkNodeMutationsThroughOneSortedDirectoryBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1256,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:32Z",
+          "time": "0.501s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ResolvesBulkEdgeMutationsThroughOneSortedDirectoryBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1288,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.535s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CompositeRangeCandidatesRetainLogicalIndexFieldOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1322,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.019s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CompositeRangeCandidateStreamStopsAtFirstBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1353,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.074s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "CompositeRangeAppliesUpperBoundBeforeCandidateBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1408,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.02s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ReusesTheSnapshotReadSessionForCompositeRangeIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1435,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.02s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ResolvesScalarNodeRangesThroughPinnedIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1482,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.02s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PermitsAtomicUniqueKeySwapAndPublishesOnlyTheFinalSupportTreeState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1554,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.041s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "DetachDeleteErasesEdgeUniqueSupportEntryInTheSamePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1590,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.079s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "NamedRelationshipConstraintsExcludeUntypedRelationships",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1622,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.07s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PublishesScalarIndexBatchesOnlyAfterEveryHistoricalTreeBuilds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1660,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.034s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsFailedScalarIndexBatchWithoutPublishingAPartialDefinitionSet",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1706,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.016s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsScalarIndexesThatExceedThePublishedDefinitionCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:33Z",
+          "time": "0.012s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsInvalidOrExistingScalarIndexBatchesBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_IndexContracts.cpp",
+          "line": 1739,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.013s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "BuildsHistoricalVectorStateAndPublishesItsDefinitionAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 19,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.117s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "SearchesSnapshotPinnedLogicalVectorStateWithBoundedExactRefinement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.022s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ReturnsNoHitsBeforeAVectorIndexHasMatchingProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 111,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.013s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "UsesPublishedAdjacencyCandidatesWithExactRawRefinement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.059s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RanksPersistentAdjacencyCandidatesWithGenerationCheckedPq",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.121s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsDerivedVectorSearchBudgetCombinationsBeforeCandidateTraversal",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.065s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ValidatesNonFiniteAndZeroCosineQueriesAtTheStorageSearchBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 414,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.031s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsDeltaManifestCountThatDisagreesWithItsPersistedOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.072s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsPartialAndStaleVectorManifestIdentitiesAtTheSearchBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.122s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsStaleAndNonFiniteRawVectorRecordsBeforeScoring",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 648,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.047s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsMalformedAndNonBijectiveSemanticVectorMappings",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.084s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsMissingAdjacencyMappingBeforeCandidateExpansion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 752,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.064s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "RejectsCorruptPqInventoryMappingsAndCodesBeforeRefinement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 809,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.136s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "ExecutesTheExistingVectorProcedureOverTheLogicalSearchBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 903,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:34Z",
+          "time": "0.028s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "TrainsAndReusesAPersistentPqGenerationThroughTheLogicalProcedure",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 930,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.115s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        },
+        {
+          "name": "PersistsPqSubspaceSelectionForDivisibleAndPrimeDimensions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackendSchema_Vector.cpp",
+          "line": 1013,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.124s",
+          "classname": "RelocatableStorageBackendSchemaTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSharedPagePoolAllocatorFaultTest",
+      "tests": 16,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T13:55:35Z",
+      "time": "0.186s",
+      "testsuite": [
+        {
+          "name": "ReplacementCandidateWriteFailureKeepsOldRouteAndFrameReusable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementCandidateShortWriteKeepsOldRouteAndFrameReusable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 218,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementDoesNotRewriteItsPublishedSourceOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 249,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.005s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementControlWriteFailureRetainsSourceAndReusesCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 275,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementControlShortWriteRetainsThePreviousCompleteRecord",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 309,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementPrePublicationSyncFailureRetainsTheOldRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 341,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.009s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReplacementControlDiskFullRetainsTheOldRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 374,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "EvacuationCandidateWriteFailureKeepsSourceAndDestinationReusable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 409,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.011s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "EvacuationDoesNotRewriteItsPublishedSourceOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 442,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.008s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "EvacuationControlWriteFailureRetainsSourceAndReusesDestination",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 470,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.011s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "EvacuationControlShortWriteRetainsTheSourceRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.011s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "EvacuationDestinationControlDiskFullRetainsTheSourceRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 538,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.011s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "ReachableOwnerChecksumCorruptionFailsClosedOnReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 574,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "RecoveryRejectsACompleteHeaderWithATruncatedFrameTail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 590,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.003s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "RecoveryStillAuthenticatesEveryOwnerHeaderChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 596,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.002s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest"
+        },
+        {
+          "name": "RecoveryReadsHeadersWithoutScanningAllocatedValueBodies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/allocation\/test_SharedPagePoolAllocatorFaults.cpp",
+          "line": 604,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.063s",
+          "classname": "RelocatableSharedPagePoolAllocatorFaultTest",
+          "recovery_read_bytes": "63424"
+        }
+      ]
+    },
+    {
+      "name": "MetadataSnapshotHandleContractTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T13:55:35Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DefaultHandlesAreInvalidAndReleaseIsIdempotent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "MetadataSnapshotHandleContractTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataSnapshotRegistryTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T13:55:35Z",
+      "time": "0.026s",
+      "testsuite": [
+        {
+          "name": "PinsDurableRootAndDefersOnlineReclamationUntilRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "PinsSupportMoveAssignmentAndCountEveryActiveReader",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 157,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "RejectsAnInvalidOrExhaustedPinLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 177,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "PinsTheCurrentDurableRootOnlyUnderItsOwningWriter",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 191,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "WriterBarrierPreventsSnapshotRegistrationUntilPublicationCompletes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0.02s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "ReclamationRequiresThisRegistrysActiveWriterAndCurrentRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 252,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "InspectsPinnedSnapshotsOnlyUnderItsOwningWriter",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "DecodedContextFollowsPinMovesAndIsReleasedWithThePin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 309,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "EscapedPinOwnsItsRegistryAndReadContextAllocationDomain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 340,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "DeniedReadContextsNeverRegisterAPinAndCanRetryUnderTheWriter",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "FullPayloadArenaCannotBlockSeparateSnapshotControls",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 388,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "PressureSampleExcludesOneObserverAndTracksOldestUntilRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 419,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        },
+        {
+          "name": "WriterDecodeCacheDoesNotConsumePinsOrChangeTheReclamationBarrier",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataSnapshotRegistry.cpp",
+          "line": 435,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T13:55:35Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataSnapshotRegistryTest"
+        }
+      ]
+    }
+  ]
+}

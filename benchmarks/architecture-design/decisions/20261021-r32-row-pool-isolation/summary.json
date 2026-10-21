@@ -1,0 +1,11 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "passed": {
+    "r32-row-pool-isolation:candidate": 332,
+    "r32-row-pool-isolation:default": 104,
+    "r32-row-pool-allocation-controls:candidate": 32,
+    "r32-row-pool-allocation-controls:default": 32
+  },
+  "commit_push": false
+}

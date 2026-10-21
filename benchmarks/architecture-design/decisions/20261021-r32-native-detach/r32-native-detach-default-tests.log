@@ -1,0 +1,247 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 104 tests from 11 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOwnerInsertionPlanTest
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages
+[       OK ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages (6 ms)
+[----------] 1 test from HybridPropertyOwnerInsertionPlanTest (6 ms total)
+
+[----------] 1 test from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo
+[       OK ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo (4 ms)
+[----------] 1 test from HybridPropertyInlineMutationTest (4 ms total)
+
+[----------] 2 tests from HybridPropertyMapTransactionsTest
+[ RUN      ] HybridPropertyMapTransactionsTest.DefaultFormatRejectsMapStagingWithoutChangingTheRowSource
+[       OK ] HybridPropertyMapTransactionsTest.DefaultFormatRejectsMapStagingWithoutChangingTheRowSource (4 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.OwnerProbeIsSnapshotBoundAndDistinguishesPropertylessLiveOwnersFromMissingOwners
+[       OK ] HybridPropertyMapTransactionsTest.OwnerProbeIsSnapshotBoundAndDistinguishesPropertylessLiveOwnersFromMissingOwners (5 ms)
+[----------] 2 tests from HybridPropertyMapTransactionsTest (10 ms total)
+
+[----------] 2 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (4 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats
+[       OK ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats (7 ms)
+[----------] 2 tests from HybridPropertyOwnerDeletionTest (11 ms total)
+
+[----------] 1 test from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (4 ms)
+[----------] 1 test from HybridPropertyMultipleGroupsTest (4 ms total)
+
+[----------] 4 tests from HybridPropertyReadContextTest
+[ RUN      ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime
+[       OK ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime (1 ms)
+[ RUN      ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext
+[       OK ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext (3 ms)
+[ RUN      ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot
+[       OK ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot (1 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource (1 ms)
+[----------] 4 tests from HybridPropertyReadContextTest (8 ms total)
+
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure (11 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint (8 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection
+[       OK ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease (4 ms)
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest (127 ms total)
+
+[----------] 1 test from NativeGraphWritePlannerOptionsTest
+[ RUN      ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections
+[       OK ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections (0 ms)
+[----------] 1 test from NativeGraphWritePlannerOptionsTest (0 ms total)
+
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest
+[ RUN      ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations
+[       OK ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations (0 ms)
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest (0 ms total)
+
+[----------] 25 tests from RelocatableEntityPageStoreTest
+[ RUN      ] RelocatableEntityPageStoreTest.EvacuatePoolPageDispatchesFixedEntityPagesByRecordKind
+[       OK ] RelocatableEntityPageStoreTest.EvacuatePoolPageDispatchesFixedEntityPagesByRecordKind (13 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.ReadsDecodedLocationsAndBoundsEntityScans
+[       OK ] RelocatableEntityPageStoreTest.ReadsDecodedLocationsAndBoundsEntityScans (4 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsMissingScanVisitorsBeforeReadingMetadata
+[       OK ] RelocatableEntityPageStoreTest.RejectsMissingScanVisitorsBeforeReadingMetadata (0 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.ScansMultipleRecordsFromOnePageUntilTheDirectoryIsExhausted
+[       OK ] RelocatableEntityPageStoreTest.ScansMultipleRecordsFromOnePageUntilTheDirectoryIsExhausted (8 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.EdgeScanRecordsOneTimingBatchWhenTracingIsEnabled
+[       OK ] RelocatableEntityPageStoreTest.EdgeScanRecordsOneTimingBatchWhenTracingIsEnabled (2 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsUntypedOrInvalidAuxiliaryPageRequestsBeforeIO
+[       OK ] RelocatableEntityPageStoreTest.RejectsUntypedOrInvalidAuxiliaryPageRequestsBeforeIO (0 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.ReusesOneSnapshotVerifiedLargeValueAcrossSeveralPropertyRoots
+[       OK ] RelocatableEntityPageStoreTest.ReusesOneSnapshotVerifiedLargeValueAcrossSeveralPropertyRoots (15 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsConflictingReusedLargeValueReferencesBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsConflictingReusedLargeValueReferencesBeforePublication (7 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsInvalidReusedLargeValueIdentityBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsInvalidReusedLargeValueIdentityBeforePublication (7 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.PublishesAndReadsTypedLabelAuxiliaryPagesWithTheirNodeMutation
+[       OK ] RelocatableEntityPageStoreTest.PublishesAndReadsTypedLabelAuxiliaryPagesWithTheirNodeMutation (4 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsAnAuxiliaryPageWhosePersistedOwnerKindWasCorrupted
+[       OK ] RelocatableEntityPageStoreTest.RejectsAnAuxiliaryPageWhosePersistedOwnerKindWasCorrupted (4 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.EvacuatesTypedLabelPageThroughThePublicPoolDispatcher
+[       OK ] RelocatableEntityPageStoreTest.EvacuatesTypedLabelPageThroughThePublicPoolDispatcher (10 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationDiskFullRetainsTheSourceAndCanRetryAfterReopen
+[       OK ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationDiskFullRetainsTheSourceAndCanRetryAfterReopen (11 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationShortWriteRetainsTheSourceAndCanRetryAfterReopen
+[       OK ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationShortWriteRetainsTheSourceAndCanRetryAfterReopen (10 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationFinalFenceFailureReportsUncertainDurabilityAndReopensTheDestination
+[       OK ] RelocatableEntityPageStoreTest.NativeLabelPageEvacuationFinalFenceFailureReportsUncertainDurabilityAndReopensTheDestination (9 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsCorruptTypedLabelPayloadDuringPublicEvacuation
+[       OK ] RelocatableEntityPageStoreTest.RejectsCorruptTypedLabelPayloadDuringPublicEvacuation (5 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.PhysicalEntityScanRejectsPoolEnvelopeThatDisagreesWithCatalogRoute
+[       OK ] RelocatableEntityPageStoreTest.PhysicalEntityScanRejectsPoolEnvelopeThatDisagreesWithCatalogRoute (2 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.PublishesAReachableLabelSetWithItsNewNodeInsertion
+[       OK ] RelocatableEntityPageStoreTest.PublishesAReachableLabelSetWithItsNewNodeInsertion (2 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.PublishesReachableLabelSetsWithNodeMutationAndAppendInsertions
+[       OK ] RelocatableEntityPageStoreTest.PublishesReachableLabelSetsWithNodeMutationAndAppendInsertions (5 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsUnboundOrMismatchedLabelSetNodeInsertionsBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsUnboundOrMismatchedLabelSetNodeInsertionsBeforePublication (1 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsMalformedOrMismatchedLabelSetNodeUpdatesBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsMalformedOrMismatchedLabelSetNodeUpdatesBeforePublication (3 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsStaleLocationsWhoseSlotsWereDeletedFromLivePages
+[       OK ] RelocatableEntityPageStoreTest.RejectsStaleLocationsWhoseSlotsWereDeletedFromLivePages (12 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsLabelPayloadFreeByteMismatchBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsLabelPayloadFreeByteMismatchBeforePublication (2 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsMalformedAuxiliaryLabelRetirementBeforePublication
+[       OK ] RelocatableEntityPageStoreTest.RejectsMalformedAuxiliaryLabelRetirementBeforePublication (3 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.RejectsWrongOwnerAndIncompletePoolEvacuationRequests
+[       OK ] RelocatableEntityPageStoreTest.RejectsWrongOwnerAndIncompletePoolEvacuationRequests (2 ms)
+[----------] 25 tests from RelocatableEntityPageStoreTest (154 ms total)
+
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots (15 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing (43 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization
+[       OK ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor (8 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode
+[       OK ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication
+[       OK ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication (8 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken (5 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes (27 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges (22 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity
+[       OK ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges (5 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints
+[       OK ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp
+[       OK ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst
+[       OK ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing
+[       OK ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing (9 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement
+[       OK ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement (16 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot (17 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot
+[       OK ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology
+[       OK ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields
+[       OK ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields (1 ms)
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest (335 ms total)
+
+[----------] Global test environment tear-down
+[==========] 104 tests from 11 test suites ran. (665 ms total)
+[  PASSED  ] 104 tests.

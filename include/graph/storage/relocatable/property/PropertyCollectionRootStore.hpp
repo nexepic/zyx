@@ -88,6 +88,11 @@ namespace graph::storage {
 
         // Layout/liveness probe for explicit candidate transactions. A live
         // propertyless owner can be hybrid; a missing/ROW owner returns false.
+        // A group can cover an absent owner. Probe that boundary before ROW
+        // placement; a group hit alone grants no Entity/liveness write authority.
+        [[nodiscard]] bool hasHybridPropertyGroup(const MetadataSnapshotPin &snapshot, EntityPropertyKey key,
+            const CancellationCheckpoint *cancellation = nullptr,
+            const SelectedPropertyReadAdmission *transientAdmission = nullptr) const;
         [[nodiscard]] bool isHybridPropertyOwner(const MetadataSnapshotPin &snapshot, EntityPropertyKey key,
             const CancellationCheckpoint *cancellation = nullptr, const SelectedPropertyReadAdmission *transientAdmission = nullptr) const;
 		// Canonical Stage 5 lookup. The Entity Property Directory is keyed by the

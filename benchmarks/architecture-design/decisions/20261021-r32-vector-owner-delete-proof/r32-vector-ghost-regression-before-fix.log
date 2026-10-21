@@ -1,0 +1,34 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:225: Failure
+Expected: (void)metadata->mutateHybridPropertyColumns(change, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:226: Failure
+Expected equality of these values:
+  metadata->openSnapshot().superblock()
+    Which is: 472-byte object <7A-5A D9-C8 FF-F6 D4-20 0D-00 00-00 00-00 00-00 0D-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 0A-00 00-00 00-00 00-00 06-FA BF-D1 FE-7F 00-00 0B-00 00-00 00-00 00-00 ... 18-00 00-00 00-00 00-00 19-00 00-00 00-00 00-00 02-10 00-00 00-00 00-00 01-10 00-00 00-00 00-00 41-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <7A-5A D9-C8 FF-F6 D4-20 0C-00 00-00 00-00 00-00 0C-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 0A-00 00-00 00-00 00-00 06-00 00-00 00-00 00-35 0B-00 00-00 00-00 00-00 ... 18-00 00-00 00-00 00-00 19-00 00-00 00-00 00-00 02-10 00-00 00-00 00-00 01-10 00-00 00-00 00-00 41-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:226: Failure
+Expected equality of these values:
+  io->dataMutationEpoch()
+    Which is: 219
+  epoch
+    Which is: 18
+
+[  FAILED  ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing (308 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (308 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (308 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+
+ 1 FAILED TEST

@@ -1,0 +1,398 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 185 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 53 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+[       OK ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (331 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (248 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (192 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+[       OK ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers (241 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks
+[       OK ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks (239 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts
+[       OK ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts (188 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend
+[       OK ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend (204 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation
+[       OK ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation (322 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode
+[       OK ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode (72 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation
+COVERED_CONTROL_COST edges=90 key_only=1703936 candidate=1835008 retired=0 allocated_peak=1835008 file=5373952
+[       OK ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation (172 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges
+[       OK ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges (322 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime
+[       OK ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime (208 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths
+[       OK ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths (310 ms)
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (2280 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1512 ms)
+[ RUN      ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults (1547 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses
+[       OK ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses (632 ms)
+[ RUN      ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion
+[       OK ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion (932 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo
+[       OK ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo (283 ms)
+[ RUN      ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex
+[       OK ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex (224 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication
+[       OK ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication (229 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+[       OK ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing (277 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors
+[       OK ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors (747 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen
+[       OK ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen (1758 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic
+[       OK ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic (3145 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether
+[       OK ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether (2383 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback (257 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback (254 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries (385 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves
+[       OK ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves (1746 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount
+[       OK ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount (2423 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork
+[       OK ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork (1774 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication
+[       OK ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication (2188 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo
+[       OK ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo (1908 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin
+[       OK ] HybridPropertyQueryParityTest.NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin (3159 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo
+[       OK ] HybridPropertyQueryParityTest.NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo (1820 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups (1546 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership (1454 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField (402 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness (1178 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementMaintainsScalarIndexAndPinnedValues
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementMaintainsScalarIndexAndPinnedValues (3054 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot (1875 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementEnforcesRequiredFieldsAndExistingTokens
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementEnforcesRequiredFieldsAndExistingTokens (1425 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementAccepts64OwnersAndPreservesNoopGeneration
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementAccepts64OwnersAndPreservesNoopGeneration (891 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementRefusesMixedRoutesWithoutChangingEitherOwner
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementRefusesMixedRoutesWithoutChangingEitherOwner (1151 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesNativeDeletionThroughRowPlans
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesNativeDeletionThroughRowPlans (2010 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels (1459 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions (183 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+[       OK ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication (913 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes
+[       OK ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes (881 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination
+[       OK ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination (220 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap
+[       OK ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap (3885 ms)
+[----------] 53 tests from HybridPropertyQueryParityTest (57465 ms total)
+
+[----------] 35 tests from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion (948 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot (882 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange
+[       OK ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange (296 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion
+[       OK ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion (346 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion (286 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges
+[       OK ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges (884 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently (270 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication
+[       OK ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication (301 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry (254 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys
+[       OK ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys (852 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate (779 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted
+[       OK ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted (1696 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin (283 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue
+[       OK ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue (394 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue
+[       OK ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue (335 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates (1310 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate (374 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries (1169 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit (379 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (286 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (284 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted
+[       OK ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted (302 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot (277 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry (316 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts
+[       OK ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts (1298 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch
+[       OK ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch (255 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults (1141 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog (351 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo (265 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo (282 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin (346 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots
+[       OK ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots (373 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts
+[       OK ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts (2311 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion
+[       OK ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion (3878 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot
+[       OK ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot (1574 ms)
+[----------] 35 tests from HybridPropertyIndexedLifecycleTest (25593 ms total)
+
+[----------] 27 tests from NativeGraphWritePlannerVectorTest
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesRawMappingsAndManifestInOneGeneration
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesRawMappingsAndManifestInOneGeneration (9 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineBootstrapPayload
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineBootstrapPayload (3 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication (5 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState (4 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning (4 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RefusesToOverwriteAPublishedVectorBootstrapState
+[       OK ] NativeGraphWritePlannerVectorTest.RefusesToOverwriteAPublishedVectorBootstrapState (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication (15 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineDeltaPayload
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineDeltaPayload (16 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaInsertForANodeOutsideTheGraphSnapshot
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaInsertForANodeOutsideTheGraphSnapshot (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaAfterStagingBootstrapForTheSameIndex
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaAfterStagingBootstrapForTheSameIndex (3 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsSecondBootstrapForTheSameIndexInOneTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsSecondBootstrapForTheSameIndexInOneTransaction (3 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsSecondDeltaForTheSameIndexInOneTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsSecondDeltaForTheSameIndexInOneTransaction (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesLogicalCreateAndReplacementThroughNativeVectorState
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesLogicalCreateAndReplacementThroughNativeVectorState (19 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion
+[       OK ] NativeGraphWritePlannerVectorTest.MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion (40 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsVectorInsertionForANodeErasedByTheSameTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsVectorInsertionForANodeErasedByTheSameTransaction (9 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration
+[       OK ] NativeGraphWritePlannerVectorTest.ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration (22 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail (17 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.AppendsAFullTailDeltaPageToItsExistingRawPool
+[       OK ] NativeGraphWritePlannerVectorTest.AppendsAFullTailDeltaPageToItsExistingRawPool (17 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool
+[       OK ] NativeGraphWritePlannerVectorTest.ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool (22 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesANewRawPoolWhenTheCurrentRawPoolIsFull
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesANewRawPoolWhenTheCurrentRawPoolIsFull (20 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.MovesTheManifestToANewPoolWhenCowFramesAreExhausted
+[       OK ] NativeGraphWritePlannerVectorTest.MovesTheManifestToANewPoolWhenCowFramesAreExhausted (718 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication (9 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication (9 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder (20 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased
+[       OK ] NativeGraphWritePlannerVectorTest.RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased (24 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay
+[       OK ] NativeGraphWritePlannerVectorTest.PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay (25 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RecoversNativeVectorDeltaAcrossSuperblockInterruptions
+[       OK ] NativeGraphWritePlannerVectorTest.RecoversNativeVectorDeltaAcrossSuperblockInterruptions (43 ms)
+[----------] 27 tests from NativeGraphWritePlannerVectorTest (1114 ms total)
+
+[----------] 9 tests from NativeVectorMutationPlannerTest
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue
+[       OK ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions
+[       OK ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties
+[       OK ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership
+[       OK ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries
+[       OK ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning
+[       OK ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes
+[       OK ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot
+[       OK ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope
+[       OK ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope (0 ms)
+[----------] 9 tests from NativeVectorMutationPlannerTest (4 ms total)
+
+[----------] 1 test from NativeVectorMutationPlannerContractsTest
+[ RUN      ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds
+[       OK ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds (0 ms)
+[----------] 1 test from NativeVectorMutationPlannerContractsTest (0 ms total)
+
+[----------] 33 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled
+[       OK ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled (138 ms)
+[ RUN      ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot
+[       OK ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks
+[       OK ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization (134 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget
+[       OK ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues
+[       OK ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties
+[       OK ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties (130 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode (80 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties
+[       OK ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties (187 ms)
+[ RUN      ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput
+[       OK ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput (149 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode
+[       OK ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode (207 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen (216 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled
+[       OK ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled (102 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen (170 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage (120 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation
+[       OK ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation (120 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication
+[       OK ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication (105 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom
+[       OK ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns
+[       OK ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation
+[       OK ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation (116 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges
+[       OK ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges (100 ms)
+[ RUN      ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay
+[       OK ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation
+[       OK ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages
+[       OK ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages (180 ms)
+[ RUN      ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown
+[       OK ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown (100 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions
+[       OK ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty
+[       OK ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty (92 ms)
+[----------] 33 tests from RelocatableStorageBackendTest (3996 ms total)
+
+[----------] 27 tests from ConstraintMutationValidatorTest
+[ RUN      ] ConstraintMutationValidatorTest.PlansNativeUsableSupportTransitionsForReplaceAndCreate
+[       OK ] ConstraintMutationValidatorTest.PlansNativeUsableSupportTransitionsForReplaceAndCreate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey
+[       OK ] ConstraintMutationValidatorTest.ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateAgainstAValidatedSupportTreeCandidate
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateAgainstAValidatedSupportTreeCandidate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesNodeKeyAndTypeChecksToTheBatchFinalState
+[       OK ] ConstraintMutationValidatorTest.AppliesNodeKeyAndTypeChecksToTheBatchFinalState (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesAdditionalDdlDefinitionsAgainstTheCompleteGraph
+[       OK ] ConstraintMutationValidatorTest.ValidatesAdditionalDdlDefinitionsAgainstTheCompleteGraph (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsAnActiveSupportConstraintWithoutAPublishedRoot
+[       OK ] ConstraintMutationValidatorTest.RejectsAnActiveSupportConstraintWithoutAPublishedRoot (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ResolvesEqualLabelAndRelationshipTypeNamesThroughSeparateDomains
+[       OK ] ConstraintMutationValidatorTest.ResolvesEqualLabelAndRelationshipTypeNamesThroughSeparateDomains (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsIncompleteAdaptersAndInvalidAffectedEntityRequests
+[       OK ] ConstraintMutationValidatorTest.RejectsIncompleteAdaptersAndInvalidAffectedEntityRequests (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AllowsAnAtomicUniqueKeySwapAgainstChangedSupportCandidates
+[       OK ] ConstraintMutationValidatorTest.AllowsAnAtomicUniqueKeySwapAgainstChangedSupportCandidates (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsMalformedAndOverBudgetSupportTreeCandidates
+[       OK ] ConstraintMutationValidatorTest.RejectsMalformedAndOverBudgetSupportTreeCandidates (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.UsesFullSnapshotValidationWhenDdlAndExistingConstraintsShareABatch
+[       OK ] ConstraintMutationValidatorTest.UsesFullSnapshotValidationWhenDdlAndExistingConstraintsShareABatch (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesUntypedEdgeConstraintsWithoutAllocatingAToken
+[       OK ] ConstraintMutationValidatorTest.ValidatesUntypedEdgeConstraintsWithoutAllocatingAToken (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesEveryDeclaredPropertyTypeInTheFullSnapshotPath
+[       OK ] ConstraintMutationValidatorTest.ValidatesEveryDeclaredPropertyTypeInTheFullSnapshotPath (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsEmptyAndUnresolvedSchemaNamesBeforePlanningMutations
+[       OK ] ConstraintMutationValidatorTest.RejectsEmptyAndUnresolvedSchemaNamesBeforePlanningMutations (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesCreatedEntitiesAndDeletesDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.AppliesCreatedEntitiesAndDeletesDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.PlansCreatedEdgeUniqueTransitionsThroughTheAffectedEntityPath
+[       OK ] ConstraintMutationValidatorTest.PlansCreatedEdgeUniqueTransitionsThroughTheAffectedEntityPath (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateBatchKeysAndUnknownReferenceKinds
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateBatchKeysAndUnknownReferenceKinds (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsMismatchedPersistedEntitiesAndStaleSupportEntries
+[       OK ] ConstraintMutationValidatorTest.RejectsMismatchedPersistedEntitiesAndStaleSupportEntries (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.StopsAtTheFirstDifferentSupportDigestAndRejectsInvalidFullScans
+[       OK ] ConstraintMutationValidatorTest.StopsAtTheFirstDifferentSupportDigestAndRejectsInvalidFullScans (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.PlansPersistedEdgeUniqueTransitionsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.PlansPersistedEdgeUniqueTransitionsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsInvalidTargetsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.RejectsInvalidTargetsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesRepeatedUpdatesAndRejectsExplicitNullProperties
+[       OK ] ConstraintMutationValidatorTest.AppliesRepeatedUpdatesAndRejectsExplicitNullProperties (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull
+[       OK ] ConstraintMutationValidatorTest.RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AllowsAKeyReleasedByADeletedSupportTreeCandidate
+[       OK ] ConstraintMutationValidatorTest.AllowsAKeyReleasedByADeletedSupportTreeCandidate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsAStaleTargetKeyEntryForTheMutatedEntity
+[       OK ] ConstraintMutationValidatorTest.RejectsAStaleTargetKeyEntryForTheMutatedEntity (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateEntitiesAndMissingSupportRootsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateEntitiesAndMissingSupportRootsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics
+[       OK ] ConstraintMutationValidatorTest.BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics (0 ms)
+[----------] 27 tests from ConstraintMutationValidatorTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 185 tests from 7 test suites ran. (88175 ms total)
+[  PASSED  ] 185 tests.

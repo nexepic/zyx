@@ -1,0 +1,78 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/tests/include -I/workspace/zyx/lib/inputxx/tests -I/workspace/zyx/apps/benchmark -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-work-candidate -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIE -Wall -Wextra -Wno-unused-parameter -DGTEST_HAS_PTHREAD=1 -MD -MT CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o -MF CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o.d -o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp.o -c /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:277:87: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  277 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true};
+      |                                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:364:64: error: use of undeclared identifier 'current'
+  364 |             const auto cell = roots.readEntityPropertyOptional(current, key, *token); ASSERT_TRUE(cell); EXPECT_EQ(cell->value, value);
+      |                                                                ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:364:64: error: cannot take address of consteval function 'current' outside of an immediate invocation
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/source_location:60:5: note: declared here
+   60 |     current(__builtin_ret_type __p = __builtin_source_location()) noexcept
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:368:63: error: use of undeclared identifier 'current'
+  368 |             EXPECT_FALSE(metadata->findVectorLocationOptional(current, *oldId));
+      |                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:368:63: error: cannot take address of consteval function 'current' outside of an immediate invocation
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/source_location:60:5: note: declared here
+   60 |     current(__builtin_ret_type __p = __builtin_source_location()) noexcept
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:416:126: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+  416 |         NativeGraphHybridPropertyConversion conversion{kind, 1, memory, nullptr, PhysicalSlotId(40), PhysicalSlotId(180), 903};
+      |                                                                                                                              ^
+8 warnings and 4 errors generated.
+[2/4] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:34:
+In file included from /workspace/zyx/include/graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp:8:
+In file included from /workspace/zyx/include/graph/storage/AdjacencyTopologyContract.hpp:4:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:742:112: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+  742 |                 placement.first_slot, placement.last_slot, placement.page_owner_id, publishCandidate, direction}};
+      |                                                                                                                ^
+6 warnings generated.
+ninja: build stopped: subcommand failed.

@@ -1,0 +1,65 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPublicationTest.*
+[==========] Running 6 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 6 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField (177 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField (201 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:53: Failure
+Expected: (void)executor.execute(batch) throws an exception of type std::runtime_error.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:55: Failure
+Value of: injected
+  Actual: false
+Expected: true
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit (42 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:53: Failure
+Expected: (void)executor.execute(batch) throws an exception of type std::runtime_error.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:55: Failure
+Value of: injected
+  Actual: false
+Expected: true
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether (42 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:53: Failure
+Expected: (void)executor.execute(batch) throws an exception of type std::runtime_error.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:55: Failure
+Value of: injected
+  Actual: false
+Expected: true
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit (54 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:53: Failure
+Expected: (void)executor.execute(batch) throws an exception of type std::runtime_error.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:55: Failure
+Value of: injected
+  Actual: false
+Expected: true
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether (53 ms)
+[----------] 6 tests from HybridPropertyOwnerInsertionPublicationTest (570 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 1 test suite ran. (571 ms total)
+[  PASSED  ] 2 tests.
+[  FAILED  ] 4 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether
+
+ 4 FAILED TESTS

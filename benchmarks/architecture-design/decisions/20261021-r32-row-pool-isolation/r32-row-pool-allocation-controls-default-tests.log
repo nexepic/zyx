@@ -1,0 +1,73 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 32 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 32 tests from RelocatableSlottedPagePoolTest
+[ RUN      ] RelocatableSlottedPagePoolTest.AtomicallyMaterializesAndReopensAnEmptyTypedPage
+[       OK ] RelocatableSlottedPagePoolTest.AtomicallyMaterializesAndReopensAnEmptyTypedPage (7 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.PinsBorrowedSlottedRecordsWhenTheBufferPoolIsAvailable
+[       OK ] RelocatableSlottedPagePoolTest.PinsBorrowedSlottedRecordsWhenTheBufferPoolIsAvailable (4 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.AtomicallyMaterializesAPopulatedPageOnlyAfterItsDirectoryPublication
+[       OK ] RelocatableSlottedPagePoolTest.AtomicallyMaterializesAPopulatedPageOnlyAfterItsDirectoryPublication (3 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsMismatchedOrUnreservablePopulatedPageAllocation
+[       OK ] RelocatableSlottedPagePoolTest.RejectsMismatchedOrUnreservablePopulatedPageAllocation (2 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.AppendsAPopulatedPageOnlyWhenItsOwnerMatchesTheRequest
+[       OK ] RelocatableSlottedPagePoolTest.AppendsAPopulatedPageOnlyWhenItsOwnerMatchesTheRequest (3 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.ReplacesTypedPagesAcrossRepeatedReclamationAndReopen
+[       OK ] RelocatableSlottedPagePoolTest.ReplacesTypedPagesAcrossRepeatedReclamationAndReopen (102 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.PersistsAndSelectsBestFitContiguousFreeSpaceAcrossCowAndReopen
+[       OK ] RelocatableSlottedPagePoolTest.PersistsAndSelectsBestFitContiguousFreeSpaceAcrossCowAndReopen (13 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RetainsPeerWhenReplacingOnePageInASharedFreeSpaceBucket
+[       OK ] RelocatableSlottedPagePoolTest.RetainsPeerWhenReplacingOnePageInASharedFreeSpaceBucket (6 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsOutOfRangeDurableFreeSpaceHintsBeforeSelection
+[       OK ] RelocatableSlottedPagePoolTest.RejectsOutOfRangeDurableFreeSpaceHintsBeforeSelection (3 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsTheBestFitPageAcrossPoolsFromOneMetadataSnapshot
+[       OK ] RelocatableSlottedPagePoolTest.SelectsTheBestFitPageAcrossPoolsFromOneMetadataSnapshot (9 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsRecordPlacementUsingReusableDeadSlots
+[       OK ] RelocatableSlottedPagePoolTest.SelectsRecordPlacementUsingReusableDeadSlots (7 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsRecordPlacementFromTheCallerSnapshotWithoutDowngradingNewerCache
+[       OK ] RelocatableSlottedPagePoolTest.SelectsRecordPlacementFromTheCallerSnapshotWithoutDowngradingNewerCache (7 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RebuildsRecordPlacementCacheAfterMetadataOnlyPublication
+[       OK ] RelocatableSlottedPagePoolTest.RebuildsRecordPlacementCacheAfterMetadataOnlyPublication (3 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.NeverSelectsAVectorRawPoolForSlottedRecordPlacement
+[       OK ] RelocatableSlottedPagePoolTest.NeverSelectsAVectorRawPoolForSlottedRecordPlacement (2 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsTightestRecordPlacementAcrossPoolsRegardlessOfCallerOrder
+[       OK ] RelocatableSlottedPagePoolTest.SelectsTightestRecordPlacementAcrossPoolsRegardlessOfCallerOrder (8 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsTightestRecordPlacementWithinOnePool
+[       OK ] RelocatableSlottedPagePoolTest.SelectsTightestRecordPlacementWithinOnePool (12 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SelectsOnlyMatchingSlottedOwnerKindsInASharedEntityPool
+[       OK ] RelocatableSlottedPagePoolTest.SelectsOnlyMatchingSlottedOwnerKindsInASharedEntityPool (6 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.EvacuatesTypedPagesAcrossPoolsWithoutChangingSlotReferences
+[       OK ] RelocatableSlottedPagePoolTest.EvacuatesTypedPagesAcrossPoolsWithoutChangingSlotReferences (11 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsInvalidOrNonCurrentTypedPageEvacuations
+[       OK ] RelocatableSlottedPagePoolTest.RejectsInvalidOrNonCurrentTypedPageEvacuations (3 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsEvacuationOfAPageSupersededAfterItWasRead
+[       OK ] RelocatableSlottedPagePoolTest.RejectsEvacuationOfAPageSupersededAfterItWasRead (6 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsReplacementAndEvacuationAfterTheCurrentOwnerIsRetired
+[       OK ] RelocatableSlottedPagePoolTest.RejectsReplacementAndEvacuationAfterTheCurrentOwnerIsRetired (4 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RetiresAndReleasesAnEmptyTypedPool
+[       OK ] RelocatableSlottedPagePoolTest.RetiresAndReleasesAnEmptyTypedPool (9 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsWrongTypedOwnerAndNeverPublishesRawPagePayloadAsSlotted
+[       OK ] RelocatableSlottedPagePoolTest.RejectsWrongTypedOwnerAndNeverPublishesRawPagePayloadAsSlotted (2 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.ReturnsEmptyWhenNoPhysicalSlotCanBeReserved
+[       OK ] RelocatableSlottedPagePoolTest.ReturnsEmptyWhenNoPhysicalSlotCanBeReserved (2 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.ReturnsNoBestFitWhenAnExistingPoolHasNoFreeFrames
+[       OK ] RelocatableSlottedPagePoolTest.ReturnsNoBestFitWhenAnExistingPoolHasNoFreeFrames (67 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsInvalidTypedPageSelectionBeforeOpeningMetadata
+[       OK ] RelocatableSlottedPagePoolTest.RejectsInvalidTypedPageSelectionBeforeOpeningMetadata (0 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsReplacementWithoutAnOwnedVersion
+[       OK ] RelocatableSlottedPagePoolTest.RejectsReplacementWithoutAnOwnedVersion (0 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsAAllocatorDirectoryEntryThatDisagreesWithTheTypedPage
+[       OK ] RelocatableSlottedPagePoolTest.RejectsAAllocatorDirectoryEntryThatDisagreesWithTheTypedPage (4 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.KeepsTheSourceOwnerLiveAfterInterruptedPublicationUntilReplacementCommits
+[       OK ] RelocatableSlottedPagePoolTest.KeepsTheSourceOwnerLiveAfterInterruptedPublicationUntilReplacementCommits (8 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.ReconcilesInterruptedTypedReplacementBeforeRetryingItsPublication
+[       OK ] RelocatableSlottedPagePoolTest.ReconcilesInterruptedTypedReplacementBeforeRetryingItsPublication (8 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.RejectsOrExactlyRoundTripsEverySingleBitPageMutation
+[       OK ] RelocatableSlottedPagePoolTest.RejectsOrExactlyRoundTripsEverySingleBitPageMutation (1472 ms)
+[ RUN      ] RelocatableSlottedPagePoolTest.SharedReadPayloadKeepsTheSnapshotAllocationGrantAfterMetadataCloses
+[       OK ] RelocatableSlottedPagePoolTest.SharedReadPayloadKeepsTheSnapshotAllocationGrantAfterMetadataCloses (2 ms)
+[----------] 32 tests from RelocatableSlottedPagePoolTest (1811 ms total)
+
+[----------] Global test environment tear-down
+[==========] 32 tests from 1 test suite ran. (1811 ms total)
+[  PASSED  ] 32 tests.

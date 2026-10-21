@@ -1,0 +1,15 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 5,
+  "passed": {
+    "default": 111,
+    "candidate": 189
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "source_note": "Source captured before subsequent selected-patch edits.",
+  "remaining": "Native public patches, creation, detach/mixed graph lifecycle, production space/resource gates, R5/R7."
+}

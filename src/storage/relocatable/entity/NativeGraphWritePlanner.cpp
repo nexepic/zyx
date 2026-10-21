@@ -10,6 +10,7 @@
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
+#include "graph/utils/OwnedAssociativeContainers.hpp"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -383,7 +384,7 @@ namespace graph::storage {
 
 	NativeGraphWriteTransaction::NativeGraphWriteTransaction(NativeGraphWriteTransaction &&other) noexcept :
 		context_(std::move(other.context_)), snapshot_(std::move(other.snapshot_)), state_(other.state_),
-		next_vector_id_(other.next_vector_id_), node_id_ranges_(std::move(other.node_id_ranges_)),
+		next_vector_id_(other.next_vector_id_), native_graph_coordinated_(other.native_graph_coordinated_), native_schema_coordinated_(other.native_schema_coordinated_), node_id_ranges_(std::move(other.node_id_ranges_)),
 		edge_id_ranges_(std::move(other.edge_id_ranges_)), nodes_(std::move(other.nodes_)),
 		edges_(std::move(other.edges_)), global_adjacency_operations_(std::move(other.global_adjacency_operations_)),
 		global_adjacency_operations_canonical_(other.global_adjacency_operations_canonical_),
@@ -391,8 +392,9 @@ namespace graph::storage {
 		global_adjacency_retirement_plan_(std::move(other.global_adjacency_retirement_plan_)),
 		global_adjacency_initial_plan_(std::move(other.global_adjacency_initial_plan_)),
 		global_adjacency_deferred_bulk_(other.global_adjacency_deferred_bulk_),
-		properties_(std::move(other.properties_)), scalar_index_mutations_(std::move(other.scalar_index_mutations_)),
+		properties_(std::move(other.properties_)), hybrid_catalog_credit_(std::move(other.hybrid_catalog_credit_)), hybrid_catalog_tokens_(std::move(other.hybrid_catalog_tokens_)), scalar_index_mutations_(std::move(other.scalar_index_mutations_)),
 		initial_scalar_index_mutations_(std::move(other.initial_scalar_index_mutations_)),
+        hybrid_vectors_(std::move(other.hybrid_vectors_)), hybrid_vector_pending_(other.hybrid_vector_pending_),
 		vector_bootstraps_(std::move(other.vector_bootstraps_)), vector_deltas_(std::move(other.vector_deltas_)),
         hybrid_conversion_(std::move(other.hybrid_conversion_)), hybrid_columns_(std::move(other.hybrid_columns_)), covered_adjacency_sealed_(other.covered_adjacency_sealed_),
         covered_adjacency_pending_(other.covered_adjacency_pending_),
@@ -414,6 +416,8 @@ namespace graph::storage {
 		snapshot_ = std::move(other.snapshot_);
 		state_ = other.state_;
 		next_vector_id_ = other.next_vector_id_;
+        native_graph_coordinated_ = other.native_graph_coordinated_;
+        native_schema_coordinated_ = other.native_schema_coordinated_;
 		node_id_ranges_ = std::move(other.node_id_ranges_);
 		edge_id_ranges_ = std::move(other.edge_id_ranges_);
 		nodes_ = std::move(other.nodes_);
@@ -425,8 +429,12 @@ namespace graph::storage {
 		global_adjacency_initial_plan_ = std::move(other.global_adjacency_initial_plan_);
 		global_adjacency_deferred_bulk_ = other.global_adjacency_deferred_bulk_;
 		properties_ = std::move(other.properties_);
+        if (other.hybrid_catalog_credit_) hybrid_catalog_credit_.emplace(std::move(*other.hybrid_catalog_credit_));
+        if (other.hybrid_catalog_tokens_) hybrid_catalog_tokens_.emplace(std::move(*other.hybrid_catalog_tokens_));
 		scalar_index_mutations_ = std::move(other.scalar_index_mutations_);
 		initial_scalar_index_mutations_ = std::move(other.initial_scalar_index_mutations_);
+        if (other.hybrid_vectors_) hybrid_vectors_.emplace(std::move(*other.hybrid_vectors_));
+        hybrid_vector_pending_ = other.hybrid_vector_pending_;
 		vector_bootstraps_ = std::move(other.vector_bootstraps_);
 		vector_deltas_ = std::move(other.vector_deltas_);
         hybrid_conversion_ = std::move(other.hybrid_conversion_);
@@ -471,6 +479,12 @@ namespace graph::storage {
         std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool fieldLifecycle) {
         stageHybridPropertyMutation(replacements, {}, std::move(memory), cancellation, fieldLifecycle);
     }
+    bool NativeGraphWriteTransaction::isHybridPropertyOwner(EntityPropertyKey owner,
+        const CancellationCheckpoint *cancellation) const {
+        requireActive("probe native property owner");
+        return context_->properties->isHybridPropertyOwner(snapshot_, owner, cancellation);
+    }
+
     void NativeGraphWriteTransaction::stageHybridPropertyMaps(std::span<const PropertyCollectionRoot> roots,
         NativeHybridPropertyMapMode mode, std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
         requireActive("stage native property maps");
@@ -496,9 +510,8 @@ namespace graph::storage {
                 fail(FormatError::FERR_INVALID_HEADER, "native map input has an invalid owner kind or exceeds4096actual fields");
             memberships += root.entries.size(); owners[i] = {root.owner_entity_type == Node::typeId ? EntityPropertyOwnerKind::EPOK_NODE :
                 EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id};
-            if (!owners[i].isValid() || (i && (owners[i].owner_kind != owners[0].owner_kind ||
-                hybridPropertyGroupFor(owners[i]) != hybridPropertyGroupFor(owners[0]))))
-                fail(FormatError::FERR_INVALID_HEADER, "native map inputs must name one valid owner namespace/group");
+            if (!owners[i].isValid())
+                fail(FormatError::FERR_INVALID_HEADER, "native map input requires a valid owner namespace and ID");
             for (size_t prior = 0; prior < i; ++prior) if (owners[prior] == owners[i])
                 fail(FormatError::FERR_INVALID_HEADER, "native map input repeats an owner");
             uint32_t previous = 0;
@@ -594,6 +607,182 @@ namespace graph::storage {
         staged.deletions.assign(deletions.begin(), deletions.end());
         static_assert(std::is_nothrow_move_constructible_v<StagedHybridColumns> && std::is_nothrow_move_assignable_v<StagedHybridColumns>);
         hybrid_columns_.emplace(std::move(staged));
+    }
+
+    void NativeGraphWriteTransaction::adoptHybridPropertyCatalog(NativeGraphWriteTransaction &&catalog,
+        utils::OwnedHeapReservation &&credit) {
+        requireActive("coordinate native property dictionary", true);
+        if (!hybrid_columns_ || !hybrid_vectors_ || hybrid_vector_pending_ || hybrid_catalog_credit_ ||
+            !hybrid_columns_->deletions.empty() || !credit.governed() || credit.bytes() < 65536U || credit.owner() != hybrid_columns_->memory)
+            fail(FormatError::FERR_INVALID_STATE, "native dictionary coordination requires admitted field/Vector staging");
+        hybrid_vector_pending_ = true;
+        if (!catalog.isActive() || catalog.context_ != context_ || catalog.baseSuperblock() != baseSuperblock() ||
+            !catalog.nodes_.empty() || !catalog.edges_.empty() || !catalog.properties_.empty() ||
+            !catalog.node_id_ranges_.empty() || !catalog.edge_id_ranges_.empty() ||
+            !catalog.initial_scalar_index_mutations_.empty() || catalog.scalar_index_mutations_.size() != 1U ||
+            !catalog.vector_bootstraps_.empty() || !catalog.vector_deltas_.empty() || catalog.hybrid_columns_ || catalog.hybrid_conversion_)
+            fail(FormatError::FERR_INVALID_STATE, "native dictionary has foreign or unrelated temporary work");
+        const auto &index = catalog.scalar_index_mutations_.front();
+        if (index.index_id != RSS_SYSTEM_CATALOG_INDEX_ID || index.index != context_->indexes ||
+            index.leaf_value_layout != BTreeLeafValueLayout::BLVL_U64 || index.operations.empty() || index.operations.size() > 192U ||
+            index.plan || index.retirement_plan ||
+            std::ranges::any_of(scalar_index_mutations_, [](const auto &entry) { return entry.index_id == RSS_SYSTEM_CATALOG_INDEX_ID; }))
+            fail(FormatError::FERR_INVALID_STATE, "native dictionary needs one existing canonical Catalog tree");
+        utils::OwnedVector<uint32_t> tokens{utils::OwnedPmrAllocator<uint32_t>(hybrid_columns_->memory)};
+        for (const auto &operation : index.operations) {
+            const auto kind = operation.key.empty() ? 255U : std::to_integer<unsigned>(operation.key.front());
+            if (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT ||
+                (kind != 1U && kind != 2U && !(kind == 5U && operation.key.size() == 2U && operation.key[1] == std::byte{1})))
+                fail(FormatError::FERR_INVALID_STATE, "native dictionary cannot change schema/index/constraint controls");
+            if (kind == 2U) {
+                if (operation.key.size() <= 5U || !operation.value || operation.value > UINT32_MAX || tokens.size() == 64U)
+                    fail(FormatError::FERR_INVALID_STATE, "native dictionary has invalid token identity or cardinality");
+                uint32_t encoded = 0;
+                for (size_t i = 1; i <= 4; ++i) encoded = (encoded << 8U) | std::to_integer<uint32_t>(operation.key[i]);
+                if (encoded != operation.value) fail(FormatError::FERR_INVALID_STATE, "native dictionary reverse token identity disagrees");
+                tokens.push_back(encoded);
+            }
+        }
+        std::ranges::sort(tokens);
+        if (tokens.empty() || std::ranges::adjacent_find(tokens) != tokens.end())
+            fail(FormatError::FERR_INVALID_STATE, "native dictionary has missing or duplicated token allocations");
+        hybrid_catalog_tokens_.emplace(std::move(tokens));
+        hybrid_catalog_credit_.emplace(std::move(credit));
+        scalar_index_mutations_.push_back(std::move(catalog.scalar_index_mutations_.front()));
+        std::vector<StagedScalarIndexMutation>().swap(catalog.scalar_index_mutations_);
+        catalog.rollback(); hybrid_vector_pending_ = false;
+    }
+
+    void NativeGraphWriteTransaction::coordinateHybridPropertyVectors(VectorPageStore &rawPages,
+        VectorManifestStore &manifests, NativeGraphVectorDeltaOptions options) {
+        requireActive("coordinate native fields and Vector state", true);
+        if (!hybrid_columns_ || hybrid_vectors_ || hybrid_vector_pending_ ||
+            !rawPages.usesMetadataStore(*context_->metadata) || !manifests.usesMetadataStore(*context_->metadata) ||
+            !options.first_slot.isValid() || options.last_slot < options.first_slot ||
+            !options.maximum_records || options.maximum_records > 128 || !options.maximum_raw_pages || options.maximum_raw_pages > 128 ||
+            !options.rebuild_threshold || options.rebuild_threshold > options.maximum_overlay_entries ||
+            options.maximum_overlay_entries > 4096 || !options.maximum_delta_pages || options.maximum_delta_pages > 128 ||
+            options.maximum_overlay_entries > VectorDeltaMapping::maximumEntriesForPageBudget(options.maximum_delta_pages))
+            fail(FormatError::FERR_INVALID_HEADER, "native Vector coordination requires one staged field mutation and bounded same-domain stores");
+        auto &fields = *hybrid_columns_;
+        const std::function<void()> check = [&] { if (fields.cancellation) fields.cancellation->check(); };
+        check(); hybrid_vector_pending_ = true;
+        utils::OwnedAllocationScope allocation(fields.memory);
+        hybrid_vectors_.emplace(StagedHybridVectors{utils::OwnedHeapReservation(fields.memory), {}});
+        auto &staged = *hybrid_vectors_;
+        const auto admit = [&](size_t bytes) {
+            constexpr size_t limit = 1024U * 1024U;
+            if (bytes > limit - staged.credit.bytes()) throw query::execution::MaterializedByteLimitExceeded();
+            staged.credit.set(staged.credit.bytes() + bytes);
+        };
+        SystemCatalog schema(*context_->indexes, *context_->metadata);
+        auto definitions = schema.readIndexDefinitions(snapshot_, 4096);
+        std::erase_if(definitions, [](const auto &d) { return d.kind != IndexDefinitionKind::IDK_VECTOR; });
+        utils::OwnedStdVector<uint64_t> owners;
+        for (const auto &cell : fields.cells) if (cell.owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE &&
+            std::ranges::find(owners, cell.owner.entity_id) == owners.end()) owners.push_back(cell.owner.entity_id);
+        for (const auto owner : fields.deletions) if (owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE) owners.push_back(owner.entity_id);
+        const auto erased = [&](uint64_t id) { return std::ranges::any_of(fields.deletions, [&](const auto owner) {
+            return owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE && owner.entity_id == id;
+        }); };
+        const auto affected = [&](uint64_t id, uint32_t token) {
+            return erased(id) || std::ranges::any_of(fields.cells, [&](const auto &cell) {
+                return cell.owner == EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, id} && cell.token == token;
+            });
+        };
+        // Admit retained semantic/raw buffers and the ordinary planner's bounded
+        // map/manifest frontier before invoking that planner. This is not an RSS
+        // or production admission claim; the existing one-MiB account remains.
+        for (const auto &definition : definitions) {
+            check(); const auto token = schema.findPropertyToken(snapshot_, definition.property_names.front());
+            if (!token || definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS)
+                fail(FormatError::FERR_INVALID_STATE, "native Vector dependency has an unresolved token or excessive dimensions");
+            const size_t count = std::ranges::count_if(owners, [&](uint64_t id) { return affected(id, *token); });
+            if (!count) continue;
+            admit(65536U + count * (size_t(definition.vector_dimensions) * 8U + 1024U));
+            const auto root = context_->metadata->findIndexRootOptional(snapshot_, definition.index_id);
+            const auto manifest = context_->metadata->findVectorManifestOptional(snapshot_, definition.index_id);
+            if (bool(root) != bool(manifest)) fail(FormatError::FERR_INVALID_STATE, "native Vector state has an incomplete mapping/Manifest pair");
+            if (manifest) admit(size_t(manifests.read(snapshot_, definition.index_id).manifest().delta_entry_count) * 512U);
+        }
+        NativeVectorMutationPlanner vector(std::move(definitions),
+            [&](const MetadataSnapshotPin &pin, std::string_view name) { return schema.findPropertyToken(pin, name); },
+            {4096, options.maximum_records});
+        for (const auto id : owners) {
+            check(); detail::PropertyDecodeWorkspace decoded(fields.memory, &check);
+            utils::OwnedMap<uint32_t, std::optional<PropertyCollectionRootEntry>> previous;
+            utils::OwnedHeapReservation labelsCredit(fields.memory);
+            const auto labels = context_->labels->readNodeLabels(snapshot_, context_->entities->readNode(snapshot_, id),
+                [&](size_t bytes) { labelsCredit.set(bytes); });
+            std::array<PropertyValue, RSS_HYBRID_GROUP_CAPACITY> scratch;
+            const auto oldValue = [&](uint32_t token) -> const PropertyValue * {
+                check(); if (!affected(id, token)) return nullptr;
+                auto found = previous.find(token);
+                if (found == previous.end()) found = previous.emplace(token,
+                    context_->properties->readEntityPropertyOptional(snapshot_, {EntityPropertyOwnerKind::EPOK_NODE, id}, token)).first;
+                return found->second ? &found->second->value : nullptr;
+            };
+            const auto newValue = [&](uint32_t token) -> const PropertyValue * {
+                check(); if (erased(id) || !affected(id, token)) return nullptr;
+                for (size_t i = 0; i < fields.cells.size(); ++i) {
+                    const auto &cell = fields.cells[i];
+                    if (cell.owner == EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, id} && cell.token == token) {
+                        if (cell.erase) return nullptr;
+                        const auto *value = &cell.propertyValue(scratch[i]);
+                        const auto *previous = oldValue(token);
+                        // Field writes use ROW equality before Vector encoding:
+                        // signed-zero differences alone must not create a delta
+                        // for a property mutation that the field writer omits.
+                        return previous && *previous == *value ? previous : value;
+                    }
+                }
+                return oldValue(token);
+            };
+            for (auto mutation : vector.planNodeValues(snapshot_, id, labels, oldValue,
+                erased(id) ? std::span<const uint64_t>{} : std::span<const uint64_t>(labels), newValue)) {
+                if (staged.semantics.size() == options.maximum_records)
+                    fail(FormatError::FERR_INVALID_STATE, "native Vector coordination exceeds its combined semantic operation bound");
+                staged.semantics.push_back(std::move(mutation));
+            }
+        }
+        std::ranges::sort(staged.semantics, {}, [](const auto &v) {
+            return std::tuple(v.index_id, v.node_id, static_cast<uint8_t>(v.kind));
+        });
+        // Keep ordinary staging permission confined to a separate transaction.
+        // Cancellation callbacks never gain permission to append unrelated work
+        // to this sealed native field transaction.
+        NativeGraphWriteTransaction vectorTransaction(context_, context_->metadata->openSnapshot());
+        if (vectorTransaction.baseSuperblock() != snapshot_.superblock())
+            fail(FormatError::FERR_INVALID_STATE, "native Vector planning source changed before coordination");
+        for (size_t first = 0; first < staged.semantics.size();) {
+            size_t last = first + 1;
+            while (last < staged.semantics.size() && staged.semantics[last].index_id == staged.semantics[first].index_id) ++last;
+            const auto index = staged.semantics[first].index_id;
+            const auto definition = std::ranges::find(vector.definitions(), index, &IndexDefinition::index_id);
+            if (definition == vector.definitions().end()) fail(FormatError::FERR_INVALID_STATE, "native Vector coordination lost its schema");
+            const auto mutations = std::span(staged.semantics).subspan(first, last - first);
+            if (context_->metadata->findIndexRootOptional(snapshot_, index)) {
+                vectorTransaction.stageVectorIndexDelta(*context_->indexes, rawPages, manifests, *definition, mutations, options);
+            } else {
+                std::vector<NativeGraphVectorBootstrapRecord, utils::OwnedPmrAllocator<NativeGraphVectorBootstrapRecord>> records;
+                for (const auto &mutation : mutations) {
+                    if (mutation.kind != NativeVectorMutationKind::NVMK_INSERT)
+                        fail(FormatError::FERR_INVALID_STATE, "native Vector bootstrap cannot erase absent state");
+                    records.push_back({mutation.node_id, mutation.encoded_bfloat16});
+                }
+                NativeGraphVectorBootstrapOptions bootstrap{options.first_slot, options.last_slot,
+                    options.maximum_records, options.maximum_raw_pages + 8U, check};
+                vectorTransaction.stageVectorIndexBootstrap(*context_->indexes, rawPages, manifests, *definition, records, bootstrap);
+            }
+            first = last;
+        }
+        check();
+        scalar_index_mutations_ = std::move(vectorTransaction.scalar_index_mutations_);
+        initial_scalar_index_mutations_ = std::move(vectorTransaction.initial_scalar_index_mutations_);
+        vector_bootstraps_ = std::move(vectorTransaction.vector_bootstraps_);
+        vector_deltas_ = std::move(vectorTransaction.vector_deltas_);
+        next_vector_id_ = vectorTransaction.next_vector_id_;
+        hybrid_vector_pending_ = false;
     }
 
     void NativeGraphWriteTransaction::stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
@@ -2340,13 +2529,34 @@ namespace graph::storage {
 		requireActive("commit", true);
         if (covered_adjacency_pending_)
             fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization must succeed before graph commit");
+        if (hybrid_vector_pending_)
+            fail(FormatError::FERR_INVALID_STATE, "failed native Vector coordination requires rollback before commit");
+        std::optional<utils::OwnedAllocationScope> hybridAllocation;
+        if (hybrid_vectors_) hybridAllocation.emplace(hybrid_columns_->memory);
+        const auto finishHybridVectors = [this](void *) noexcept {
+            if (!hybrid_vectors_ || state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE) return;
+            std::vector<StagedVectorBootstrap>().swap(vector_bootstraps_);
+            std::vector<StagedVectorDelta>().swap(vector_deltas_);
+            std::vector<StagedScalarIndexMutation>().swap(scalar_index_mutations_);
+            std::vector<StagedInitialScalarIndexMutation>().swap(initial_scalar_index_mutations_);
+            hybrid_vectors_.reset(); hybrid_columns_.reset(); hybrid_catalog_tokens_.reset(); hybrid_catalog_credit_.reset(); hybrid_vector_pending_ = false;
+        };
+        // Declared before all publication closures: their retained buffers die
+        // before the coordinator refunds its temporary/retained heap credit.
+        std::unique_ptr<void, decltype(finishHybridVectors)> hybridCleanup(this, finishHybridVectors);
+        if (hybrid_vectors_ && (!hybrid_vectors_->semantics.empty() || hybrid_catalog_credit_)) {
+            // Known pre-publication cancellation leaves the complete staged plan
+            // available for retry; later preparation failures require rollback.
+            if (hybrid_columns_->cancellation) hybrid_columns_->cancellation->check();
+            hybrid_vector_pending_ = true;
+        }
 		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
 		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
 		}
-        if (hybrid_conversion_ || hybrid_columns_) {
+        if (hybrid_conversion_ || (hybrid_columns_ && !hybrid_catalog_credit_ && (!hybrid_vectors_ || hybrid_vectors_->semantics.empty()))) {
             // This checkpoint is provably before publication. Cancellation
             // retains an active source/request for an independent retry and
             // avoids ordinary lease-vector scratch and the publication lock.
@@ -3065,14 +3275,60 @@ namespace graph::storage {
 		debug::PerfTrace::addValue("native_graph.commit.entity_insert_target_records",
 				static_cast<int64_t>(insertionTargetRecords));
 
-		std::vector<EntityPropertyRootMutationPlan> propertyPlans;
-		propertyPlans.reserve(properties_.size());
-		std::vector<PropertyCollectionRoot> propertyRoots;
-		propertyRoots.reserve(properties_.size());
-		for (const auto &[directoryId, root]: properties_) {
-			static_cast<void>(directoryId);
-			propertyRoots.push_back(root);
-		}
+        std::shared_ptr<query::execution::MaterializedByteBudget> pendingFieldsMemory;
+        std::optional<utils::OwnedVector<NativeHybridPropertyColumnReplacement>> pendingFields;
+        std::optional<utils::OwnedVector<uint64_t>> pendingPropertyKeys;
+        std::optional<utils::OwnedVector<EntityPropertyKey>> nativeOwnerDeletions;
+        std::optional<utils::OwnedVector<uint32_t>> pendingCatalogTokens;
+        std::vector<EntityPropertyRootMutationPlan> propertyPlans;
+        propertyPlans.reserve(properties_.size());
+        std::vector<PropertyCollectionRoot> propertyRoots;
+        propertyRoots.reserve(properties_.size());
+        for (const auto &[key, root] : properties_) {
+            const auto owner = EntityPropertyKey::fromDirectoryId(key);
+            utils::OwnedHeapReservation boundary(utils::OwnedAllocationScope::owner());
+            const SelectedPropertyReadAdmission admission = [&](size_t bytes) { boundary.set(bytes); };
+            const bool native = native_graph_coordinated_ && context_->properties->hasHybridPropertyGroup(snapshot_, owner, nullptr, &admission);
+            boundary.set(0);
+            if (!native) { propertyRoots.push_back(root); continue; }
+            const auto node = nodes_.find(owner.entity_id); const auto edge = edges_.find(owner.entity_id);
+            const bool inserted = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ?
+                node != nodes_.end() && node->second.inserted && !node->second.erased :
+                edge != edges_.end() && edge->second.inserted && !edge->second.erased;
+            if (!pendingFieldsMemory) {
+                pendingFieldsMemory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                pendingFields.emplace(utils::OwnedPmrAllocator<NativeHybridPropertyColumnReplacement>(pendingFieldsMemory));
+                pendingPropertyKeys.emplace(utils::OwnedPmrAllocator<uint64_t>(pendingFieldsMemory));
+                nativeOwnerDeletions.emplace(utils::OwnedPmrAllocator<EntityPropertyKey>(pendingFieldsMemory));
+                pendingCatalogTokens.emplace(utils::OwnedPmrAllocator<uint32_t>(pendingFieldsMemory));
+            }
+            utils::OwnedAllocationScope scope(pendingFieldsMemory);
+            if (pendingPropertyKeys->size() == 64U)
+                fail(FormatError::FERR_INVALID_STATE, "native graph property batch exceeds64owners");
+            pendingPropertyKeys->push_back(key);
+            if (inserted) {
+                if (root.entries.size() > 64U - pendingFields->size())
+                    fail(FormatError::FERR_INVALID_STATE, "native owner creation exceeds64changed fields");
+                for (const auto &entry : root.entries)
+                    pendingFields->push_back({owner, entry.key_token, OwnedPropertyValue(entry.value), false});
+            } else {
+                const bool erased = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ?
+                    node != nodes_.end() && node->second.erased : edge != edges_.end() && edge->second.erased;
+                if (erased) { nativeOwnerDeletions->push_back(owner); continue; }
+                // Reuse the authenticated map differ without granting the
+                // temporary transaction any publication authority.
+                NativeGraphWriteTransaction fields(context_, context_->metadata->openSnapshot());
+                if (fields.baseSuperblock() != snapshot_.superblock())
+                    fail(FormatError::FERR_INVALID_STATE, "native graph field planning lost its source fence");
+                fields.stageHybridPropertyMaps(std::span(&root, 1U), NativeHybridPropertyMapMode::NHPMM_REPLACE, pendingFieldsMemory);
+                if (fields.hybrid_columns_->cells.size() > 64U - pendingFields->size())
+                    fail(FormatError::FERR_INVALID_STATE, "native graph property batch exceeds64changed fields");
+                for (auto &cell : fields.hybrid_columns_->cells) pendingFields->push_back(std::move(cell));
+                fields.rollback();
+            }
+        }
+
+
 		{
 			debug::ScopedPerfTimer propertyPlanTimer("native_graph.commit.property_plan");
 			propertyPlans = context_->properties->planEntityRootReplacements(snapshot_, propertyRoots,
@@ -3256,7 +3512,7 @@ namespace graph::storage {
 			contentValuesToPublish.insert(contentValuesToPublish.end(), propertyPlan.large_values.begin(),
 														 propertyPlan.large_values.end());
 		}
-		if (!contentValuesToPublish.empty()) {
+		if (!contentValuesToPublish.empty() && (!pendingFields || pendingFields->empty())) {
 			const bool conflictsWithUserMutation =
 					std::ranges::any_of(scalar_index_mutations_,
 										[](const StagedScalarIndexMutation &mutation) {
@@ -4015,13 +4271,81 @@ namespace graph::storage {
 			std::ranges::sort(vectorRebuildIndexIds);
 			const EntityPageBatchResult published = [&] {
 				debug::ScopedPerfTimer publishTimer("native_graph.commit.entity_publish");
+                if (hybrid_vectors_) {
+                    if (!mutations.empty() || !appends.empty() || !newPools.empty() || !propertyPlans.empty() || !auxiliary.empty())
+                        fail(FormatError::FERR_INVALID_STATE, "native Vector coordination cannot mix ordinary Entity/ROW work");
+                    const auto &base = snapshot_.superblock(); const auto &fields = *hybrid_columns_;
+                    const auto &placement = context_->options.property_roots;
+                    NativeHybridVectorPublication proof(*context_->metadata, derivedState,
+                        {base.database_id, base.generation, base.hybrid_property_descriptor_root, fields.cells,
+                            fields.memory, placement.first_slot, placement.last_slot, placement.page_owner_id,
+                            fields.cancellation, fields.field_lifecycle, fields.deletions}, hybrid_vectors_->semantics, bool(hybrid_catalog_credit_),
+                        hybrid_catalog_tokens_ ? std::span<const uint32_t>(*hybrid_catalog_tokens_) : std::span<const uint32_t>{});
+                    EntityPageBatchResult result;
+                    result.superblock = context_->metadata->mutateNativeGraphPagesWithLargeValues(
+                        {}, {}, {}, {}, {}, {}, derivedState, checkpointLsn,
+                        [](auto pages, auto appends, auto pools, auto properties, auto propertyBatches, auto largeValues) {
+                            if (!pages.empty() || !appends.empty() || !pools.empty() || !properties.empty() || !propertyBatches.empty() || !largeValues.empty())
+                                fail(FormatError::FERR_INVALID_STATE, "native Vector-only preparer received unrelated graph images");
+                        }, derivedStatePreparer, vectorBootstrapPreparer, vectorDeltaPreparer, {}, {}, {}, publishOptions,
+                        {}, base.generation, {}, {}, {}, {}, {}, std::nullopt, std::nullopt, &proof);
+                    return result;
+                }
+                std::vector<EntityPropertyKey, utils::OwnedPmrAllocator<EntityPropertyKey>> topologyPropertyOwners;
+                std::optional<NativeHybridTopologyPublication> topologyProof;
+                const bool schemaOnlyCandidate = native_schema_coordinated_ && nodes_.empty() && edges_.empty() && properties_.empty() &&
+                    node_id_ranges_.empty() && edge_id_ranges_.empty() && vector_deltas_.empty();
+                if ((native_graph_coordinated_ || schemaOnlyCandidate) && snapshot_.superblock().hybrid_property_descriptor_root.isValid()) {
+                    // No field/directory authority is granted by ordinary graph
+                    // staging. The metadata writer proves every affected owner.
+                    for (const auto &[key, root] : properties_) {
+                        if (pendingPropertyKeys && std::ranges::find(*pendingPropertyKeys, key) != pendingPropertyKeys->end()) continue;
+                        topologyPropertyOwners.push_back({root.owner_entity_type == Node::typeId ?
+                            EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id});
+                    }
+                    // Existing schema stays fixed for this preservation path.
+                    // Token/sequence/config/count changes are field-independent;
+                    // index/constraint DDL needs its own native coordinator.
+                    bool schemaPreserved = true, schemaControlsKnown = true;
+                    for (const auto &index : scalar_index_mutations_) if (index.index_id == RSS_SYSTEM_CATALOG_INDEX_ID)
+                        for (const auto &operation : index.operations) {
+                            if (operation.key.empty()) { schemaPreserved = false; schemaControlsKnown = false; continue; }
+                            const auto kind = std::to_integer<uint8_t>(operation.key.front());
+                            if (kind > 13) schemaControlsKnown = false;
+                            if (kind > 13 || (kind >= 6 && kind <= 11))
+                                schemaPreserved = false;
+                            if (pendingCatalogTokens && !pendingFields->empty() && kind == 2U) {
+                                if (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT || operation.key.size() <= 5U ||
+                                    !operation.value || operation.value > UINT32_MAX || pendingCatalogTokens->size() == 64U)
+                                    fail(FormatError::FERR_INVALID_STATE, "native creation has an invalid new Catalog token");
+                                uint32_t token = 0;
+                                for (size_t i = 1; i <= 4; ++i) token = (token << 8U) | std::to_integer<uint32_t>(operation.key[i]);
+                                if (token != operation.value) fail(FormatError::FERR_INVALID_STATE, "native creation token reverse identity disagrees");
+                                pendingCatalogTokens->push_back(token);
+                            }
+                        }
+                    if (pendingCatalogTokens) {
+                        std::ranges::sort(*pendingCatalogTokens);
+                        if (std::ranges::adjacent_find(*pendingCatalogTokens) != pendingCatalogTokens->end())
+                            fail(FormatError::FERR_INVALID_STATE, "native creation repeats a Catalog token allocation");
+                    }
+                    topologyProof.emplace(NativeHybridTopologyPublication(*context_->metadata, *context_->entities,
+                        snapshot_.superblock(), topologyPropertyOwners, schemaPreserved, derivedState,
+                        pendingFields ? std::span<const NativeHybridPropertyColumnReplacement>(*pendingFields) : std::span<const NativeHybridPropertyColumnReplacement>{},
+                        pendingFieldsMemory, pendingCatalogTokens ? std::span<const uint32_t>(*pendingCatalogTokens) : std::span<const uint32_t>{},
+                        nativeOwnerDeletions ? std::span<const EntityPropertyKey>(*nativeOwnerDeletions) : std::span<const EntityPropertyKey>{},
+                        schemaOnlyCandidate && schemaControlsKnown));
+                }
 				return context_->entities->applyNativeGraphBatchTransaction(
 						snapshot_, mutations, appends, newPools, propertyPlans, *context_->properties,
 						context_->options.property_roots, auxiliary, derivedState, derivedStatePreparer, checkpointLsn,
 						publishOptions, logicalIds, vectorBootstrapPreparer, vectorDeltaPreparer,
-						privateSegmentImagePreparer, {}, deferredIndexPlanner, {});
+                        privateSegmentImagePreparer, {}, deferredIndexPlanner, {}, topologyProof ? &*topologyProof : nullptr);
 			}();
-			refreshInsertionTargetCache(published);
+            if (hybrid_vectors_ && !hybrid_columns_->deletions.empty()) {
+                std::lock_guard lock(context_->insertion_cache_mutex);
+                context_->insertion_cache.valid = false; context_->insertion_cache.targets.clear();
+            } else refreshInsertionTargetCache(published);
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_COMMITTED;
 			return {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, published.superblock,
@@ -4041,7 +4365,14 @@ namespace graph::storage {
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		}
-        hybrid_conversion_.reset(); hybrid_columns_.reset();
+        if (hybrid_vectors_) {
+            std::vector<StagedVectorBootstrap>().swap(vector_bootstraps_);
+            std::vector<StagedVectorDelta>().swap(vector_deltas_);
+            std::vector<StagedScalarIndexMutation>().swap(scalar_index_mutations_);
+            std::vector<StagedInitialScalarIndexMutation>().swap(initial_scalar_index_mutations_);
+            hybrid_vectors_.reset();
+        }
+        hybrid_conversion_.reset(); hybrid_columns_.reset(); hybrid_catalog_tokens_.reset(); hybrid_catalog_credit_.reset();
 	}
 
 	NativeGraphWritePlanner::NativeGraphWritePlanner(RelocatableMetadataStore &metadata, EntityPageStore &entities,

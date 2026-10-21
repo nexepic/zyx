@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *RowCreationAfterNativeFieldWrite*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate
+unknown file: Failure
+C++ exception with description "relocatable shared page owner header disagrees with its location mapping" thrown in the test body.
+
+[  FAILED  ] HybridPropertyQueryParityTest.RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate (238 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (238 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (238 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate
+
+ 1 FAILED TEST

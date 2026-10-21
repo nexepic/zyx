@@ -1,0 +1,39 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.OrdinaryTopology*:RelocatableTailTruncationTest.*
+[==========] Running 13 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from RelocatableTailTruncationTest
+[ RUN      ] RelocatableTailTruncationTest.TruncatesOnlyReleasedTailSlotsAfterSnapshotsDrainAndReopens
+[       OK ] RelocatableTailTruncationTest.TruncatesOnlyReleasedTailSlotsAfterSnapshotsDrainAndReopens (8 ms)
+[ RUN      ] RelocatableTailTruncationTest.RefusesFallbackOnlyStorageWithoutRiskingTheFileTail
+[       OK ] RelocatableTailTruncationTest.RefusesFallbackOnlyStorageWithoutRiskingTheFileTail (7 ms)
+[ RUN      ] RelocatableTailTruncationTest.NativeTruncateFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen
+[       OK ] RelocatableTailTruncationTest.NativeTruncateFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen (9 ms)
+[ RUN      ] RelocatableTailTruncationTest.NativePreTruncateSyncFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen
+[       OK ] RelocatableTailTruncationTest.NativePreTruncateSyncFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen (8 ms)
+[ RUN      ] RelocatableTailTruncationTest.NativePostTruncateSyncFailureReportsUncertainDurabilityAndReopensSafely
+[       OK ] RelocatableTailTruncationTest.NativePostTruncateSyncFailureReportsUncertainDurabilityAndReopensSafely (7 ms)
+[ RUN      ] RelocatableTailTruncationTest.TruncatesAReleasedExtentTailAfterMixedPageAndExtentRelocationThenReopens
+[       OK ] RelocatableTailTruncationTest.TruncatesAReleasedExtentTailAfterMixedPageAndExtentRelocationThenReopens (19 ms)
+[----------] 6 tests from RelocatableTailTruncationTest (62 ms total)
+
+[----------] 7 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups (1518 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership (1437 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField (397 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness (1124 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesNativePropertyMutationAndDeletionThroughRowPlans
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesNativePropertyMutationAndDeletionThroughRowPlans (2031 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels (1446 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions
+[       OK ] HybridPropertyQueryParityTest.OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions (183 ms)
+[----------] 7 tests from HybridPropertyQueryParityTest (8139 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 2 test suites ran. (8201 ms total)
+[  PASSED  ] 13 tests.

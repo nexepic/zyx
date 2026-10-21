@@ -1452,7 +1452,8 @@ namespace graph::storage {
         auto definitions = readIndexDefinitions(snapshot, maximumRecords);
         for (const auto &definition : definitions) {
             check(); if (definition.kind != IndexDefinitionKind::IDK_LABEL &&
-                definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE)
+                definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE &&
+                definition.kind != IndexDefinitionKind::IDK_VECTOR)
                 fail(FormatError::FERR_UNSUPPORTED_VERSION, "native field publication requires complete property-derived index coordination");
         }
         verifyBootstrap(*this, snapshot);

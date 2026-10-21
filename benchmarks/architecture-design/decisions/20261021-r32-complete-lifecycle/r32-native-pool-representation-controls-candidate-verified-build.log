@@ -1,0 +1,10 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:1555:21: warning: unused variable 'currentEntry' [-Wunused-variable]
+ 1555 |         const CatalogEntry currentEntry = store->findCatalog(current, testSegmentId(1));
+      |                            ^~~~~~~~~~~~
+In file included from /workspace/zyx/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocator.cpp:9:
+/workspace/zyx/tests/include/storage/relocatable/allocation/PhysicalSegmentAllocatorTestFixture.hpp:78:28: warning: unused function 'catalogEntriesThatExhaustOneNormalMetadataPool' [-Wunused-function]
+   78 |         std::vector<CatalogEntry> catalogEntriesThatExhaustOneNormalMetadataPool() {
+      |                                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.

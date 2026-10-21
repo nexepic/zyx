@@ -61,6 +61,8 @@ namespace graph::storage {
     };
 	class BTreePageStore;
     class EntityPageStore;
+    class EntityLabelSetStore;
+    class HybridPropertyPoolPlacement;
     class SlottedPagePool;
     class CancellationCheckpoint;
 	class SystemCatalog;
@@ -1083,6 +1085,57 @@ namespace graph::storage {
         const CancellationCheckpoint *cancellation = nullptr;
         bool field_lifecycle = false;
         std::span<const EntityPropertyKey> owner_deletions;
+        std::span<const EntityPropertyKey> pending_owner_additions;
+    };
+    struct NativeVectorMutation;
+    // Only the native transaction can bind its sealed semantic plan to this
+    // exact compound publication. No caller-supplied callback grants authority.
+    class NativeHybridVectorPublication final {
+        friend class NativeGraphWriteTransaction;
+        friend class RelocatableMetadataStore;
+        const RelocatableMetadataStore *metadata_;
+        const NativeGraphDerivedStateMutation *derived_;
+        NativeHybridPropertyColumnWrite fields_;
+        std::span<const NativeVectorMutation> semantics_;
+        bool catalog_tokens_ = false;
+        std::span<const uint32_t> new_property_tokens_;
+        NativeHybridVectorPublication(const RelocatableMetadataStore &metadata,
+            const NativeGraphDerivedStateMutation &derived, NativeHybridPropertyColumnWrite fields,
+            std::span<const NativeVectorMutation> semantics, bool catalogTokens = false,
+            std::span<const uint32_t> newPropertyTokens = {})
+            : metadata_(&metadata), derived_(&derived), fields_(std::move(fields)), semantics_(semantics),
+                catalog_tokens_(catalogTokens), new_property_tokens_(newPropertyTokens) {}
+    public:
+        NativeHybridVectorPublication(const NativeHybridVectorPublication &) = delete;
+        NativeHybridVectorPublication &operator=(const NativeHybridVectorPublication &) = delete;
+    };
+    // Only the logical coordinator can bind canonical live/new-owner fields and
+    // derived work to an exact leased Entity publication. Metadata independently
+    // validates liveness and prepares physical field images in that same batch.
+    class NativeHybridTopologyPublication final {
+        friend class NativeGraphWriteTransaction;
+        friend class RelocatableMetadataStore;
+        friend class EntityPageStore;
+        const RelocatableMetadataStore *metadata_;
+        const EntityPageStore *entities_;
+        Superblock source_;
+        std::span<const EntityPropertyKey> property_owners_;
+        bool schema_preserved_, schema_only_;
+        const NativeGraphDerivedStateMutation *derived_;
+        std::span<const NativeHybridPropertyColumnReplacement> field_changes_;
+        std::span<const EntityPropertyKey> owner_deletions_;
+        std::shared_ptr<std::pmr::memory_resource> fields_memory_;
+        std::span<const uint32_t> new_property_tokens_;
+        NativeHybridTopologyPublication(const RelocatableMetadataStore &metadata, const EntityPageStore &entities,
+            const Superblock &source, std::span<const EntityPropertyKey> owners, bool schemaPreserved,
+            const NativeGraphDerivedStateMutation &derived, std::span<const NativeHybridPropertyColumnReplacement> fields,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::span<const uint32_t> newTokens,
+            std::span<const EntityPropertyKey> deletions, bool schemaOnly)
+            : metadata_(&metadata), entities_(&entities), source_(source), property_owners_(owners), schema_preserved_(schemaPreserved), schema_only_(schemaOnly),
+                derived_(&derived), field_changes_(fields), owner_deletions_(deletions), fields_memory_(std::move(memory)), new_property_tokens_(newTokens) {}
+    public:
+        NativeHybridTopologyPublication(const NativeHybridTopologyPublication &) = delete;
+        NativeHybridTopologyPublication(NativeHybridTopologyPublication &&) noexcept = default;
     };
     struct NativeHybridPropertyPoolRelocation {
         DatabaseId expected_database_id{};
@@ -1424,7 +1477,9 @@ namespace graph::storage {
 				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
 				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {},
                 const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation = std::nullopt,
-                const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence = std::nullopt);
+                const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence = std::nullopt,
+                const NativeHybridVectorPublication *hybridVectors = nullptr,
+                const NativeHybridTopologyPublication *hybridTopology = nullptr);
         [[nodiscard]] Superblock mutateHybridPropertyColumns(const NativeHybridPropertyColumnWrite &request,
             LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
         // Physical-only native field maintenance: at most31 current source
@@ -1921,6 +1976,16 @@ namespace graph::storage {
 									const std::optional<LargeValueManifestLocation> &replacementLargeValueManifest,
 									LogSequenceNumber checkpointLsn, const CrossPoolPageEvacuationPreparer &preparer,
 									const MetadataPublishOptions &options);
+        // Prepares field/directory/derived images in an existing writer batch.
+        // The caller owns publication and retains placement through its outcome.
+        [[nodiscard]] bool prepareHybridPropertyColumns(MetadataWriteBatch &batch,
+            const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
+            const NativeHybridPropertyColumnWrite &request, std::span<const NativeHybridPropertyColumnReplacement> replacements,
+            SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &sourceValues,
+            EntityPageStore &sourceEntities, EntityLabelSetStore &sourceLabels, HybridPropertyPoolPlacement &placement,
+            const NativeHybridVectorPublication *hybridVectors = nullptr,
+            const NativeHybridTopologyPublication *hybridTopology = nullptr,
+            std::span<const NativeGraphLargeValueMutation> jointValues = {});
         [[nodiscard]] Superblock publishHybridPropertyRows(MetadataWriteBatch &batch,
             const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
             const NativeGraphHybridPropertyConversion &conversion, EntityPageStore &entities,
