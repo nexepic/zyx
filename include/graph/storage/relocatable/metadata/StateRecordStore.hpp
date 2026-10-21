@@ -32,7 +32,8 @@ namespace graph::storage {
 		// Inserts a new State record or atomically replaces the same durable State
 		// ID. Replacements keep a stable State location when the encoded payload
 		// fits the existing slot; otherwise they fail before publication.
-		[[nodiscard]] StateLocation upsert(const StateRecord &record, const StateRecordStoreOptions &options);
+		[[nodiscard]] StateLocation upsert(const StateRecord &record, const StateRecordStoreOptions &options,
+            const MetadataPublishOptions &publishOptions = {});
 		[[nodiscard]] StateRecord read(const MetadataSnapshotPin &snapshot, uint64_t stateId) const;
 
 	private:

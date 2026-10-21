@@ -1,0 +1,59 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyNativeJournalTest
+[ RUN      ] HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:103: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:104: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 00-00 00-00 EC-55 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:104: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 424
+  epoch
+    Which is: 400
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:110: Failure
+Expected: (void)tx.commit() throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:111: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:111: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 424
+  epoch
+    Which is: 400
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:112: Failure
+Expected equality of these values:
+  properties_->readEntity(metadata_->openSnapshot(), {NODE, 1})
+    Which is: 40-byte object <01-00 00-00 00-00 00-00 00-00 00-00 EC-55 00-00 F0-00 42-10 EC-55 00-00 38-01 42-10 EC-55 00-00 38-01 42-10 EC-55 00-00>
+  original
+    Which is: 40-byte object <01-00 00-00 00-00 00-00 00-00 00-00 FE-7F 00-00 E0-24 43-10 EC-55 00-00 28-25 43-10 EC-55 00-00 28-25 43-10 EC-55 00-00>
+
+[  FAILED  ] HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication (30 ms)
+[----------] 1 test from HybridPropertyNativeJournalTest (30 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (30 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication
+
+ 1 FAILED TEST

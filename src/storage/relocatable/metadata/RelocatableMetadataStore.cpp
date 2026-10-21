@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyPoolRoutes.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/utils/OwnedVector.hpp"
@@ -14,6 +15,7 @@
 #include "graph/storage/relocatable/metadata/MetadataStoreLifecycle.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <array>
 #include <bit>
 #include <limits>
@@ -40,6 +42,14 @@
 namespace graph::storage {
 
 	namespace {
+
+        bool isLargeValueMaintenancePool(const CatalogEntry &pool) {
+            return (pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
+                    pool.owner_id == RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID) ||
+                (pool.kind == SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL &&
+                    pool.owner_id == RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID) ||
+                (pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL && pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+        }
 
         using LogicalIdCapabilityMap = std::pmr::map<uint64_t, uint64_t>;
         struct PreparedLogicalIdCapabilities {
@@ -131,16 +141,44 @@ namespace graph::storage {
 		pool_ownership_.verifyAfterOpen(current);
         if (current.hybrid_property_descriptor_root.isValid())
             static_cast<void>(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current));
+        // A rejected private candidate can leave appends behind a ROW root.
+        // Every writable candidate-profile reopen must therefore recover before
+        // its first publication, including metadata-only publications.
+        native_pool_recovery_required_ = !readOnly && RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
 	}
 
 	RelocatableMetadataStore::~RelocatableMetadataStore() = default;
 
-	MetadataWriteGuard RelocatableMetadataStore::beginWrite() {
+	MetadataWriteGuard RelocatableMetadataStore::beginWrite(bool allowHybridMutation) {
 		if (read_only_) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable read-only metadata store cannot publish or reclaim metadata");
 		}
-		return snapshots_.beginWrite();
+        if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return snapshots_.beginWrite();
+        return snapshots_.beginWriteWithAdmission([this, allowHybridMutation](const Superblock &current) {
+            if (!current.hybrid_property_descriptor_root.isValid()) return;
+            const auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current);
+            if (!allowHybridMutation && std::ranges::any_of(descriptor.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
+                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                    "native hybrid candidate rejects unadapted writes and pool reconciliation");
+        }, [this](MetadataWriteGuard &writer) {
+            const auto current = bootstrap_.recover();
+            // An optional admission can abandon private appends while its
+            // durable source still uses ROW. Clean them before ANY next write.
+            if (native_pool_recovery_required_) recoverNativePoolFrames(writer, current);
+            if (!current.hybrid_property_descriptor_root.isValid()) return;
+            const auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current);
+            if (std::ranges::none_of(descriptor.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); })) return;
+            native_safe_io_epoch_ = io_->dataMutationEpoch();
+            writer.release_observer_ = [this, exceptions = std::uncaught_exceptions()]() noexcept {
+                const auto epoch = io_->dataMutationEpoch();
+                // Saturation loses the physical-change signal. An interrupted
+                // writer then requires conservative recovery, even when it
+                // cannot prove that its first physical write completed.
+                if (epoch != native_safe_io_epoch_ || (epoch == UINT64_MAX && std::uncaught_exceptions() > exceptions))
+                    native_pool_recovery_required_ = true;
+            };
+        });
 	}
 
 	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::initializeNew(std::shared_ptr<StorageIO> io,
@@ -205,7 +243,11 @@ namespace graph::storage {
 		// high-water mark and never lets an older cached ID overtake it later.
 		available_node_ids_ = {};
 		available_edge_ids_ = {};
-		MetadataWriteGuard writer = beginWrite();
+		// This typed publication only advances ID high-water marks and the
+        // bootstrap route context; it does not mutate graph/native payloads.
+        // beginWrite still authenticates the active descriptor and performs
+        // required interrupted-pool recovery under the writer lock.
+        MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
 		if (!current.checkpoint_lsn.isValid() ||
 			current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max() ||
@@ -239,6 +281,7 @@ namespace graph::storage {
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
         catch (...) {}
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
+        native_safe_io_epoch_ = io_->dataMutationEpoch();
         // The lease mutex excludes intervening registrations; these maps use
         // equal std allocators and transfer their prepared nodes without allocation.
         outstanding_node_id_leases_.merge(prepared.nodes);
@@ -298,7 +341,11 @@ namespace graph::storage {
 		}
 		const uint64_t requestedNodes = remainingNodes == 0U ? 0U : std::max(remainingNodes, minimumLeaseBlockSize);
 		const uint64_t requestedEdges = remainingEdges == 0U ? 0U : std::max(remainingEdges, minimumLeaseBlockSize);
-		MetadataWriteGuard writer = beginWrite();
+		// This typed publication only advances ID high-water marks and the
+        // bootstrap route context; it does not mutate graph/native payloads.
+        // beginWrite still authenticates the active descriptor and performs
+        // required interrupted-pool recovery under the writer lock.
+        MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
 		validateRequest(requestedNodes, current.next_logical_node_id, "Node");
 		validateRequest(requestedEdges, current.next_logical_edge_id, "Edge");
@@ -325,6 +372,7 @@ namespace graph::storage {
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
         catch (...) {}
         snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
+        native_safe_io_epoch_ = io_->dataMutationEpoch();
         if (requestedNodes != 0U) available_node_ids_ = nextAvailableNodes;
         if (requestedEdges != 0U) available_edge_ids_ = nextAvailableEdges;
         registerPrepared(prepared);
@@ -422,8 +470,16 @@ namespace graph::storage {
 		}
 	}
 
-	void RelocatableMetadataStore::publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
-												const MetadataPublishOptions &options) {
+    void RelocatableMetadataStore::prepareBatchPublication(MetadataWriteBatch &batch) {
+        if (batch.publication_prepared_) return;
+        if (batch.candidate().hybrid_property_descriptor_root.isValid()) {
+            const auto descriptor = pages_.readHybridPropertyDescriptor(batch.candidate().hybrid_property_descriptor_root,
+                batch.candidate());
+            if (!batch.hybrid_property_publication_ && std::ranges::any_of(descriptor.descriptor.roots,
+                [](const auto &root) { return root.page_id.isValid(); }))
+                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                    "nonempty native hybrid publication requires its metadata-owned candidate coordinator");
+        }
 		// The first Catalog COW can allocate a metadata pool that was not visible
 		// while the ownership pass enumerated pools. Reconcile it while the Catalog
 		// root still uses physical children; logical route children are not visible
@@ -462,9 +518,17 @@ namespace graph::storage {
 			}
 		}
 		prepareBootstrapRoutes(batch);
+        batch.publication_prepared_ = true;
+    }
+
+	void RelocatableMetadataStore::publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
+												const MetadataPublishOptions &options) {
+        prepareBatchPublication(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
 		pages_.rebindSuperblock(batch.candidate());
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
+        native_safe_io_epoch_ = io_->dataMutationEpoch();
+        native_pool_recovery_required_ = false;
 	}
 
 	Superblock RelocatableMetadataStore::upsertCatalog(std::span<const CatalogEntry> entries,
@@ -2465,9 +2529,15 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable pool reconciliation requires a valid Segment ID and callback");
 		}
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
 		const CatalogEntry visible = catalog_.find(current, segmentId);
+        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+            std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
+                [](const auto &root) { return root.page_id.isValid(); });
+        if (nativeActive && !isLargeValueMaintenancePool(visible))
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                "native physical reconciliation requires an immutable LargeValue or content-index pool");
 		const uint8_t unavailable = static_cast<uint8_t>(visible.state != SegmentState::SGS_SEALED) |
 									static_cast<uint8_t>(!allocator_.isAllocated(current, visible.physical_slot));
 		if (unavailable != 0U) {
@@ -2709,9 +2779,21 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Catalog retirement batch requires segments and a checkpoint LSN");
 		}
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+            std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
+                [](const auto &root) { return root.page_id.isValid(); });
+        if (nativeActive) {
+            if (requests.size() > 64U)
+                throw FormatException(FormatError::FERR_INVALID_HEADER, "native immutable pool retirement exceeds its bound");
+            for (const auto &request : requests)
+                if (!isLargeValueMaintenancePool(catalog_.find(current, request.segment_id)))
+                    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                        "native empty-pool retirement requires an immutable LargeValue or content-index pool");
+        }
+        MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        if (nativeActive) batch.hybrid_property_publication_ = true;
 		segment_retirement_coordinator_.prepareRetirements(batch, requests);
 		publishBatch(batch, writer, options);
 		return batch.candidate();
@@ -2775,8 +2857,13 @@ namespace graph::storage {
 		if (requests.empty() || !checkpointLsn.isValid())
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 				"relocatable retired slot release requires a nonempty batch and checkpoint LSN");
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
+        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+            std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
+                [](const auto &root) { return root.page_id.isValid(); });
+        if (nativeActive && requests.size() > 64U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "native retired-pool release exceeds its 64-pool bound");
 		utils::OwnedVector<uint64_t> identities;
 		identities.reserve(requests.size());
 		for (const auto &request : requests) {
@@ -2799,6 +2886,28 @@ namespace graph::storage {
 			retirements.push_back(retirement);
 		}
 		if (blocked) return std::nullopt;
+        if (nativeActive) {
+            // Whole-pool release never reconciles or overwrites field frames.
+            // The durable retire queue and pin barrier establish eligibility;
+            // probe every frame owner and reject a current route, even if its allocation bit is clear.
+            const auto source = snapshots_.pinCurrentUnderWrite(writer, current);
+            SharedPagePoolAllocator sourcePools(io_, *this, source);
+            for (const auto &entry : retirements) {
+                const auto pool = catalog_.find(current, entry.segment_id);
+                if (pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL && pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL && pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL && pool.kind != SegmentKind::SGK_STATE_PAGE_POOL && !isLargeValueMaintenancePool(pool))
+                    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                        "native retired-pool release requires a supported detached shared pool");
+                const auto header = SharedPagePoolAllocator::readPoolHeader(*io_, current.data_region_offset, pool);
+                for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
+                    const auto owner = hybrid_property_detail::currentPoolFrameOwner(pool, header, frame,
+                        [&](uint8_t index) { return sourcePools.readPageOwner(pool, index); },
+                        [&](PageId id) { return locations_.findPageOptional(current, id); });
+                    if (owner)
+                        throw FormatException(FormatError::FERR_INVALID_STATE,
+                            "native retired-pool release still has a current page route");
+                }
+            }
+        }
 		std::ranges::sort(retirements, {}, &RetireQueueEntry::physical_slot);
         // A reused slot must not retain one permanent Catalog owner per release.
         // Only older, already-obsolete shared-pool owners of these exact slots
@@ -2810,7 +2919,7 @@ namespace graph::storage {
         const size_t maximumHistory = requests.size() * 2U;
         utils::OwnedVector<SegmentId> obsoleteOwners;
         obsoleteOwners.reserve(maximumHistory);
-        catalog_.visit(current, [&](const CatalogEntry &entry) {
+        if (!nativeActive) catalog_.visit(current, [&](const CatalogEntry &entry) {
             if (obsoleteOwners.size() == maximumHistory || entry.state != SegmentState::SGS_OBSOLETE ||
                 !isSharedPagePoolSegmentKind(entry.kind)) return;
             const auto selected = std::lower_bound(retirements.begin(), retirements.end(), entry.physical_slot,
@@ -2828,6 +2937,15 @@ namespace graph::storage {
         }
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		retire_queue_reclaimer_.prepareReclamation(batch, retirements);
+        if (nativeActive) {
+            // Exact retired identities have no older reachable pins or current
+            // data routes. Avoid accumulating an obsolete owner per reuse cycle.
+            utils::OwnedVector<SegmentId> erased;
+            erased.reserve(retirements.size());
+            for (const auto &entry : retirements) erased.push_back(entry.segment_id);
+            std::ranges::sort(erased); catalog_.prepareErase(batch, erased);
+            batch.hybrid_property_publication_ = true;
+        }
         if (!obsoleteOwners.empty()) catalog_.prepareErase(batch, obsoleteOwners);
 		publishBatch(batch, writer, options);
 		return batch.candidate();
@@ -3692,6 +3810,19 @@ namespace graph::storage {
 		}
 		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitNodePageLocationsAfter(snapshot.superblock(), afterNodeId, maximumMetadataPages, visitor,
+													  visitedMetadataPages);
+	}
+
+	bool RelocatableMetadataStore::visitEdgePageLocationsAfter(
+			const MetadataSnapshotPin &snapshot, uint64_t afterEdgeId, size_t maximumMetadataPages,
+			const std::function<bool(const EntityPageLocation &)> &visitor, size_t *visitedMetadataPages) const {
+		if (!snapshots_.owns(snapshot) || !visitor || maximumMetadataPages == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable resumable Entity Map Edge traversal "
+								  "requires this store's active snapshot, page bound, and visitor");
+		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
+		return locations_.visitEdgePageLocationsAfter(snapshot.superblock(), afterEdgeId, maximumMetadataPages, visitor,
 													  visitedMetadataPages);
 	}
 

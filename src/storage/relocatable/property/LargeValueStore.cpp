@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
@@ -1444,6 +1445,34 @@ namespace graph::storage {
 		return bytes;
 	}
 
+    LargeValueManifest LargeValueStore::verifyContent(const MetadataSnapshotPin &snapshot,
+            const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission,
+            const std::function<void()> &checkpoint) const {
+        if (checkpoint) checkpoint();
+        auto root = readManifest(snapshot, reference, bufferAdmission);
+        const size_t rootBytes = checkedReadBufferSum(root.media_type.capacity(),
+            checkedReadBufferSum(root.chunks.capacity() * sizeof(LargeValueChunk),
+                root.children.capacity() * sizeof(LargeValueManifestChild)));
+        const auto admitRange = [&](size_t bytes) {
+            if (bufferAdmission) bufferAdmission(checkedReadBufferSum(rootBytes, bytes));
+        };
+        utils::Sha256 hash;
+        const auto inspect = [&](std::span<const std::byte> bytes) {
+            if (checkpoint) checkpoint();
+            hash.update(bytes);
+        };
+        // Reuse the same authenticated chunk traversal without reserving an
+        // owning output. Each compressed chunk is decoded once, then discarded.
+        static_cast<void>(readRangeFromManifestImpl(snapshot, root, 0, root.logical_bytes,
+            bufferAdmission ? std::function<void(size_t)>(std::ref(admitRange)) : std::function<void(size_t)>{},
+            nullptr, std::ref(inspect)));
+        if (hash.finalize() != root.content_hash)
+            fail(FormatError::FERR_CHECKSUM_MISMATCH, "LargeValue full-content SHA-256 does not match its manifest");
+        if (checkpoint) checkpoint();
+        if (bufferAdmission) bufferAdmission(rootBytes);
+        return root;
+    }
+
 	std::vector<std::byte> LargeValueStore::readRange(const MetadataSnapshotPin &snapshot,
 													  const LargeValueRef &reference, uint64_t offset,
 													  uint64_t length) const {
@@ -1466,7 +1495,8 @@ namespace graph::storage {
 
 	std::vector<std::byte> LargeValueStore::readRangeFromManifestImpl(const MetadataSnapshotPin &snapshot,
 		const LargeValueManifest &immutableManifest, uint64_t offset, uint64_t length,
-		const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache) const {
+		const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache,
+        const std::function<void(std::span<const std::byte>)> &verificationSink) const {
 		if (!metadata_.ownsSnapshot(snapshot)) {
 			fail(FormatError::FERR_INVALID_STATE, "LargeValue ranged read requires this store's active snapshot");
 		}
@@ -1482,21 +1512,24 @@ namespace graph::storage {
 		const auto admit = [&](size_t bytes) {
 			if (bufferAdmission) bufferAdmission(checkedReadBufferSum(bytes, cache ? cache->retainedBytes() : 0U));
 		};
-		if (length > std::numeric_limits<size_t>::max()) {
+		if (!verificationSink && length > std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue ranged read exceeds addressable buffer size");
 		}
 		std::vector<std::byte> result;
-		admit(static_cast<size_t>(length));
-        if (!bufferAdmission) detail::admitScopedPropertyVectorGrowth(result, static_cast<size_t>(length));
-		result.reserve(static_cast<size_t>(length));
+		if (!verificationSink) {
+            admit(static_cast<size_t>(length));
+            if (!bufferAdmission) detail::admitScopedPropertyVectorGrowth(result, static_cast<size_t>(length));
+            result.reserve(static_cast<size_t>(length));
+        }
 		admit(result.capacity());
 		if (length == 0U) {
 			return result;
 		}
 		const uint64_t end = offset + length;
+        uint64_t delivered = 0;
 		bool firstDataPage = true;
 		const auto readNode = [this, &snapshot, &immutableManifest, offset, end, &result,
-								   &firstDataPage, &bufferAdmission, &admit, cache](const auto &self, const LargeValueManifest &node, size_t retainedChildren) -> void {
+								   &firstDataPage, &bufferAdmission, &admit, cache, &verificationSink, &delivered](const auto &self, const LargeValueManifest &node, size_t retainedChildren) -> void {
 			if (node.isLeaf()) {
 				const auto first =
 						std::lower_bound(node.chunks.begin(), node.chunks.end(), offset,
@@ -1538,8 +1571,10 @@ namespace graph::storage {
 					const uint64_t copyBegin =
 							std::max(offset, chunk->uncompressed_offset) - chunk->uncompressed_offset;
 					const uint64_t copyEnd = std::min(end, chunkEnd) - chunk->uncompressed_offset;
-					result.insert(result.end(), rawChunk.begin() + static_cast<std::ptrdiff_t>(copyBegin),
-								  rawChunk.begin() + static_cast<std::ptrdiff_t>(copyEnd));
+                    const auto selected = rawChunk.subspan(static_cast<size_t>(copyBegin), static_cast<size_t>(copyEnd - copyBegin));
+                    if (verificationSink) verificationSink(selected);
+                    else result.insert(result.end(), selected.begin(), selected.end());
+                    delivered += selected.size();
 				}
 				return;
 			}
@@ -1561,7 +1596,7 @@ namespace graph::storage {
 			}
 		};
 		readNode(readNode, immutableManifest, 0U);
-		if (result.size() != length) { // ZYX_COV_EXCL_LINE: manifest validation makes the covered ranges contiguous.
+		if (delivered != length) { // ZYX_COV_EXCL_LINE: manifest validation makes the covered ranges contiguous.
 			fail(FormatError::FERR_INVALID_STATE, "LargeValue chunk coverage did not satisfy the requested range");
 		}
 		admit(result.capacity());
@@ -2045,7 +2080,8 @@ namespace graph::storage {
 													   std::span<const PageRetirement> retirements,
 													   PhysicalSlotId firstIndexSlot, PhysicalSlotId lastIndexSlot,
 													   LogSequenceNumber checkpointLsn,
-													   const MetadataPublishOptions &publishOptions) {
+													   const MetadataPublishOptions &publishOptions,
+            const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence) {
 		const uint8_t invalidRetirement =
 				static_cast<uint8_t>(!expectedMetadataGeneration.isValid()) |
 				static_cast<uint8_t>(erasedValueIds.empty()) | static_cast<uint8_t>(retirements.empty()) |
@@ -2069,6 +2105,13 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue retirement scan generation is stale and must be repeated");
 			}
+            if (!reclamationEvidence && snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                const auto descriptor = metadata_.pages_.readHybridPropertyDescriptor(
+                    snapshot.superblock().hybrid_property_descriptor_root, snapshot.superblock()).descriptor;
+                if (std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
+                    fail(FormatError::FERR_UNSUPPORTED_VERSION,
+                        "native LargeValue retirement requires complete typed ownership evidence");
+            }
 			// Retirement makes a value unreachable by removing its content-index and
 			// Manifest-directory routes. Require the complete immutable tree here so
 			// a caller cannot leave orphaned child Manifest or data frames behind.
@@ -2154,7 +2197,7 @@ namespace graph::storage {
 					[this, checkpointLsn](std::span<const ExistingPoolPageRetirementBatch> batches) {
 						prepareRetirements(batches, checkpointLsn);
 					},
-					publishOptions, {}, expectedMetadataGeneration);
+					publishOptions, {}, expectedMetadataGeneration, {}, {}, {}, {}, {}, std::nullopt, reclamationEvidence);
 		} catch (...) {
 			snapshot.release();
 			throw;

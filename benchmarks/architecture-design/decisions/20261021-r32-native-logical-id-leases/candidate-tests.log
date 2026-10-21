@@ -1,0 +1,340 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLogicalIdsTest.*:NativeGraphWritePlannerLeaseRecoveryTest.*:RelocatableMetadataStoreTest.*
+[==========] Running 162 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from HybridPropertyLogicalIdsTest
+[ RUN      ] HybridPropertyLogicalIdsTest.DefaultFormatRetainsOrdinaryLeaseContract
+[       OK ] HybridPropertyLogicalIdsTest.DefaultFormatRetainsOrdinaryLeaseContract (2 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.DurableLeasePreservesNativeFieldsGraphRootsAndOldPins
+[       OK ] HybridPropertyLogicalIdsTest.DurableLeasePreservesNativeFieldsGraphRootsAndOldPins (172 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.CachedRangesAreSingleUseAndReopenSkipsUnissuedTails
+[       OK ] HybridPropertyLogicalIdsTest.CachedRangesAreSingleUseAndReopenSkipsUnissuedTails (32 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots
+[       OK ] HybridPropertyLogicalIdsTest.BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots (40 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.ReadOnlyLeaseRefusalAndGeneralWriterGuardRemain
+[       OK ] HybridPropertyLogicalIdsTest.ReadOnlyLeaseRefusalAndGeneralWriterGuardRemain (27 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.HighWaterLeasesDoNotGrantGeneralGraphMutationAuthority
+[       OK ] HybridPropertyLogicalIdsTest.HighWaterLeasesDoNotGrantGeneralGraphMutationAuthority (32 ms)
+[----------] 6 tests from HybridPropertyLogicalIdsTest (308 ms total)
+
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease (4 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption (10 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication (6 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication (6 ms)
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest (48 ms total)
+
+[----------] 147 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots (30 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence (16 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor (37 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence (22 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication (13 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences (24 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace (13 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner (19 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable (41 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsOverlappingManifestDataPageRanges
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsOverlappingManifestDataPageRanges (11 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary (23 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues (235 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner
+[       OK ] RelocatableMetadataStoreTest.LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds (12 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds (14 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRouteOutsideStatePage
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRouteOutsideStatePage (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners (12 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType (12 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia (22 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots (14 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication (15 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetirementBudgetBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetirementBudgetBeforePublication (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerBatchesPoolLifecyclePublications
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerBatchesPoolLifecyclePublications (159 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValuePoolBatchReleaseWaitsForPinnedReaders
+[       OK ] RelocatableMetadataStoreTest.LargeValuePoolBatchReleaseWaitsForPinnedReaders (186 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication (42 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot
+[       OK ] RelocatableMetadataStoreTest.RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot (30 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement (1299 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues
+[       OK ] RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues (19 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesPropertylessStreamedEdgeGraphWithoutPropertyDirectories
+[       OK ] RelocatableMetadataStoreTest.PublishesPropertylessStreamedEdgeGraphWithoutPropertyDirectories (13 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphLargeValueRootsInOneGeneration
+[       OK ] RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphLargeValueRootsInOneGeneration (28 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesStreamedLargeValuesIntoFreshSharedPools
+[       OK ] RelocatableMetadataStoreTest.PublishesStreamedLargeValuesIntoFreshSharedPools (21 ms)
+[ RUN      ] RelocatableMetadataStoreTest.KeepsTransactionPrivateScratchSegmentsUnpublishedAfterTheSingleGraphGeneration
+[       OK ] RelocatableMetadataStoreTest.KeepsTransactionPrivateScratchSegmentsUnpublishedAfterTheSingleGraphGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsPrivateScratchPublicationBeforeTheSuperblockWithoutCatalogLeak
+[       OK ] RelocatableMetadataStoreTest.RejectsPrivateScratchPublicationBeforeTheSuperblockWithoutCatalogLeak (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsDeferredPrivateScratchPlanningWithoutPublishingCandidateState
+[       OK ] RelocatableMetadataStoreTest.RejectsDeferredPrivateScratchPlanningWithoutPublishingCandidateState (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsDeferredIndexPlanWithConflictingFreshAndStableRootTransitionsWithoutPublishingScratch
+[       OK ] RelocatableMetadataStoreTest.RejectsDeferredIndexPlanWithConflictingFreshAndStableRootTransitionsWithoutPublishingScratch (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningReadsOnlyTheWriterFencedCandidateBeforeFinalMaterialization
+[       OK ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningReadsOnlyTheWriterFencedCandidateBeforeFinalMaterialization (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningCanFillOnlyReservedCandidatesBeforeTheSinglePublication
+[       OK ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningCanFillOnlyReservedCandidatesBeforeTheSinglePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.KeepsAnExternalPrivateSourceTailOutOfEveryFinalPublicPoolAllocation
+[       OK ] RelocatableMetadataStoreTest.KeepsAnExternalPrivateSourceTailOutOfEveryFinalPublicPoolAllocation (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPlanningDerivesAStreamedPublicationPlanWithoutCopyingTheDurableSource
+[       OK ] RelocatableMetadataStoreTest.EarlyPlanningDerivesAStreamedPublicationPlanWithoutCopyingTheDurableSource (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPlanningMaterializesAllPrivateBulkFamiliesInsideOneCandidateLayout
+[       OK ] RelocatableMetadataStoreTest.EarlyPlanningMaterializesAllPrivateBulkFamiliesInsideOneCandidateLayout (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPlanningCanQueueOneDeferredIndexPlanForTheFinalPublication
+[       OK ] RelocatableMetadataStoreTest.EarlyPlanningCanQueueOneDeferredIndexPlanForTheFinalPublication (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningFailureLeavesNoPublishedGenerationOrScratchRoute
+[       OK ] RelocatableMetadataStoreTest.EarlyPrivateCandidatePlanningFailureLeavesNoPublishedGenerationOrScratchRoute (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AssignsAllPrivateScratchIdentitiesBeforePreparingDependentImages
+[       OK ] RelocatableMetadataStoreTest.AssignsAllPrivateScratchIdentitiesBeforePreparingDependentImages (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.FailsClosedWhenFallbackIoCannotAbandonCompactPrivateScratchTail
+[       OK ] RelocatableMetadataStoreTest.FailsClosedWhenFallbackIoCannotAbandonCompactPrivateScratchTail (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeIoTruncatesFailedCompactPrivateScratchTailAndPermitsSafeRetryAfterReopen
+[       OK ] RelocatableMetadataStoreTest.NativeIoTruncatesFailedCompactPrivateScratchTailAndPermitsSafeRetryAfterReopen (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsExhaustedNewPoolRangeWithoutCallingTheMaterializerOrPublishingAnyPartialReservation
+[       OK ] RelocatableMetadataStoreTest.RejectsExhaustedNewPoolRangeWithoutCallingTheMaterializerOrPublishingAnyPartialReservation (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsEmptyOrIncoherentGraphPublicationBeforeInvokingAnyTypedPreparer
+[       OK ] RelocatableMetadataStoreTest.RejectsEmptyOrIncoherentGraphPublicationBeforeInvokingAnyTypedPreparer (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsIncompleteCoordinatorInputsBeforeTakingTheWriterOrCallingAnyPreparer
+[       OK ] RelocatableMetadataStoreTest.RejectsIncompleteCoordinatorInputsBeforeTakingTheWriterOrCallingAnyPreparer (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsAnAuxiliaryLabelPageThatAttemptsToPublishAnEntityMapDelta
+[       OK ] RelocatableMetadataStoreTest.RejectsAnAuxiliaryLabelPageThatAttemptsToPublishAnEntityMapDelta (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStorePublishesAnEmptyValueAndSurvivesReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStorePublishesAnEmptyValueAndSurvivesReopen (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ResumesDurableLargeValueManifestTraversalAfterStableValueId
+[       OK ] RelocatableMetadataStoreTest.ResumesDurableLargeValueManifestTraversalAfterStableValueId (11 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteImmutableValue
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteImmutableValue (14 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreMetadataDiskFullRetainsPublishedValueAndCanRetryAfterReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreMetadataDiskFullRetainsPublishedValueAndCanRetryAfterReopen (15 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreAllocatesDataAndManifestPoolsFromOneCandidateRange
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreAllocatesDataAndManifestPoolsFromOneCandidateRange (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreDeduplicatesFullContentIdentityAcrossReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreDeduplicatesFullContentIdentityAcrossReopen (13 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreGrowsThePersistentContentIndexForManyUniqueValues
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreGrowsThePersistentContentIndexForManyUniqueValues (425 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreDoesNotDeduplicateDifferentMediaTypesAndRejectsZeroBound
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreDoesNotDeduplicateDifferentMediaTypesAndRejectsZeroBound (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsMalformedPersistentContentIndexCandidateKeys
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsMalformedPersistentContentIndexCandidateKeys (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsContentIndexCandidateWithAnotherValuesImmutableIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsContentIndexCandidateWithAnotherValuesImmutableIdentity (10 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsContentIndexCandidateWhoseKeyAndValueDisagree
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsContentIndexCandidateWhoseKeyAndValueDisagree (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsInvalidWritePoliciesBeforePublishingMetadata
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsInvalidWritePoliciesBeforePublishingMetadata (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsInvalidPublicReferencesAndRetirementRequests
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsInvalidPublicReferencesAndRetirementRequests (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueContentIndexPlannerValidatesTheGraphPublicationBatchBeforeReservingPages
+[       OK ] RelocatableMetadataStoreTest.LargeValueContentIndexPlannerValidatesTheGraphPublicationBatchBeforeReservingPages (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataCoordinatorRejectsLargeValuePublicationWithoutTheRequiredContentIndexMutation
+[       OK ] RelocatableMetadataStoreTest.MetadataCoordinatorRejectsLargeValuePublicationWithoutTheRequiredContentIndexMutation (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreWritesAcrossPoolsAndReadsOnlyTheRequestedRange
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreWritesAcrossPoolsAndReadsOnlyTheRequestedRange (59 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreReusesSharedDataAndManifestPoolsAcrossValuesAndReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreReusesSharedDataAndManifestPoolsAcrossValuesAndReopen (17 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueCapacityPlanningReusesTheExistingSharedDataPool
+[       OK ] RelocatableMetadataStoreTest.LargeValueCapacityPlanningReusesTheExistingSharedDataPool (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueRangeReadRetainsOnlyItsFirstDataPage
+[       OK ] RelocatableMetadataStoreTest.LargeValueRangeReadRetainsOnlyItsFirstDataPage (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreFillsSharedPoolsBeforeAllocatingAnotherPool
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreFillsSharedPoolsBeforeAllocatingAnotherPool (138 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreSpansMoreThanOneManifestPoolAndReopens
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreSpansMoreThanOneManifestPoolAndReopens (5358 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreUsesManifestLeavesBeyondRootChunkCapacity
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreUsesManifestLeavesBeyondRootChunkCapacity (500 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedLargeValueMaterializationUsesBoundedManifestFrontier
+[       OK ] RelocatableMetadataStoreTest.StreamedLargeValueMaterializationUsesBoundedManifestFrontier (98 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreReadsAValidManifestWithAnInternalChildLevel
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreReadsAValidManifestWithAnInternalChildLevel (291 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStorePlansInternalManifestLevelsBeyondTheLeafFanout
+[       OK ] RelocatableMetadataStoreTest.LargeValueStorePlansInternalManifestLevelsBeyondTheLeafFanout (48 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreCompressesLz4ChunksAndPreservesRangeReadsAcrossReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreCompressesLz4ChunksAndPreservesRangeReadsAcrossReopen (10 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreCompressesAndReadsZstdChunksAcrossReopen
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreCompressesAndReadsZstdChunksAcrossReopen (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreFallsBackToRawWhenZstdDoesNotMeetPolicy
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreFallsBackToRawWhenZstdDoesNotMeetPolicy (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreUsesMixedChunkCodecsForMixedCompressibility
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreUsesMixedChunkCodecsForMixedCompressibility (16 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreNeverExposesTheBeforeInactiveWriteGeneration
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreNeverExposesTheBeforeInactiveWriteGeneration (12 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsCorruptedDataBeforeReturningBytes
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsCorruptedDataBeforeReturningBytes (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsRawDataWithInconsistentStoredLength
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsRawDataWithInconsistentStoredLength (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChunkWithAnInvalidStoredChecksum
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChunkWithAnInvalidStoredChecksum (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChunkWithAnInvalidUncompressedChecksum
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChunkWithAnInvalidUncompressedChecksum (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreVerifiesFullContentHashAfterChunkChecks
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreVerifiesFullContentHashAfterChunkChecks (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsLz4PayloadThatPassesFrameChecksButCannotDecompress
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsLz4PayloadThatPassesFrameChecksButCannotDecompress (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsZstdPayloadThatPassesFrameChecksButCannotDecompress
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsZstdPayloadThatPassesFrameChecksButCannotDecompress (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsZstdPayloadWithAValidButWrongDecodedLength
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsZstdPayloadWithAValidButWrongDecodedLength (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsManifestAndDataFramesWithStalePhysicalGenerations
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsManifestAndDataFramesWithStalePhysicalGenerations (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRequiresDirectoryRootManifestNode
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRequiresDirectoryRootManifestNode (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsTraversalFromANonRootManifest
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsTraversalFromANonRootManifest (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsValidlyEncodedDataWithMismatchedManifestIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsValidlyEncodedDataWithMismatchedManifestIdentity (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsValidlyEncodedManifestWithMismatchedReference
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsValidlyEncodedManifestWithMismatchedReference (5 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsDuplicateManifestChildrenWithValidPageChecksums
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsDuplicateManifestChildrenWithValidPageChecksums (201 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChildRangeWithIncorrectChunkCardinality
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsChildRangeWithIncorrectChunkCardinality (200 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsManifestChildAtAnUnexpectedLevel
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsManifestChildAtAnUnexpectedLevel (202 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsMultiLevelChildWithMismatchedImmutableIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsMultiLevelChildWithMismatchedImmutableIdentity (200 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsIncompleteMultiLevelRetirementBeforeRemovingTheContentIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsIncompleteMultiLevelRetirementBeforeRemovingTheContentIdentity (321 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsRetirementPlannedAgainstAStaleGeneration
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsRetirementPlannedAgainstAStaleGeneration (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesDataAndManifestFramesWithoutChangingLogicalGeneration
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesDataAndManifestFramesWithoutChangingLogicalGeneration (24 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesLaterChunksAndDirectoryRootThroughPageDispatch
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesLaterChunksAndDirectoryRootThroughPageDispatch (23 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesADataPageFromTheSecondManifestLeaf
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesADataPageFromTheSecondManifestLeaf (297 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsEvacuationToTheWrongTypedPool
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsEvacuationToTheWrongTypedPool (11 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRejectsUnreachableManifestAndForeignPageEvacuation
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRejectsUnreachableManifestAndForeignPageEvacuation (254 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesANonRootManifestPageWithoutChangingDirectoryRouteOrSnapshots
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreEvacuatesANonRootManifestPageWithoutChangingDirectoryRouteOrSnapshots (626 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueNonRootManifestEvacuationRecoversAtSuperblockPublicationBoundaries
+[       OK ] RelocatableMetadataStoreTest.LargeValueNonRootManifestEvacuationRecoversAtSuperblockPublicationBoundaries (707 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueDataEvacuationRecoversAtSuperblockPublicationBoundaries
+[       OK ] RelocatableMetadataStoreTest.LargeValueDataEvacuationRecoversAtSuperblockPublicationBoundaries (23 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueContentIndexPlannerRejectsAnInvalidLastAllocationSlot
+[       OK ] RelocatableMetadataStoreTest.LargeValueContentIndexPlannerRejectsAnInvalidLastAllocationSlot (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreRetiresEveryFrameAndContentIdentityAtomically
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreRetiresEveryFrameAndContentIdentityAtomically (10 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueStoreReclaimsAndReleasesAnEmptySharedDataPoolAfterSnapshotsDrain
+[       OK ] RelocatableMetadataStoreTest.LargeValueStoreReclaimsAndReleasesAnEmptySharedDataPoolAfterSnapshotsDrain (20 ms)
+[----------] 147 tests from RelocatableMetadataStoreTest (12962 ms total)
+
+[----------] Global test environment tear-down
+[==========] 162 tests from 3 test suites ran. (13319 ms total)
+[  PASSED  ] 162 tests.

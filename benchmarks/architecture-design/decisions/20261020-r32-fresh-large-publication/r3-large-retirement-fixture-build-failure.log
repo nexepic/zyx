@@ -1,0 +1,117 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/tests/include -I/workspace/zyx/lib/inputxx/tests -I/workspace/zyx/apps/benchmark -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-work-candidate -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIE -Wall -Wextra -Wno-unused-parameter -DGTEST_HAS_PTHREAD=1 -MD -MT CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o -MF CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o.d -o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o -c /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:76:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   76 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:127:114: warning: missing field 'media_type' initializer [-Wmissing-field-initializers]
+  127 |     LargeValueWriteOptions options{PhysicalSlotId(40), PhysicalSlotId(80), PhysicalSlotId(40), PhysicalSlotId(80)};
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:163:82: error: no member named 'findCatalogEntry' in 'graph::storage::RelocatableMetadataStore'; did you mean 'findCatalog'?
+  163 |         const auto pin = metadata_->openSnapshot(); const auto pool = metadata_->findCatalogEntry(pin, sourcePage.segment_id);
+      |                                                                                  ^~~~~~~~~~~~~~~~
+      |                                                                                  findCatalog
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1607:30: note: 'findCatalog' declared here
+ 1607 |                 [[nodiscard]] CatalogEntry findCatalog(const MetadataSnapshotPin &snapshot, SegmentId segmentId) const;
+      |                                            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:166:66: error: no viable conversion from 'std::vector<RetireQueueEntry>' to 'std::span<const CatalogSegmentRetirementRequest>'
+  166 |         EXPECT_FALSE(metadata_->tryReleaseRetiredCatalogSegments(retirement, LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1)));
+      |                                                                  ^~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1827:52: note: expanded from macro 'EXPECT_FALSE'
+ 1827 | #define EXPECT_FALSE(condition) GTEST_EXPECT_FALSE(condition)
+      |                                                    ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1811:25: note: expanded from macro 'GTEST_EXPECT_FALSE'
+ 1811 |   GTEST_TEST_BOOLEAN_(!(condition), #condition, true, false, \
+      |                         ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1453:38: note: expanded from macro 'GTEST_TEST_BOOLEAN_'
+ 1453 |           ::testing::AssertionResult(expression))                     \
+      |                                      ^~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:225:7: note: candidate constructor not viable: no known conversion from 'std::vector<RetireQueueEntry>' to 'const span<const CatalogSegmentRetirementRequest> &' for 1st argument
+  225 |       span(const span&) noexcept = default;
+      |       ^    ~~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:187:2: note: candidate template ignored: could not match 'graph::storage::CatalogSegmentRetirementRequest[_ArrayExtent]' against 'std::vector<RetireQueueEntry>'
+  187 |         span(type_identity_t<element_type> (&__arr)[_ArrayExtent]) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:194:2: note: candidate template ignored: could not match 'array' against 'std::vector'
+  194 |         span(array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:201:2: note: candidate template ignored: could not match 'array' against 'std::vector'
+  201 |         span(const array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:213:2: note: candidate template ignored: constraints not satisfied [with _Range = std::vector<RetireQueueEntry> &]
+  213 |         span(_Range&& __range)
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:211:7: note: because '__is_compatible_ref<ranges::range_reference_t<vector<RetireQueueEntry, allocator<RetireQueueEntry> > &> >::value' evaluated to false
+  211 |           && __is_compatible_ref<ranges::range_reference_t<_Range>>::value
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:233:2: note: candidate template ignored: could not match 'span' against 'std::vector'
+  233 |         span(const span<_OType, _OExtent>& __s) noexcept
+      |         ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1555:53: note: passing argument to parameter 'requests' here
+ 1555 |                         std::span<const CatalogSegmentRetirementRequest> requests, LogSequenceNumber checkpointLsn,
+      |                                                                          ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:170:61: error: no viable conversion from 'std::vector<RetireQueueEntry>' to 'std::span<const CatalogSegmentRetirementRequest>'
+  170 |     EXPECT_TRUE(metadata_->tryReleaseRetiredCatalogSegments(retirement, LogSequenceNumber(state.checkpoint_lsn.value() + 1)));
+      |                                                             ^~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1823:50: note: expanded from macro 'EXPECT_TRUE'
+ 1823 | #define EXPECT_TRUE(condition) GTEST_EXPECT_TRUE(condition)
+      |                                                  ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1808:23: note: expanded from macro 'GTEST_EXPECT_TRUE'
+ 1808 |   GTEST_TEST_BOOLEAN_(condition, #condition, false, true, \
+      |                       ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1453:38: note: expanded from macro 'GTEST_TEST_BOOLEAN_'
+ 1453 |           ::testing::AssertionResult(expression))                     \
+      |                                      ^~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:225:7: note: candidate constructor not viable: no known conversion from 'std::vector<RetireQueueEntry>' to 'const span<const CatalogSegmentRetirementRequest> &' for 1st argument
+  225 |       span(const span&) noexcept = default;
+      |       ^    ~~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:187:2: note: candidate template ignored: could not match 'graph::storage::CatalogSegmentRetirementRequest[_ArrayExtent]' against 'std::vector<RetireQueueEntry>'
+  187 |         span(type_identity_t<element_type> (&__arr)[_ArrayExtent]) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:194:2: note: candidate template ignored: could not match 'array' against 'std::vector'
+  194 |         span(array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:201:2: note: candidate template ignored: could not match 'array' against 'std::vector'
+  201 |         span(const array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:213:2: note: candidate template ignored: constraints not satisfied [with _Range = std::vector<RetireQueueEntry> &]
+  213 |         span(_Range&& __range)
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:211:7: note: because '__is_compatible_ref<ranges::range_reference_t<vector<RetireQueueEntry, allocator<RetireQueueEntry> > &> >::value' evaluated to false
+  211 |           && __is_compatible_ref<ranges::range_reference_t<_Range>>::value
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:233:2: note: candidate template ignored: could not match 'span' against 'std::vector'
+  233 |         span(const span<_OType, _OExtent>& __s) noexcept
+      |         ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1555:53: note: passing argument to parameter 'requests' here
+ 1555 |                         std::span<const CatalogSegmentRetirementRequest> requests, LogSequenceNumber checkpointLsn,
+      |                                                                          ^
+2 warnings and 3 errors generated.
+[2/4] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:45:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+ninja: build stopped: subcommand failed.

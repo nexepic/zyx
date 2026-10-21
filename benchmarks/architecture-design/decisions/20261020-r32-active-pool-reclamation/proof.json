@@ -1,0 +1,56 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement"
+  ],
+  "tests": {
+    "default": {
+      "registered": 265,
+      "passed": 265,
+      "skipped": 0,
+      "binary_sha256": "4c2a848f27efdcbb0f3057b650186883143c7b164955eda882d666c562e2ea1b",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 392,
+      "passed": 391,
+      "skipped": 1,
+      "binary_sha256": "7ab28f9a701775055a9b3739d02d560e55db0df0a7242eb7c0d95bbc6aa90168",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Isolated format32 only; production format31 unchanged.",
+    "Existing scalar column members only; no insertion/deletion/type changes/owner deletion.",
+    "SystemCatalog root conservatively rejected; no derived-index/constraint adoption.",
+    "Multiple-group incremental maps, general LargeValue/ref-GC and full costs remain.",
+    "Only at-most64 detached Property/Index pools may release while native is active; generic frame reconciliation and relocation remain guarded."
+  ]
+}

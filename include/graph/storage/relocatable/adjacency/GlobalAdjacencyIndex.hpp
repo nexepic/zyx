@@ -25,6 +25,7 @@ namespace graph::storage {
 		GlobalAdjacencyDirection direction = GlobalAdjacencyDirection::GAD_OUT;
 		uint64_t node_id = 0U;
 		uint64_t last_edge_id = 0U;
+        DatabaseId database_id{};
 
 		constexpr bool operator==(const GlobalAdjacencyContinuation &) const = default;
 	};

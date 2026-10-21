@@ -1,0 +1,57 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 302,
+      "passed": 302,
+      "skipped": 0,
+      "binary_sha256": "9d7cd357ddc26b6518f6e9b62ebb23b7583467b41132c70c5821a353f0019330",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 453,
+      "passed": 452,
+      "skipped": 1,
+      "binary_sha256": "c3dafaf2ef5a5077ea047bad5fca46bd6fa2f0855cf1a701a6a9fe6b38037485",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Isolated format32 only; production format31 unchanged.",
+    "Explicit lifecycle handles existing-column removal/type changes and existing inline-extension scalar updates/deletion in one group; missing scalar fields can join live groups/existing columns, and changed extension tokens promote at48 compatible members; owner deletion remains unsupported.",
+    "SystemCatalog root conservatively rejected; no derived-index/constraint adoption.",
+    "Multiple-group incremental maps, general LargeValue/ref-GC and full costs remain.",
+    "Only at-most64 detached Property/Index pools may release while native is active; generic frame reconciliation and relocation remain guarded."
+  ]
+}

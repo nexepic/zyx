@@ -1,0 +1,112 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyInlineMutationTest.*:HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRefusesWithoutDroppingItsReference:HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations
+[==========] Running 9 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:567: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(state.checkpoint_lsn.value() + 1)) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:568: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 ... 10-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  state
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 04-00 00-00 00-00 00-00 05-81 3D-9F 3A-56 00-00 05-00 00-00 00-00 00-00 ... 10-00 00-00 00-00 00-00 0E-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:568: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 598
+  nativeEpoch
+    Which is: 502
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:568: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 00-00 00-00 FE-7F 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 ... 10-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  state
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 04-00 00-00 00-00 00-00 05-81 3D-9F 3A-56 00-00 05-00 00-00 00-00 00-00 ... 10-00 00-00 00-00 00-00 0E-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:568: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 598
+  nativeEpoch
+    Which is: 502
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations (174 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (174 ms total)
+
+[----------] 1 test from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRefusesWithoutDroppingItsReference
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:277: Failure
+Expected: erase(deletion(owners, memory)) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:278: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 16-12 FF-65 3A-56 00-00 05-00 00-00 00-00 00-00 ... 0C-00 00-00 00-00 00-00 0D-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 02-0D 3C-9F 3A-56 00-00 04-00 00-00 00-00 00-00 ... 0C-00 00-00 00-00 00-00 0D-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:278: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 454
+  epoch
+    Which is: 394
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:279: Failure
+Expected: (void)entities_->readNode(metadata_->openSnapshot(), id) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "relocatable location lookup requires an ID and published directory root".
+
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRefusesWithoutDroppingItsReference (34 ms)
+[----------] 1 test from HybridPropertyOwnerDeletionTest (34 ms total)
+
+[----------] 7 tests from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo
+[       OK ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo (5 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen
+[       OK ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen (397 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality
+[       OK ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality (200 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback
+[       OK ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback (17 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.OversizedAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:99: Failure
+Expected: tx.stageHybridPropertyColumns(cells, memory, nullptr, true) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:100: Failure
+Expected equality of these values:
+  memory->used()
+    Which is: 8409
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:103: Failure
+Expected: tx.stageHybridPropertyColumns(cells, tiny, nullptr, true) throws an exception of type graph::query::execution::MaterializedByteLimitExceeded.
+  Actual: it throws graph::storage::FormatException with description "isolated native property mutation cannot mix with other transaction operations".
+
+unknown file: Failure
+C++ exception with description "isolated native property mutation cannot mix with other transaction operations" thrown in the test body.
+
+[  FAILED  ] HybridPropertyInlineMutationTest.OversizedAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging (12 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields
+[       OK ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields (81 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry
+[       OK ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry (343 ms)
+[----------] 7 tests from HybridPropertyInlineMutationTest (1057 ms total)
+
+[----------] Global test environment tear-down
+[==========] 9 tests from 3 test suites ran. (1266 ms total)
+[  PASSED  ] 6 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRefusesWithoutDroppingItsReference
+[  FAILED  ] HybridPropertyInlineMutationTest.OversizedAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging
+
+ 3 FAILED TESTS

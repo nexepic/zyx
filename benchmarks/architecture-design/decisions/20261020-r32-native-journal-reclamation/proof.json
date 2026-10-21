@@ -1,0 +1,84 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3",
+    "R4.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Native journal evidence uses a reserved State identity and explicit private database/generation/descriptor/output capabilities, with pin-safe bounded physical COW and admitted retained ID storage.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 497,
+      "passed": 497,
+      "skipped": 0,
+      "binary_sha256": "7e0100edeade3dea7d89df1884cc3674899adf5e3e7da70c09f6e3b84055add3",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 739,
+      "passed": 738,
+      "skipped": 1,
+      "binary_sha256": "1466029c0de4d827fd049d14c03592b522ab3c3a58edd9ae8ef878633775ca11",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Explicit isolated format32 only; production format31 unchanged.",
+    "Same-group inline values, including nested map/list, bytes and temporal values; immutable admitted payloads; no automatic re-promotion or schema-derived-state adoption.",
+    "Controlled field/directory-pool relocation probes at most31 frame positions; root and child physical epochs authenticate independently.",
+    "Native-active direct exact GC now merges ROW/native owners and publishes only with a private current-generation proof; durable native journal GC now persists only protected reclaimer advancements; schema/unknown-derived-State/general-topology coordination remain; multiple groups and Node/Edge namespaces now share directories through selected-group conversion, field writes, deletion and global ownership scanning; controlled LargeValue SET/REMOVE/owner deletion now authenticate content and retain global identities for GC; large ROW inverse carriers now publish atomically; fresh field values and their content index now publish atomically; controlled inline/overflow-labeled Node and canonical Edge/topology deletion are published atomically; schema/derived-State and conservative Node topology guards remain.",
+    "Generic reconciliation remains guarded; bounded whole-pool retirement/release does not complete general maintenance.",
+    "Final full costs/same-executor ROW control and R7 still pending."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Bounded journals must authenticate/retain non-candidate references outside the current window.",
+    "Native persisted owner progress requires a reserved State producer and unmodified private reclaimer advancement; a plain phase flag is insufficient."
+  ]
+}

@@ -86,6 +86,10 @@ namespace graph::storage {
 		}
 		[[nodiscard]] LargeValueStore *largeValueStore() const { return large_values_; }
 
+        // Layout/liveness probe for explicit candidate transactions. A live
+        // propertyless owner can be hybrid; a missing/ROW owner returns false.
+        [[nodiscard]] bool isHybridPropertyOwner(const MetadataSnapshotPin &snapshot, EntityPropertyKey key,
+            const CancellationCheckpoint *cancellation = nullptr, const SelectedPropertyReadAdmission *transientAdmission = nullptr) const;
 		// Canonical Stage 5 lookup. The Entity Property Directory is keyed by the
 		// owning logical entity, so no Property-ID reservation or entity-record
 		// reference is needed on this path.

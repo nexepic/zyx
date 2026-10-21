@@ -8,6 +8,44 @@ namespace {
 Superblock initialSuperblock(){Superblock s;s.database_id=DatabaseId(0x1020304050607080ULL);s.generation=Generation(1);s.checkpoint_lsn=LogSequenceNumber(1);return s;}
 NativeGraphWritePlannerOptions graphWriteOptions(){NativeGraphWritePlannerOptions o;o.first_slot=PhysicalSlotId(46);o.last_slot=PhysicalSlotId(70);o.entity_pool_owner_id=907;o.property_roots={PhysicalSlotId(50),PhysicalSlotId(70),903};return o;}
 }
+TEST_F(PageBackedGraphReadAdapterTest, BatchedTopologyRejectsLaterInconsistencyBeforeAnyEarlyStopCallback) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    EntityPageStore entities(io, *metadata);
+    SlottedPagePool pages(io, *metadata);
+    EntityLabelSetStore labels(io, *metadata, pages);
+    PropertyCollectionRootStore properties(pages, *metadata);
+    BTreePageStore trees(pages, *metadata);
+    NativeGraphWritePlanner planner(*metadata, entities, labels, properties, trees, graphWriteOptions());
+    auto transaction = planner.beginTransaction();
+    const auto source = transaction.createNode({});
+    const auto target = transaction.createNode({});
+    const auto other = transaction.createNode({});
+    const auto first = transaction.createEdge(source, target, 41);
+    const auto second = transaction.createEdge(source, other, 43);
+    ASSERT_TRUE(transaction.commit().committed());
+    auto old = metadata->openSnapshot();
+    auto wrong = entities.readEdge(old, second);
+    // Publish valid main-record bytes through the lower storage seam without
+    // its matching derived adjacency update, to model cross-structure damage.
+    wrong.source_node_id = other;
+    static_cast<void>(entities.updateEdge(old, second, wrong,
+        LogSequenceNumber(old.superblock().checkpoint_lsn.value() + 1)));
+    const auto current = metadata->openSnapshot();
+    PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
+    const std::array sources{source};
+    for (const bool stop : {false, true}) {
+        size_t callbacks = 0;
+        EXPECT_THROW(static_cast<void>(adapter.visitAdjacentEdgeRefsForNodesUntil(current, sources,
+            PageBackedGraphReadDirection::PBGRD_OUTGOING, 3,
+            [&](const EntityRef &) { ++callbacks; return !stop; })), FormatException);
+        EXPECT_EQ(callbacks, 0U);
+    }
+    std::vector<uint64_t> retained;
+    EXPECT_TRUE(adapter.visitAdjacentEdgeRefsForNodesUntil(old, sources,
+        PageBackedGraphReadDirection::PBGRD_OUTGOING, 3,
+        [&](const EntityRef &edge) { retained.push_back(edge.entity_id); return true; }));
+    EXPECT_EQ(retained, (std::vector<uint64_t>{first, second}));
+}
 TEST_F(PageBackedGraphReadAdapterTest, VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);

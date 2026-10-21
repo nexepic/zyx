@@ -1,0 +1,47 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLargePublicationTest.*:EntityPropertyLargeValuePayloadCodecTest.Pmr*:HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+[==========] Running 12 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource (184 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (184 ms total)
+
+[----------] 8 tests from HybridPropertyLargePublicationTest
+[ RUN      ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+unknown file: Failure
+C++ exception with description "Entity Property root plan selected a stale or foreign Property page" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex (135 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates
+[       OK ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates (175 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex (169 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable
+[       OK ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable (152 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia
+[       OK ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia (687 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.DetachedContentIndexPoolRetiresBehindPinsAndCanBeReleased
+[       OK ] HybridPropertyLargePublicationTest.DetachedContentIndexPoolRetiresBehindPinsAndCanBeReleased (151 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts (281 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries (152 ms)
+[----------] 8 tests from HybridPropertyLargePublicationTest (1907 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes (0 ms)
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 12 tests from 3 test suites ran. (2091 ms total)
+[  PASSED  ] 11 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+
+ 1 FAILED TEST

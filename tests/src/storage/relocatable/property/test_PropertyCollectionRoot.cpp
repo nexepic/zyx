@@ -7,6 +7,7 @@
  **/
 
 #include <array>
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <functional>
 #include <optional>
 
@@ -481,4 +482,51 @@ TEST(RelocatablePropertyCollectionRootTest, InlineSelectedSlotsRejectBeforeValue
 		EXPECT_EQ(retained, result.second.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
 	}
 	EXPECT_EQ(values, 4U);
+}
+
+TEST(EntityPropertyLargeValuePayloadCodecTest, PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload) {
+    PropertyValue::MapType map{{"z", PropertyValue(int64_t(7))}, {"a", PropertyValue(std::string(80, 'x'))}};
+    const std::vector<PropertyCollectionRootEntry> entries{
+        {1, PropertyValue(std::move(map))}, {2, PropertyValue(std::vector<PropertyValue>{PropertyValue(), PropertyValue(-0.0)})},
+        {3, PropertyValue(PropertyValue::Bytes{std::byte{0}, std::byte{255}})}, {4, PropertyValue(TemporalDuration{1, 2, 3})}};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024 * 1024);
+    {
+        const auto bytes = EntityPropertyLargeValuePayloadCodec::encode(entries, *memory);
+        const auto expected = EntityPropertyLargeValuePayloadCodec::encode(entries);
+        EXPECT_EQ(std::vector<std::byte>(bytes.begin(), bytes.end()), expected);
+        EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::decode(bytes), entries);
+        EXPECT_GE(memory->used(), bytes.capacity());
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    {
+        const auto empty = EntityPropertyLargeValuePayloadCodec::encode({}, *memory);
+        EXPECT_EQ(std::vector<std::byte>(empty.begin(), empty.end()), EntityPropertyLargeValuePayloadCodec::encode({}));
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+TEST(EntityPropertyLargeValuePayloadCodecTest, PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission) {
+    const std::array<PropertyCollectionRootEntry, 2> duplicate{{{7, PropertyValue()}, {7, PropertyValue(true)}}};
+    const std::array<PropertyCollectionRootEntry, 2> unordered{{{8, PropertyValue()}, {7, PropertyValue(true)}}};
+    const std::array<PropertyCollectionRootEntry, 1> zero{{{0, PropertyValue()}}};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1);
+    for (const auto entries : {std::span<const PropertyCollectionRootEntry>(duplicate),
+        std::span<const PropertyCollectionRootEntry>(unordered), std::span<const PropertyCollectionRootEntry>(zero)})
+        expectFormatError([&] { (void)EntityPropertyLargeValuePayloadCodec::encode(entries, *memory); }, FormatError::FERR_INVALID_HEADER);
+    EXPECT_EQ(memory->used(), 0U);
+}
+TEST(EntityPropertyLargeValuePayloadCodecTest, PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes) {
+    const std::array<PropertyCollectionRootEntry, 2> entries{{{1, PropertyValue(std::string(900, 'a'))}, {2, PropertyValue("b")}}};
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(16);
+    EXPECT_THROW((void)EntityPropertyLargeValuePayloadCodec::encode(entries, *tiny), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(tiny->used(), 0U);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024 * 1024); size_t checks = 0;
+    EXPECT_THROW((void)EntityPropertyLargeValuePayloadCodec::encode(entries, *memory, [&] {
+        if (++checks == 5) throw std::runtime_error("codec cancelled during output");
+    }), std::runtime_error);
+    EXPECT_EQ(checks, 5U); EXPECT_EQ(memory->used(), 0U);
+    {
+        const auto retry = EntityPropertyLargeValuePayloadCodec::encode(entries, *memory);
+        EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::decode(retry), std::vector<PropertyCollectionRootEntry>(entries.begin(), entries.end()));
+    }
+    EXPECT_EQ(memory->used(), 0U);
 }

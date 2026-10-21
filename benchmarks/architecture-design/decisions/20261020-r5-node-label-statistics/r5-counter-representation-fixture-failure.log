@@ -1,0 +1,61 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = CoveredAdjacencyCandidateTest.*
+[==========] Running 22 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 22 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (109 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (21 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (19 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (87 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (264 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (12 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (145 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (25 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (17 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (520 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (185 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (184 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (30 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (138 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (384 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (158 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (163 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (137 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (130 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (285 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (144 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+unknown file: Failure
+C++ exception with description "System Catalog graph cardinality cannot encode the maximum uint64 value" thrown in the test body.
+
+[  FAILED  ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (13 ms)
+[----------] 22 tests from CoveredAdjacencyCandidateTest (3180 ms total)
+
+[----------] Global test environment tear-down
+[==========] 22 tests from 1 test suite ran. (3181 ms total)
+[  PASSED  ] 21 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+
+ 1 FAILED TEST

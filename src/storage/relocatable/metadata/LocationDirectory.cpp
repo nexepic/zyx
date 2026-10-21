@@ -2942,6 +2942,24 @@ namespace graph::storage {
 				visitedMetadataPages);
 	}
 
+	bool LocationDirectory::visitEdgePageLocationsAfter(const Superblock &superblock, uint64_t afterEdgeId,
+														size_t maximumMetadataPages,
+														const std::function<bool(const EntityPageLocation &)> &visitor,
+														size_t *visitedMetadataPages) const {
+		if (!visitor || maximumMetadataPages == 0U) {
+			throwLocationDirectoryError(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable resumable Entity Map Edge traversal requires a page bound and visitor");
+		}
+		return visitAfter(
+				superblock, MetadataDirectoryType::MDT_EDGE_ENTITY, afterEdgeId, maximumMetadataPages,
+				[&visitor](const LocationLeafEntry &entry) {
+					return visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
+									static_cast<uint32_t>(entry.generation.value())});
+				},
+				visitedMetadataPages);
+	}
+
 	void
 	LocationDirectory::visitEntityProperties(const Superblock &superblock,
 											 const std::function<void(const EntityPropertyLocation &)> &visitor) const {

@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -236,26 +237,49 @@ namespace graph::storage {
 	std::optional<std::vector<std::byte>> NativeScalarIndexMutationPlanner::propertyEntryKey(
 		const MetadataSnapshotPin &snapshot, const IndexDefinition &definition, uint64_t ownerId,
 		std::span<const uint64_t> nodeLabels, const PropertyCollectionRoot &root) const {
+        return propertyEntryKeyValues(snapshot, definition, ownerId, nodeLabels,
+            [&](uint32_t token) { return findPropertyValue(root, token); });
+    }
+
+    std::optional<std::vector<std::byte>> NativeScalarIndexMutationPlanner::propertyEntryKeyValues(
+        const MetadataSnapshotPin &snapshot, const IndexDefinition &definition, uint64_t ownerId,
+        std::span<const uint64_t> nodeLabels, const PropertyValueLookup &lookup) const {
 		if (definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE && definition.label_token_id != 0U &&
 			!hasLabel(nodeLabels, definition.label_token_id)) return std::nullopt;
-		std::vector<PropertyValue> values;
-		values.reserve(definition.property_names.size());
-		for (const auto &name : definition.property_names) {
-			const auto token = resolvePropertyKey(snapshot, name);
-			if (!token) return std::nullopt;
-			const auto *value = findPropertyValue(root, *token);
-			if (!value) return std::nullopt;
-			values.push_back(*value);
-		}
-		return definition.kind == IndexDefinitionKind::IDK_PROPERTY
-			? IndexKeyCodec::tryEncodeEntryKey(values.front(), ownerId)
-			: IndexKeyCodec::tryEncodeCompositeEntryKey(values, ownerId);
+        if (definition.property_names.size() > RSS_INDEX_KEY_MAX_COMPONENTS)
+            fail(FormatError::FERR_INVALID_HEADER, "relocatable composite index key requires a bounded nonempty component sequence");
+        std::array<const PropertyValue *, RSS_INDEX_KEY_MAX_COMPONENTS> values{};
+        size_t count = 0;
+        for (const auto &name : definition.property_names) {
+            const auto token = resolvePropertyKey(snapshot, name);
+            if (!token) return std::nullopt;
+            const auto *value = lookup(*token);
+            if (!value) return std::nullopt;
+            values[count++] = value;
+        }
+        return definition.kind == IndexDefinitionKind::IDK_PROPERTY
+            ? IndexKeyCodec::tryEncodeEntryKey(*values[0], ownerId)
+            : IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(
+                std::span<const PropertyValue *const>(values.data(), count), ownerId);
 	}
 
-	void NativeScalarIndexMutationPlanner::stagePropertyDelta(NativeGraphWriteTransaction &transaction,
-		IndexDefinitionEntityKind ownerKind, uint64_t ownerId, std::span<const uint64_t> oldLabels,
-		const PropertyCollectionRoot &oldRoot, std::span<const uint64_t> newLabels,
-		const PropertyCollectionRoot &newRoot) const {
+    void NativeScalarIndexMutationPlanner::stagePropertyDelta(NativeGraphWriteTransaction &transaction,
+        IndexDefinitionEntityKind ownerKind, uint64_t ownerId, std::span<const uint64_t> oldLabels,
+        const PropertyCollectionRoot &oldRoot, std::span<const uint64_t> newLabels,
+        const PropertyCollectionRoot &newRoot) const {
+        visitPropertyDelta(transaction.baseSnapshot(), ownerKind, ownerId, oldLabels, oldRoot, newLabels, newRoot,
+            [&](uint64_t indexId, std::span<const std::byte> key, uint64_t owner, bool erase) {
+                if (erase) transaction.stageScalarIndexErase(indexes_, indexId, key);
+                else transaction.stageScalarIndexUpsert(indexes_, indexId, key, owner);
+            });
+    }
+
+    void NativeScalarIndexMutationPlanner::visitPropertyDelta(const MetadataSnapshotPin &snapshot,
+        IndexDefinitionEntityKind ownerKind, uint64_t ownerId, std::span<const uint64_t> oldLabels,
+        const PropertyCollectionRoot &oldRoot, std::span<const uint64_t> newLabels,
+        const PropertyCollectionRoot &newRoot, const PropertyDeltaVisitor &visitor) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !visitor)
+            fail(FormatError::FERR_INVALID_HEADER, "native scalar delta visitor requires its source pin and callback");
 		if (ownerKind != IndexDefinitionEntityKind::IDEK_NODE && ownerKind != IndexDefinitionEntityKind::IDEK_EDGE)
 			fail(FormatError::FERR_INVALID_HEADER, "native scalar Index planner has an unknown Property owner kind");
 		if (ownerKind == IndexDefinitionEntityKind::IDEK_NODE) {
@@ -266,18 +290,32 @@ namespace graph::storage {
 		}
 		validatePropertyRoot(ownerKind, ownerId, oldRoot);
 		validatePropertyRoot(ownerKind, ownerId, newRoot);
-		const auto &snapshot = transaction.baseSnapshot();
+        visitPropertyDeltaValues(snapshot, ownerKind, ownerId, oldLabels,
+            [&](uint32_t token) { return findPropertyValue(oldRoot, token); }, newLabels,
+            [&](uint32_t token) { return findPropertyValue(newRoot, token); }, visitor);
+    }
+
+    void NativeScalarIndexMutationPlanner::visitPropertyDeltaValues(const MetadataSnapshotPin &snapshot,
+        IndexDefinitionEntityKind ownerKind, uint64_t ownerId, std::span<const uint64_t> oldLabels,
+        const PropertyValueLookup &oldValues, std::span<const uint64_t> newLabels,
+        const PropertyValueLookup &newValues, const PropertyDeltaVisitor &visitor) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !ownerId || !visitor || !oldValues || !newValues)
+            fail(FormatError::FERR_INVALID_HEADER, "native scalar value delta requires its pin, owner and borrowed readers");
+        if (ownerKind == IndexDefinitionEntityKind::IDEK_NODE) {
+            validateCanonicalLabels(oldLabels); validateCanonicalLabels(newLabels);
+        } else if (ownerKind != IndexDefinitionEntityKind::IDEK_EDGE || !oldLabels.empty() || !newLabels.empty())
+            fail(FormatError::FERR_INVALID_HEADER, "native scalar value delta has an invalid owner kind or labels");
 		for (const auto &definition : definitions_) {
 			if (definition.entity_kind != ownerKind ||
 				(definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE) ||
 				!hasPublishedRoot(snapshot, definition.index_id)) continue;
-			const auto before = propertyEntryKey(snapshot, definition, ownerId, oldLabels, oldRoot);
-			const auto after = propertyEntryKey(snapshot, definition, ownerId, newLabels, newRoot);
+			const auto before = propertyEntryKeyValues(snapshot, definition, ownerId, oldLabels, oldValues);
+			const auto after = propertyEntryKeyValues(snapshot, definition, ownerId, newLabels, newValues);
 			// Byte identity handles codec equivalence and collisions consistently
 			// with lookup, rather than relying on dynamic value equality.
 			if (before == after) continue;
-			if (before) transaction.stageScalarIndexErase(indexes_, definition.index_id, *before);
-			if (after) transaction.stageScalarIndexUpsert(indexes_, definition.index_id, *after, ownerId);
+			if (before) visitor(definition.index_id, *before, ownerId, true);
+			if (after) visitor(definition.index_id, *after, ownerId, false);
 		}
 	}
 

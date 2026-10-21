@@ -71,6 +71,68 @@ TEST(RelocatablePropertyValueInspectionTest, ValidationMatchesDecoderForEverySin
     }
 }
 
+TEST(RelocatablePropertyValueInspectionTest, RangeInspectionMatchesBorrowedShapeWithBoundedLongKeyComparisons) {
+    PropertyValue::MapType map;
+    map.emplace(std::string(2048, 'a') + "a", inspectionValue());
+    map.emplace(std::string(2048, 'a') + "b", PropertyValue(std::string(128 * 1024, 's')));
+    map.emplace(std::string(1, char(0x80)), PropertyValue(PropertyValue::Bytes(4096, std::byte{3})));
+    map.emplace(std::string(1, char(0xff)), PropertyValue(TemporalDuration{1, 2, 3}));
+    std::vector<std::byte> encoded;
+    CanonicalPropertyValueCodec::append(encoded, PropertyValue(std::move(map)));
+    size_t offset = 0, largestRead = 0;
+    const auto expected = CanonicalPropertyValueCodec::inspectNext(encoded, offset);
+    const auto read = [&](size_t position, std::span<std::byte> bytes) {
+        ASSERT_LE(position, encoded.size()); ASSERT_LE(bytes.size(), encoded.size() - position);
+        largestRead = (std::max)(largestRead, bytes.size());
+        std::copy_n(encoded.begin() + position, bytes.size(), bytes.begin());
+    };
+    const auto actual = CanonicalPropertyValueCodec::inspectRange(encoded.size(), std::ref(read));
+    EXPECT_EQ(actual.encoded_bytes, expected.encoded_bytes);
+    EXPECT_EQ(actual.value_count, expected.value_count); EXPECT_EQ(actual.map_entries, expected.map_entries);
+    EXPECT_EQ(actual.list_elements, expected.list_elements); EXPECT_EQ(actual.string_bytes, expected.string_bytes);
+    EXPECT_EQ(actual.map_key_bytes, expected.map_key_bytes); EXPECT_EQ(actual.binary_bytes, expected.binary_bytes);
+    EXPECT_EQ(actual.maximum_depth, expected.maximum_depth);
+    EXPECT_EQ(actual.maximum_heap_request_bytes, expected.maximum_heap_request_bytes);
+    EXPECT_LE(largestRead, 256U);
+}
+
+TEST(RelocatablePropertyValueInspectionTest, RangeValidationRejectsTheSameSingleBitMutationsAndAllTruncations) {
+    std::vector<std::byte> original; CanonicalPropertyValueCodec::append(original, inspectionValue());
+    const auto compare = [](const std::vector<std::byte> &bytes) {
+        std::optional<FormatError> borrowed, ranged;
+        size_t offset = 0;
+        try {
+            static_cast<void>(CanonicalPropertyValueCodec::inspectNext(bytes, offset));
+            if (offset != bytes.size()) borrowed = FormatError::FERR_INVALID_HEADER;
+        } catch (const FormatException &error) { borrowed = error.error(); }
+        const auto read = [&](size_t position, std::span<std::byte> target) {
+            ASSERT_LE(position, bytes.size()); ASSERT_LE(target.size(), bytes.size() - position);
+            std::copy_n(bytes.begin() + position, target.size(), target.begin());
+        };
+        try { static_cast<void>(CanonicalPropertyValueCodec::inspectRange(bytes.size(), std::ref(read))); }
+        catch (const FormatException &error) { ranged = error.error(); }
+        EXPECT_EQ(ranged, borrowed);
+    };
+    for (size_t index = 0; index < original.size(); ++index) {
+        compare(std::vector<std::byte>(original.begin(), original.begin() + index));
+        for (unsigned bit = 0; bit < 8; ++bit) {
+            auto changed = original; changed[index] ^= std::byte{static_cast<unsigned char>(1U << bit)};
+            compare(changed);
+        }
+    }
+}
+
+TEST(RelocatablePropertyValueInspectionTest, RangeInspectionPropagatesReaderAndCancellationFailures) {
+    EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::inspectRange(6, {})), std::invalid_argument);
+    const auto failRead = [](size_t, std::span<std::byte>) { throw std::runtime_error("range I/O"); };
+    EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::inspectRange(6, failRead)), std::runtime_error);
+    size_t reads = 0;
+    const auto read = [&](size_t, std::span<std::byte>) { ++reads; };
+    EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::inspectRange(6, read,
+        [] { throw std::runtime_error("cancel range"); })), std::runtime_error);
+    EXPECT_EQ(reads, 0U);
+}
+
 TEST(RelocatablePropertyValueInspectionTest, ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime) {
     const PropertyValue expected(std::vector<PropertyValue>(1024U, PropertyValue(std::string(512U, 's'))));
     std::vector<std::byte> encoded; CanonicalPropertyValueCodec::append(encoded, expected);

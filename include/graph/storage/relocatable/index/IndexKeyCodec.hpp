@@ -48,6 +48,10 @@ namespace graph::storage {
 																		 uint64_t entityId);
 		[[nodiscard]] static std::optional<std::vector<std::byte>>
 		tryEncodeCompositeEntryKey(std::span<const PropertyValue> values, uint64_t entityId);
+        // Borrow components instead of cloning owning PropertyValue payloads.
+        // Pointers must remain live/non-null for this synchronous call.
+        [[nodiscard]] static std::optional<std::vector<std::byte>>
+        tryEncodeCompositeEntryKeyReferences(std::span<const PropertyValue *const> values, uint64_t entityId);
 		[[nodiscard]] static std::vector<std::byte> lowerBound(const PropertyValue &value);
 		[[nodiscard]] static std::vector<std::byte> upperBound(const PropertyValue &value);
 		[[nodiscard]] static int64_t decodeIntegerEntryValue(std::span<const std::byte> key);

@@ -1,0 +1,29 @@
+{
+  "scope": "R3.2 private single-field demotion within the fixed five",
+  "accepted_before": 13,
+  "accepted_after": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "commit_push": false,
+  "full_unit_suite": false,
+  "new_performance_windows": 0,
+  "platform": "Linux x86_64",
+  "tests": {
+    "default": {
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "candidate": {
+      "tests": 45,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    }
+  },
+  "corrected_failures": [
+    "Test decodeInline call omitted the required admission callback; corrected the call.",
+    "The oversized sibling fixture requested inline mode; corrected it to the existing LargeValue fixture mode, retaining the 8192-byte value."
+  ]
+}

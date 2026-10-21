@@ -1,0 +1,60 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*
+[==========] Running 20 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (1977 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1340 ms)
+[ RUN      ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults (1374 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+unknown file: Failure
+C++ exception with description "relocatable constraint definition has an invalid identity, schema Token, or enum value" thrown in the test body.
+
+[  FAILED  ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication (116 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerDeletionStillRequiresCatalogCountAndLabelIndexCoordination
+[       OK ] HybridPropertyQueryParityTest.OwnerDeletionStillRequiresCatalogCountAndLabelIndexCoordination (740 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination
+[       OK ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination (219 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap
+[       OK ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap (3735 ms)
+[----------] 8 tests from HybridPropertyQueryParityTest (9504 ms total)
+
+[----------] 12 tests from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion (846 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot (739 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange
+[       OK ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange (291 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion
+[       OK ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion (336 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion (279 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges
+[       OK ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges (727 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently (265 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication
+[       OK ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication (258 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry (248 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys
+[       OK ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys (764 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate (694 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted
+[       OK ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted (1672 ms)
+[----------] 12 tests from HybridPropertyIndexedLifecycleTest (7125 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 2 test suites ran. (16629 ms total)
+[  PASSED  ] 19 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+
+ 1 FAILED TEST

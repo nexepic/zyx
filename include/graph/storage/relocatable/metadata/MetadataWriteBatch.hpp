@@ -178,6 +178,10 @@ namespace graph::storage {
 					 BootstrapPublishFailpoint failpoint = BootstrapPublishFailpoint::BPF_NONE);
 
 	private:
+        friend class RelocatableMetadataStore;
+        friend class NativeStorageAllocationCensus;
+        bool publication_prepared_ = false;
+        bool hybrid_property_publication_ = false;
 		void validateOwnedRoot(PhysicalPageRef root, const char *message) const;
 		void abandonUnpublishedPages() noexcept;
 

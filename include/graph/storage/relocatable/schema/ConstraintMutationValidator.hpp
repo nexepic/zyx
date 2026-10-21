@@ -62,6 +62,11 @@ namespace graph::storage {
 	// fixed-record and native Entity-page transaction planners.
 	class ConstraintMutationValidator final {
 	public:
+        // Values are borrowed in definition order; nullptr denotes absence.
+        // Checks local non-null/type rules; uniqueness still needs support trees.
+        static void validatePropertyValues(const ConstraintDefinition &definition,
+            std::span<const PropertyValue *const> values);
+
 		ConstraintMutationValidator(ConstraintMutationValidationAdapter adapter,
 									ConstraintMutationValidatorOptions options);
 

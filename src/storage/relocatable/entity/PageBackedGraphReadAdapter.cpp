@@ -1625,9 +1625,9 @@ namespace graph::storage {
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &readSession = selectNativeReadSession(snapshot, session, localSession);
 		const GlobalAdjacencyDirection adjacencyDirection = globalDirection(direction);
-		if (continuation.has_value() && (continuation->previous_edge_id == 0U || continuation->next_edge_id == 0U)) {
+		if (continuation.has_value() && (continuation->previous_edge_id == 0U || continuation->next_edge_id <= continuation->previous_edge_id)) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
-							  "page-backed graph adjacency continuation has a zero Edge ID");
+							  "page-backed graph adjacency continuation has invalid Edge order");
 		}
 
 		// The source Node is invariant across all pages of one adjacency scan.
@@ -1639,7 +1639,7 @@ namespace graph::storage {
 		std::optional<GlobalAdjacencyContinuation> adjacencyContinuation;
 		if (continuation.has_value()) {
 			adjacencyContinuation = {snapshot.superblock().generation, adjacencyDirection, nodeId,
-									 continuation->previous_edge_id};
+									 continuation->previous_edge_id, snapshot.superblock().database_id};
 		}
 		const size_t boundedRecords = std::min(maximumRecords, maximum_adjacency_edges_);
 		if (boundedRecords == 0U) { // constructor validation keeps both bounds positive.
@@ -1769,7 +1769,7 @@ namespace graph::storage {
 		NativeReadSession &readSession = selectNativeReadSession(snapshot, session, localSession);
 		const GlobalAdjacencyDirection adjacencyDirection = globalDirection(direction);
 		if (continuation.has_value() &&
-			(continuation->previous_edge_id == 0U || continuation->next_edge_id == 0U)) {
+			(continuation->previous_edge_id == 0U || continuation->next_edge_id <= continuation->previous_edge_id)) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed graph adjacency topology continuation has a zero Edge ID");
 		}
@@ -1779,7 +1779,7 @@ namespace graph::storage {
 		std::optional<GlobalAdjacencyContinuation> adjacencyContinuation;
 		if (continuation.has_value()) {
 			adjacencyContinuation = {snapshot.superblock().generation, adjacencyDirection, nodeId,
-									 continuation->previous_edge_id};
+									 continuation->previous_edge_id, snapshot.superblock().database_id};
 		}
 		const size_t boundedRecords = std::min(maximumRecords, maximum_adjacency_edges_);
 		if (boundedRecords == 0U) {
@@ -2127,6 +2127,15 @@ namespace graph::storage {
 					throwAdapterError(FormatError::FERR_INVALID_STATE,
 							"page-backed batch adjacency traversal returned an inconsistent endpoint");
 				}
+            }
+            // Authenticate the whole private batch before any consumer can
+            // apply a type predicate, stop early or produce side effects. A bad
+            // later record must not be hidden by an earlier visitor return.
+            for (const auto &[nodeId, edgeId]: keys) {
+                static_cast<void>(nodeId);
+                admit(workingBytes, 0U, 0U);
+                const size_t ordinal = static_cast<size_t>(std::ranges::lower_bound(edgeIds, edgeId) - edgeIds.begin());
+                const EdgeEntityRecord &record = *records[ordinal];
 				active.putEdge(edgeId, record);
 				if (!visitor({edgeId, true, record.source_node_id, record.target_node_id, record.type_id})) {
 					stoppedByVisitor = true;

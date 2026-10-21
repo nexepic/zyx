@@ -634,22 +634,33 @@ namespace graph::storage {
         debug::PerfTrace::addValue("native_graph.read.metadata_decodes.hybrid_descriptor", 1);
         auto page = HybridPropertyDescriptorCodec::decode(bytes, snapshot.database_id, reference.generation,
             snapshot.generation, snapshot.checkpoint_lsn);
-        // The metadata prototype admits empty descriptors only until all native
-        // group/source readers and writers are installed together. Never let a
-        // partial candidate silently fall through to ROW on reopen.
-        if (std::ranges::any_of(page.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
-            throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property routing is not installed");
+        // Nonempty descriptors are readable in the isolated format. Their
+        // actual namespaces/roots and field pages are authenticated by the
+        // pinned field reader. Generic publication remains rejected below.
+        for (size_t base : {size_t(0), size_t(4)}) {
+            const auto &roots = page.descriptor.roots;
+            if ((roots[base].page_id.isValid() || roots[base + 1].page_id.isValid() || roots[base + 2].page_id.isValid()) &&
+                !roots[base + 3].page_id.isValid())
+                throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid field namespaces have no group root");
+            if ((roots[base + 1].page_id.isValid() || roots[base + 2].page_id.isValid()) && !roots[base].page_id.isValid())
+                throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid field source namespace has no owner root");
+        }
         return page;
     }
 
     void MetadataPageFile::prepareHybridPropertyDescriptor(MetadataWriteBatch &batch,
         const HybridPropertyDescriptor &descriptor) const {
+        prepareHybridPropertyDescriptorImpl(batch, descriptor, false);
+    }
+
+    void MetadataPageFile::prepareHybridPropertyDescriptorImpl(MetadataWriteBatch &batch,
+        const HybridPropertyDescriptor &descriptor, bool nativeCandidate) const {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != database_id_ ||
             batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
             descriptor.semantic_generation != batch.generation() ||
             batch.candidate().hybrid_property_descriptor_root != batch.current().hybrid_property_descriptor_root)
             throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor publication has a foreign or stale semantic identity");
-        if (std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
+        if (!nativeCandidate && std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
             throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property publication is not installed");
         const HybridPropertyDescriptorPage page{batch.generation(), batch.checkpointLsn(), descriptor};
         // Validate/encode before allocating a frame or changing the candidate root.

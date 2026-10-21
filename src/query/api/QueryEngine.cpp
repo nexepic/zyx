@@ -19,6 +19,7 @@
  **/
 
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/optimization/ReadTraversalAnchorEnvelope.hpp"
 #include "graph/core/PropertyHeapRequestBytes.hpp"
 #include <algorithm>
 #include <chrono>
@@ -137,7 +138,7 @@ namespace graph::query {
 						(statistics_->node_count == 0U && statistics_->edge_count != 0U)) return std::nullopt;
 					if (scan->getLabels().empty()) return statistics_->node_count;
 					if (scan->getLabels().front().empty()) return std::nullopt;
-					const auto count = estimateLabels(scan->getLabels());
+					const auto count = estimateLabels(scan->getLabels(), false);
 					return count && *count <= statistics_->node_count ? count : std::nullopt;
 				} catch (...) { return std::nullopt; }
 			}
@@ -255,7 +256,8 @@ namespace graph::query {
 
 			static void collectAnchorLabels(const logical::LogicalOperator &root, size_t depth,
 				std::vector<std::vector<std::string>> &labels) {
-				if (depth >= 64U || labels.size() >= 64U) return;
+				if (depth >= 64U || labels.size() >= 64U ||
+                    !optimization::detail::readTraversalAnchorEnvelope(root)) return;
 				if (const auto *project = dynamic_cast<const logical::LogicalProject *>(&root)) {
 					const auto children = project->getChildren();
 					const auto *traversal = children.size() == 1U ? dynamic_cast<const logical::LogicalTraversal *>(children.front()) : nullptr;
@@ -271,10 +273,11 @@ namespace graph::query {
 				for (const auto *child : root.getChildren()) if (child) collectAnchorLabels(*child, depth + 1U, labels);
 			}
 
-			[[nodiscard]] std::optional<uint64_t> estimateLabels(const std::vector<std::string> &labels) const {
+			[[nodiscard]] std::optional<uint64_t> estimateLabels(const std::vector<std::string> &labels, bool allowLazyRead = true) const {
 				for (const auto &entry : label_estimates_) {
 					if (entry.first == labels) return entry.second;
 				}
+                if (!allowLazyRead) return std::nullopt;
 				const auto estimate = backend_.estimateLogicalNodeCardinality(labels);
 				// Rewrites can revisit the same scan. Keep a small planning-local memo;
 				// it dies with this provider and cannot outlive a catalog publication.

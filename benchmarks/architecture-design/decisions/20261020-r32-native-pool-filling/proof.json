@@ -1,0 +1,83 @@
+{
+  "scope": [
+    "R3.2",
+    "R4.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Actual 128 KiB native field/index/entity pool reuse with bounded advisory discovery, pin-safe shadow capacity, exact physical root epochs, and recovery before unrelated publication/reopen.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 497,
+      "passed": 497,
+      "skipped": 0,
+      "binary_sha256": "1fb3f90ba98650830d36ac8c06e6a4eed311957d85bde19de545e9040efb6b01",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 745,
+      "passed": 744,
+      "skipped": 1,
+      "binary_sha256": "f81e9694395cc37a4a355d97485964b626e8185bd1a9a5074de34ca4470fb4f9",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Explicit isolated format32 only; production format31 unchanged.",
+    "Forward fields and shared directories, field SET/REMOVE and controlled labeled/unlabeled owner deletion reuse pool frames. Inverse ROW carriers and explicit pool relocation retain their existing fresh placement.",
+    "At most12 advisory kind/owner hints plus directly related source/root/two-neighbor routes; every hint revalidated. No ordinary database-wide placement scan.",
+    "Recovery streams Catalog/Page Directory only after an interrupted physical writer or first writable native open; current/pinned bitmap checks precede cleanup. Generic unadapted writes remain rejected.",
+    "Complete allocation-cost estimation, schema/statistics/index/unknown-State/general-topology coordination, same-executor ROW comparison and R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "A reused destination must be selected before whole-source-pool retirement and excluded from that retirement.",
+    "Reconcile an existing pool only before its first private append; later private appends in the same batch are not reclaimable orphans.",
+    "Dirty directory root epochs must be rebound from virtual epoch1 to their real destination pool before both root authorities publish.",
+    "A/B failure in a Catalog-visible pool requires typed physical recovery before an unrelated next publication; same-pool retry alone is insufficient.",
+    "A successful central publication updates the guard I/O baseline so ROW-equal no-op writes perform no cleanup I/O.",
+    "Physical COW may reuse the same pool; tests authenticate changed frames, forced pinned exhaustion/release, and exact current-frame copying rather than requiring one new pool per write."
+  ]
+}

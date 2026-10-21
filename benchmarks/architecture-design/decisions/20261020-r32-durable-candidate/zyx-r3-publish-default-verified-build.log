@@ -1,0 +1,4 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp.o
+[2/4] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp.o
+[3/4] Linking CXX static library libzyx_core.a

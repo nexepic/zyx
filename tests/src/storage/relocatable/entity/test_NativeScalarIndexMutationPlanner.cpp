@@ -12,6 +12,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 #include "graph/core/Edge.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
@@ -463,4 +464,96 @@ TEST_F(NativeScalarIndexMutationPlannerTest, EdgePropertyDeltaRemovesAnIndexedFi
 	auto current = metadata_->openSnapshot();
 	EXPECT_FALSE(index.find(current, IndexKeyCodec::encodeEntryKey(PropertyValue(42), 1U)));
 	current.release();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, BorrowedPropertyDeltaVisitorSharesScalarAndCompositeKeyRulesWithoutWriting) {
+    allocateEmptyIndexRoot(*btree_pages_, 18, 72, 102, 41, 2);
+    allocateEmptyIndexRoot(*btree_pages_, 19, 73, 103, 42, 4);
+    IndexDefinition single; single.index_id = 18; single.name = "score";
+    single.entity_kind = IndexDefinitionEntityKind::IDEK_NODE; single.kind = IndexDefinitionKind::IDK_PROPERTY;
+    single.property_names = {"score"}; single.label_token_id = 7;
+    auto composite = single; composite.index_id = 19; composite.name = "score_tag";
+    composite.kind = IndexDefinitionKind::IDK_COMPOSITE; composite.property_names = {"score", "tag"};
+    NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {single, composite},
+        [](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> { return name == "score" ? 17U : 18U; });
+    const PropertyCollectionRoot before{1, Node::typeId, {{17, PropertyValue(42)}, {18, PropertyValue("a")}}};
+    const PropertyCollectionRoot after{1, Node::typeId, {{17, PropertyValue(43)}, {18, PropertyValue("b")}}};
+    const std::array<uint64_t, 1> labels{7}; auto pin = metadata_->openSnapshot();
+    struct Delta { uint64_t index, owner; bool erase; std::vector<std::byte> key; };
+    std::vector<Delta> deltas; const auto epoch = io_->dataMutationEpoch(); const auto generation = pin.superblock().generation;
+    const NativeScalarIndexMutationPlanner::PropertyDeltaVisitor visitor = [&](uint64_t index, std::span<const std::byte> key, uint64_t owner, bool erase) {
+        deltas.push_back({index, owner, erase, {key.begin(), key.end()}});
+    };
+    scalar.visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, labels, before, labels, after, visitor);
+    ASSERT_EQ(deltas.size(), 4U);
+    EXPECT_EQ(deltas[0].index, 18U); EXPECT_TRUE(deltas[0].erase);
+    EXPECT_EQ(deltas[1].index, 18U); EXPECT_FALSE(deltas[1].erase);
+    EXPECT_EQ(deltas[0].key, IndexKeyCodec::encodeEntryKey(PropertyValue(42), 1));
+    EXPECT_EQ(deltas[1].key, IndexKeyCodec::encodeEntryKey(PropertyValue(43), 1));
+    const std::array oldTuple{PropertyValue(42), PropertyValue("a")};
+    const std::array newTuple{PropertyValue(43), PropertyValue("b")};
+    EXPECT_EQ(deltas[2].key, IndexKeyCodec::encodeCompositeEntryKey(oldTuple, 1));
+    EXPECT_EQ(deltas[3].key, IndexKeyCodec::encodeCompositeEntryKey(newTuple, 1));
+    for (const auto &delta : deltas) EXPECT_EQ(delta.owner, 1U);
+    deltas.clear(); scalar.visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, labels, before, labels, before, visitor);
+    EXPECT_TRUE(deltas.empty());
+    scalar.visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, labels, before, {}, after, visitor);
+    ASSERT_EQ(deltas.size(), 2U); EXPECT_TRUE(deltas[0].erase); EXPECT_TRUE(deltas[1].erase);
+    EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(metadata_->openSnapshot().superblock().generation, generation);
+}
+TEST_F(NativeScalarIndexMutationPlannerTest, BorrowedDeltaVisitorPropagatesPreparationFailureWithoutPublication) {
+    allocateEmptyIndexRoot(*btree_pages_, 18, 72, 102, 41, 2);
+    IndexDefinition definition; definition.index_id = 18; definition.name = "score";
+    definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE; definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+    definition.property_names = {"score"};
+    NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {definition},
+        [](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 17; });
+    const PropertyCollectionRoot before{1, Node::typeId, {{17, PropertyValue(42)}}};
+    const PropertyCollectionRoot after{1, Node::typeId, {{17, PropertyValue(43)}}};
+    auto pin = metadata_->openSnapshot(); const auto epoch = io_->dataMutationEpoch();
+    EXPECT_THROW(scalar.visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, {}, before, {}, after,
+        [](auto, auto, auto, auto) { throw std::runtime_error("preparation refused"); }), std::runtime_error);
+    EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
+}
+TEST_F(NativeScalarIndexMutationPlannerTest, BorrowedDeltaVisitorRequiresDomainAndCallbackEvenWithoutDefinitions) {
+    NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {},
+        [](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return {}; });
+    const PropertyCollectionRoot root{1, Node::typeId, {}}; auto pin = metadata_->openSnapshot();
+    EXPECT_THROW(scalar.visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, {}, root, {}, root, {}), FormatException);
+    const auto foreignPath = std::filesystem::path(path_.string() + "_foreign");
+    {
+        auto file = std::make_shared<std::fstream>(foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto other = RelocatableMetadataStore::initializeNew(io, graph::storage::test::nativeGraphInitialSuperblock());
+        auto foreign = other->openSnapshot();
+        EXPECT_EQ(foreign.superblock().database_id, pin.superblock().database_id);
+        EXPECT_EQ(foreign.superblock().generation, pin.superblock().generation);
+        EXPECT_THROW(scalar.visitPropertyDelta(foreign, IndexDefinitionEntityKind::IDEK_NODE, 1, {}, root, {}, root,
+            [](auto, auto, auto, auto) {}), FormatException);
+    }
+    std::filesystem::remove(foreignPath);
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, PublishedRootCacheRetainsItsAllocationOwnerOutsideTheConstructionScope) {
+    allocateEmptyIndexRoot(*btree_pages_, 18, 72, 102, 41, 2);
+    IndexDefinition definition; definition.index_id = 18; definition.name = "score";
+    definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE; definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+    definition.property_names = {"score"};
+    auto memory = std::make_shared<query::execution::MaterializedByteBudget>(65536);
+    std::unique_ptr<NativeScalarIndexMutationPlanner> scalar;
+    {
+        utils::OwnedAllocationScope scope(memory);
+        scalar = std::make_unique<NativeScalarIndexMutationPlanner>(*metadata_, *btree_pages_,
+            utils::OwnedStdVector<IndexDefinition>{definition},
+            [](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 17; });
+    }
+    const auto retainedDefinitions = memory->used(); auto pin = metadata_->openSnapshot();
+    const PropertyCollectionRoot missing{1, Node::typeId, {}};
+    scalar->visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, {}, missing, {}, missing,
+        [](auto, auto, auto, auto) { ADD_FAILURE() << "missing values must not produce an index key"; });
+    EXPECT_GT(memory->used(), retainedDefinitions); const auto populated = memory->used();
+    scalar->visitPropertyDelta(pin, IndexDefinitionEntityKind::IDEK_NODE, 1, {}, missing, {}, missing,
+        [](auto, auto, auto, auto) { ADD_FAILURE(); });
+    EXPECT_EQ(memory->used(), populated);
+    scalar.reset(); EXPECT_EQ(memory->used(), 0U);
 }

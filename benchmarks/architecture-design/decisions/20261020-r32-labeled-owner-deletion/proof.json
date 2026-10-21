@@ -1,0 +1,76 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Controlled Node deletion publishes exclusive inline/overflow label-slot removal with fixed Entity/Entity Map/native fields in one A/B transaction, preserving other Nodes and all old pins.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 460,
+      "passed": 460,
+      "skipped": 0,
+      "binary_sha256": "7f1e8f4d0fd780079febed7f966902dffe4b8be81b16f14839ea449f4491bc02",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 692,
+      "passed": 691,
+      "skipped": 1,
+      "binary_sha256": "dc1d0722fae96e4b22e733cb64e97a5ab2dd1adb65c5f03b271b302a23a3d493",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Explicit isolated format32 only; production format31 unchanged.",
+    "Same-group inline values, including nested map/list, bytes and temporal values; immutable admitted payloads; no automatic re-promotion or schema-derived-state adoption.",
+    "Controlled field/directory-pool relocation probes at most31 frame positions; root and child physical epochs authenticate independently.",
+    "Native-active direct exact GC now merges ROW/native owners and publishes only with a private current-generation proof; durable native journal GC and label/schema/derived-state owner coordination remain; multiple groups and Node/Edge namespaces now share directories through selected-group conversion, field writes, deletion and global ownership scanning; controlled LargeValue SET/REMOVE/owner deletion now authenticate content and retain global identities for GC; large ROW inverse carriers now publish atomically; fresh field values and their content index now publish atomically; controlled inline/overflow-labeled Node and canonical Edge/topology deletion are published atomically; schema/derived-State and conservative Node topology guards remain.",
+    "Generic reconciliation remains guarded; bounded whole-pool retirement/release does not complete general maintenance.",
+    "Final full costs/same-executor ROW control and R7 still pending."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner."
+}

@@ -1,0 +1,113 @@
+{
+  "scope": [
+    "R5.1"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Accepted adjacency protocol and complete covering-tree lifecycle prototype, including Node-only transitions, last-edge empty/recreate, skewed cycles and real same-executor multihop/overlay controls.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "backend/test_RelocatableLogicalGraphReadSnapshot",
+    "backend/test_RelocatableStorageBackend_DirectReadContracts",
+    "backend/test_RelocatableStorageBackend_LifecycleContracts",
+    "backend/test_RelocatableQueryResources",
+    "backend/test_RelocatableGraphTraversalLifecycle",
+    "schema/test_SystemCatalogTokenCardinality",
+    "schema/test_ConstraintMutationValidator",
+    "schema/test_SystemCatalogIndexEnumeration",
+    "schema/test_SystemCatalog",
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyShapeCosts",
+    "property/test_HybridPropertyLogicalIds",
+    "entity/test_NativeGraphWritePlanner_LeaseRecovery",
+    "entity/test_NativeScalarIndexMutationPlanner",
+    "index/test_IndexKeyCodec",
+    "entity/test_NativeGraphWritePlanner",
+    "metadata/test_RelocatableMetadataStoreGraphMutation",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "adjacency/test_CoveredAdjacencyCandidate",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 897,
+      "passed": 897,
+      "skipped": 0,
+      "binary_sha256": "884bc82531a2c7fc17c96e72d57bbf949fe0ec83c58d8e86d87c4522c0e90216"
+    },
+    "candidate": {
+      "registered": 1224,
+      "passed": 1223,
+      "skipped": 1,
+      "binary_sha256": "8b96a7fe695fb9331d6f87c8bbdc70e19e3ec02f3f95e776286d6505738386b7"
+    }
+  },
+  "limits": [
+    "Prototype protocol/lifecycle acceptance only; R5.2production/covering-segment choice and R5.3cost/planning/holdouts remain open.",
+    "General low-level transactions still use existing resource contracts; a private1MiBcoalescer account is not complete RSS/admission.",
+    "Existing canonical adjacency is retained and included in whole cost.",
+    "No timing benchmark, full repository suite or non-Linux platform claim."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Node-only create/relabel/delete preserves candidate physical roots while maintaining supplied known graph/label statistics.",
+    "Existing root/first leaf is authenticated even without Edge changes; ordinary scalar roots and excessive entity changes refuse with pending commit fence.",
+    "Last-edge empty-root/recreation retains historical pins and nonreused logical IDs.",
+    "Four fixed-seed skewed insert/delete cycles:34nodes, every direction and complete0/1/2/7counts.",
+    "Same-executor two-hop traversal keeps four parallel-edge paths; reference/topology/overlay, corruption, quotas and cancellation have independent and broad evidence."
+  ],
+  "final_filter": "*-HybridPropertyMatureShapeCostsTest.*",
+  "prior_broad_evidence": "benchmarks/architecture-design/decisions/20261021-r5-overlay-and-whole-cost",
+  "acceptance": {
+    "item": "R5.1",
+    "status": "accepted",
+    "before": "13/24 (54.2%)",
+    "after": "14/24 (58.3%)",
+    "protocol": [
+      "protocol-zh.md",
+      "protocol-en.md"
+    ],
+    "production_admission": false
+  }
+}

@@ -17,6 +17,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
@@ -29,6 +30,8 @@
 namespace graph::storage {
 
 	class PropertyCollectionRootStore;
+    class NativeScalarIndexMutationPlanner;
+    class SystemCatalog;
 	class VectorManifestStore;
 	class VectorPageStore;
 	struct LargeValueContentIndexPublicationPlan;
@@ -61,6 +64,7 @@ namespace graph::storage {
 		}
 	};
 
+    enum class NativeHybridPropertyMapMode : uint8_t { NHPMM_REPLACE = 1, NHPMM_MERGE = 2 };
 	// Entity pools are shared by Node, Edge, and LabelSet pages. Property roots
 	// stay in their own typed pool namespace and remain owner-keyed.
 	struct NativeGraphWritePlannerOptions {
@@ -175,11 +179,48 @@ namespace graph::storage {
 		void replaceEdgeProperty(PropertyCollectionRoot root);
 		void eraseNode(uint64_t nodeId);
 		void eraseEdge(uint64_t edgeId);
+        // Isolated-format explicit conversion, never an implicit promotion on
+        // ordinary property writes. It owns one group/account and cannot mix
+        // with entity mutations, ID leases, indexes or another conversion.
+        // The metadata coordinator retains its uninstalled-publication guard
+        // until the complete field lifecycle is ready. The account is retained;
+        // a non-null cancellation checkpoint must outlive commit/rollback.
+        // Cancellation before staging or at commit entry performs no publish
+        // attempt and leaves the transaction active for retry/rollback.
+        void stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
+            std::shared_ptr<std::pmr::memory_resource> memory,
+            const CancellationCheckpoint *cancellation = nullptr, bool publishCandidate = false,
+            NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID);
+        // Isolated-format cells; copied into the same bounded account and
+        // committed exclusively under this transaction's pin. The opt-in
+        // lifecycle mode includes field insertion/removal and inline writes.
+        void stageHybridPropertyColumns(std::span<const NativeHybridPropertyColumnReplacement> replacements,
+            std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr,
+            bool fieldLifecycle = false);
+        // Canonical storage maps: NULL remains stored NULL; upper logical
+        // layers retain their existing Cypher NULL/removal mapping. One native
+        // group,<=64owners/4096input fields/64changed cells, same<=1MiB account.
+        void stageHybridPropertyMaps(std::span<const PropertyCollectionRoot> roots, NativeHybridPropertyMapMode mode,
+            std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr);
+        void stageHybridPropertyOwnerDeletion(std::span<const EntityPropertyKey> owners,
+            std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr);
 		// Explicit EMPTY supports fixed prefix/value shared maps without changing
 		// generic leaf values or silently reinterpreting an existing U64 tree.
 		// Stage logical scalar-index operations. One Index is replayed through one
 		// transaction-local B+Tree overlay, then published with graph state under
 		// the same snapshot and Superblock generation.
+        // Laboratory existing-root coordinator. Call after final Node/Edge changes;
+        // success seals further staging until commit/rollback; refusal requires
+        // successful retry or rollback before commit. Main Edge reads
+        // and whole-candidate integrity checks remain mandatory. Optional derived
+        // planners maintain type indexes and known graph/complete type counts
+        // and label counts from this pin. The same combined Entity-change bound
+        // covers Nodes/labels; Node-only batches preserve the candidate tree.
+        // Other label/scalar/property indexes remain caller-staged.
+        void stageCoveredAdjacencyCandidate(uint64_t indexId, size_t maximumChangedEdges,
+            std::shared_ptr<std::pmr::memory_resource> memory,
+            const CancellationCheckpoint *stageCancellation = nullptr,
+            const NativeScalarIndexMutationPlanner *typeIndexes = nullptr, SystemCatalog *statistics = nullptr);
 		void stageScalarIndexUpsert(BTreePageStore &index, uint64_t indexId, std::span<const std::byte> key,
 									uint64_t value, BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		void stageScalarIndexErase(BTreePageStore &index, uint64_t indexId, std::span<const std::byte> key,
@@ -280,7 +321,7 @@ namespace graph::storage {
 
 		NativeGraphWriteTransaction(std::shared_ptr<NativeGraphWritePlannerContext> context,
 									MetadataSnapshotPin snapshot);
-		void requireActive(const char *operation) const;
+		void requireActive(const char *operation, bool allowHybridConversion = false) const;
 		[[nodiscard]] NodeChange &mutableNode(uint64_t nodeId);
 		[[nodiscard]] EdgeChange &mutableEdge(uint64_t edgeId);
 		void stageGlobalAdjacencyMutation(GlobalAdjacencyDirection direction, uint64_t nodeId, uint64_t edgeId,
@@ -325,6 +366,27 @@ namespace graph::storage {
 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;
 		std::vector<StagedVectorBootstrap> vector_bootstraps_;
 		std::vector<StagedVectorDelta> vector_deltas_;
+        std::optional<NativeGraphHybridPropertyRootMutation> hybrid_conversion_;
+        struct StagedHybridColumns {
+            utils::OwnedVector<NativeHybridPropertyColumnReplacement> cells;
+            std::shared_ptr<std::pmr::memory_resource> memory;
+            const CancellationCheckpoint *cancellation = nullptr;
+            bool field_lifecycle = false;
+            utils::OwnedVector<EntityPropertyKey> deletions;
+        };
+        void stageHybridPropertyMutation(std::span<const NativeHybridPropertyColumnReplacement> replacements,
+            std::span<const EntityPropertyKey> deletions, std::shared_ptr<std::pmr::memory_resource> memory,
+            const CancellationCheckpoint *cancellation, bool fieldLifecycle);
+        std::optional<StagedHybridColumns> hybrid_columns_;
+        bool covered_adjacency_sealed_ = false;
+        bool covered_adjacency_pending_ = false;
+        struct CoveredAdjacencyRequest {
+            uint64_t index_id = 0;
+            const NativeScalarIndexMutationPlanner *type_indexes = nullptr;
+            SystemCatalog *statistics = nullptr;
+            bool operator==(const CoveredAdjacencyRequest &) const = default;
+        };
+        std::optional<CoveredAdjacencyRequest> covered_adjacency_request_;
 	};
 
 	class NativeGraphWritePlanner final {

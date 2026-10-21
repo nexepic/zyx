@@ -426,6 +426,9 @@ namespace graph::storage {
 													   size_t maximumMetadataPages,
 													   const std::function<bool(const EntityPageLocation &)> &visitor,
 													   size_t *visitedMetadataPages = nullptr) const;
+		[[nodiscard]] bool visitEdgePageLocationsAfter(const Superblock &superblock, uint64_t afterEdgeId,
+            size_t maximumMetadataPages, const std::function<bool(const EntityPageLocation &)> &visitor,
+            size_t *visitedMetadataPages = nullptr) const;
 		void visitEntityProperties(const Superblock &superblock,
 								   const std::function<void(const EntityPropertyLocation &)> &visitor) const;
 		// The cursor is the stable directory identity, not a page or slot that a

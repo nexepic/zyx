@@ -1,0 +1,7 @@
+### 2026-10-21 R3.2 / R6.1: atomic field and scalar/composite index publication
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-atomic-scalar-publication/`. Bounded field updates read schema and selected old values through the same authenticated pin, reuse canonical deltas and borrow final values. Private BTree images are grouped by index; fields, index images, physical routes, roots and retirements share the existing A/B publication. Old-key presence and new-key absence are checked before preparation; inconsistent derived state refuses rather than repairing silently. Removing the last entry retains the active schema's valid empty root. Unmatched partial indexes and unchanged canonical keys keep their physical roots.
+
+Real Node/Edge, composite and partial membership, type demotion, oversized keys, multiple owners, old pins, reopen, A/B interruption, cancellation and corrupt-index refusal are covered, alongside the same LogicalPlanReadRuntime and integrity scans. The 8192-delta / 64-owner / 1MiB limits remain; no second complete owning property tree is constructed. Constraints, VECTOR, schema-bearing owner deletion and general topology writes still require coordination.
+
+47 related modules, excluding the independently verified mature multi-group space case unaffected by this change: default651 passed; candidate953 passed and1 conditional skip. No full repository suite or timing benchmark; no production admission claim. **Total13/24 (54.2%), accepted growth0; no commit or push.**

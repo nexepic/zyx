@@ -1,0 +1,127 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*:FixedShapes/HybridPropertyShapeCostsTest.*
+[==========] Running 51 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (2374 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1533 ms)
+[ RUN      ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults (1594 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+[       OK ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication (917 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes
+[       OK ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes (890 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination
+[       OK ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination (225 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap
+[       OK ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap (3844 ms)
+[----------] 8 tests from HybridPropertyQueryParityTest (11381 ms total)
+
+[----------] 34 tests from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion (946 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot (852 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange
+[       OK ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange (293 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion
+[       OK ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion (336 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion (278 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges
+[       OK ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges (826 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently (261 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication
+[       OK ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication (257 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry (251 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys
+[       OK ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys (848 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate (795 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted
+[       OK ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted (1664 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin (274 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue
+[       OK ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue (368 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue
+[       OK ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue (310 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates (1266 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate (365 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries (1156 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit (376 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (277 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (278 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted
+[       OK ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted (297 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot (275 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry (309 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts
+[       OK ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts (1281 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch
+[       OK ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch (252 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults (1131 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog (347 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo (263 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo (262 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin (341 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots
+[       OK ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots (384 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts
+[       OK ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts (2321 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion
+[       OK ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion (3841 ms)
+[----------] 34 tests from HybridPropertyIndexedLifecycleTest (23599 ms total)
+
+[----------] 9 tests from FixedShapes/HybridPropertyShapeCostsTest
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied47
+NATIVE_SHAPE_COST name=occupied47 owners=47 fields=2 columns=0 extensions=94 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=217766 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied47 (726 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied48
+NATIVE_SHAPE_COST name=occupied48 owners=48 fields=2 columns=2 extensions=0 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=211184 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied48 (401 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied64
+NATIVE_SHAPE_COST name=occupied64 owners=64 fields=2 columns=2 extensions=0 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=214640 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied64 (522 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/unique_sparse
+NATIVE_SHAPE_COST name=unique_sparse owners=64 fields=1 columns=0 extensions=64 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=214966 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/unique_sparse (599 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/mixed_null_string
+NATIVE_SHAPE_COST name=mixed_null_string owners=64 fields=4 columns=1 extensions=192 row=655360 candidate=1310720 retired=131072 allocated_peak=1441792 file=6160384 planning_peak=243891 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/mixed_null_string (1842 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/multiple_labels
+NATIVE_SHAPE_COST name=multiple_labels owners=64 fields=16 columns=16 extensions=0 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=302472 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/multiple_labels (4323 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large
+NATIVE_SHAPE_COST name=shared_large owners=64 fields=1 columns=0 extensions=64 row=1179648 candidate=1572864 retired=131072 allocated_peak=1703936 file=6422528 planning_peak=800064 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large (1038 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096
+NATIVE_SHAPE_COST name=wide4096 owners=64 fields=64 columns=64 extensions=0 row=786432 candidate=1179648 retired=262144 allocated_peak=1441792 file=6160384 planning_peak=608520 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096 (17367 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse
+NATIVE_SHAPE_COST name=interleaved_dense_sparse owners=64 fields=16 columns=8 extensions=64 row=655360 candidate=1310720 retired=131072 allocated_peak=1441792 file=6160384 planning_peak=253366 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse (2337 ms)
+[----------] 9 tests from FixedShapes/HybridPropertyShapeCostsTest (29159 ms total)
+
+[----------] Global test environment tear-down
+[==========] 51 tests from 3 test suites ran. (64140 ms total)
+[  PASSED  ] 51 tests.

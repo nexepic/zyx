@@ -1,0 +1,99 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLargeMutationTest.*:HybridPropertyInlineMutationTest.*:HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin:HybridPropertyOrdinaryConversionTest.CandidateReusesIndependentLargeFieldAndExplicitlyReplacesAndRemovesItsReference
+[==========] Running 15 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesIndependentLargeFieldAndExplicitlyReplacesAndRemovesItsReference
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateReusesIndependentLargeFieldAndExplicitlyReplacesAndRemovesItsReference (132 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (132 ms total)
+
+[----------] 1 test from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin (31 ms)
+[----------] 1 test from HybridPropertyOwnerDeletionTest (31 ms total)
+
+[----------] 7 tests from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo
+[       OK ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo (5 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen
+[       OK ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen (383 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality
+[       OK ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality (194 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback
+[       OK ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback (17 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging
+[       OK ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging (16 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields
+[       OK ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields (83 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry
+[       OK ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry (326 ms)
+[----------] 7 tests from HybridPropertyInlineMutationTest (1027 ms total)
+
+[----------] 6 tests from HybridPropertyLargeMutationTest
+[ RUN      ] HybridPropertyLargeMutationTest.DisabledOrUnconvertedLargeWritesLeaveTheSourceUntouched
+[       OK ] HybridPropertyLargeMutationTest.DisabledOrUnconvertedLargeWritesLeaveTheSourceUntouched (5 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:51: Failure
+Expected: (void)write(cells, memory) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+[  FAILED  ] HybridPropertyLargeMutationTest.MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop (12 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.AColumnDemotesOnlyItsFieldWhenAReplacementNeedsANewLargeValue
+[       OK ] HybridPropertyLargeMutationTest.AColumnDemotesOnlyItsFieldWhenAReplacementNeedsANewLargeValue (399 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.ReplacingRemovingAndDeletingOwnersRetainsSharedGlobalContentAndOldPins
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:81: Failure
+Expected: (void)write(cells, memory) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+[  FAILED  ] HybridPropertyLargeMutationTest.ReplacingRemovingAndDeletingOwnersRetainsSharedGlobalContentAndOldPins (14 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.LargeListNoopFollowsRowSignedZeroAndNanEqualityWithoutIdentityChurn
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:103: Failure
+Expected: (void)write(cells, memory) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+[  FAILED  ] HybridPropertyLargeMutationTest.LargeListNoopFollowsRowSignedZeroAndNanEqualityWithoutIdentityChurn (11 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.LargeWriteABRecoveryAndPreparationCancellationPublishNoPartialIdentity
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:122: Failure
+Expected: (void)write(cells, tiny) throws an exception of type graph::query::execution::MaterializedByteLimitExceeded.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:129: Failure
+Expected: (void)write(cells, memory, {}, &cancellation) throws an exception of type Cancelled.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:131: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:134: Failure
+Expected: (void)write(cells, memory, options) throws an exception of type BootstrapPublishInterrupted.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:134: Failure
+Expected: (void)write(cells, memory, options) throws an exception of type BootstrapPublishInterrupted.
+  Actual: it throws graph::storage::FormatException with description "hybrid large reference requires retained-buffer admission".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeMutation.cpp:138: Failure
+Expected equality of these values:
+  pin.superblock().next_large_value_id
+    Which is: 1
+  before.next_large_value_id + size_t(installed)
+    Which is: 2
+
+unknown file: Failure
+C++ exception with description "Entity Property read requires a present Property root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLargeMutationTest.LargeWriteABRecoveryAndPreparationCancellationPublishNoPartialIdentity (66 ms)
+[----------] 6 tests from HybridPropertyLargeMutationTest (511 ms total)
+
+[----------] Global test environment tear-down
+[==========] 15 tests from 4 test suites ran. (1702 ms total)
+[  PASSED  ] 11 tests.
+[  FAILED  ] 4 tests, listed below:
+[  FAILED  ] HybridPropertyLargeMutationTest.MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop
+[  FAILED  ] HybridPropertyLargeMutationTest.ReplacingRemovingAndDeletingOwnersRetainsSharedGlobalContentAndOldPins
+[  FAILED  ] HybridPropertyLargeMutationTest.LargeListNoopFollowsRowSignedZeroAndNanEqualityWithoutIdentityChurn
+[  FAILED  ] HybridPropertyLargeMutationTest.LargeWriteABRecoveryAndPreparationCancellationPublishNoPartialIdentity
+
+ 4 FAILED TESTS

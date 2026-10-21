@@ -1,0 +1,6 @@
+{
+  "sha256": {
+    "include/graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp": "e03ccd2fa8beed79af14e1e9d982f6c35ac78f30744b594ce9e41984a2302219",
+    "tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp": "f5e3475b9ed61d2b12f2f100f7e1c2ee461aef200eb49e2ada3579d7d3e73622"
+  }
+}

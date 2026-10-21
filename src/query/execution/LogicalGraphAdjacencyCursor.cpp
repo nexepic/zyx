@@ -104,20 +104,21 @@ namespace graph::query::execution {
 			exhausted_ = true;
 			return std::nullopt;
 		}
-		edges_returned_ += page.edges.size();
+		const size_t nextReturned = edges_returned_ + page.edges.size();
 		if (page.continuation.has_value()) {
 			const storage::LogicalGraphAdjacencyContinuation &next = *page.continuation;
-			if (next.previous_edge_id != page.edges.back().edge_id || next.next_edge_id == 0U ||
-				next.previous_edge_id == next.next_edge_id) {
+			if (next.previous_edge_id != page.edges.back().edge_id || next.next_edge_id <= next.previous_edge_id) {
 				throw std::runtime_error("logical graph backend returned an invalid adjacency continuation");
 			}
-			if (edges_returned_ == options_.maximum_total_edges) {
+			if (nextReturned == options_.maximum_total_edges) {
 				throw std::runtime_error("logical graph adjacency traversal exceeded its total edge bound");
 			}
 			continuation_ = next;
 		} else {
 			exhausted_ = true;
 		}
+		// Commit cursor state only after the complete page/continuation passes.
+		edges_returned_ = nextReturned;
 		return page;
 	}
 

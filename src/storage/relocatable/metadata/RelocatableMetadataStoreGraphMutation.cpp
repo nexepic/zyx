@@ -6,10 +6,16 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyPoolRoutes.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyImmutablePreparation.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyReadContext.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
@@ -266,7 +272,8 @@ namespace graph::storage {
 			const NativeGraphDeferredIndexPlanner &deferredIndexPlanner,
 			const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner,
 			const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner,
-            const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation) {
+            const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation,
+            const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence) {
 		debug::ScopedPerfTimer timer("native_graph.metadata_publish");
         if (hybridPropertyRootMutation) {
             const auto &request = *hybridPropertyRootMutation;
@@ -290,8 +297,15 @@ namespace graph::storage {
                 const auto &conversion = *request.conversion;
                 const auto memory = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(conversion.memory);
                 constexpr size_t maximumConversionBytes = 1024U * 1024U;
+                if (conversion.allocation_admission && (!conversion.publish_candidate ||
+                    conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID ||
+                    !conversion.allocation_admission->maximum_admitted_peak_bytes || !conversion.allocation_admission->maximum_admitted_file_bytes ||
+                    (conversion.allocation_admission->census.cancellation && conversion.allocation_admission->census.cancellation != conversion.cancellation)))
+                    throw FormatException(FormatError::FERR_INVALID_HEADER, "native allocation admission requires explicit forward publication, peak limits and its conversion checkpoint");
                 if (request.mode != NativeHybridPropertyRootMode::NHPRM_REPLACE ||
                     !expectedMetadataGeneration.has_value() || !hybrid_property_detail::validKind(conversion.owner_kind) ||
+                    (conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID &&
+                        conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW) ||
                     !conversion.group_id || conversion.group_id > RSS_HYBRID_MAX_GROUP_ID || !memory ||
                     !conversion.first_slot.isValid() || !conversion.last_slot.isValid() ||
                     conversion.first_slot > conversion.last_slot || !conversion.field_pool_owner_id ||
@@ -865,7 +879,7 @@ namespace graph::storage {
             conversionRoots = std::make_unique<PropertyCollectionRootStore>(*conversionPages, *conversionLargeValues, *this);
             conversionIndexes = std::make_unique<BTreePageStore>(*conversionPages, *this);
         }
-		MetadataWriteGuard writer = beginWrite();
+        MetadataWriteGuard writer = beginWrite(reclamationEvidence.has_value() || (hybridPropertyRootMutation && hybridPropertyRootMutation->conversion));
 		const Superblock current = bootstrap_.recover();
 		// The writer fences this published generation until this call returns.
 		// Reuse only immutable raw decodes through the existing bounded context;
@@ -887,6 +901,25 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native graph metadata publication no longer matches its pinned generation");
 		}
+        if (reclamationEvidence) {
+            const auto &proof = *reclamationEvidence;
+            if (proof.source_.database_id != current.database_id || proof.source_.generation != current.generation ||
+                proof.source_.hybrid_property_descriptor_root != current.hybrid_property_descriptor_root ||
+                expectedMetadataGeneration != std::optional(current.generation) ||
+                !std::ranges::equal(proof.erased_, erasedLargeValueIds) || !hasLargeValueRetirements ||
+                !requests.empty() || !appendRequests.empty() || !newPoolRequests.empty() ||
+                !propertyReplacements.empty() || !propertyPageBatchRequests.empty() || !largeValues.empty() ||
+                !logicalIdReservation.empty() || hybridPropertyRootMutation ||
+                privateSegmentImagePreparer || privateSegmentPreparer || deferredIndexPlanner ||
+                earlyPublicationPlanner || deferredIndexPlansPlanner || vectorBootstrapPreparer || vectorDeltaPreparer ||
+                derivedState.index_tree_mutations.size() != 1U ||
+                derivedState.index_tree_mutations.front().index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
+                !derivedState.reused_large_values.empty() || !derivedState.vector_bootstraps.empty() ||
+                !derivedState.vector_deltas.empty() || !derivedState.private_segments.empty() ||
+                derivedState.private_segment_plan || derivedState.external_private_tail_reservation)
+                throw FormatException(FormatError::FERR_INVALID_STATE,
+                    "native LargeValue reclamation requires a current complete ownership proof and retirement-only work");
+        }
         if (hybridPropertyRootMutation &&
             (hybridPropertyRootMutation->expected_database_id != current.database_id ||
                 hybridPropertyRootMutation->expected_root != current.hybrid_property_descriptor_root))
@@ -1966,6 +1999,7 @@ namespace graph::storage {
         MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn,
             hybridPropertyRootMutation && hybridPropertyRootMutation->conversion ?
                 hybridPropertyRootMutation->conversion->memory : std::shared_ptr<std::pmr::memory_resource>{});
+        if (reclamationEvidence) batch.hybrid_property_publication_ = true;
         if (hybridPropertyRootMutation && hybridPropertyRootMutation->conversion) {
             const auto &conversion = *hybridPropertyRootMutation->conversion;
             const std::function<void()> checkpoint = [&conversion] {
@@ -1974,8 +2008,36 @@ namespace graph::storage {
             // Declare the decode admission before all borrowed ROW values:
             // decoded heaps and vector backing die before their credit refunds.
             utils::OwnedAllocationScope allocationScope(conversion.memory);
-            detail::PropertyDecodeWorkspace sourceWorkspace(conversion.memory, &checkpoint);
+            std::optional<detail::PropertyDecodeWorkspace> headerWorkspace;
+            headerWorkspace.emplace(conversion.memory, &checkpoint);
             auto source = snapshots_.pinCurrentUnderWrite(writer, current);
+            if (conversion.direction == NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW)
+                return publishHybridPropertyRows(batch, writer, source, conversion, *conversionEntities,
+                    *conversionPages, *conversionIndexes, *conversionLargeValues, options);
+            if (current.hybrid_property_descriptor_root.isValid()) {
+                HybridPropertyReadContext existing(io_, *conversionPages, *this, source, conversion.cancellation);
+                if (existing.groupRecord({conversion.owner_kind, (conversion.group_id - 1U) * 64U + 1U}))
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "ROW conversion group is already native");
+            }
+            std::optional<NativeStorageAllocationCensus> allocationCensus;
+            std::optional<NativeStorageAllocationFootprint> sourceCost;
+            NativeStorageAllocationCensusOptions censusOptions;
+            if (conversion.allocation_admission) {
+                censusOptions = conversion.allocation_admission->census;
+                censusOptions.cancellation = conversion.cancellation;
+                allocationCensus.emplace(io_, *this, conversion.memory);
+                try { sourceCost = allocationCensus->inspectCurrentUnderWrite(writer, source, censusOptions); }
+                catch (const query::execution::MaterializedByteLimitExceeded &) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_unknown", 1); return current;
+                }
+                if (!sourceCost || !sourceCost->fullyAttributed()) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_unknown", 1); return current;
+                }
+                const auto &limits = *conversion.allocation_admission;
+                if (sourceCost->totalAllocatedBytes() > limits.maximum_admitted_peak_bytes || sourceCost->file_bytes > limits.maximum_admitted_file_bytes) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_resource_refusal", 1); return current;
+                }
+            }
             struct SourceOwner { EntityPropertyKey key; size_t fields; };
             auto owners = utils::OwnedVector<SourceOwner>(utils::OwnedPmrAllocator<SourceOwner>(conversion.memory));
             owners.reserve(64);
@@ -2002,65 +2064,93 @@ namespace graph::storage {
             }
             if (owners.empty())
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid conversion group has no live owners");
-            // Complete the header-only bound check before materializing any
-            // source values. Both passes remain within the same fenced pin.
-            auto roots = utils::OwnedVector<PropertyCollectionRoot>(
-                utils::OwnedPmrAllocator<PropertyCollectionRoot>(conversion.memory));
-            roots.reserve(owners.size());
-            auto cursor = conversionRoots->openScanCursor(source, conversion.cancellation);
-            for (const auto &owner : owners) {
-                checkpoint();
-                auto root = cursor.readEntityOptional(source, owner.key).value_or(PropertyCollectionRoot{
-                    owner.key.entity_id, conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId, {}});
-                if (root.entries.size() != owner.fields)
-                    throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid source count disagrees with its ROW payload");
-                roots.push_back(std::move(root));
-            }
-            HybridPropertyGroupConversion plan(conversion.memory, roots, conversion.owner_kind,
-                conversion.group_id, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, checkpoint);
-            // Directory sources retain their immutable final locator records,
-            // rather than borrow the ROW/planner or keep a second row copy.
+            // Header-only temporaries have died. Decode/classify/encode ROW
+            // values in a separate lifetime: field images and immutable value
+            // proposals own their bytes and borrow no input after preparation.
+            // Releasing source values before index/physical planning keeps the
+            // documented maximal group inside the same 1 MiB account.
+            headerWorkspace.reset();
             auto largeFields = utils::OwnedVector<HybridPropertyLargeFieldPreparation>(
                 utils::OwnedPmrAllocator<HybridPropertyLargeFieldPreparation>(conversion.memory));
-            const auto resolveLarge = [&](EntityPropertyKey owner, uint32_t token, const PropertyValue &value) {
-                checkpoint();
-                auto proposal = HybridPropertyLargeFieldPreparation::prepare(*this, source, *conversionLargeValues,
-                    owner, token, value, LargeValueId(batch.candidate().next_large_value_id), conversion.memory,
-                    {}, LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES,
-                    conversion.cancellation);
-                const HybridPropertyLargeFieldPreparation *selected = &proposal;
-                // Content created earlier in this same private batch is absent
-                // from the published index. Compare the complete carrier bytes
-                // before allocating another ID; hash equality alone is not enough.
-                if (!proposal.reused()) {
+            const auto fields = [&] {
+                detail::PropertyDecodeWorkspace sourceWorkspace(conversion.memory, &checkpoint);
+                // Keep decoded values admitted for the complete source lifetime,
+                // but release per-owner LargeValue wire buffers after decoding.
+                // Without explicit slot admission those transient bodies join
+                // the retained decoder ledger once per owner.
+                size_t retainedSlotBytes = 0;
+                utils::OwnedHeapReservation sourceSlotCredit(conversion.memory);
+                const SelectedPropertyReadAdmission admitSourceSlots = [&](size_t bytes) {
+                    constexpr size_t frontierBytes = 4096U;
+                    if (bytes > (std::numeric_limits<size_t>::max)() - retainedSlotBytes - frontierBytes)
+                        throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "native source slot admission overflows");
+                    sourceSlotCredit.set(retainedSlotBytes + bytes + frontierBytes);
+                };
+                // Complete the header-only bound check before materializing any
+                // source values. Both passes remain within the same fenced pin.
+                auto roots = utils::OwnedVector<PropertyCollectionRoot>(
+                    utils::OwnedPmrAllocator<PropertyCollectionRoot>(conversion.memory));
+                roots.reserve(owners.size());
+                auto cursor = conversionRoots->openScanCursor(source, conversion.cancellation);
+                for (const auto &owner : owners) {
+                    checkpoint();
+                    auto root = cursor.readEntityOptional(source, owner.key, nullptr, &admitSourceSlots).value_or(PropertyCollectionRoot{
+                        owner.key.entity_id, conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId, {}});
+                    if (root.entries.size() != owner.fields)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid source count disagrees with its ROW payload");
+                    retainedSlotBytes += utils::detail::standardContainerProxyBytes() +
+                        utils::detail::standardAllocatorRequestBytes(root.entries.capacity() * sizeof(PropertyCollectionRootEntry),
+                            alignof(PropertyCollectionRootEntry));
+                    roots.push_back(std::move(root));
+                    sourceSlotCredit.set(retainedSlotBytes);
+                    debug::PerfTrace::addValue("native_graph.hybrid.source_owners_decoded", 1);
+                }
+                HybridPropertyGroupConversion plan(conversion.memory, roots, conversion.owner_kind,
+                    conversion.group_id, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, checkpoint);
+                debug::PerfTrace::addValue("native_graph.hybrid.source_classification_completed", 1);
+                // Directory sources retain their immutable final locator records,
+                // rather than borrow the ROW/planner or keep a second row copy.
+                const auto resolveLarge = [&](EntityPropertyKey owner, uint32_t token, const PropertyValue &value) {
+                    checkpoint();
+                    auto proposal = HybridPropertyLargeFieldPreparation::prepare(*this, source, *conversionLargeValues,
+                        owner, token, value, LargeValueId(batch.candidate().next_large_value_id), conversion.memory,
+                        {}, LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES,
+                        conversion.cancellation);
+                    debug::PerfTrace::addValue("native_graph.hybrid.large_field_proposals_prepared", 1);
+                    const HybridPropertyLargeFieldPreparation *selected = &proposal;
+                    // Content created earlier in this same private batch is absent
+                    // from the published index. Compare the complete carrier bytes
+                    // before allocating another ID; hash equality alone is not enough.
+                    // Shared existing values also need one retained proposal
+                    // per complete payload, rather than one copy per owner.
                     for (const auto &previous : largeFields) {
                         checkpoint();
                         if (std::ranges::equal(previous.payload(), proposal.payload())) {
                             selected = &previous; break;
                         }
                     }
-                }
-                if (selected == &proposal) {
-                    // Reserve the holder before consuming a batch-local ID.
-                    if (largeFields.size() == largeFields.capacity())
-                        largeFields.reserve(largeFields.empty() ? 1U : largeFields.size() * 2U);
-                    if (!proposal.reused() && batch.allocateLargeValueId() != proposal.reference().value_id)
-                        throw FormatException(FormatError::FERR_INVALID_STATE, "native field value lost its batch ID sequence");
-                    largeFields.push_back(std::move(proposal)); selected = &largeFields.back();
-                }
-                const size_t encodedBytes = RSS_LARGE_VALUE_REF_HEADER_BYTES + selected->reference().media_type.size();
-                utils::OwnedHeapReservation encodingCredit(conversion.memory,
-                    utils::detail::standardContainerProxyBytes() +
-                    utils::detail::standardAllocatorRequestBytes(encodedBytes, alignof(std::byte)));
-                const auto encoded = LargeValueRefCodec::encode(selected->reference());
-                utils::OwnedHeapReservation decodedCredit(conversion.memory);
-                const auto admitReference = [&](size_t bytes) { decodedCredit.set(bytes); };
-                return HybridPropertyExtensionView::encodeReference(owner, token, batch.generation(), encoded,
-                    RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *conversion.memory, std::ref(admitReference));
-            };
-            const HybridPropertyConversionPreparation::LargeFieldResolver largeResolver = std::ref(resolveLarge);
-            const auto fields = utils::shareOwned(std::unique_ptr<HybridPropertyConversionPreparation>(
-                new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver)));
+                    if (selected == &proposal) {
+                        // Reserve the holder before consuming a batch-local ID.
+                        if (largeFields.size() == largeFields.capacity())
+                            largeFields.reserve(largeFields.empty() ? 1U : largeFields.size() * 2U);
+                        if (!proposal.reused() && batch.allocateLargeValueId() != proposal.reference().value_id)
+                            throw FormatException(FormatError::FERR_INVALID_STATE, "native field value lost its batch ID sequence");
+                        largeFields.push_back(std::move(proposal)); selected = &largeFields.back();
+                    }
+                    const size_t encodedBytes = RSS_LARGE_VALUE_REF_HEADER_BYTES + selected->reference().media_type.size();
+                    utils::OwnedHeapReservation encodingCredit(conversion.memory,
+                        utils::detail::standardContainerProxyBytes() +
+                        utils::detail::standardAllocatorRequestBytes(encodedBytes, alignof(std::byte)));
+                    const auto encoded = LargeValueRefCodec::encode(selected->reference());
+                    utils::OwnedHeapReservation decodedCredit(conversion.memory);
+                    const auto admitReference = [&](size_t bytes) { decodedCredit.set(bytes); };
+                    return HybridPropertyExtensionView::encodeReference(owner, token, batch.generation(), encoded,
+                        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *conversion.memory, std::ref(admitReference));
+                };
+                const HybridPropertyConversionPreparation::LargeFieldResolver largeResolver = std::ref(resolveLarge);
+                return utils::shareOwned(std::unique_ptr<HybridPropertyConversionPreparation>(
+                    new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver)));
+            }();
             const auto sourceFor = [fields, memory = conversion.memory, checkpoint]<class Map>(
                 std::span<const typename Map::Entry> entries) -> OrderedBTreeEntrySource {
                 return [fields, memory, entries, checkpoint]() -> OrderedBTreeEntryCursor {
@@ -2077,7 +2167,7 @@ namespace graph::storage {
                     };
                 };
             };
-            struct PreparedIndexImage { CatalogEntry pool; PageLocation location; BTreePage page; };
+            using PreparedIndexImage = HybridPropertyContentIndexPreparation::Image;
             auto indexImages = utils::makeSharedOwned<utils::OwnedVector<PreparedIndexImage>>(
                 utils::OwnedPmrAllocator<PreparedIndexImage>(conversion.memory));
             const auto collectIndexImages = [indexImages, checkpoint](const CatalogEntry &pool,
@@ -2098,50 +2188,44 @@ namespace graph::storage {
             };
             std::array<std::optional<BTreeInitialTreeMutationPlan>, 4> directoryPlans;
             const size_t namespaceBase = conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? 0U : 4U;
-            const auto prepareDirectory = [&]<class Map>(size_t ordinal, std::span<const typename Map::Entry> entries) {
-                checkpoint();
-                const auto index = hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(namespaceBase + ordinal));
-                // The current conversion source is ROW-only; no previously
-                // installed or orphaned field namespace may be overwritten.
-                if (findIndexRootOptional(source, index))
-                    throw FormatException(FormatError::FERR_INVALID_STATE,
-                        "ROW conversion cannot replace an existing hybrid directory");
-                if (entries.empty()) return; // absent is canonical, no empty root/pool
-                const BulkBTreeBuildOptions options{conversion.first_slot, conversion.last_slot, index,
-                    entries.size(), entries.size(), BTreeLeafValueLayout::BLVL_EMPTY};
-                directoryPlans[ordinal] = BulkBTreeBuilder::planNativeTreeWithImageSink(*conversionIndexes, *this, source,
-                    index, sourceFor.template operator()<Map>(entries), options, collectIndexImages);
-                if (directoryPlans[ordinal]->entry_count != entries.size())
-                    throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid directory plan lost a final field locator");
-            };
-            prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, fields->owners());
-            prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, fields->columns());
-            prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, fields->extensions());
-            prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, std::span(&fields->group(), 1));
             // Select real, disjoint allocator-free destinations under the same
             // writer, but do not write or mark any pool reachable before complete
             // cost/lifecycle admission. This local cursor is monotonic across
             // field and Index pools; it cannot reuse another private destination.
             auto pools = utils::OwnedVector<CatalogEntry>(utils::OwnedPmrAllocator<CatalogEntry>(conversion.memory));
-            std::optional<uint64_t> nextSlot = conversion.first_slot.value();
-            const auto allocatePool = [&](SegmentKind kind, uint64_t owner) {
-                while (nextSlot) {
-                    checkpoint();
-                    const auto found = allocator_.findFirstFree(current, PhysicalSlotId(*nextSlot), conversion.last_slot);
-                    if (!found) break;
-                    nextSlot = *found == conversion.last_slot ? std::nullopt : std::optional(found->value() + 1U);
-                    if (batch.isDataSlotReserved(*found) || batch.isMetadataPoolSlot(*found)) continue;
-                    CatalogEntry pool;
-                    pool.segment_id = batch.allocateLogicalSegmentId(); pool.physical_slot = *found;
-                    pool.kind = kind; pool.owner_id = owner; pool.generation = Generation(1);
-                    pool.state = SegmentState::SGS_SEALED; pool.committed_lsn = batch.checkpointLsn();
-                    // Exclude this destination from every subsequent metadata
-                    // allocation in this same batch. This is an in-memory
-                    // reservation, not durable allocator publication.
-                    batch.reserveDataSlot(pool.physical_slot);
-                    pools.push_back(pool); return pool;
+            HybridPropertyPoolPlacement placement(*this, batch, writer, source, conversion.first_slot,
+                conversion.last_slot, conversion.memory, checkpoint);
+            // Two directly neighbouring groups provide a bounded cold-open
+            // hint. The descriptor/map/body and actual Catalog route remain
+            // authoritative; no database-wide pool search is needed.
+            if (current.hybrid_property_descriptor_root.isValid()) {
+                const auto prior = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
+                if (prior.roots[namespaceBase + 3U].page_id.isValid()) {
+                    const auto binding = HybridPropertyDirectoryCodec::bindRoot(prior, source,
+                        static_cast<HybridPropertyRootOrdinal>(namespaceBase + 3U));
+                    HybridPropertyGroupDirectoryMap groups(binding.root.index_id, *conversionIndexes, *this, binding);
+                    HybridPropertyReadContext reader(io_, *conversionPages, *this, source);
+                    utils::OwnedHeapReservation boundary(conversion.memory);
+                    for (const auto neighbor : {conversion.group_id > 1U ? conversion.group_id - 1U : conversion.group_id,
+                        conversion.group_id < RSS_HYBRID_MAX_GROUP_ID ? conversion.group_id + 1U : conversion.group_id}) {
+                        if (neighbor == conversion.group_id) continue;
+                        const auto locator = groups.find(source, HybridPropertyDirectoryCodec::groupKey(neighbor),
+                            [&](size_t bytes) { boundary.set(bytes); }, conversion.cancellation);
+                        boundary.set(0); if (!locator) continue;
+                        static_cast<void>(reader.groupRecord({conversion.owner_kind, (neighbor - 1U) * 64U + 1U},
+                            [&](size_t bytes) { boundary.set(bytes); }));
+                        boundary.set(0);
+                        const auto slot = HybridPropertyDirectoryCodec::decodeLocator(*locator);
+                        placement.candidate(locations_.findPage(current, slot.page_id).segment_id,
+                            SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id, true);
+                    }
                 }
-                throw FormatException(FormatError::FERR_INVALID_STATE, "private hybrid placement has no free slot");
+            }
+            const auto allocatePool = [&](SegmentKind kind, uint64_t owner, size_t count = RSS_PAGE_POOL_DATA_FRAME_COUNT, bool native = false) {
+                const bool forceFresh = kind == SegmentKind::SGK_INDEX_PAGE_POOL && !locations_.findIndexRootOptional(current, owner);
+                const auto pool = placement.allocate(kind, owner, count, native, forceFresh);
+                if (std::none_of(pools.begin(), pools.end(), [&](const auto &p) { return p.segment_id == pool.segment_id; })) pools.push_back(pool);
+                return pool;
             };
             struct PreparedFieldImage { CatalogEntry pool; PageLocation location; SlottedPage page; };
             auto fieldImages = utils::OwnedVector<PreparedFieldImage>(utils::OwnedPmrAllocator<PreparedFieldImage>(conversion.memory));
@@ -2150,7 +2234,8 @@ namespace graph::storage {
             for (size_t i = 0; i < fields->pages_.size(); ++i) {
                 checkpoint();
                 if (i % RSS_PAGE_POOL_DATA_FRAME_COUNT == 0)
-                    fieldPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id);
+                    fieldPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id,
+                        std::min(size_t(RSS_PAGE_POOL_DATA_FRAME_COUNT), fields->pages_.size() - i), true);
                 auto &image = fields->pages_[i];
                 PageOwnerHeader owner;
                 owner.page_id = image.pageId(); owner.owner_id = fieldPool.owner_id;
@@ -2164,8 +2249,50 @@ namespace graph::storage {
                     fieldPool.generation, bound.stats().contiguous_free_bytes};
                 fieldImages.push_back({fieldPool, location, std::move(bound)});
             }
-            HybridPropertyDescriptor descriptor;
-            descriptor.database_id = current.database_id; descriptor.semantic_generation = batch.generation();
+            HybridPropertyDescriptor descriptor = current.hybrid_property_descriptor_root.isValid() ?
+                pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor : HybridPropertyDescriptor{};
+            descriptor.database_id = current.database_id;
+            std::array<std::optional<IndexRootLocation>, 4> directoryRoots;
+            utils::OwnedVector<uint64_t> supersededDirectories{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
+            utils::OwnedVector<uint64_t> erasedDirectories{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
+            const auto prepareDirectory = [&]<class Map>(size_t ordinal, std::span<const typename Map::Entry> entries) {
+                checkpoint();
+                const auto index = hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(namespaceBase + ordinal));
+                const auto existing = findIndexRootOptional(source, index);
+                if (existing) {
+                    if (!descriptor.roots[namespaceBase + ordinal].page_id.isValid())
+                        throw FormatException(FormatError::FERR_INVALID_STATE,
+                            "ROW conversion found an existing hybrid directory without its descriptor binding");
+                    const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source,
+                        static_cast<HybridPropertyRootOrdinal>(namespaceBase + ordinal));
+                    if (entries.empty()) return;
+                    HybridPropertyDirectoryPreparation prepared(batch, source, *this, *conversionIndexes, binding,
+                        entries, std::span<const typename Map::Key>{}, conversion.memory, conversion.cancellation,
+                        allocatePool, checkpoint, std::type_identity<Map>{});
+                    if (!prepared.root_)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "new native group lost a shared directory");
+                    directoryRoots[ordinal] = *prepared.root_;
+                    descriptor.roots[namespaceBase + ordinal] = {prepared.root_->root_page_id, prepared.root_->root_generation};
+                    for (auto &image : prepared.images_) indexImages->push_back({image.pool, image.location, std::move(image.page)});
+                    supersededDirectories.insert(supersededDirectories.end(), prepared.superseded_.begin(), prepared.superseded_.end());
+                    erasedDirectories.insert(erasedDirectories.end(), prepared.erased_.begin(), prepared.erased_.end());
+                    return;
+                }
+                if (descriptor.roots[namespaceBase + ordinal].page_id.isValid())
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "native descriptor has a missing Index Root binding");
+                if (entries.empty()) return; // absent is canonical, no empty root/pool
+                const BulkBTreeBuildOptions options{conversion.first_slot, conversion.last_slot, index,
+                    entries.size(), entries.size(), BTreeLeafValueLayout::BLVL_EMPTY};
+                directoryPlans[ordinal] = BulkBTreeBuilder::planNativeTreeWithImageSink(*conversionIndexes, *this, source,
+                    index, sourceFor.template operator()<Map>(entries), options, collectIndexImages);
+                if (directoryPlans[ordinal]->entry_count != entries.size())
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid directory plan lost a final field locator");
+            };
+            prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, fields->owners());
+            prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, fields->columns());
+            prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, fields->extensions());
+            prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, std::span(&fields->group(), 1));
+
             for (size_t ordinal = 0; ordinal < directoryPlans.size(); ++ordinal) {
                 if (!directoryPlans[ordinal]) continue;
                 const auto &directory = *directoryPlans[ordinal];
@@ -2187,7 +2314,7 @@ namespace graph::storage {
                 std::vector<IndexTreeMutationPoolBatch> assignments(directory.new_pool_mutations.size());
                 for (size_t i = 0; i < assignments.size(); ++i) {
                     const auto &request = directory.new_pool_mutations[i]; auto &assignment = assignments[i];
-                    assignment.pool = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, directory.index_id);
+                    assignment.pool = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, directory.index_id, request.appended_page_count);
                     assignment.replacement_pool = assignment.pool; assignment.newly_reserved = true;
                     assignment.appended_page_ids.reserve(request.appended_page_count);
                     assignment.appended_locations.reserve(request.appended_page_count);
@@ -2204,10 +2331,15 @@ namespace graph::storage {
                 const auto &root = assignments.at(directory.root_page.pool_ordinal);
                 descriptor.roots[namespaceBase + ordinal] = {
                     root.appended_locations.at(directory.root_page.appended_page_ordinal).page_id, root.pool.generation};
+                directoryRoots[ordinal] = IndexRootLocation{directory.index_id,
+                    root.appended_locations.at(directory.root_page.appended_page_ordinal).page_id, root.pool.generation};
             }
+            descriptor.semantic_generation = batch.generation();
             // Validate the final namespace bindings and publication identity,
             // without allocating or writing a descriptor metadata frame yet.
             static_cast<void>(HybridPropertyDescriptorCodec::encode({batch.generation(), batch.checkpointLsn(), descriptor}));
+            const HybridPropertyImmutablePreparation immutableImages(batch, *conversionLargeValues,
+                largeFields, conversion.memory, allocatePool, checkpoint);
             // These are private preparation counts, not committed work or total
             // conversion cost. Count every whole reserved pool, including its
             // header and unused frames; final metadata/retirement is additional.
@@ -2217,13 +2349,217 @@ namespace graph::storage {
             debug::PerfTrace::addValue("native_graph.hybrid.private_new_large_values", int64_t(newLargeValues));
             debug::PerfTrace::addValue("native_graph.hybrid.private_field_frames", int64_t(fieldImages.size()));
             debug::PerfTrace::addValue("native_graph.hybrid.private_index_frames", int64_t(indexImages->size()));
-            debug::PerfTrace::addValue("native_graph.hybrid.private_data_pool_bytes", int64_t(pools.size() * RSS_SEGMENT_SIZE));
+            debug::PerfTrace::addValue("native_graph.hybrid.private_large_data_frames", int64_t(immutableImages.dataFrameCount()));
+            debug::PerfTrace::addValue("native_graph.hybrid.private_large_manifest_frames", int64_t(immutableImages.manifestFrameCount()));
+            debug::PerfTrace::addValue("native_graph.hybrid.private_data_pool_bytes", int64_t(std::count_if(placement.reservations_.begin(), placement.reservations_.end(), [](const auto &r) { return r.fresh; }) * RSS_SEGMENT_SIZE));
             checkpoint();
             // Do not publish an empty descriptor and consumed IDs as a false
             // success. Physical placement, final maps and every graph route
             // must replace this guard together with nonempty-root admission.
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                "native hybrid private field preparation completed; directory plans prepared; physical images and final roots prepared; physical publication is not installed");
+            if (!conversion.publish_candidate)
+                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                    "native hybrid private field preparation completed; directory plans prepared; physical images and final roots prepared; physical publication is not installed for preparation-only requests");
+            const size_t contentImageStart = indexImages->size();
+            HybridPropertyContentIndexPreparation content(batch, source, conversion, *this, *conversionIndexes,
+                *conversionLargeValues, largeFields, allocatePool, checkpoint);
+            auto contentRoot = content.root_;
+            auto supersededContentPages = std::move(content.superseded_);
+            auto erasedContentPages = std::move(content.erased_);
+            supersededContentPages.insert(supersededContentPages.end(), supersededDirectories.begin(), supersededDirectories.end());
+            erasedContentPages.insert(erasedContentPages.end(), erasedDirectories.begin(), erasedDirectories.end());
+            for (auto &image : content.images_) indexImages->push_back(std::move(image));
+            debug::PerfTrace::addValue("native_graph.hybrid.private_content_index_frames",
+                int64_t(indexImages->size() - contentImageStart));
+            checkpoint();
+            // Remove converted ROW slots from CURRENT physical page images as
+            // well as their owner directory. Preserve every unrelated owner and
+            // stable slot locator; old pins keep their original physical frames.
+            utils::OwnedVector<SlottedPage> rowPages{utils::OwnedPmrAllocator<SlottedPage>(conversion.memory)};
+            rowPages.reserve(owners.size());
+            for (const auto &owner : owners) {
+                checkpoint(); const auto location = locations_.findEntityPropertyOptional(current, owner.key);
+                if (!location) continue;
+                auto found = std::find_if(rowPages.begin(), rowPages.end(),
+                    [&](const auto &page) { return page.pageId() == location->page_id; });
+                if (found == rowPages.end()) {
+                    rowPages.push_back(conversionPages->read(source, location->page_id)); found = rowPages.end() - 1;
+                }
+                found->erase({location->page_id, location->slot_id, location->slot_generation});
+            }
+            // A pool may retire only when every currently routed frame is
+            // replaced or removed by this conversion. Inspect at most 31 frame
+            // owners per source pool; never scan the database Page Directory.
+            utils::OwnedVector<CatalogEntry> retiredRowPools{utils::OwnedPmrAllocator<CatalogEntry>(conversion.memory)};
+            retiredRowPools.reserve(rowPages.size() + supersededContentPages.size());
+            for (const auto id : supersededContentPages) {
+                const auto location = locations_.findPage(current, PageId(id));
+                retiredRowPools.push_back(catalog_.find(current, location.segment_id));
+            }
+            for (const auto &page : rowPages) {
+                const auto location = locations_.findPage(current, page.pageId());
+                retiredRowPools.push_back(catalog_.find(current, location.segment_id));
+            }
+            std::sort(retiredRowPools.begin(), retiredRowPools.end(), [](const auto &a, const auto &b) { return a.segment_id < b.segment_id; });
+            retiredRowPools.erase(std::unique(retiredRowPools.begin(), retiredRowPools.end(), [](const auto &a, const auto &b) {
+                return a.segment_id == b.segment_id;
+            }), retiredRowPools.end());
+            SharedPagePoolAllocator sourceRowPools(io_, *this, source);
+            for (auto pool = retiredRowPools.begin(); pool != retiredRowPools.end();) {
+                checkpoint(); bool detached = pool->state == SegmentState::SGS_SEALED &&
+                    (pool->kind == SegmentKind::SGK_PROPERTY_PAGE_POOL ||
+                        (pool->kind == SegmentKind::SGK_INDEX_PAGE_POOL && (pool->owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID || isHybridPropertyIndexId(pool->owner_id)))) &&
+                    allocator_.isAllocated(current, pool->physical_slot);
+                if (detached) {
+                    const auto header = SharedPagePoolAllocator::readPoolHeader(*io_, current.data_region_offset, *pool);
+                    for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
+                        checkpoint(); const auto owner = hybrid_property_detail::currentPoolFrameOwner(*pool, header, frame,
+                            [&](uint8_t index) { return sourceRowPools.readPageOwner(*pool, index); },
+                            [&](PageId id) { return locations_.findPageOptional(current, id); });
+                        if (owner) detached = detached && (pool->kind == SegmentKind::SGK_PROPERTY_PAGE_POOL ?
+                            std::any_of(rowPages.begin(), rowPages.end(), [&](const auto &page) { return page.pageId() == owner->page_id; }) :
+                            std::find(supersededContentPages.begin(), supersededContentPages.end(), owner->page_id.value()) != supersededContentPages.end());
+                    }
+                }
+                if (!detached || placement.destination(pool->segment_id)) { pool = retiredRowPools.erase(pool); continue; }
+                batch.reserveDataSlot(pool->physical_slot); pool->state = SegmentState::SGS_RETIRED; ++pool;
+            }
+            utils::OwnedVector<uint64_t> erasedRowPages{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
+            erasedRowPages.reserve(rowPages.size() + erasedContentPages.size());
+            erasedRowPages.insert(erasedRowPages.end(), erasedContentPages.begin(), erasedContentPages.end());
+            utils::OwnedVector<PreparedFieldImage> rowImages{utils::OwnedPmrAllocator<PreparedFieldImage>(conversion.memory)};
+            rowImages.reserve(rowPages.size());
+            CatalogEntry rowPool; size_t rowFrames = RSS_PAGE_POOL_DATA_FRAME_COUNT;
+            for (auto &page : rowPages) {
+                checkpoint();
+                if (page.stats().live_slot_count == 0) { erasedRowPages.push_back(page.pageId().value()); continue; }
+                if (rowFrames == RSS_PAGE_POOL_DATA_FRAME_COUNT || rowPool.owner_id != page.ownerId()) {
+                    rowPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, page.ownerId()); rowFrames = 0;
+                }
+                const PageOwnerHeader owner{page.pageId(), page.ownerId(), PageOwnerKind::POK_PROPERTY, 0,
+                    RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, rowPool.generation, batch.checkpointLsn()};
+                page.rebindOwner(owner);
+                const PageLocation location{page.pageId(), rowPool.segment_id,
+                    uint16_t(RSS_PAGE_POOL_FIRST_DATA_FRAME + rowFrames++), rowPool.generation, page.stats().contiguous_free_bytes};
+                rowImages.push_back({rowPool, location, std::move(page)});
+            }
+            auto published = utils::OwnedVector<PageLocation>(utils::OwnedPmrAllocator<PageLocation>(conversion.memory));
+            published.reserve(fieldImages.size() + indexImages->size() + rowImages.size() + immutableImages.frames_.size());
+            for (const auto &pool : pools) {
+                checkpoint();
+                const auto inPool = [&](const auto &image) { return image.pool.segment_id == pool.segment_id; };
+                const auto frameCount = size_t(std::count_if(fieldImages.begin(), fieldImages.end(), inPool)) +
+                    size_t(std::count_if(indexImages->begin(), indexImages->end(), inPool)) +
+                    size_t(std::count_if(rowImages.begin(), rowImages.end(), inPool)) +
+                    size_t(std::count_if(immutableImages.frames_.begin(), immutableImages.frames_.end(), inPool));
+                const bool hybridPool = std::any_of(fieldImages.begin(), fieldImages.end(), inPool);
+                utils::OwnedHeapReservation payloadCredit(conversion.memory, frameCount *
+                    (utils::detail::standardAllocatorRequestBytes(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, alignof(std::byte)) +
+                        3U * utils::detail::standardContainerProxyBytes()));
+                utils::OwnedVector<SharedPagePoolPreparedAppend> appends{
+                    utils::OwnedPmrAllocator<SharedPagePoolPreparedAppend>(conversion.memory)};
+                utils::OwnedVector<PageLocation> locations{utils::OwnedPmrAllocator<PageLocation>(conversion.memory)};
+                appends.reserve(frameCount); locations.reserve(frameCount);
+                const auto append = [&](const auto &prepared, PageOwnerKind kind, const SlottedPage &page) {
+                    checkpoint();
+                    if (prepared.pool.segment_id != pool.segment_id) return;
+                    const auto bytes = page.serializeOwned(conversion.memory);
+                    PageOwnerHeader owner{prepared.location.page_id, pool.owner_id, kind, 0,
+                        RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
+                    SharedPagePoolPreparedAppend preparedAppend;
+                    preparedAppend.owner = owner; preparedAppend.free_bytes = prepared.location.free_bytes;
+                    preparedAppend.payload.assign(bytes.begin(), bytes.end());
+                    appends.push_back(std::move(preparedAppend));
+                    auto location = prepared.location; location.page_index = 0;
+                    locations.push_back(location);
+                };
+                if (pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL) {
+                    for (const auto &prepared : fieldImages) append(prepared, PageOwnerKind::POK_HYBRID_PROPERTY, prepared.page);
+                    for (const auto &prepared : rowImages) append(prepared, PageOwnerKind::POK_PROPERTY, prepared.page);
+                } else if (pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL)
+                    for (const auto &prepared : *indexImages) append(prepared, PageOwnerKind::POK_INDEX, prepared.page.slottedPage());
+                else if (pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL || pool.kind == SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) {
+                    for (const auto &frame : immutableImages.frames_) if (inPool(frame)) {
+                        SharedPagePoolPreparedAppend prepared; prepared.owner = frame.owner;
+                        prepared.payload.assign(frame.payload.begin(), frame.payload.end()); appends.push_back(std::move(prepared));
+                        auto location = frame.location; location.page_index = 0; locations.push_back(location);
+                    }
+                } else throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid candidate has an unsupported pool");
+                // A declined optional admission can leave private appends in
+                // a Catalog-visible ROW content-index pool. Its next writer
+                // must recover these even though no hybrid root was published.
+                if (conversion.allocation_admission) native_pool_recovery_required_ = true;
+                placement.write(pool, appends, locations, hybridPool);
+                for (const auto &location : locations) published.push_back(location);
+            }
+            // Physical frames precede every reachable metadata root. All
+            // allocator, Catalog, Page Directory, field directories and ROW
+            // authority changes belong to this ONE final A/B publication.
+            for (const auto &reservation : placement.reservations_) if (reservation.fresh) {
+                const auto &pool = reservation.pool; allocator_.prepareSetAllocated(batch, pool.physical_slot, true);
+                catalog_.prepareUpsert(batch, std::span(&pool, 1));
+            }
+            std::sort(published.begin(), published.end(), [](const auto &left, const auto &right) {
+                return left.page_id < right.page_id;
+            });
+            std::sort(erasedRowPages.begin(), erasedRowPages.end());
+            locations_.prepareReplacePages(batch, published, erasedRowPages);
+            utils::OwnedVector<RetireQueueEntry> rowRetirements{utils::OwnedPmrAllocator<RetireQueueEntry>(conversion.memory)};
+            rowRetirements.reserve(retiredRowPools.size());
+            for (const auto &pool : retiredRowPools)
+                rowRetirements.push_back({pool.physical_slot, pool.segment_id, batch.generation(), RetireQueueDisposition::RQD_RETIRED_SEGMENT});
+            std::sort(rowRetirements.begin(), rowRetirements.end(), [](const auto &a, const auto &b) { return a.physical_slot < b.physical_slot; });
+            if (!retiredRowPools.empty()) {
+                catalog_.prepareUpsert(batch, retiredRowPools); retirement_.prepareQueueInsertions(batch, rowRetirements);
+            }
+            utils::OwnedVector<IndexRootLocation> installedRoots{utils::OwnedPmrAllocator<IndexRootLocation>(conversion.memory)};
+            installedRoots.reserve(5);
+            if (contentRoot) installedRoots.push_back(*contentRoot);
+            for (const auto &root : directoryRoots) if (root) installedRoots.push_back(*root);
+            std::sort(installedRoots.begin(), installedRoots.end(), [](const auto &a, const auto &b) { return a.index_id < b.index_id; });
+            locations_.prepareReplaceIndexRoots(batch, installedRoots, {});
+            if (!immutableImages.manifests_.empty()) locations_.prepareReplaceLargeValueManifests(batch, immutableImages.manifests_, {});
+            utils::OwnedVector<EntityPropertyKey> erasedRows{utils::OwnedPmrAllocator<EntityPropertyKey>(conversion.memory)};
+            erasedRows.reserve(owners.size());
+            for (const auto &owner : owners)
+                if (locations_.findEntityPropertyOptional(current, owner.key)) erasedRows.push_back(owner.key);
+            if (!erasedRows.empty()) locations_.prepareReplaceEntityProperties(batch, {}, erasedRows);
+            pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
+            batch.hybrid_property_publication_ = true;
+            checkpoint();
+            if (conversion.allocation_admission) {
+                // Prepare final metadata/routes once. The private future graph
+                // remains unreachable until the following A/B decision.
+                prepareBatchPublication(batch); checkpoint();
+                // Drain dirty private cache pages before the stable-epoch
+                // census; read eviction must not become a hidden writeback.
+                io_->flushStream(); checkpoint();
+                std::optional<NativeStorageAllocationFootprint> prepared;
+                try { prepared = allocationCensus->inspectPreparedCandidate(writer, batch, censusOptions); }
+                catch (const query::execution::MaterializedByteLimitExceeded &) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_unknown", 1); return current;
+                }
+                if (!prepared || !prepared->fullyAttributed()) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_unknown", 1); return current;
+                }
+                const auto row = sourceCost->steadyAllocatedBytes(), candidate = prepared->steadyAllocatedBytes();
+                const auto peak = std::max(sourceCost->totalAllocatedBytes(), prepared->totalAllocatedBytes());
+                debug::PerfTrace::addValue("native_graph.hybrid.allocation_row_bytes", int64_t(row));
+                debug::PerfTrace::addValue("native_graph.hybrid.allocation_candidate_bytes", int64_t(candidate));
+                debug::PerfTrace::addValue("native_graph.hybrid.allocation_peak_bytes", int64_t(peak));
+                debug::PerfTrace::addValue("native_graph.hybrid.allocation_costs_prepared", 1); checkpoint();
+                const auto &limits = *conversion.allocation_admission;
+                if (peak > limits.maximum_admitted_peak_bytes || prepared->file_bytes > limits.maximum_admitted_file_bytes) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_resource_refusal", 1); return current;
+                }
+                const uint64_t threshold = row / 10U * 9U + row % 10U * 9U / 10U;
+                if (candidate > threshold) {
+                    debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_insufficient_saving", 1); return current;
+                }
+                debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_passed", 1);
+            }
+            publishBatch(batch, writer, options);
+            placement.remember();
+            return batch.candidate();
         }
 		if (derivedState.external_private_tail_reservation.has_value()) {
 			// Keep the source outside every metadata allocator decision, but do not

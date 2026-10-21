@@ -1,0 +1,157 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*:CoveredAdjacencyCandidateTest.*
+[==========] Running 67 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:229: Failure
+Expected: (pages) > (0), actual: 0 vs 0
+
+[  FAILED  ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (382 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (247 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (180 ms)
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (2309 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1525 ms)
+[ RUN      ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults (1566 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+[       OK ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication (919 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes
+[       OK ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes (876 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination
+[       OK ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination (221 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap
+[       OK ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap (3894 ms)
+[----------] 11 tests from HybridPropertyQueryParityTest (12125 ms total)
+
+[----------] 34 tests from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion (940 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot (842 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange
+[       OK ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange (292 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion
+[       OK ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion (345 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion (281 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges
+[       OK ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges (806 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently (258 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication
+[       OK ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication (257 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry (248 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys
+[       OK ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys (835 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate (767 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted
+[       OK ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted (1678 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin (283 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue
+[       OK ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue (378 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue
+[       OK ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue (310 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates (1268 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate (369 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries (1195 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit (391 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (287 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (287 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted
+[       OK ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted (303 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot (279 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry (315 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts
+[       OK ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts (1313 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch
+[       OK ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch (258 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults (1145 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog (353 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo (266 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo (265 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin (341 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots
+[       OK ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots (377 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts
+[       OK ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts (2279 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion
+[       OK ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion (3961 ms)
+[----------] 34 tests from HybridPropertyIndexedLifecycleTest (23790 ms total)
+
+[----------] 22 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (102 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (20 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (19 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (83 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (249 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (12 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (139 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (24 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (17 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (507 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (158 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (127 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (27 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (126 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (363 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (151 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (153 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (133 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (125 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (268 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (135 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (124 ms)
+[----------] 22 tests from CoveredAdjacencyCandidateTest (3073 ms total)
+
+[----------] Global test environment tear-down
+[==========] 67 tests from 3 test suites ran. (38989 ms total)
+[  PASSED  ] 66 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+
+ 1 FAILED TEST

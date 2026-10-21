@@ -678,6 +678,50 @@ namespace graph::storage {
 	}
 
 
+    std::pmr::vector<std::byte> EntityPropertyLargeValuePayloadCodec::encode(
+        std::span<const PropertyCollectionRootEntry> entries, std::pmr::memory_resource &memory,
+        const std::function<void()> &checkpoint) {
+        const auto check = [&] { if (checkpoint) checkpoint(); };
+        check();
+        constexpr size_t directoryEntryBytes = sizeof(uint32_t) * 2U;
+        if (entries.size() > (std::numeric_limits<uint32_t>::max)() / directoryEntryBytes)
+            throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property directory exceeds its wire size");
+        const size_t directoryBytes = entries.size() * directoryEntryBytes;
+        size_t payloadBytes = directoryBytes; uint32_t previous = 0;
+        for (const auto &entry : entries) {
+            check();
+            if (!entry.key_token || entry.key_token <= previous)
+                throwRootError(FormatError::FERR_INVALID_HEADER, "LargeValue Property tokens are not strictly ordered");
+            const auto bytes = CanonicalPropertyValueCodec::encodedSize(entry.value);
+            if (payloadBytes > (std::numeric_limits<uint32_t>::max)() - sizeof(uint32_t) ||
+                bytes > (std::numeric_limits<uint32_t>::max)() - payloadBytes - sizeof(uint32_t))
+                throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property payload exceeds its wire size");
+            payloadBytes += sizeof(uint32_t) + bytes; previous = entry.key_token;
+        }
+        if (payloadBytes > (std::numeric_limits<size_t>::max)() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES)
+            throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property output size overflowed");
+        const auto total = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes;
+        std::pmr::vector<std::byte> result(&memory); result.reserve(total);
+        result.resize(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes);
+        LittleEndianCodec::writeU32(result, 0, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC);
+        LittleEndianCodec::writeU16(result, 4, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION);
+        LittleEndianCodec::writeU16(result, 6, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+        LittleEndianCodec::writeU32(result, 8, uint32_t(entries.size()));
+        LittleEndianCodec::writeU32(result, 12, uint32_t(payloadBytes));
+        for (size_t index = 0; index < entries.size(); ++index) {
+            check(); const auto &entry = entries[index];
+            const auto offset = result.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES;
+            LittleEndianCodec::writeU32(result, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + index * directoryEntryBytes, entry.key_token);
+            LittleEndianCodec::writeU32(result, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + index * directoryEntryBytes + sizeof(uint32_t), uint32_t(offset));
+            const auto tokenOffset = result.size(); result.resize(tokenOffset + sizeof(uint32_t));
+            LittleEndianCodec::writeU32(result, tokenOffset, entry.key_token);
+            CanonicalPropertyValueCodec::append(result, entry.value);
+        }
+        if (result.size() != total)
+            throwRootError(FormatError::FERR_INVALID_STATE, "LargeValue Property input changed during encoding");
+        check(); return result;
+    }
+
     std::pmr::vector<std::byte> EntityPropertyLargeValuePayloadCodec::encodeSingleField(uint32_t token,
         const PropertyValue &value, std::pmr::memory_resource &memory) {
         if (!token) throwRootError(FormatError::FERR_INVALID_HEADER, "single-field LargeValue requires a nonzero token");

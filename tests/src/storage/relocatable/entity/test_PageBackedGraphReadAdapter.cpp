@@ -1649,6 +1649,24 @@ TEST_F(PageBackedGraphReadAdapterTest, RejectsInvalidAdjacencyBoundsDirectionsAn
 			 snapshot, 1001U, PageBackedGraphReadDirection::PBGRD_OUTGOING,
 			 PageBackedGraphAdjacencyContinuation{1U, 0U}, 1U)),
 			 FormatException);
+    // Invalid order rejects before any source-node lookup (node 999 is absent).
+    for (const auto invalid : {PageBackedGraphAdjacencyContinuation{2U, 1U},
+                              PageBackedGraphAdjacencyContinuation{2U, 2U}}) {
+        try {
+            static_cast<void>(adapter.scanAdjacentEdges(snapshot, 999U,
+                PageBackedGraphReadDirection::PBGRD_OUTGOING, invalid, 1U));
+            FAIL() << "invalid continuation order was accepted";
+        } catch (const FormatException &error) {
+            EXPECT_EQ(error.error(), FormatError::FERR_INVALID_HEADER);
+        }
+        try {
+            static_cast<void>(adapter.scanAdjacentEdgeTopologies(snapshot, 999U,
+                PageBackedGraphReadDirection::PBGRD_OUTGOING, invalid, 1U));
+            FAIL() << "invalid topology continuation order was accepted";
+        } catch (const FormatException &error) {
+            EXPECT_EQ(error.error(), FormatError::FERR_INVALID_HEADER);
+        }
+    }
 	EXPECT_THROW(static_cast<void>(adapter.scanAdjacentEdges(
 			 snapshot, 1001U, static_cast<PageBackedGraphReadDirection>(99U), std::nullopt, 1U)),
 			 FormatException);

@@ -14,6 +14,8 @@
 #include <stdexcept>
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -209,25 +211,33 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		const StateRecord record = states_.read(snapshot, options_.state_id);
-		if (record.key != RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY ||
+		if ((record.key != RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY && record.key != RSS_NATIVE_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY) ||
 			record.storage_kind != StateRecordStorageKind::SRS_INLINE || record.large_value_id.isValid()) {
 			fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance State record has an invalid journal identity");
 		}
-		return LargeValueMaintenanceJournalCodec::decode(record.inline_bytes);
+        auto journal = LargeValueMaintenanceJournalCodec::decode(record.inline_bytes);
+        if (record.key == RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY && snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+            const auto descriptor = metadata_.pages_.readHybridPropertyDescriptor(
+                snapshot.superblock().hybrid_property_descriptor_root, snapshot.superblock()).descriptor;
+            if (std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); })) return {};
+        }
+        return journal;
 	}
 
-	StateLocation LargeValueMaintenanceJournalStore::save(const LargeValueMaintenanceJournal &journal) {
+	StateLocation LargeValueMaintenanceJournalStore::save(const LargeValueMaintenanceJournal &journal,
+            const MetadataPublishOptions &publishOptions) {
+        if (auto native = metadata_.upsertNativeMaintenanceJournal(journal, options_, publishOptions)) return *native;
 		StateRecord record;
 		record.state_id = options_.state_id;
 		record.key = std::string(RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY);
 		record.storage_kind = StateRecordStorageKind::SRS_INLINE;
 		record.inline_bytes = LargeValueMaintenanceJournalCodec::encode(journal);
-		return states_.upsert(record, options_.state_record_options);
+		return states_.upsert(record, options_.state_record_options, publishOptions);
 	}
 
 	LargeValueMaintenanceJournalSave
 	LargeValueMaintenanceJournalStore::saveAfterScan(const MetadataSnapshotPin &snapshot,
-														 const LargeValueMaintenanceJournal &journal) {
+														 const LargeValueMaintenanceJournal &journal, const MetadataPublishOptions &publishOptions) {
 		// This lookup proves that the supplied pin belongs to this metadata store
 		// even when the journal has not yet been materialized.
 		static_cast<void>(metadata_.findStateLocationOptional(snapshot, options_.state_id));
@@ -241,7 +251,22 @@ namespace graph::storage {
 		}
 		LargeValueMaintenanceJournal persisted = journal;
 		persisted.scan_generation = Generation(snapshot.superblock().generation.value() + 1U);
-		return {persisted, save(persisted)};
+		return {persisted, save(persisted, publishOptions)};
 	}
+
+    LargeValueMaintenanceJournalSave LargeValueMaintenanceJournalStore::saveAfterScan(
+        const MetadataSnapshotPin &snapshot, const LargeValueMaintenanceJournalAdvance &advance,
+        const MetadataPublishOptions &publishOptions) {
+        static_cast<void>(metadata_.findStateLocationOptional(snapshot, options_.state_id));
+        if (advance.journal.scan_generation != snapshot.superblock().generation ||
+            snapshot.superblock().generation.value() == (std::numeric_limits<uint64_t>::max)())
+            fail(FormatError::FERR_INVALID_STATE, "journal advancement requires its source pin and next generation");
+        auto persisted = advance.journal;
+        persisted.scan_generation = Generation(snapshot.superblock().generation.value() + 1U);
+        const auto evidence = advance.native_evidence_ ? &*advance.native_evidence_ : nullptr;
+        if (auto native = metadata_.upsertNativeMaintenanceJournal(persisted, options_, publishOptions, evidence))
+            return {std::move(persisted), *native};
+        return saveAfterScan(snapshot, advance.journal, publishOptions);
+    }
 
 } // namespace graph::storage

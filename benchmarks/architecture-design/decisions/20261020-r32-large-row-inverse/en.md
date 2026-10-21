@@ -1,0 +1,11 @@
+### 2026-10-20 R3.2: complete large ROW carriers, bidirectional publication and exact reclamation
+
+Evidence: `benchmarks/architecture-design/decisions/20261020-r32-large-row-inverse/`.
+
+Controlled inverse conversion now reuses an exactly matching existing whole-ROW carrier or creates one after fields change. New value IDs, data/manifests, content-index COW and ROW references publish in the same A/B update as native root/page retirement. Equal content across owners receives one new identity per batch. Forward and inverse conversions share the same metadata-private content-index preparation; existing trees update dirty paths only, with independent root/child physical authentication.
+
+Complete owner-neutral version-3 encoding now supports admitted PMR output, avoiding standard whole-payload copies and matching existing wire bytes exactly. Directory preflight validates ordered tokens before output admission; quota failure and cancellation during encoding refund. B+Tree internal separators, entries and split/merge scratch now use existing exactly admitted containers, so decompressed long content keys are governed beyond the fixed short-key frontier credit.
+
+Targeted checks cover existing/new carriers, Node/Edge, cross-owner batch deduplication, inverse conversion after field changes, read-only reopen/old pins, A/B recovery,128 KiB refusal and cancellation after private preparation/retry. Ordinary LargeValue writes resume in ROW; existing exact GC preserves a carrier shared by two owners, retires three unreferenced identities and keeps old native pins readable. General LargeValue SET/reference removal/GC while a native descriptor remains active stay guarded. Former refusal fixtures now check supported success with changed content/fault/quota atomicity coverage. Direct includes, an extracted callback's metadata argument, fixture owner policy and same-line gtest labels were corrected; failure logs are retained.
+
+Final verification runs only23 affected storage modules; exact counts are in proof.json. No full unit suite or performance window. Complete schema/statistics/label coordination, native-active value-reference lifecycle, multiple groups, generic maintenance, full native costs/same-executor ROW control and production/R7 admission remain. **No new acceptance:13/24(54.2%); no commit/push.**

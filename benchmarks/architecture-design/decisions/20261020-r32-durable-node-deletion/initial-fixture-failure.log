@@ -1,0 +1,50 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerDeletionTest.*
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (7 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether
+[       OK ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether (531 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:63: Failure
+Value of: empty.superblock().node_entity_directory_root.isValid()
+  Actual: true
+Expected: false
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:78: Failure
+Value of: metadata_->tryReleaseRetiredCatalogSegments(retired, LogSequenceNumber(state.checkpoint_lsn.value() + 1))
+  Actual: false
+Expected: true
+
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse (159 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:87: Failure
+Value of: pin.superblock().node_entity_directory_root.isValid()
+  Actual: true
+Expected: false
+
+[  FAILED  ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount (5571 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable
+[       OK ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable (472 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys
+[       OK ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys (188 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration
+[       OK ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration (812 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner
+[       OK ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner (612 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite
+[       OK ] HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite (16 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeOwnersRemainGuardedUntilTopologyAndTypeStateAreCoordinated
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeOwnersRemainGuardedUntilTopologyAndTypeStateAreCoordinated (18 ms)
+[----------] 10 tests from HybridPropertyOwnerDeletionTest (8391 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (8391 ms total)
+[  PASSED  ] 8 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+[  FAILED  ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+
+ 2 FAILED TESTS

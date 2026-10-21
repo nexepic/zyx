@@ -1,0 +1,29 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*
+[==========] Running 4 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 4 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (1985 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1406 ms)
+[ RUN      ] HybridPropertyQueryParityTest.PropertyDerivedIndexStillRefusesFieldPublicationBeforePrivateIo
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:73: Failure
+Expected equality of these values:
+  io->dataMutationEpoch()
+    Which is: 15
+  epoch
+    Which is: 12
+
+[  FAILED  ] HybridPropertyQueryParityTest.PropertyDerivedIndexStillRefusesFieldPublicationBeforePrivateIo (862 ms)
+[----------] 4 tests from HybridPropertyQueryParityTest (4254 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test suite ran. (4254 ms total)
+[  PASSED  ] 3 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.PropertyDerivedIndexStillRefusesFieldPublicationBeforePrivateIo
+
+ 1 FAILED TEST

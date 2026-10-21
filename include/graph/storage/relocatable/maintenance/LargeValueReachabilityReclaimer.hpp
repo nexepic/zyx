@@ -170,6 +170,10 @@ namespace graph::storage {
 		uint64_t owner_locations_scanned = 0U;
 		uint64_t owner_metadata_pages_scanned = 0U;
 		bool completed_without_candidates = false;
+    private:
+        friend class LargeValueReachabilityReclaimer;
+        friend class LargeValueMaintenanceJournalStore;
+        std::optional<NativeJournalProgressEvidence> native_evidence_;
 	};
 
 	class LargeValueReachabilityReclaimer final {

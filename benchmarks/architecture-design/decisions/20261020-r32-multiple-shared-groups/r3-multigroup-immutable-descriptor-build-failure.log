@@ -1,0 +1,27 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-work-candidate -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIC -Wall -Wextra -Wno-unused-parameter -MD -MT CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o -MF CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o.d -o CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o -c /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1072:43: error: no viable overloaded '='
+ 1072 |             descriptor.roots[base + role] = {prepared.root_->root_page_id, prepared.root_->root_generation};
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:28:8: note: candidate function (the implicit copy assignment operator) not viable: 'this' argument has type 'const value_type' (aka 'const graph::storage::HybridPropertyTreeRoot'), but method is not marked const
+   28 | struct HybridPropertyTreeRoot {
+      |        ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:28:8: note: candidate function (the implicit move assignment operator) not viable: 'this' argument has type 'const value_type' (aka 'const graph::storage::HybridPropertyTreeRoot'), but method is not marked const
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1074:48: error: no viable overloaded '='
+ 1074 |         } else { descriptor.roots[base + role] = {}; erasedRoots.push_back(binding.root.index_id); }
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:28:8: note: candidate function (the implicit copy assignment operator) not viable: 'this' argument has type 'const value_type' (aka 'const graph::storage::HybridPropertyTreeRoot'), but method is not marked const
+   28 | struct HybridPropertyTreeRoot {
+      |        ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:28:8: note: candidate function (the implicit move assignment operator) not viable: 'this' argument has type 'const value_type' (aka 'const graph::storage::HybridPropertyTreeRoot'), but method is not marked const
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1083:36: error: no viable overloaded '='
+ 1083 |     descriptor.semantic_generation = batch.generation();
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~
+/workspace/zyx/include/graph/storage/relocatable/format/Format.hpp:56:8: note: candidate function (the implicit copy assignment operator) not viable: 'this' argument has type 'const Generation' (aka 'const StrongUInt64<GenerationTag>'), but method is not marked const
+   56 |         class StrongUInt64 {
+      |               ^
+/workspace/zyx/include/graph/storage/relocatable/format/Format.hpp:56:8: note: candidate function (the implicit move assignment operator) not viable: 'this' argument has type 'const Generation' (aka 'const StrongUInt64<GenerationTag>'), but method is not marked const
+3 errors generated.
+ninja: build stopped: subcommand failed.

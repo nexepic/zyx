@@ -1,0 +1,62 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3"
+  ],
+  "parent_scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted_before": 13,
+  "accepted_after": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "commit_push": false,
+  "full_unit_suite": false,
+  "new_performance_windows": 0,
+  "platform": "Linux x86_64",
+  "production_adopted": false,
+  "experimental_candidate_durable": true,
+  "bidirectional_durable": true,
+  "maximum_group_64_4096_one_mib_passed": true,
+  "candidate_after_commit": "controlled inverse only; inverse restores ROW writes and existing retirement/reuse",
+  "fresh_large_values_published": false,
+  "modules": 12,
+  "tests": {
+    "default": {
+      "tests": 246,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 246,
+      "binary_sha256": "1891c9b0b86de0e6c0d8b3e5c4a7007b4d1d2f47433ecc6a786c890df82b7622"
+    },
+    "candidate": {
+      "tests": 360,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 359,
+      "binary_sha256": "fd8f4b844a6cda8a2a281f20aa5b39ea2ea4295665b3a6255220ae4a9c99701c"
+    }
+  },
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree"
+  ]
+}

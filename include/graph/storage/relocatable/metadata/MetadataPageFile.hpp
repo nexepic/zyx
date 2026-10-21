@@ -119,6 +119,9 @@ namespace graph::storage {
         void prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch, const Superblock &snapshot) const;
 
 	private:
+        friend class RelocatableMetadataStore;
+        void prepareHybridPropertyDescriptorImpl(MetadataWriteBatch &batch,
+            const HybridPropertyDescriptor &descriptor, bool nativeCandidate) const;
 		[[nodiscard]] BufferPoolPageKey pageKey(PhysicalPageRef reference) const;
 		void writePage(PhysicalPageRef reference, const std::array<std::byte, RSS_PAGE_SIZE> &bytes) const;
 		[[nodiscard]] std::array<std::byte, RSS_PAGE_SIZE> readPage(PhysicalPageRef reference,

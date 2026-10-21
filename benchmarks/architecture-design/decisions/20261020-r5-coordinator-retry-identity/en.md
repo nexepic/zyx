@@ -1,0 +1,5 @@
+### 2026-10-20 R5.1: coordinator retry participant identity
+
+Evidence: `benchmarks/architecture-design/decisions/20261020-r5-coordinator-retry-identity/`. A failed request could previously change its candidate root or omit its statistics catalog on retry and bypass the original coordination obligation. The first valid request now binds its IndexId and optional type-planner/SystemCatalog identities. Retry must preserve them, and transaction moves preserve the binding. A retry may increase its planning account or operation bound within the existing contract, without changing derived-state participants. The binding compares identity only and does not dereference participants after transaction completion.
+
+Counter-refusal coverage now asserts refusal when dropping the catalog, changing the root or dropping the catalog after move; main-Edge-only commit remains blocked. Both rebuilt formats pass all22 affected covered-tree cases. Source-patch reverse checks and whitespace checks pass. No full repository unit suite or intermediate performance benchmark ran. **Overall13/24(54.2%); accepted progress increases by0, with no commit or push.**

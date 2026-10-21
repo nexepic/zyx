@@ -276,7 +276,7 @@ namespace graph::storage {
 			// deletion. A crash after the final State scan therefore resumes from
 			// evidence, never from an in-memory phase transition.
 			if (journal.phase != LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM) {
-				static_cast<void>(journalStore.saveAfterScan(snapshot, advancement.journal));
+				static_cast<void>(journalStore.saveAfterScan(snapshot, advancement));
 				snapshot.release();
 				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, RSS_PAGE_SIZE, 0U};
 			}

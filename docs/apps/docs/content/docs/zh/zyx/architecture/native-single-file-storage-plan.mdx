@@ -152,13 +152,19 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 | 构建 | Segment profile／envelope 版本 | Superblock 版本／header 字节 | 属性路由范围 |
 |---|---:|---:|---|
 | 默认 OFF | 5 | 31／336 | 现行 ROW；描述符物理根必须为零，拒绝 kind 16 |
-| 隔离 ON | 6 | 32／352 | ROW 与空描述符元数据生命周期；非空字段根仍拒绝 |
+| 隔离 ON | 6 | 32／352 | ROW 及显式受控 hybrid 候选；非空根仅由内部候选协调器发布 |
 
 两种构建互相拒绝对方的文件，不迁移、不重解释旧 A/B 字节。实验 Superblock 在 offset 336..351 新增 `hybrid_property_descriptor_root` 的 16 字节物理引用；metadata emergency reserve 从 header 末尾开始，实验偏移 352，默认偏移 336，宽度均为 32 字节。描述符是 metadata pool 内独立认证的 4096 字节物理 frame（32 字节 header、192 字节 payload、其余为零），不分配 routed MetadataPageId，不属于既有逻辑目录根。数据库／物理根／generation／LSN／CRC 和旧 pin 的恢复、完整性及回收检查适用；第八个图语义 fence 包含该根，两种格式的 token 不同。
 
 八个字段命名空间按 Node owner／column／extension／group、Edge owner／column／extension／group 的固定顺序保留 IndexId `0x8000000000000030`..`0x8000000000000037`。它们与 schema definition 范围、全局邻接、System Catalog、Vector mapping 前缀及 LargeValue content index 不重叠；普通图事务的标量 upsert／erase／create（两入口）／drop 均拒绝它们，默认构建也保留此身份范围。描述符请求在准备数据前验证每个非零 IndexId 与其 ordinal 精确匹配，不能绑定其他字段角色或普通索引。最终字段 reader 仍须核对固定 namespace、pin 下目录及实际根页／物理池代际，不能仅信 frame CRC。
 
-私有字段图像绑定使用现有 PROPERTY SegmentKind 和新的 `POK_HYBRID_PROPERTY=16`；13–15 是退役邻接 owner 编码，继续拒绝。该 owner kind 只在隔离构建中被 codec／SlottedPage 识别，普通池读取匹配以及独立 allocate／append／replace／evacuate 仍拒绝持久化它。元数据私有准备只在同一未发布 batch 内取得逻辑 ID 并生成图像／定位；普通元数据请求现会在 writer pin 下认证实际 Entity／ROW 源，检查≤1MiB账户及完整成员上限，再在该 batch 内准备私有图像／locator 及四个角色固定 map 的原生树规划。请求只给出允许的预留范围与字段池 owner，实际帧及最终树身份仍由元数据选择；空 map 缺席、已有同名目录拒绝，目录规划使用同一持有账户。元数据现会选择真实空闲／不重复位置、绑定私有字段帧，以同batch分配ID编码私有Index图像并验证最终描述符根；这些位置尚未登记且不写帧，后续发布须先登记全部所选槽再分配元数据。随后明确拒绝物理发布，保留文件修改 epoch 与原根。物理池、最终 map／描述符及完整字段读写／索引／大值归属／integrity／退役仍须接通同一图事务；未启用 backend／公开事务转换。完整生命周期完成前不得解除这些保护，不声称已启用混合属性生产布局。
+字段图像使用现有 PROPERTY SegmentKind 和隔离构建的 `POK_HYBRID_PROPERTY=16`；13–15 是退役邻接 owner 编码，继续拒绝。独立 allocate／append／replace／evacuate 不授予该 owner kind 写权限。内部候选协调器须在 writer pin 下认证实际 Entity／ROW／字段源及精确数据库、generation、描述符 fence，并持有最多1 MiB账户；单次转换最多64 owner／4096实际成员。只准备请求不得发布或消费持久 ID；显式候选发布必须先保留所有目的槽，在写入数据帧后，以同一次 A/B 更新字段／目录／描述符、Page Directory、Catalog、allocator 和精确退役队列。普通 backend／公开事务尚未采用 hybrid，默认格式31保持 ROW。
+
+受控 ROW→hybrid 可创建或复用认证的独立字段大值。新身份的所有数据／manifest 帧、manifest 目录与内容索引必须同批发布；同批重复内容只分配一个身份。内容索引使用既有 U64 叶布局，修改已有树只 COW 变化路径，不整树重建；当前映射与页 owner 分别认证根及子页的物理代际。仅当前全部页均被替换／移除的源池可整池退休，旧 pin 阻止释放。受控逆转换可复用或新建完整 ROW carrier；新 carrier 的数据、manifest、内容索引和 ROW 引用同批发布，复用原 version-3 owner-neutral 字节，PMR 编码与原 codec 完全一致。显式字段生命周期支持大值 SET/REMOVE 及受控 owner 删除：先认证选中大值的完整内容和单字段 token，再同批发布新的数据/manifest/内容索引或字段/实体移除。no-op 沿用 ROW 递归相等语义，NaN 即使字节相同仍发布；内容去重可复用同一大值身份。丢弃的引用不直接退休全局身份，旧 manifest/内容索引保留给精确可达性 GC，不能从本批引用差集推断全局无引用。直接有界 GC 按稳定逻辑 owner 顺序合并 ROW owner 和 native 成员，逐项用 Manifest 认证引用，并要求所有已登记媒体扫描完整结束。私有回收凭据绑定数据库、generation、描述符及精确删除身份；writer 复核后才发布内容索引／Manifest／Page 退役。部分扫描或并发写均不能授权删除。native immutable data／manifest 及保留内容索引池支持受限协调、空池退役和 pin 保护释放；通用写入及协调仍受保护。native 持久日志 GC 使用保留的等宽 `.v2` State 身份，payload 仍为原 version-1。通用 State writer 不能创建该身份。普通 journal 值只可开始／重置 manifest 枚举；owner 进度必须携带绑定源数据库／generation／描述符且未被修改的私有推进凭据。每次恢复非枚举阶段及最终回收，均须匹配当前已持久化的受保护证据。native 活跃时忽略旧 ROW `.v1` 进度，并在重置时迁移身份。有界候选窗口会认证并保留窗口外引用。State COW 复用前检查全部31个物理位置及全部活跃快照路由；被旧pin钉满的池改用新池，并在pin排空后释放。描述符和字段语义fence不变。规范inline journal控制记录可与owner删除共存，删除推进generation使扫描失效；未知derived State仍受保护。inline 字段只按显式转换建列，后续写不自动重新晋升；no-op 遵循 ROW 的递归类型／值相等语义。当前已验证范围及剩余准入见[优化计划](optimization)。
+
+每次显式转换或受控字段批次仍只处理一个64-ID组，沿用4096个实际成员和1 MiB工作上限；这些不是数据库生命周期容量上限。多个组及Node／Edge命名空间共享描述符绑定目录。新增或移除一组时，已有树仅进行私有脏路径COW，保留其他前缀／根；缺少描述符绑定的孤立Index Root仍拒绝。逆转换仅检查选定组，并在移除其专用字段帧前证明全部存活记录恰好属于该组的认证记录。共享源池只有在所有当前帧均被替换／移除时才退役，其他路由仍引用的帧会保留该池。有限的精确目录清点证明选定前缀覆盖整树时，可以直接整树退役。逆转换仅在全部命名空间消失后清除描述符。通用schema／derived-state协调和生产采用仍待完成。
+
+受控Node删除还会认证inline／overflow标签，将共享LabelSet页的槽删除合并成一份私有图像，保留其他Node的稳定槽。LabelSet、固定Node、Entity Map及原生字段原子发布；空标签页移除当前路由，完整退役Entity池仅在旧pin排空后释放。schema／derived State及通用拓扑协调仍受保护。
 
 ## 5. Bootstrap、根目录和 Page Directory
 
@@ -934,3 +940,44 @@ storage/relocatable/maintenance/
 ## 19. 历史记录
 
 本次清理前的完整规范与 S0–S6 过程记录原样保存在 `benchmarks/architecture-design/archive/20261019-completed-s0-s6/zh/`，上级 manifest 保存 SHA-256。更早记录在 `20261011-completed-optimization/` 和 `20261009-superseded-plans/`。这些是审计历史，不是实施入口；旧的待批准、待测试和中间百分比不再表示当前状态。
+
+
+#### 2026-10-20 原生候选池复用与恢复补充
+
+实验格式32的正向转换／字段修改／受控实体与 LabelSet 删除可在元数据私有影子容量中选定已认证的共享池空闲帧，保留精确旧 pin，最终共同发布；每池31帧，固定容量提示只作候选。接收池不得同批退役，同批后续追加不得再清理为孤儿。变化根按实际物理池代际绑定。中断物理写入与可写重开通过写锁内流式验证／恢复再允许新发布；普通未适配写与一般原生池 reconciliation 仍拒绝。默认格式31不变，完整成本及生产准入仍未完成。证据：`benchmarks/architecture-design/decisions/20261020-r32-native-pool-filling/`。
+
+
+只读 allocation census 另按完整128KiB池核对全部持久allocator位、Catalog、退役／搬迁源和应急元数据reserve；缺失归属／遍历不完整不授权布局，元数据framing包含在完整池内，文件high-water单列。当前只提供已分配成本观测，不是转换前估计器或生产准入凭据。证据：`benchmarks/architecture-design/decisions/20261020-r32-full-allocation-census/`。
+
+
+格式32显式正向转换可按元数据私有签发的源／完整准备候选实配判断10%字节及准入峰值／文件阈值，拒绝保持ROW。最终metadata／route仅准备一次，刷出dirty页后观察、再选择A/B发布。它允许私有I/O，不是无分配预测；原WRITE／StorageIO硬上限仍有效。无描述符的ROW源在放弃／重开后也须恢复未发布追加再写。默认31未切换。证据：`benchmarks/architecture-design/decisions/20261020-r32-prepublication-allocation-admission/`。
+
+### 2026-10-20 R3.2：完整 map 显式事务暂存与相同槽位更新
+
+证据：`benchmarks/architecture-design/decisions/20261020-r32-map-transactions/`。新增显式 MERGE／REPLACE 暂存入口：合并保留未指定字段，替换删除省略字段；只对真实变化生成字段更新，区分 stored NULL 与缺失，沿用 ROW 的 signed-zero／NaN（含嵌套）比较。活的 propertyless native owner 可认证；大值不变时复用，局部删除不推断全局退役。空合并与相等 map 是有来源 fence 的无写入提交。暂存值归同一预算所有，取消／额度拒绝不遗留半个请求，move／rollback／冲突释放所有权。
+
+宽 map 定向测试发现同长度 extension SET 先删除再插入导致 locator 改变、多写目录帧。修复为认证旧记录后在私有 COW 页保留同一槽位覆盖；仅增长需重新放置时更新定位。192 字段 map 修改一个字段最多准备字段／group 两帧，旧 pin 与全库完整性保持有效。保留失败日志，未放宽帧数断言。
+
+新增12个定向测试。仅验证38个相关模块，默认530项通过；候选799项通过、1项条件跳过。未跑全量单测或中间性能基准，仅验证Linux。入口仍限单个64-ID组、64个owner、输入4096字段、最多64个实际变更和1MiB；不是通用无界map事务。schema／统计／查询索引／未知State及通用拓扑协调、同执行器对照与R5／R7仍待完成，生产保护保持。**总计13/24（54.2%），无验收增长，不提交、不推送。**
+
+### 2026-10-20 R3.2：未知 State 发布保护与同执行器正确性对照
+
+证据：`benchmarks/architecture-design/decisions/20261020-r32-state-query-parity/`。新回归真实复现未知State存在时字段／map修改仍能发布；原来只有owner删除检查。现将同一有界State census移到全部字段修改的共同发布入口，保留规范maintenance journal、拒绝未知派生State／未来代际／不完整census；拒绝前不写私有帧，不更改根／属性／State，原额度退款。未知State并未获得通用写入支持，schema／派生索引保护未移除。
+
+增加同一LogicalPlanReadRuntime执行器的端到端正确性对照：通过公开backend建立schema／属性索引、64节点与64条多重边，用相同查询依次核对ROW、Node候选、Node＋Edge候选、两次逆转换后的结果。覆盖范围过滤、count／sum、字符串与缺失NULL、OPTIONAL与聚合、多重边遍历、ORDER／LIMIT，基线64节点及sum2016有独立断言。每次只读重开后执行，不执行性能采样。初版夹具漏填分页边界，修正为显式正值，失败日志保留。
+
+最终仅运行39个相关模块：默认531通过；候选802通过、1个条件跳过。未跑全量单测或中间性能基准，仅验证Linux。这是小规模语义对照，不代替完整形状／空间矩阵、同条件性能结论及生产准入。schema／统计／查询索引的写入协调、通用拓扑与剩余R5／R7继续待办。**总计13/24（54.2%），没有验收增长，不提交、不推送。**
+
+### 2026-10-20 R5.1：从最终 Edge 状态协调覆盖树双向更新
+
+证据：`benchmarks/architecture-design/decisions/20261020-r5-covered-final-state-coordinator/`。为既有覆盖树实验根增加显式事务协调入口，从最终Edge创建／删除记录生成两个方向的派生变化，不再要求调用方重复抄写endpoint／type。发布前逐项核对旧方向与权威Edge完全一致，新Edge不能覆盖已有候选键；同事务先创建后删除不留下派生记录。保持主Edge认证和全候选integrity；不安装默认backend路由，不新增持久格式或保留IndexId。
+
+入口只允许非schema／非内部保留命名空间、最多64个变化Edge及同一最多1MiB账户；直接手工修改同一候选根与自动协调不可混用。成功后封住继续暂存（含move之后），拒绝／取消后必须成功重试或rollback，不能忽略错误只提交主Edge。PMR合并器／边界缓冲受此账户约束，既有事务暂存和WRITE硬限制保持原合同；没有把局部额度宣称为全部发布内存。
+
+新增4个回归覆盖自环、多重边、最终状态、旧pin、移交封口、命名空间、额度／取消／变更数量拒绝与可重试、合法CRC错误反向项的拒绝及防止失败后漏维护提交。既有只读重开与A/B两种故障测试改走协调入口，断言仍核对主Edge及两方向一致。
+
+40个相关模块的扩大回归：默认545通过，候选816通过／1项条件跳过。随后收口失败提交保护与命名空间，重新构建两种格式并各跑覆盖树14项，均通过。未跑全量单测或中间性能基准，仅验证Linux。原始候选根构建仍显式，完整backend type索引／统计／overlay协调、访问计划／留出负载与R7准入继续待办。**总计13/24（54.2%）；没有验收增长，不提交、不推送。**
+
+### 2026-10-21：R5覆盖邻接协议原型边界
+
+R5.1协议／完整生命周期原型的字节、故障检测与资源合同见`benchmarks/architecture-design/decisions/20261021-r5-lifecycle-protocol/protocol-zh.md`。它复用既有key-only Packed BTree与Index Root／Page Directory，不新增持久metadata根或格式版本；两种构建均可使用显式实验入口。候选root属于调用方实验namespace，默认图读取仍走canonical key-only邻接。只读对照入口自行认证并保留真实pin，不接受外部报告授予权限；真实overlay仅在测试transaction内暂存，不能写只读文件。Node-only与Edge双向／type索引／统计、A/B、旧pin、空root重建、搬迁／退役已验证；生产writer hook、持久采用协议、成本规划与R7准入仍未完成。

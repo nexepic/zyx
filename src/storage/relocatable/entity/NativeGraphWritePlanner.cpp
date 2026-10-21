@@ -1,3 +1,4 @@
+#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 /**
  * @file NativeGraphWritePlanner.cpp
  * @brief Snapshot-pinned native Entity/Page graph write planning.
@@ -7,6 +8,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
 #include <algorithm>
 #include <array>
@@ -24,8 +26,14 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
+#include "graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp"
+#include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
+#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
+#include "graph/storage/relocatable/index/FixedBTreeMapMutation.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyMutationMerger.hpp"
@@ -385,7 +393,10 @@ namespace graph::storage {
 		global_adjacency_deferred_bulk_(other.global_adjacency_deferred_bulk_),
 		properties_(std::move(other.properties_)), scalar_index_mutations_(std::move(other.scalar_index_mutations_)),
 		initial_scalar_index_mutations_(std::move(other.initial_scalar_index_mutations_)),
-		vector_bootstraps_(std::move(other.vector_bootstraps_)), vector_deltas_(std::move(other.vector_deltas_)) {
+		vector_bootstraps_(std::move(other.vector_bootstraps_)), vector_deltas_(std::move(other.vector_deltas_)),
+        hybrid_conversion_(std::move(other.hybrid_conversion_)), hybrid_columns_(std::move(other.hybrid_columns_)), covered_adjacency_sealed_(other.covered_adjacency_sealed_),
+        covered_adjacency_pending_(other.covered_adjacency_pending_),
+        covered_adjacency_request_(other.covered_adjacency_request_) {
 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		other.next_vector_id_ = 0U;
 		other.global_adjacency_operations_canonical_ = false;
@@ -418,6 +429,11 @@ namespace graph::storage {
 		initial_scalar_index_mutations_ = std::move(other.initial_scalar_index_mutations_);
 		vector_bootstraps_ = std::move(other.vector_bootstraps_);
 		vector_deltas_ = std::move(other.vector_deltas_);
+        hybrid_conversion_ = std::move(other.hybrid_conversion_);
+        hybrid_columns_ = std::move(other.hybrid_columns_);
+        covered_adjacency_sealed_ = other.covered_adjacency_sealed_;
+        covered_adjacency_pending_ = other.covered_adjacency_pending_;
+        covered_adjacency_request_ = other.covered_adjacency_request_;
 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		other.next_vector_id_ = 0U;
 		other.global_adjacency_operations_canonical_ = false;
@@ -430,21 +446,181 @@ namespace graph::storage {
 	}
 
 	const Superblock &NativeGraphWriteTransaction::baseSuperblock() const {
-		requireActive("inspect its base Superblock");
+		requireActive("inspect its base Superblock", true);
 		return snapshot_.superblock();
 	}
 
 	const MetadataSnapshotPin &NativeGraphWriteTransaction::baseSnapshot() const {
-		requireActive("inspect its pinned metadata snapshot");
+		requireActive("inspect its pinned metadata snapshot", true);
 		return snapshot_;
 	}
 
-	void NativeGraphWriteTransaction::requireActive(const char *operation) const {
+	void NativeGraphWriteTransaction::requireActive(const char *operation, bool allowHybridConversion) const {
 		if (!isActive()) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction is no longer active");
 		}
+        if (covered_adjacency_sealed_ && !allowHybridConversion)
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization sealed further graph staging");
+        if ((hybrid_conversion_ || hybrid_columns_) && !allowHybridConversion)
+            fail(FormatError::FERR_INVALID_STATE, "isolated native property mutation cannot mix with other transaction operations");
 		static_cast<void>(operation);
 	}
+
+    void NativeGraphWriteTransaction::stageHybridPropertyColumns(
+        std::span<const NativeHybridPropertyColumnReplacement> replacements,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool fieldLifecycle) {
+        stageHybridPropertyMutation(replacements, {}, std::move(memory), cancellation, fieldLifecycle);
+    }
+    void NativeGraphWriteTransaction::stageHybridPropertyMaps(std::span<const PropertyCollectionRoot> roots,
+        NativeHybridPropertyMapMode mode, std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
+        requireActive("stage native property maps");
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native map staging is disabled");
+        const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
+        constexpr size_t maximumBytes = 1024U * 1024U;
+        if (!account || account->used() > maximumBytes || account->available() > maximumBytes - account->used() ||
+            roots.empty() || roots.size() > RSS_HYBRID_GROUP_CAPACITY ||
+            (mode != NativeHybridPropertyMapMode::NHPMM_REPLACE && mode != NativeHybridPropertyMapMode::NHPMM_MERGE))
+            fail(FormatError::FERR_INVALID_HEADER, "native map staging requires a bounded account, owner set and mode");
+        if (!nodes_.empty() || !edges_.empty() || !properties_.empty() || !node_id_ranges_.empty() || !edge_id_ranges_.empty() ||
+            !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() || !vector_bootstraps_.empty() || !vector_deltas_.empty())
+            fail(FormatError::FERR_INVALID_STATE, "native map staging requires an otherwise empty transaction");
+        const std::function<void()> check = [cancellation] { if (cancellation) cancellation->check(); };
+        check(); std::array<EntityPropertyKey, RSS_HYBRID_GROUP_CAPACITY> owners{}; size_t memberships = 0, inputBytes = 0;
+        // Validate the complete bounded input metadata before optional heap
+        // admission can conceal a later duplicate owner or malformed token.
+        for (size_t i = 0; i < roots.size(); ++i) {
+            check(); const auto &root = roots[i];
+            if ((root.owner_entity_type != Node::typeId && root.owner_entity_type != Edge::typeId) ||
+                root.entries.size() > 4096U - memberships)
+                fail(FormatError::FERR_INVALID_HEADER, "native map input has an invalid owner kind or exceeds4096actual fields");
+            memberships += root.entries.size(); owners[i] = {root.owner_entity_type == Node::typeId ? EntityPropertyOwnerKind::EPOK_NODE :
+                EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id};
+            if (!owners[i].isValid() || (i && (owners[i].owner_kind != owners[0].owner_kind ||
+                hybridPropertyGroupFor(owners[i]) != hybridPropertyGroupFor(owners[0]))))
+                fail(FormatError::FERR_INVALID_HEADER, "native map inputs must name one valid owner namespace/group");
+            for (size_t prior = 0; prior < i; ++prior) if (owners[prior] == owners[i])
+                fail(FormatError::FERR_INVALID_HEADER, "native map input repeats an owner");
+            uint32_t previous = 0;
+            for (const auto &entry : root.entries) {
+                check(); if (!entry.key_token || entry.key_token <= previous)
+                    fail(FormatError::FERR_INVALID_HEADER, "native map input tokens must be strictly ordered");
+                previous = entry.key_token; const auto bytes = CanonicalPropertyValueCodec::encodedSize(entry.value);
+                if (bytes > maximumBytes - inputBytes)
+                    fail(FormatError::FERR_INVALID_STATE, "native map canonical input exceeds its one MiB planning bound");
+                inputBytes += bytes;
+            }
+        }
+        utils::OwnedAllocationScope allocation(memory);
+        utils::OwnedHeapReservation boundary(memory);
+        const SelectedPropertyReadAdmission admitBoundary = [&](size_t bytes) { boundary.set(bytes); };
+        for (size_t i = 0; i < roots.size(); ++i) {
+            check(); if (!context_->properties->isHybridPropertyOwner(snapshot_, owners[i], cancellation, &admitBoundary))
+                fail(FormatError::FERR_INVALID_STATE, "native map staging requires live owners with authenticated hybrid routing");
+            boundary.set(0);
+            if (owners[i].owner_kind == EntityPropertyOwnerKind::EPOK_NODE) static_cast<void>(context_->entities->readNode(snapshot_, owners[i].entity_id));
+            else static_cast<void>(context_->entities->readEdge(snapshot_, owners[i].entity_id));
+        }
+        StagedHybridColumns staged{utils::OwnedVector<NativeHybridPropertyColumnReplacement>(
+            utils::OwnedPmrAllocator<NativeHybridPropertyColumnReplacement>(memory)), memory, cancellation, true,
+            utils::OwnedVector<EntityPropertyKey>(utils::OwnedPmrAllocator<EntityPropertyKey>(memory))};
+        const auto append = [&](NativeHybridPropertyColumnReplacement cell) {
+            if (staged.cells.size() == RSS_HYBRID_GROUP_CAPACITY)
+                fail(FormatError::FERR_INVALID_STATE, "native map transaction exceeds64changed fields");
+            staged.cells.push_back(std::move(cell));
+        };
+        for (size_t i = 0; i < roots.size(); ++i) {
+            check(); const auto &root = roots[i]; const auto owner = owners[i];
+            for (const auto &entry : root.entries) {
+                check(); detail::PropertyDecodeWorkspace decoded(memory, &check);
+                const auto previous = context_->properties->readEntityPropertyOptional(snapshot_, owner, entry.key_token);
+                if (!previous || !(previous->value == entry.value))
+                    append({owner, entry.key_token, OwnedPropertyValue(entry.value), false});
+            }
+            if (mode == NativeHybridPropertyMapMode::NHPMM_REPLACE) {
+                utils::OwnedHeapReservation tokenCredit(memory), transientCredit(memory);
+                const SelectedPropertyReadAdmission admitTokens = [&](size_t bytes) { tokenCredit.set(bytes); };
+                const SelectedPropertyReadAdmission admitTransient = [&](size_t bytes) { transientCredit.set(bytes); };
+                const auto tokens = context_->properties->readEntityPropertyTokens(snapshot_, owner, admitTokens, admitTransient, cancellation);
+                transientCredit.set(0);
+                for (const auto token : tokens) {
+                    check(); const auto found = std::lower_bound(root.entries.begin(), root.entries.end(), token,
+                        [](const PropertyCollectionRootEntry &entry, uint32_t key) { return entry.key_token < key; });
+                    if (found == root.entries.end() || found->key_token != token) append({owner, token, std::monostate{}, true});
+                }
+            }
+        }
+        // All-equal maps and empty merges deliberately stage a fenced no-op;
+        // old field staging still rejects an empty request from public callers.
+        hybrid_columns_.emplace(std::move(staged));
+    }
+
+    void NativeGraphWriteTransaction::stageHybridPropertyOwnerDeletion(std::span<const EntityPropertyKey> owners,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
+        stageHybridPropertyMutation({}, owners, std::move(memory), cancellation, true);
+    }
+    void NativeGraphWriteTransaction::stageHybridPropertyMutation(
+        std::span<const NativeHybridPropertyColumnReplacement> replacements, std::span<const EntityPropertyKey> deletions,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool fieldLifecycle) {
+        requireActive("stage native field or owner mutations");
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native column publication is disabled");
+        const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
+        constexpr size_t maximumBytes = 1024U * 1024U;
+        if (!account || account->used() > maximumBytes || account->available() > maximumBytes - account->used() ||
+            (replacements.empty() == deletions.empty()) || replacements.size() > RSS_HYBRID_GROUP_CAPACITY ||
+            deletions.size() > RSS_HYBRID_GROUP_CAPACITY ||
+            !snapshot_.superblock().hybrid_property_descriptor_root.isValid())
+            fail(FormatError::FERR_INVALID_HEADER, "native column staging requires a bounded set/account and native source");
+        if (!nodes_.empty() || !edges_.empty() || !properties_.empty() || !node_id_ranges_.empty() || !edge_id_ranges_.empty() ||
+            !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
+            !vector_bootstraps_.empty() || !vector_deltas_.empty())
+            fail(FormatError::FERR_INVALID_STATE, "native column staging requires an otherwise empty transaction");
+        if (cancellation) cancellation->check();
+        utils::OwnedAllocationScope allocationScope(memory);
+        StagedHybridColumns staged{utils::OwnedVector<NativeHybridPropertyColumnReplacement>(
+            utils::OwnedPmrAllocator<NativeHybridPropertyColumnReplacement>(memory)), memory, cancellation, fieldLifecycle,
+            utils::OwnedVector<EntityPropertyKey>(utils::OwnedPmrAllocator<EntityPropertyKey>(memory))};
+        staged.cells.reserve(replacements.size());
+        for (const auto &cell : replacements) {
+            if (cancellation) cancellation->check();
+            if (cell.erase) { staged.cells.push_back({cell.owner, cell.token, std::monostate{}, true}); continue; }
+            PropertyValue scratch;
+            if (!fieldLifecycle && CanonicalPropertyValueCodec::encodedSize(cell.propertyValue(scratch)) >
+                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES - RSS_HYBRID_EXTENSION_HEADER_BYTES)
+                fail(FormatError::FERR_INVALID_STATE, "oversized native cells require explicit field lifecycle");
+            staged.cells.push_back(cell);
+        }
+        staged.deletions.assign(deletions.begin(), deletions.end());
+        static_assert(std::is_nothrow_move_constructible_v<StagedHybridColumns> && std::is_nothrow_move_assignable_v<StagedHybridColumns>);
+        hybrid_columns_.emplace(std::move(staged));
+    }
+
+    void NativeGraphWriteTransaction::stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
+            std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool publishCandidate,
+            NativeHybridPropertyConversionDirection direction) {
+        requireActive("stage a native property group conversion");
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native property group conversion is disabled");
+        const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
+        constexpr size_t maximumBytes = 1024U * 1024U;
+        if (!hybrid_property_detail::validKind(kind) || !groupId || groupId > RSS_HYBRID_MAX_GROUP_ID ||
+            (direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID &&
+                direction != NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW) || !account ||
+            account->used() > maximumBytes || account->available() > maximumBytes - account->used())
+            fail(FormatError::FERR_INVALID_HEADER, "native property conversion requires one bounded group/account");
+        if (!nodes_.empty() || !edges_.empty() || !properties_.empty() || !node_id_ranges_.empty() ||
+            !edge_id_ranges_.empty() || !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
+            !vector_bootstraps_.empty() || !vector_deltas_.empty())
+            fail(FormatError::FERR_INVALID_STATE, "native property conversion requires an otherwise empty transaction");
+        const auto &source = snapshot_.superblock();
+        const auto &placement = context_->options.property_roots;
+        if (cancellation) cancellation->check();
+        hybrid_conversion_ = NativeGraphHybridPropertyRootMutation{source.database_id,
+            source.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE, {},
+            NativeGraphHybridPropertyConversion{kind, groupId, std::move(memory), cancellation,
+                placement.first_slot, placement.last_slot, placement.page_owner_id, publishCandidate, direction}};
+    }
 
 	NativeGraphWriteTransaction::NodeChange &NativeGraphWriteTransaction::mutableNode(uint64_t nodeId) {
 		requireActive("modify a Node");
@@ -731,6 +907,136 @@ namespace graph::storage {
 		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id};
 		properties_.insert_or_assign(key.directoryId(), std::move(root));
 	}
+
+    void NativeGraphWriteTransaction::stageCoveredAdjacencyCandidate(uint64_t indexId, size_t maximumChangedEdges,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *stageCancellation,
+        const NativeScalarIndexMutationPlanner *typeIndexes, SystemCatalog *statistics) {
+        requireActive("finalize covered adjacency candidate");
+        const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
+        if (!indexId || (indexId >> 62U) || !maximumChangedEdges || maximumChangedEdges > 64U || !account ||
+            account->used() > 1024U * 1024U || account->available() > 1024U * 1024U - account->used())
+            fail(FormatError::FERR_INVALID_HEADER, "covered candidate finalization requires a lab namespace and bounded account");
+        const CoveredAdjacencyRequest participants{indexId, typeIndexes, statistics};
+        if (covered_adjacency_pending_ && covered_adjacency_request_ != participants)
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate retry cannot change its root or derived-state participants");
+        covered_adjacency_request_ = participants;
+        covered_adjacency_pending_ = true;
+        const auto check = [&] { if (stageCancellation) stageCancellation->check(); };
+        check();
+        if (std::ranges::any_of(scalar_index_mutations_, [indexId](const auto &entry) { return entry.index_id == indexId; }) ||
+            std::ranges::any_of(initial_scalar_index_mutations_, [indexId](const auto &entry) { return entry.index_id == indexId; }))
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate cannot mix manual and coordinator index changes");
+        size_t count = 0;
+        for (const auto &[id, edge] : edges_) {
+            check(); static_cast<void>(id);
+            if (edge.inserted == edge.erased) continue;
+            if (++count > maximumChangedEdges)
+                fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization exceeds its changed Edge bound");
+        }
+        size_t changedNodes = 0;
+        for (const auto &[id, node] : nodes_) {
+            check(); static_cast<void>(id);
+            if ((node.inserted || node.erased || node.labels.has_value()) && ++changedNodes > maximumChangedEdges - count)
+                fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization exceeds its combined Entity bound");
+        }
+        if (!count && !changedNodes) fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization has no Entity changes");
+        utils::OwnedAllocationScope allocation(memory); utils::OwnedHeapReservation boundary(memory);
+        const auto admit = [&](size_t bytes) { boundary.set(bytes); };
+        using Candidate = CoveredAdjacencyCandidate;
+        Candidate::Map map(indexId, *context_->indexes, *context_->metadata);
+        if (!context_->metadata->findIndexRootOptional(snapshot_, indexId))
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate coordinator requires its existing root");
+        std::optional<FixedBTreeMapMutation<RSS_GLOBAL_ADJACENCY_KEY_BYTES, 16>> changes;
+        if (count) changes.emplace(*this, *context_->indexes, *context_->metadata, indexId, count * 2U, *memory);
+        else {
+            // Bind/authenticate the existing root and first leaf even though
+            // this Node-only batch will not change any candidate entries.
+            static_cast<void>(map.visitAll(snapshot_, 1, [](const auto &) { return false; }, admit, stageCancellation));
+            boundary.set(0);
+        }
+        // Authenticate every old direction before staging any derived delta.
+        // Completeness of unrelated entries still belongs to verifyIntegrity.
+        for (const auto &[id, edge] : edges_) {
+            check(); if (edge.inserted == edge.erased) continue;
+            for (const auto direction : {GlobalAdjacencyDirection::GAD_OUT, GlobalAdjacencyDirection::GAD_IN}) {
+                check(); const auto expected = Candidate::entry(direction, id, edge.record.source_node_id,
+                    edge.record.target_node_id, edge.record.type_id);
+                const auto previous = map.find(snapshot_, expected.key, admit); boundary.set(0);
+                if (edge.inserted ? previous.has_value() : previous != std::optional(expected.value))
+                    fail(FormatError::FERR_INVALID_STATE, "covered candidate old direction disagrees with authoritative Edge");
+                if (edge.erased) changes->erase(expected.key, admit);
+                else changes->set(expected.key, expected.value, admit);
+                boundary.set(0);
+            }
+        }
+        // Keep all derived state in this transaction. Missing statistics stay unknown;
+        // a complete token namespace is updated only from its pinned counts.
+        if ((typeIndexes && !typeIndexes->usesMetadataStore(*context_->metadata)) ||
+            (statistics && !statistics->usesMetadataStore(*context_->metadata)))
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate derived state has a foreign metadata domain");
+        if (typeIndexes) {
+            for (const auto &definition : typeIndexes->definitions())
+                if (definition.index_id == indexId)
+                    fail(FormatError::FERR_INVALID_STATE, "covered candidate cannot alias a schema index");
+        }
+        if (statistics) {
+            const auto graph = statistics->readGraphCardinalityStatistics(snapshot_);
+            const auto kind = SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE;
+            const auto labelKind = SystemCatalogSchemaTokenKind::SCSTK_LABEL;
+            const bool complete = statistics->hasCompleteTokenCardinality(snapshot_, kind);
+            const bool labelsComplete = statistics->hasCompleteTokenCardinality(snapshot_, labelKind);
+            auto updated = graph;
+            using Counter = std::pair<SystemCatalogSchemaTokenKind, uint64_t>;
+            std::pmr::map<Counter, int64_t> deltas(memory.get());
+            const auto changeCount = [&](uint64_t &value, bool erased) {
+                if ((erased && !value) || (!erased && value >= UINT64_MAX - 1U))
+                    fail(FormatError::FERR_INVALID_STATE, "covered candidate graph count underflows or overflows");
+                value = erased ? value - 1U : value + 1U;
+            };
+            for (const auto &[id, edge] : edges_) {
+                check(); static_cast<void>(id); if (edge.inserted == edge.erased) continue;
+                if (updated) changeCount(updated->edge_count, edge.erased);
+                if (complete) deltas[{kind, edge.record.type_id}] += edge.erased ? -1 : 1;
+            }
+            for (const auto &[id, node] : nodes_) {
+                check(); static_cast<void>(id);
+                if (!node.inserted && !node.erased && !node.labels) continue;
+                if (updated && node.inserted != node.erased) changeCount(updated->node_count, node.erased);
+                if (!labelsComplete) continue;
+                if (!node.inserted) {
+                    {
+                        const auto previous = context_->labels->readNodeLabels(snapshot_, node.record, admit);
+                        for (const auto token : previous) { check(); --deltas[{labelKind, token}]; }
+                    }
+                    boundary.set(0);
+                }
+                if (!node.erased && node.labels)
+                    for (const auto token : *node.labels) { check(); ++deltas[{labelKind, token}]; }
+            }
+            // Validate all counters before staging any catalog updates.
+            std::pmr::map<Counter, uint64_t> counts(memory.get());
+            for (const auto &[counter, delta] : deltas) {
+                check(); if (!delta) continue; const auto previous = statistics->readTokenCardinality(snapshot_, counter.first, counter.second);
+                if (!previous || (delta < 0 && *previous < uint64_t(-delta)) ||
+                    (delta > 0 && *previous > UINT64_MAX - 1U - uint64_t(delta)))
+                    fail(FormatError::FERR_INVALID_STATE, "covered candidate token count is unknown or overflows");
+                counts[counter] = delta < 0 ? *previous - uint64_t(-delta) : *previous + uint64_t(delta);
+            }
+            if (updated != graph || !counts.empty()) {
+                auto session = statistics->beginWrite(*this);
+                if (updated != graph) session.setGraphCardinalityStatistics(*updated);
+                for (const auto &[counter, value] : counts) { check(); session.setTokenCardinality(counter.first, counter.second, value); }
+                session.finish();
+            }
+        }
+        if (typeIndexes) for (const auto &[id, edge] : edges_) {
+            check(); if (edge.inserted != edge.erased)
+                typeIndexes->stageEdgeType(*this, id, edge.record.type_id, edge.erased);
+        }
+        check(); if (changes) changes->stage();
+        covered_adjacency_sealed_ = true;
+        covered_adjacency_pending_ = false;
+    }
 
 	void NativeGraphWriteTransaction::stageScalarIndexUpsert(BTreePageStore &index, uint64_t indexId,
 															 std::span<const std::byte> key, uint64_t value, BTreeLeafValueLayout leafValueLayout) {
@@ -2031,13 +2337,50 @@ namespace graph::storage {
 	NativeGraphWriteCommitResult NativeGraphWriteTransaction::commit(const MetadataPublishOptions &publishOptions) {
         debug::PerfTrace::addValue("native_graph.write.graph_commit_calls", 1);
 		debug::ScopedPerfTimer timer("native_graph.commit");
-		requireActive("commit");
+		requireActive("commit", true);
+        if (covered_adjacency_pending_)
+            fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization must succeed before graph commit");
 		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
-		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty()) {
+		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
 		}
+        if (hybrid_conversion_ || hybrid_columns_) {
+            // This checkpoint is provably before publication. Cancellation
+            // retains an active source/request for an independent retry and
+            // avoids ordinary lease-vector scratch and the publication lock.
+            const auto *cancellation = hybrid_columns_ ? hybrid_columns_->cancellation : hybrid_conversion_->conversion->cancellation;
+            if (cancellation) cancellation->check();
+            std::lock_guard publicationLock(context_->publication_mutex);
+            auto current = context_->metadata->openSnapshot();
+            if (current.superblock() != snapshot_.superblock()) {
+                current.release(); snapshot_.release(); hybrid_conversion_.reset(); hybrid_columns_.reset();
+                state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
+                return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
+            }
+            current.release();
+            try {
+                const auto &base = snapshot_.superblock();
+                const auto &placement = context_->options.property_roots;
+                const bool mapNoop = hybrid_columns_ && hybrid_columns_->cells.empty() && hybrid_columns_->deletions.empty();
+                const auto published = mapNoop ? base : hybrid_columns_ ? context_->metadata->mutateHybridPropertyColumns(
+                    {base.database_id, base.generation, base.hybrid_property_descriptor_root, hybrid_columns_->cells,
+                        hybrid_columns_->memory, placement.first_slot, placement.last_slot, placement.page_owner_id, cancellation,
+                        hybrid_columns_->field_lifecycle, hybrid_columns_->deletions},
+                    nextCheckpointLsn(base), publishOptions) : context_->metadata->mutateNativeGraphPagesWithLargeValues(
+                    {}, {}, {}, {}, {}, {}, {}, nextCheckpointLsn(snapshot_.superblock()),
+                    [](auto, auto, auto, auto, auto, auto) {}, [](auto &) {}, {}, {}, {}, {}, {},
+                    publishOptions, {}, snapshot_.superblock().generation, {}, {}, {}, {}, {}, hybrid_conversion_);
+                snapshot_.release(); hybrid_conversion_.reset(); hybrid_columns_.reset();
+                state_ = NativeGraphWriteTransactionState::NGWTS_COMMITTED;
+                return {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, published, {}};
+            } catch (...) {
+                snapshot_.release(); hybrid_conversion_.reset(); hybrid_columns_.reset();
+                state_ = NativeGraphWriteTransactionState::NGWTS_INDETERMINATE;
+                throw;
+            }
+        }
 		NativeGraphLogicalIdReservation logicalIds;
 		logicalIds.node_ranges = node_id_ranges_;
 		logicalIds.edge_ranges = edge_id_ranges_;
@@ -3698,6 +4041,7 @@ namespace graph::storage {
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		}
+        hybrid_conversion_.reset(); hybrid_columns_.reset();
 	}
 
 	NativeGraphWritePlanner::NativeGraphWritePlanner(RelocatableMetadataStore &metadata, EntityPageStore &entities,

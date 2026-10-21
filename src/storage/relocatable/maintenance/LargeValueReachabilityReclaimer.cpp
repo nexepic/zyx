@@ -27,6 +27,7 @@
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/StateRecord.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyReadContext.hpp"
 
 namespace graph::storage {
 
@@ -135,16 +136,41 @@ namespace graph::storage {
 			}
 		}
 
+        void requireNativeJournalEvidence(SlottedPagePool &propertyPages, RelocatableMetadataStore &metadata,
+            const MetadataSnapshotPin &snapshot, const LargeValueMaintenanceJournal &journal,
+            const LargeValueReachabilityReclaimOptions &options) {
+            if (!options.journal_state_id || !options.journal_state_page_owner_id ||
+                !options.first_journal_state_slot.isValid() || options.last_journal_state_slot < options.first_journal_state_slot)
+                fail(FormatError::FERR_INVALID_STATE, "native reclamation requires its durable journal identity");
+            const auto route = metadata.findStateLocationOptional(snapshot, options.journal_state_id);
+            if (!route) fail(FormatError::FERR_INVALID_STATE, "native reclamation has no durable journal evidence");
+            const auto page = metadata.findPageLocation(snapshot, route->page_id);
+            const auto pool = metadata.findCatalog(snapshot, page.segment_id);
+            if (pool.kind != SegmentKind::SGK_STATE_PAGE_POOL || pool.owner_id != options.journal_state_page_owner_id)
+                fail(FormatError::FERR_INVALID_STATE, "native reclamation has a foreign journal pool");
+            StateRecordStore states(propertyPages, metadata);
+            LargeValueMaintenanceJournalStore stored(states, metadata, {{options.first_journal_state_slot,
+                options.last_journal_state_slot, options.journal_state_page_owner_id}, options.journal_state_id});
+            const auto evidence = stored.load(snapshot);
+            if (!evidence || *evidence != journal)
+                fail(FormatError::FERR_INVALID_STATE, "native reclamation requires its complete persisted current-generation evidence");
+
+        }
+
 		class ReachabilitySink final : public LargeValueOwnershipScanSink {
 		public:
-			ReachabilitySink(const WorkMap<uint64_t, ScannedValue> &reclaimableValues,
-							 WorkSet<uint64_t> &reachableValues) :
-				reclaimable_values_(reclaimableValues), reachable_values_(reachableValues) {}
+            ReachabilitySink(const WorkMap<uint64_t, ScannedValue> &reclaimableValues,
+                WorkSet<uint64_t> &reachableValues, std::function<void(const LargeValueRef &)> validateOutsideWindow = {}) :
+                reclaimable_values_(reclaimableValues), reachable_values_(reachableValues),
+                validate_outside_window_(std::move(validateOutsideWindow)) {}
 
 			void setExpectedMediaType(std::string_view mediaType) { expected_media_type_ = mediaType; }
 
 			void markReachable(const LargeValueRef &reference) override {
 				const auto value = reclaimable_values_.find(reference.value_id.value());
+                if (reference.media_type == expected_media_type_ && value == reclaimable_values_.end() && validate_outside_window_) {
+                    validate_outside_window_(reference); return;
+                }
 				if (reference.media_type != expected_media_type_ || value == reclaimable_values_.end() ||
 					value->second.manifest.reference() != reference) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -157,6 +183,7 @@ namespace graph::storage {
 			const WorkMap<uint64_t, ScannedValue> &reclaimable_values_;
 			WorkSet<uint64_t> &reachable_values_;
 			std::string_view expected_media_type_;
+            std::function<void(const LargeValueRef &)> validate_outside_window_;
 		};
 
 	} // namespace
@@ -172,13 +199,10 @@ namespace graph::storage {
 	LargeValueOwnershipScanner::Progress EntityPropertyLargeValueOwnershipScanner::scanReachableAfter(
 			const MetadataSnapshotPin &snapshot, uint64_t afterLocationId, size_t maximumLocations,
 			size_t maximumMetadataPages, LargeValueOwnershipScanSink &sink) const {
-		Progress progress;
-		progress.exhausted = metadata_.visitEntityPropertyLocationsAfter(
-				snapshot, afterLocationId, maximumMetadataPages,
-				[&](const EntityPropertyLocation &location) {
-					if (progress.locations_scanned == maximumLocations) {
-						return false;
-					}
+        if (!metadata_.ownsSnapshot(snapshot) || !property_pages_.usesMetadataStore(metadata_))
+            fail(FormatError::FERR_INVALID_STATE, "LargeValue ownership scanner requires its own source domain");
+        Progress progress;
+        const auto markRow = [&](const EntityPropertyLocation &location) {
 					detail::PropertyDecodeWorkspace propertyWorkspace(utils::OwnedAllocationScope::owner());
                     const SlottedPage page = property_pages_.read(snapshot, location.page_id);
 					const std::vector<std::byte> bytes =
@@ -202,13 +226,95 @@ namespace graph::storage {
 						}
 						sink.markReachable(reference.value);
 					}
-					++progress.locations_scanned;
-					progress.last_scanned_location_id = location.key.directoryId();
-					return true;
-				},
-				&progress.metadata_pages_scanned);
-		return progress;
-	}
+        };
+        if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+            progress.exhausted = metadata_.visitEntityPropertyLocationsAfter(snapshot, afterLocationId, maximumMetadataPages,
+                [&](const EntityPropertyLocation &location) {
+                    if (progress.locations_scanned == maximumLocations) return false;
+                    markRow(location); ++progress.locations_scanned; progress.last_scanned_location_id = location.key.directoryId(); return true;
+                }, &progress.metadata_pages_scanned);
+            return progress;
+        }
+        if (!maximumMetadataPages) { progress.last_scanned_location_id = afterLocationId; return progress; }
+        struct DirectoryLimit {};
+        const auto memory = utils::OwnedAllocationScope::owner();
+        utils::OwnedHeapReservation boundary(memory), referenceCredit(memory);
+        // Native directory admission is charged conservatively per page-view
+        // notification, including lookahead/overlap, rather than assuming a
+        // cache hit or one physical leaf per logical owner.
+        const auto admit = [&](size_t bytes) {
+            if (bytes) {
+                const auto pages = bytes / RSS_PAGE_SIZE + size_t(bytes % RSS_PAGE_SIZE != 0);
+                if (pages > maximumMetadataPages - progress.metadata_pages_scanned) throw DirectoryLimit{};
+                progress.metadata_pages_scanned += pages;
+            }
+            boundary.set(bytes);
+        };
+        const auto admitReference = [&](size_t bytes) { referenceCredit.set(bytes); };
+        progress.last_scanned_location_id = afterLocationId;
+        ++progress.metadata_pages_scanned; // authenticated physical descriptor
+        HybridPropertyReadContext context(property_pages_, metadata_, snapshot);
+        constexpr uint64_t edgeBit = UINT64_C(1) << 63U;
+        const auto nextRow = [&](uint64_t after) -> std::optional<EntityPropertyLocation> {
+            if (!snapshot.superblock().entity_property_directory_root.isValid()) return {};
+            const auto remaining = maximumMetadataPages - progress.metadata_pages_scanned;
+            if (!remaining) throw DirectoryLimit{};
+            std::optional<EntityPropertyLocation> result; size_t pages = 0;
+            const bool exhausted = metadata_.visitEntityPropertyLocationsAfter(snapshot, after, remaining,
+                [&](const auto &location) { result = location; return false; }, &pages);
+            progress.metadata_pages_scanned += pages;
+            if (!result && !exhausted) throw DirectoryLimit{};
+            return result;
+        };
+        try {
+            auto row = nextRow(afterLocationId);
+            auto node = afterLocationId < edgeBit ? context.nextOwnerAfter(EntityPropertyOwnerKind::EPOK_NODE, afterLocationId, std::ref(admit)) : std::nullopt;
+            boundary.set(0);
+            auto edge = context.nextOwnerAfter(EntityPropertyOwnerKind::EPOK_EDGE,
+                afterLocationId < edgeBit ? 0 : afterLocationId & ~edgeBit, std::ref(admit));
+            boundary.set(0);
+            for (;;) {
+                std::optional<EntityPropertyKey> owner;
+                if (node) owner = node;
+                if (edge && (!owner || edge->directoryId() < owner->directoryId())) owner = edge;
+                if (row && owner && row->key.directoryId() == owner->directoryId())
+                    fail(FormatError::FERR_INVALID_STATE, "LargeValue ownership has overlapping ROW/native owner routes");
+                const bool useRow = row && (!owner || row->key.directoryId() < owner->directoryId());
+                if (!row && !owner) { progress.exhausted = true; return progress; }
+                if (progress.locations_scanned == maximumLocations) return progress;
+                if (useRow) {
+                    if (context.groupRecord(row->key, std::ref(admit)))
+                        fail(FormatError::FERR_INVALID_STATE, "ROW LargeValue owner lies inside a native group");
+                    boundary.set(0); markRow(*row); ++progress.locations_scanned;
+                    progress.last_scanned_location_id = row->key.directoryId();
+                    row = nextRow(progress.last_scanned_location_id); continue;
+                }
+                const auto remaining = maximumLocations - progress.locations_scanned;
+                const auto summary = context.visitOwner(*owner, remaining, [&](uint32_t token, HybridPropertySource) {
+                    const auto route = context.visitField(*owner, token, [](const auto &) {}, [&](const auto &field) {
+                        if (field.reference()) sink.markReachable(*field.reference());
+                    }, std::ref(admit), std::ref(admitReference));
+                    referenceCredit.set(0); boundary.set(0);
+                    if (route != HybridPropertyReadContext::FieldRoute::HFR_FOUND)
+                        fail(FormatError::FERR_INVALID_STATE, "native LargeValue owner lost a selected field");
+                    return true;
+                }, std::ref(admit));
+                boundary.set(0);
+                if (!summary.routed || !summary.owner_live || !summary.complete || !summary.fields)
+                    fail(FormatError::FERR_INVALID_STATE, "native LargeValue owner exceeds its complete membership work bound");
+                progress.locations_scanned += summary.fields;
+                progress.last_scanned_location_id = owner->directoryId();
+                if (owner->owner_kind == EntityPropertyOwnerKind::EPOK_NODE)
+                    node = context.nextOwnerAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
+                else edge = context.nextOwnerAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
+                boundary.set(0);
+            }
+        } catch (const DirectoryLimit &) {
+            // A partial owner's marks only retain candidates. Its cursor is not
+            // advanced, and no incomplete scan grants reclamation authority.
+            return progress;
+        }
+    }
 
 	StateLargeValueOwnershipScanner::StateLargeValueOwnershipScanner(SlottedPagePool &pages, LargeValueStore &values,
 																	 RelocatableMetadataStore &metadata) :
@@ -293,8 +399,21 @@ namespace graph::storage {
 				 "LargeValue maintenance journal cannot resume an unregistered persistent owner namespace");
 		}
 
+        HybridPropertyReadContext ownershipContext(property_pages_, metadata_, snapshot);
+        const bool nativeActive = ownershipContext.hasNativeGroups();
+        if (nativeActive) {
+            if (journal.phase == LargeValueMaintenanceJournalPhase::LVMJP_ENUMERATE_MANIFESTS) {
+                if (!journal.candidate_value_ids.empty() || !journal.reachable_value_ids.empty() ||
+                    journal.entity_property_after_directory_id || journal.state_after_id)
+                    fail(FormatError::FERR_INVALID_STATE, "native manifest enumeration cannot import owner progress");
+            } else requireNativeJournalEvidence(property_pages_, metadata_, snapshot, journal, options);
+        }
 		LargeValueMaintenanceJournalAdvance result;
 		result.journal = journal;
+        const auto finish = [&]() -> LargeValueMaintenanceJournalAdvance {
+            if (nativeActive) result.native_evidence_.emplace(NativeJournalProgressEvidence(snapshot.superblock(), result.journal));
+            return std::move(result);
+        };
 		switch (journal.phase) {
 			case LargeValueMaintenanceJournalPhase::LVMJP_ENUMERATE_MANIFESTS: {
 				size_t metadataPages = 0U;
@@ -321,10 +440,10 @@ namespace graph::storage {
 				result.journal.manifest_scan_exhausted = exhausted;
 				if (result.journal.candidate_value_ids.empty()) {
 					result.completed_without_candidates = exhausted;
-					return result;
+					return finish();
 				}
 				result.journal.phase = LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES;
-				return result;
+				return finish();
 			}
 			case LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES:
 			case LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES:
@@ -354,7 +473,12 @@ namespace graph::storage {
 			}
 			reachable.insert(valueId.value());
 		}
-		ReachabilitySink sink(candidates, reachable);
+        utils::OwnedHeapReservation outsideCallbackCredit(utils::OwnedAllocationScope::owner(), 256U);
+        ReachabilitySink sink(candidates, reachable, [&](const LargeValueRef &reference) {
+            utils::OwnedHeapReservation manifestCredit(utils::OwnedAllocationScope::owner());
+            const auto admit = [&](size_t bytes) { manifestCredit.set(bytes); };
+            static_cast<void>(values_.manifest(snapshot, reference, std::ref(admit)));
+        });
 		const auto persistReachable = [&] {
 			result.journal.reachable_value_ids.clear();
 			result.journal.reachable_value_ids.reserve(reachable.size());
@@ -384,7 +508,7 @@ namespace graph::storage {
 				result.journal.phase = LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES;
 			}
 			persistReachable();
-			return result;
+			return finish();
 		}
 
 		if (journal.phase == LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES) {
@@ -406,11 +530,11 @@ namespace graph::storage {
 				result.journal.phase = LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM;
 			}
 			persistReachable();
-			return result;
+			return finish();
 		}
 
 		persistReachable();
-		return result;
+		return finish();
 	}
 
 	LargeValueReachabilityReclaimReport
@@ -429,6 +553,10 @@ namespace graph::storage {
 					 "LargeValue maintenance journal cannot reclaim without persistent evidence for every owner namespace");
 		}
 
+        const Superblock ownershipSource = snapshot.superblock();
+        HybridPropertyReadContext ownershipContext(property_pages_, metadata_, snapshot);
+        const bool nativeActive = ownershipContext.hasNativeGroups();
+        if (nativeActive) requireNativeJournalEvidence(property_pages_, metadata_, snapshot, journal, options);
 		LargeValueReachabilityReclaimReport report;
 		report.scanned_generation = snapshot.superblock().generation;
 		WorkMap<uint64_t, ScannedValue> reclaimableValues;
@@ -519,6 +647,14 @@ namespace graph::storage {
 				}
 			};
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
+                if (pool.kind == SegmentKind::SGK_STATE_PAGE_POOL) {
+                    if (pool.state == SegmentState::SGS_RETIRED) {
+                        if (retiredPoolCandidates.size() == options.maximum_pools - frameReclaimPools.size())
+                            fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance exceeded its retired State-pool bound");
+                        retiredPoolCandidates.emplace(pool.segment_id.value(), pool);
+                    }
+                    return;
+                }
                 const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
                     pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
                 const bool graphPool = pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL ||
@@ -585,6 +721,7 @@ namespace graph::storage {
                 }
             }
             for (const auto &[id, pool] : orphanPagePoolCandidates) {
+                if (nativeActive && (pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL || pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL)) continue;
                 retainSealedPool(pool);
                 sealedPoolCandidates.emplace(id, pool);
             }
@@ -655,9 +792,11 @@ namespace graph::storage {
 		if (!retirements.empty()) {
 			std::ranges::sort(retirements, {},
 							  [](const PageRetirement &retirement) { return retirement.location.page_id.value(); });
+            std::optional<NativeLargeValueReclamationEvidence> ownership;
+            if (nativeActive) ownership.emplace(NativeLargeValueReclamationEvidence(ownershipSource, erasedValueIds));
 			published = values_.retireUnreachablePages(report.scanned_generation, erasedValueIds, retirements,
 												   options.first_index_slot, options.last_index_slot,
-												   takePublicationLsn(), publishOptions);
+												   takePublicationLsn(), publishOptions, ownership);
 			hasPublished = true;
 		}
 		for (const auto &[segmentId, pool]: frameReclaimPools) {
@@ -686,6 +825,7 @@ namespace graph::storage {
 		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+        const Superblock ownershipSource = snapshot.superblock();
 		try {
 			report.scanned_generation = snapshot.superblock().generation;
 			size_t manifestMetadataPagesScanned = 0U;
@@ -786,6 +926,14 @@ namespace graph::storage {
 				}
 			};
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
+                if (pool.kind == SegmentKind::SGK_STATE_PAGE_POOL) {
+                    if (pool.state == SegmentState::SGS_RETIRED) {
+                        if (retiredPoolCandidates.size() == options.maximum_pools - frameReclaimPools.size())
+                            fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance exceeded its retired State-pool bound");
+                        retiredPoolCandidates.emplace(pool.segment_id.value(), pool);
+                    }
+                    return;
+                }
                 const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
                     pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
                 const bool graphPool = pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL ||
@@ -854,6 +1002,10 @@ namespace graph::storage {
                 }
             }
             for (const auto &[id, pool] : orphanPagePoolCandidates) {
+                // Native field/entity cleanup has its own exact publication path.
+                if (ownershipSource.hybrid_property_descriptor_root.isValid() &&
+                    (pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL || pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL))
+                    continue;
                 retainSealedPool(pool);
                 sealedPoolCandidates.emplace(id, pool);
             }
@@ -928,9 +1080,12 @@ namespace graph::storage {
 		if (!retirements.empty()) {
 			std::ranges::sort(retirements, {},
 							  [](const PageRetirement &retirement) { return retirement.location.page_id.value(); });
-			published = values_.retireUnreachablePages(report.scanned_generation, erasedValueIds, retirements,
+			std::optional<NativeLargeValueReclamationEvidence> ownership;
+            if (ownershipSource.hybrid_property_descriptor_root.isValid())
+                ownership.emplace(NativeLargeValueReclamationEvidence(ownershipSource, erasedValueIds));
+            published = values_.retireUnreachablePages(report.scanned_generation, erasedValueIds, retirements,
 													   options.first_index_slot, options.last_index_slot,
-													   takePublicationLsn(), publishOptions);
+													   takePublicationLsn(), publishOptions, ownership);
 			hasPublished = true;
 		}
 

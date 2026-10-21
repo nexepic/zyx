@@ -6,6 +6,7 @@
 #pragma once
 #include "graph/storage/relocatable/property/HybridPropertyReadContext.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyLargeFieldInspection.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 
 namespace graph::storage {
@@ -239,12 +240,8 @@ private:
                     } else {
                         if (!largeValues)
                             throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid integrity requires its immutable value store");
-                        utils::OwnedHeapReservation readCredit(memory), directoryCredit(memory);
-                        const auto admitRead = [&](size_t bytes) { readCredit.set(bytes); };
-                        const auto payload = largeValues->read(snapshot, *value.reference(), std::ref(admitRead));
-                        const auto admitDirectory = [&](size_t bytes) { directoryCredit.set(bytes); };
-                        const auto checkpoint = [&] { context.check(); };
-                        static_cast<void>(value.inspectLargePayload(payload, std::ref(admitDirectory), std::ref(checkpoint)));
+                        HybridPropertyLargeFieldInspection inspection(context, snapshot, value, *largeValues, memory);
+                        static_cast<void>(inspection.inspect());
                         add(report.large_values, 1);
                     }
                     add(extensionCount, 1); add(bodyCount, 1); return true;

@@ -1,0 +1,7 @@
+### 2026-10-20 R3.2: Explicit whole-map transaction staging and stable-slot updates
+
+Evidence: `benchmarks/architecture-design/decisions/20261020-r32-map-transactions/`. Explicit MERGE preserves unspecified fields; REPLACE removes omitted fields. Only actual changes become deltas, preserving stored NULL versus missing and ROW signed-zero/NaN equality, including nested values. Authenticate live propertyless owners, reuse unchanged large values, and never infer global retirement from local removal. Equal maps and empty merges commit a source-fenced no-op. Staged values share the owned budget; cancellation, quota refusal, move, rollback and conflict preserve transaction ownership.
+
+A wide-map check exposed an unnecessary directory frame: same-size extension SET erased and reinserted its slot. Authenticated private COW overwrite now preserves the locator; growth may relocate. Changing one of192 fields prepares at most the field/group frames, preserving old pins and integrity. Failure logs are retained and frame assertions were not relaxed.
+
+Twelve new checks; only38 related modules run: default530 passed; candidate799 passed plus1 conditional skip. No full unit suite or intermediate performance benchmark; Linux only. The explicit entry remains bounded to one64-ID group,64owners,4096input fields,64actual changes and1MiB. Schema/statistics/query-index/unknown-State/general-topology coordination, same-executor controls andR5/R7 remain unfinished; production guards remain. **13/24(54.2%); no acceptance increase, commit or push.**

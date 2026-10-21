@@ -1,0 +1,59 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3"
+  ],
+  "parent_scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted_before": 13,
+  "accepted_after": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "commit_push": false,
+  "full_unit_suite": false,
+  "new_performance_windows": 0,
+  "platform": "Linux x86_64",
+  "production_adopted": false,
+  "experimental_candidate_durable": true,
+  "candidate_after_commit": "read-only; all unadapted writes/reclamation refused at lock-held admission",
+  "fresh_large_values_published": false,
+  "modules": 11,
+  "tests": {
+    "default": {
+      "tests": 220,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 220,
+      "binary_sha256": "f8cc3f46802212ac80c5e0f610f2464a8b61b7a8beca701b9c5b3cb265fcd594"
+    },
+    "candidate": {
+      "tests": 324,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 323,
+      "binary_sha256": "1096acdbb5d831a3d8a9fe8af96cae3a00fdfc84a8199c76cf4b94f0ec727669"
+    }
+  },
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption"
+  ]
+}

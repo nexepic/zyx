@@ -89,7 +89,8 @@ private:
 	};
 
 	[[nodiscard]] std::unique_ptr<logical::LogicalOperator> rewrite(
-			std::unique_ptr<logical::LogicalOperator> root, size_t depth, RewriteState &state) const;
+			std::unique_ptr<logical::LogicalOperator> root, size_t depth, RewriteState &state,
+            bool allowAnchorReordering = true) const;
 
 	LogicalOptimizerOptions options_;
 };

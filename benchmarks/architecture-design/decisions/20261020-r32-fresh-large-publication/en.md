@@ -1,0 +1,9 @@
+### 2026-10-20 R3.2: atomic fresh LargeValue and content-index publication
+
+Evidence: `benchmarks/architecture-design/decisions/20261020-r32-fresh-large-publication/`.
+
+Explicit ROW-to-hybrid conversion now publishes new independent field LargeValues. Private data/manifest frames, Manifest Directory, content-index entries, field references, allocator/Catalog/Page Directory and exact source-pool retirement share one A/B publication. Equal single-field content within a batch receives one ID. Existing content indexes retain U64 leaves and copy dirty paths only, without full rebuilds or source-pool writes. Child physical epochs authenticate through their pinned Page Directory while the root retains its exact Index Root fence. Cross-owner retirement rules for fields and old ROW carriers remain guarded.
+
+Six new regressions pass: Node/Edge, new identities/content deduplication, old pins/read-only reopen, A/B recovery,128 KiB refusal under the unchanged1 MiB cap and cancellation after private preparation/refund/retry, a multi-level content tree retaining96 other-media values/untouched routes, and pin-protected detached content-pool release. An old test still expected the removed fresh-value refusal; it now checks preparation-only nonpublication. New fixtures' reference admission, namespace and retirement-request type errors were corrected; all failure logs are retained.
+
+Final verification runs only22 affected storage modules: default366 pass; candidate566 pass/1 conditional skip. No full unit suite or performance benchmark. The isolated-format specification is synchronized; production format31 has not adopted hybrid. General LargeValue SET/reference removal, cross-owner GC, oversized complex ROW inverse carriers, schema/statistics/label coordination, multiple groups, full costs/same-executor ROW comparison and production admission remain. **No new acceptance:13/24(54.2%); no commit/push.**

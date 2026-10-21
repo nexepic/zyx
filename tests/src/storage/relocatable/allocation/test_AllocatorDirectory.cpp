@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cerrno>
@@ -909,4 +910,22 @@ TEST_F(RelocatableAllocatorDirectoryTest, RejectsCorruptDirectoryAndLeafRoutesBe
 	EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(bootstrap, allocated, PhysicalSlotId(2), true,
 																	LogSequenceNumber(3))),
 				 FormatException);
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, BoundedAllocatedSlotWalkPreservesOldLogicalRootsAndNeverClaimsPartialCompletion) {
+    auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    auto old = metadata->openSnapshot(); const PhysicalSlotId far(uint64_t(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY) * RSS_CATALOG_RADIX_FANOUT + 17U);
+    (void)metadata->setPhysicalSlotAllocated(far, true, LogSequenceNumber(old.superblock().checkpoint_lsn.value() + 1U));
+    auto current = metadata->openSnapshot(); MetadataPageFile pages(io, current.superblock());
+    MetadataPagePoolAllocator pools(io, current.superblock(), MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
+    AllocatorDirectory directory(pages, pools); std::vector<PhysicalSlotId> prior, latest; const auto epoch = io->dataMutationEpoch();
+    ASSERT_TRUE(directory.visitAllocatedSlotsUntil(old.superblock(), 128, [&](PhysicalSlotId slot) { prior.push_back(slot); return true; }));
+    ASSERT_TRUE(directory.visitAllocatedSlotsUntil(current.superblock(), 128, [&](PhysicalSlotId slot) { latest.push_back(slot); return true; }));
+    EXPECT_EQ(std::count(prior.begin(), prior.end(), far), 0); EXPECT_EQ(std::count(latest.begin(), latest.end(), far), 1);
+    EXPECT_TRUE(std::is_sorted(latest.begin(), latest.end())); EXPECT_EQ(std::adjacent_find(latest.begin(), latest.end()), latest.end());
+    size_t pagesVisited = 0, delivered = 0;
+    EXPECT_FALSE(directory.visitAllocatedSlotsUntil(current.superblock(), 1, [&](PhysicalSlotId) { ++delivered; return true; }, &pagesVisited));
+    EXPECT_EQ(pagesVisited, 1U); EXPECT_EQ(delivered, 0U);
+    EXPECT_FALSE(directory.visitAllocatedSlotsUntil(current.superblock(), 128, [&](PhysicalSlotId) { ++delivered; return false; }));
+    EXPECT_EQ(delivered, 1U); EXPECT_EQ(io->dataMutationEpoch(), epoch);
 }

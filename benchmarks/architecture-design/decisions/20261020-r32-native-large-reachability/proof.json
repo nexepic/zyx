@@ -1,0 +1,72 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Native direct GC requires complete ROW/native ownership scanning and a private database/generation/descriptor/identity capability. General retirement, writers and reconciliation remain guarded.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 437,
+      "passed": 437,
+      "skipped": 0,
+      "binary_sha256": "fff7b2f5eda93d03a427691e08afbefde42c0d8faab2d95c519285f73d21c269",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 658,
+      "passed": 657,
+      "skipped": 1,
+      "binary_sha256": "1c7a9ac4bcbe7a2af60595c40427c73541bc43958e753df3e5a609f1a070b421",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Explicit isolated format32 only; production format31 unchanged.",
+    "Same-group inline values, including nested map/list, bytes and temporal values; immutable admitted payloads; no automatic re-promotion or schema-derived-state adoption.",
+    "Controlled field/directory-pool relocation probes at most31 frame positions; root and child physical epochs authenticate independently.",
+    "Native-active direct exact GC now merges ROW/native owners and publishes only with a private current-generation proof; durable native journal GC, label/schema/derived-state owner coordination and multiple groups remain; controlled LargeValue SET/REMOVE/owner deletion now authenticate content and retain global identities for GC; large ROW inverse carriers now publish atomically; fresh field values and their content index now publish atomically; unlabeled Node and canonical Edge/topology deletion are published atomically.",
+    "Generic reconciliation remains guarded; bounded whole-pool retirement/release does not complete general maintenance.",
+    "Final full costs/same-executor ROW control and R7 still pending."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner."
+}

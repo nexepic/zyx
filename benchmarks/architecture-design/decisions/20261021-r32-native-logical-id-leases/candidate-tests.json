@@ -1,0 +1,1665 @@
+{
+  "tests": 162,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T00:04:53Z",
+  "time": "13.319s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyLogicalIdsTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T00:04:53Z",
+      "time": "0.308s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRetainsOrdinaryLeaseContract",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 34,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        },
+        {
+          "name": "DurableLeasePreservesNativeFieldsGraphRootsAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 43,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.172s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        },
+        {
+          "name": "CachedRangesAreSingleUseAndReopenSkipsUnissuedTails",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 55,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.032s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        },
+        {
+          "name": "BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.04s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        },
+        {
+          "name": "ReadOnlyLeaseRefusalAndGeneralWriterGuardRemain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 87,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.027s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        },
+        {
+          "name": "HighWaterLeasesDoNotGrantGeneralGraphMutationAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLogicalIds.cpp",
+          "line": 95,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.032s",
+          "classname": "HybridPropertyLogicalIdsTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeGraphWritePlannerLeaseRecoveryTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T00:04:53Z",
+      "time": "0.048s",
+      "testsuite": [
+        {
+          "name": "SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 40,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.004s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 115,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.01s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 216,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.006s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        },
+        {
+          "name": "RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LeaseRecovery.cpp",
+          "line": 248,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.006s",
+          "classname": "NativeGraphWritePlannerLeaseRecoveryTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 147,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T00:04:53Z",
+      "time": "12.962s",
+      "testsuite": [
+        {
+          "name": "LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 207,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.03s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 300,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.016s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 339,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 357,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 388,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.037s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.022s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 486,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.013s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.024s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 553,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 570,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 586,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 603,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 622,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.013s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 664,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 706,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 731,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.019s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 761,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.041s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsOverlappingManifestDataPageRanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 831,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.011s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 850,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 867,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.023s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 910,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:53Z",
+          "time": "0.235s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 955,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 990,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1015,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1039,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1054,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1079,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1092,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.012s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1163,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.014s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1199,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsStateRouteOutsideStatePage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1235,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.012s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1277,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.012s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.022s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1320,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.014s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1341,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.015s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerRejectsRetirementBudgetBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1401,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerBatchesPoolLifecyclePublications",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1419,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.159s",
+          "classname": "RelocatableMetadataStoreTest",
+          "maintenance_publications": "3"
+        },
+        {
+          "name": "LargeValuePoolBatchReleaseWaitsForPinnedReaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.186s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.042s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "0.03s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_LargeValueReachabilityReclaimer.cpp",
+          "line": 1559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:54Z",
+          "time": "1.299s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 153,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 173,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 201,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 240,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 270,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 290,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 324,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_CatalogRetireQueueReclaimer.cpp",
+          "line": 342,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 115,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataRetirement.cpp",
+          "line": 280,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 75,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.019s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesPropertylessStreamedEdgeGraphWithoutPropertyDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 322,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.013s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesStreamedEdgeGraphLargeValueRootsInOneGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 387,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.028s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesStreamedLargeValuesIntoFreshSharedPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 581,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.021s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsTransactionPrivateScratchSegmentsUnpublishedAfterTheSingleGraphGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 676,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsPrivateScratchPublicationBeforeTheSuperblockWithoutCatalogLeak",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 732,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsDeferredPrivateScratchPlanningWithoutPublishingCandidateState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsDeferredIndexPlanWithConflictingFreshAndStableRootTransitionsWithoutPublishingScratch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 826,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPrivateCandidatePlanningReadsOnlyTheWriterFencedCandidateBeforeFinalMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 897,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPrivateCandidatePlanningCanFillOnlyReservedCandidatesBeforeTheSinglePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 952,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsAnExternalPrivateSourceTailOutOfEveryFinalPublicPoolAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1013,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPlanningDerivesAStreamedPublicationPlanWithoutCopyingTheDurableSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1096,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPlanningMaterializesAllPrivateBulkFamiliesInsideOneCandidateLayout",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPlanningCanQueueOneDeferredIndexPlanForTheFinalPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EarlyPrivateCandidatePlanningFailureLeavesNoPublishedGenerationOrScratchRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AssignsAllPrivateScratchIdentitiesBeforePreparingDependentImages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1395,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "FailsClosedWhenFallbackIoCannotAbandonCompactPrivateScratchTail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1450,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeIoTruncatesFailedCompactPrivateScratchTailAndPermitsSafeRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1496,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsExhaustedNewPoolRangeWithoutCallingTheMaterializerOrPublishingAnyPartialReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1576,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEmptyOrIncoherentGraphPublicationBeforeInvokingAnyTypedPreparer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1643,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsIncompleteCoordinatorInputsBeforeTakingTheWriterOrCallingAnyPreparer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1721,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsAnAuxiliaryLabelPageThatAttemptsToPublishAnEntityMapDelta",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreGraphMutation.cpp",
+          "line": 1845,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStorePublishesAnEmptyValueAndSurvivesReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 173,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ResumesDurableLargeValueManifestTraversalAfterStableValueId",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.011s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteImmutableValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 221,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.014s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreMetadataDiskFullRetainsPublishedValueAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.015s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreAllocatesDataAndManifestPoolsFromOneCandidateRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 339,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreDeduplicatesFullContentIdentityAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 360,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.013s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreGrowsThePersistentContentIndexForManyUniqueValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 403,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.425s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreDoesNotDeduplicateDifferentMediaTypesAndRejectsZeroBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 437,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsMalformedPersistentContentIndexCandidateKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 464,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsContentIndexCandidateWithAnotherValuesImmutableIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 484,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsContentIndexCandidateWhoseKeyAndValueDisagree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 516,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsInvalidWritePoliciesBeforePublishingMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsInvalidPublicReferencesAndRetirementRequests",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueContentIndexPlannerValidatesTheGraphPublicationBatchBeforeReservingPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 693,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "MetadataCoordinatorRejectsLargeValuePublicationWithoutTheRequiredContentIndexMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 773,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreWritesAcrossPoolsAndReadsOnlyTheRequestedRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 855,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.059s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreReusesSharedDataAndManifestPoolsAcrossValuesAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 901,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.017s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueCapacityPlanningReusesTheExistingSharedDataPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 965,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueRangeReadRetainsOnlyItsFirstDataPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 983,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreFillsSharedPoolsBeforeAllocatingAnotherPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1013,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:56Z",
+          "time": "0.138s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreSpansMoreThanOneManifestPoolAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1048,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:04:57Z",
+          "time": "5.358s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreUsesManifestLeavesBeyondRootChunkCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1089,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:02Z",
+          "time": "0.5s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedLargeValueMaterializationUsesBoundedManifestFrontier",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:02Z",
+          "time": "0.098s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreReadsAValidManifestWithAnInternalChildLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:02Z",
+          "time": "0.291s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStorePlansInternalManifestLevelsBeyondTheLeafFanout",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1237,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.048s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreCompressesLz4ChunksAndPreservesRangeReadsAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1251,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreCompressesAndReadsZstdChunksAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1281,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreFallsBackToRawWhenZstdDoesNotMeetPolicy",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1310,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreUsesMixedChunkCodecsForMixedCompressibility",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1337,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.016s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreNeverExposesTheBeforeInactiveWriteGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1366,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.012s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsCorruptedDataBeforeReturningBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1400,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsRawDataWithInconsistentStoredLength",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsChunkWithAnInvalidStoredChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1446,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsChunkWithAnInvalidUncompressedChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1463,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreVerifiesFullContentHashAfterChunkChecks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1489,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsLz4PayloadThatPassesFrameChecksButCannotDecompress",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsZstdPayloadThatPassesFrameChecksButCannotDecompress",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsZstdPayloadWithAValidButWrongDecodedLength",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1579,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsManifestAndDataFramesWithStalePhysicalGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1607,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRequiresDirectoryRootManifestNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1631,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsTraversalFromANonRootManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1648,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsValidlyEncodedDataWithMismatchedManifestIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1660,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsValidlyEncodedManifestWithMismatchedReference",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsDuplicateManifestChildrenWithValidPageChecksums",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1694,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.201s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsChildRangeWithIncorrectChunkCardinality",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1713,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.2s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsManifestChildAtAnUnexpectedLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1737,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:03Z",
+          "time": "0.202s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsMultiLevelChildWithMismatchedImmutableIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1757,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.2s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsIncompleteMultiLevelRetirementBeforeRemovingTheContentIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1778,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.321s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsRetirementPlannedAgainstAStaleGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1838,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreEvacuatesDataAndManifestFramesWithoutChangingLogicalGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1862,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.024s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreEvacuatesLaterChunksAndDirectoryRootThroughPageDispatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1911,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.023s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreEvacuatesADataPageFromTheSecondManifestLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1933,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.297s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsEvacuationToTheWrongTypedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1955,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.011s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRejectsUnreachableManifestAndForeignPageEvacuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 1974,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:04Z",
+          "time": "0.254s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreEvacuatesANonRootManifestPageWithoutChangingDirectoryRouteOrSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 2035,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:05Z",
+          "time": "0.626s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueNonRootManifestEvacuationRecoversAtSuperblockPublicationBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 2080,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:05Z",
+          "time": "0.707s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueDataEvacuationRecoversAtSuperblockPublicationBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore.cpp",
+          "line": 2122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:06Z",
+          "time": "0.023s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueContentIndexPlannerRejectsAnInvalidLastAllocationSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore_ContentIndexValidation.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:06Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreRetiresEveryFrameAndContentIdentityAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore_Maintenance.cpp",
+          "line": 43,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:06Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LargeValueStoreReclaimsAndReleasesAnEmptySharedDataPoolAfterSnapshotsDrain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_LargeValueStore_Maintenance.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T00:05:06Z",
+          "time": "0.02s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    }
+  ]
+}

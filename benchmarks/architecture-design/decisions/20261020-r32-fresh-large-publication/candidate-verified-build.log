@@ -1,0 +1,4 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_ContentIndexValidation.cpp.o
+[2/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_Maintenance.cpp.o
+[3/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore.cpp.o

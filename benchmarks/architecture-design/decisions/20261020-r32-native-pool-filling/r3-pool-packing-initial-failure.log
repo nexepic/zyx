@@ -1,0 +1,194 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMultipleGroupsTest.*:HybridPropertyNativeJournalTest.*:HybridPropertyInlineMutationTest.*:HybridPropertyLabeledDeletionTest.*:HybridPropertyOwnerDeletionTest.*
+[==========] Running 58 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 22 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (8 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats
+[       OK ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats (9 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether
+[       OK ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether (828 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+[       OK ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse (177 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+[       OK ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount (5620 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable
+[       OK ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable (451 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys
+[       OK ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys (177 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration
+[       OK ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration (771 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner
+[       OK ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner (552 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin (136 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether (222 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.RepeatedNativeNodeDeletionReleasesEntityPoolsWithoutLeavingTheCandidate
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:246: Failure
+Value of: retired.empty()
+  Actual: true
+Expected: false
+
+[  FAILED  ] HybridPropertyOwnerDeletionTest.RepeatedNativeNodeDeletionReleasesEntityPoolsWithoutLeavingTheCandidate (219 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes
+[       OK ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes (18 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin (35 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges
+[       OK ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges (240 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster
+[       OK ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster (153 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections (691 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly (576 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry
+[       OK ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry (156 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsEdgesButAcceptsTheirLogicallyEmptyMapAfterCompleteEdgeRemoval
+[       OK ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsEdgesButAcceptsTheirLogicallyEmptyMapAfterCompleteEdgeRemoval (96 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology
+[       OK ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology (481 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB
+[       OK ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB (5704 ms)
+[----------] 22 tests from HybridPropertyOwnerDeletionTest (17329 ms total)
+
+[----------] 7 tests from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo
+[       OK ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo (7 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen
+[       OK ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen (370 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 367
+  epoch
+    Which is: 364
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 418
+  epoch
+    Which is: 412
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 472
+  epoch
+    Which is: 466
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 514
+  epoch
+    Which is: 508
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 565
+  epoch
+    Which is: 559
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:68: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 619
+  epoch
+    Which is: 613
+
+[  FAILED  ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality (230 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback
+[       OK ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback (19 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging
+[       OK ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging (18 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields
+[       OK ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields (86 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry
+[       OK ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry (343 ms)
+[----------] 7 tests from HybridPropertyInlineMutationTest (1076 ms total)
+
+[----------] 9 tests from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (2 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots
+[       OK ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots (1328 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories
+[       OK ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories (826 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently
+[       OK ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently (134 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged (617 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory (814 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup
+[       OK ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup (968 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable
+[       OK ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable (1079 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup
+[       OK ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup (633 ms)
+[----------] 9 tests from HybridPropertyMultipleGroupsTest (6404 ms total)
+
+[----------] 6 tests from HybridPropertyLabeledDeletionTest
+[ RUN      ] HybridPropertyLabeledDeletionTest.UnconvertedOwnerDeletionRetainsLabelsAndAllRoutes
+[       OK ] HybridPropertyLabeledDeletionTest.UnconvertedOwnerDeletionRetainsLabelsAndAllRoutes (13 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLabeledDeletion.cpp:53: Failure
+Expected: (metadata_->findPageLocation(pin, neighbor.page_id).segment_id) != (source.segment_id), actual: 8-byte object <03-00 00-00 00-00 00-00> vs 8-byte object <03-00 00-00 00-00 00-00>
+
+[  FAILED  ] HybridPropertyLabeledDeletionTest.ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot (145 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.TwoRemovalsCoalesceTheSharedLabelPageAndRemoveItsEmptyRoute
+[       OK ] HybridPropertyLabeledDeletionTest.TwoRemovalsCoalesceTheSharedLabelPageAndRemoveItsEmptyRoute (140 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.OldPinsProtectDetachedEntityAndLabelPoolsUntilEveryOwnerIsRemoved
+[       OK ] HybridPropertyLabeledDeletionTest.OldPinsProtectDetachedEntityAndLabelPoolsUntilEveryOwnerIsRemoved (43 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.QuotaAndPrivateCancellationRefundWithoutPublishingHalfALabelDeletion
+[       OK ] HybridPropertyLabeledDeletionTest.QuotaAndPrivateCancellationRefundWithoutPublishingHalfALabelDeletion (39 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.ABRecoverySelectsMatchingNodeLabelAndNativeFieldRoots
+[       OK ] HybridPropertyLabeledDeletionTest.ABRecoverySelectsMatchingNodeLabelAndNativeFieldRoots (273 ms)
+[----------] 6 tests from HybridPropertyLabeledDeletionTest (655 ms total)
+
+[----------] 14 tests from HybridPropertyNativeJournalTest
+[ RUN      ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract
+[       OK ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract (9 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity
+[       OK ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity (5 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity (122 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite (17 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable
+[       OK ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable (588 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame (240 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan
+[       OK ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan (829 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner
+[       OK ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner (135 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence
+[       OK ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence (13 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity
+[       OK ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity (126 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain
+[       OK ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain (1003 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose
+[       OK ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose (215 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication
+[       OK ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication (136 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner
+[       OK ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner (137 ms)
+[----------] 14 tests from HybridPropertyNativeJournalTest (3581 ms total)
+
+[----------] Global test environment tear-down
+[==========] 58 tests from 5 test suites ran. (29049 ms total)
+[  PASSED  ] 55 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerDeletionTest.RepeatedNativeNodeDeletionReleasesEntityPoolsWithoutLeavingTheCandidate
+[  FAILED  ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality
+[  FAILED  ] HybridPropertyLabeledDeletionTest.ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot
+
+ 3 FAILED TESTS

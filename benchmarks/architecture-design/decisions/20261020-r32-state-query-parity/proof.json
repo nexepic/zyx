@@ -1,0 +1,84 @@
+{
+  "scope": [
+    "R3.2"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Every native field mutation conservatively fences unknown State before private writes; identical queries preserve small-scope semantic results across ROW/native/inverse layouts through the same executor.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 531,
+      "passed": 531,
+      "skipped": 0,
+      "binary_sha256": "69753bc043fb5b54687cbd8e821063174c196b436dc12dc55009f1962c44743e",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 803,
+      "passed": 802,
+      "skipped": 1,
+      "binary_sha256": "b11ecb1579b0553392301f081e27f7d946995705a7d6d9dfeda6290cd62584d0",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Isolated format32 explicit prototype, production guards retained.",
+    "One64-ID group,64owners,4096input fields,64actual changed cells,1MiBaccount.",
+    "Schema/statistics/query-index/unknown-State/general-topology coordination, same-executor controls, R5/R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Reproduced unknown-State bypass before fix; preserve source superblock/IOepoch/value/State and account after refusal for field and map entrypoints.",
+    "Canonical inline maintenance journals remain accepted; bound the complete State control census and refuse future or unknown evidence.",
+    "Same executor and fixed queries across ROW,Node native,Node+Edge native and both inverse conversions; independent64node/sum2016 cardinality oracle.",
+    "Read-only reopen for every query group; public backend creates schema/property index/multiedges.",
+    "This is a small correctness comparison only, with no timing or performance admission."
+  ]
+}

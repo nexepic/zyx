@@ -191,12 +191,15 @@ namespace graph::storage {
 		friend class EntityLabelSetStore;
 		friend class EntityPageStore;
 		friend class RelocatableMetadataStore;
+        friend class HybridPropertyPoolPlacement;
 		friend class SharedPagePoolAllocatorTestAccess;
 		friend class VectorAdjacencyPageStore;
 		friend class VectorPageStore;
 		friend class VectorManifestStore;
 		friend class LargeValueStore;
         friend class HybridPropertyFieldPageStore;
+        friend class HybridPropertyReadContext;
+        friend class RelocatableIntegrityScanner;
 
 	public:
 		// `io` must be the same data-file handle used by `metadata`, otherwise a
@@ -327,13 +330,13 @@ namespace graph::storage {
 		static void prepareNewPoolPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
 												  std::span<const SharedPagePoolPreparedAppend> pages,
 												  std::span<PageLocation> locations, LogSequenceNumber checkpointLsn,
-												  size_t preparedPrefixCount = 0U);
+												  size_t preparedPrefixCount = 0U, bool nativeHybridFields = false);
 		// Appends to a current pool while the enclosing metadata coordinator already
 		// owns the writer fence. This mirrors prepareAppendPages() without opening
 		// a nested snapshot or publishing an intermediate directory root.
 		static void prepareAppendPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
 													 std::span<const SharedPagePoolPreparedAppend> pages,
-													 std::span<PageLocation> locations, LogSequenceNumber checkpointLsn);
+													 std::span<PageLocation> locations, LogSequenceNumber checkpointLsn, bool nativeHybridFields = false);
 		// Writes a group of replacement and appended frames while a single metadata
 		// writer owns the current Page Directory root. All supplied frames are
 		// durable before the caller switches that root, preserving snapshot COW.
@@ -395,7 +398,8 @@ namespace graph::storage {
 		reconcilePoolFrames(const CatalogEntry &entry,
 							const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
 							const std::function<CatalogEntry(SegmentId)> &findCatalog,
-							const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot) const;
+							const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot,
+                            bool nativeHybridFields = false) const;
 		[[nodiscard]] bool reconcilePoolFramesAtStartup(const CatalogEntry &entry,
 														std::span<const PageLocation> pageLocations) const;
 		void writePreparedPage(const CatalogEntry &entry, const SharedPagePoolHeader &poolHeader,

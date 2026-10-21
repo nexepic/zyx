@@ -53,7 +53,8 @@ namespace graph::storage {
 		std::vector<std::byte> lowerBound;
 		if (continuation.has_value()) {
 			const GlobalAdjacencyContinuation &cursor = *continuation;
-			const uint8_t invalidCursor = static_cast<uint8_t>(cursor.generation != snapshot.superblock().generation) |
+			const uint8_t invalidCursor = static_cast<uint8_t>(cursor.database_id != snapshot.superblock().database_id) |
+                                                  static_cast<uint8_t>(cursor.generation != snapshot.superblock().generation) |
 											  static_cast<uint8_t>(cursor.direction != direction) |
 											  static_cast<uint8_t>(cursor.node_id != nodeId) |
 											  static_cast<uint8_t>(cursor.last_edge_id == 0U);
@@ -96,7 +97,8 @@ namespace graph::storage {
 				break;
 			}
 			if (result.edge_ids.size() == maximumEntries) {
-				result.continuation = {snapshot.superblock().generation, direction, nodeId, result.edge_ids.back()};
+				result.continuation = {snapshot.superblock().generation, direction, nodeId, result.edge_ids.back(),
+                    snapshot.superblock().database_id};
 				break;
 			}
 			if (result.edge_ids.size() == result.edge_ids.capacity()) {

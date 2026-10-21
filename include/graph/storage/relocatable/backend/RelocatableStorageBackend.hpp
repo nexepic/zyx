@@ -375,6 +375,15 @@ namespace graph::storage {
 		}
 		[[nodiscard]] std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override;
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
+        // Explicit laboratory reference-path control. Performs a bounded global
+        // candidate integrity scan at setup, outside query planning/point reads.
+        // The returned snapshot retains its source pin. No automatic adoption
+        // or write authority; only a physical read-only backend may open it.
+        [[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openCoveredAdjacencyCandidateReadSnapshot(
+            uint64_t indexId, size_t maximumEdges, size_t maximumEdgeMetadataPages,
+            std::shared_ptr<std::pmr::memory_resource> memory,
+            const CancellationCheckpoint *cancellation = nullptr) const;
+
 		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> logicalPlanCacheIdentity() const override;
         [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> logicalPlanCacheMemoryOwner() const override { return native_cache_memory_; }
 		[[nodiscard]] std::shared_ptr<query::execution::detail::DatabaseResourceBudget> queryResourceDomain() const override {

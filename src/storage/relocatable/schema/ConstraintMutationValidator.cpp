@@ -178,6 +178,26 @@ namespace graph::storage {
 				const auto found = state.entity.properties.find(name);
 				values.push_back(found == state.entity.properties.end() ? nullptr : &found->second);
 			}
+            ConstraintMutationValidator::validatePropertyValues(definition, values);
+            const bool missingOrNull = std::ranges::any_of(values, [](const PropertyValue *value) {
+                return !value || value->getType() == PropertyType::NULL_TYPE;
+            });
+			if (uniqueKeys == nullptr || missingOrNull)
+				return;
+			std::vector<std::byte> key;
+			for (const PropertyValue *value: values)
+				CanonicalPropertyValueCodec::append(key, *value);
+			if (!uniqueKeys->insert(std::move(key)).second) {
+				throw std::runtime_error("Constraint violation: '" + definition.name + "' has a duplicate key");
+			}
+		}
+
+	} // namespace
+
+    void ConstraintMutationValidator::validatePropertyValues(const ConstraintDefinition &definition,
+        std::span<const PropertyValue *const> values) {
+        if (values.empty() || values.size() != definition.property_names.size())
+            throw std::invalid_argument("constraint property view has the wrong component count");
 			const bool missingOrNull = std::ranges::any_of(values, [](const PropertyValue *value) {
 				return value == nullptr || value->getType() == PropertyType::NULL_TYPE;
 			});
@@ -192,17 +212,8 @@ namespace graph::storage {
 				throw std::runtime_error("Constraint violation: '" + definition.name +
 										 "' has an invalid Property type");
 			}
-			if (uniqueKeys == nullptr || missingOrNull)
-				return;
-			std::vector<std::byte> key;
-			for (const PropertyValue *value: values)
-				CanonicalPropertyValueCodec::append(key, *value);
-			if (!uniqueKeys->insert(std::move(key)).second) {
-				throw std::runtime_error("Constraint violation: '" + definition.name + "' has a duplicate key");
-			}
-		}
 
-	} // namespace
+    }
 
 	ConstraintMutationValidator::ConstraintMutationValidator(ConstraintMutationValidationAdapter adapter,
 															 ConstraintMutationValidatorOptions options) :

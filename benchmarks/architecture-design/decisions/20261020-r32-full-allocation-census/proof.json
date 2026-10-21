@@ -1,0 +1,84 @@
+{
+  "scope": [
+    "R3.2",
+    "R4.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Bounded persistent allocation-bit traversal cross-checks Catalog, retirement sources and the non-Catalog emergency reserve; all bytes are complete128KiB pools, independent of payload length and physical file high-water.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 527,
+      "passed": 527,
+      "skipped": 0,
+      "binary_sha256": "29f436bf3ea1973062d7a616a232ade448ca4939f3185acc8e147e1cd869a745",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 776,
+      "passed": 775,
+      "skipped": 1,
+      "binary_sha256": "03b788357090cda394fcf0e629d5580c16888baba92865174f32fcad7d4ee107",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Explicit read-only allocation census, not a future allocation estimator or an integrity/production-admission capability.",
+    "Every current allocated slot is counted, including unused frames and old versions within sealed pools; all metadata descriptors/routes/Catalog/allocator/retire framing are charged together through their complete physical pools.",
+    "Unattributed allocations and private scratch cannot authorize conversion. Explicit work bounds return unknown; corruption, cancellation, IO and quota errors propagate.",
+    "Only one actual64-owner/16-int-field shape is measured here. ROW640KiB, candidate1152KiB, retired128KiB: this shape fails the10percent byte gate. This is not a performance benchmark or final matrix.",
+    "Complete pre-conversion estimation/same-executor query controls, schema/statistics/index/unknown-State/general-topology coordination, R5 and R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Allocator allocation bits may lie beyond the physical file or have no Catalog owner; inspecting Catalog or file slots alone cannot prove complete allocation accounting.",
+    "Logical-bootstrap allocator traversal validates route/level/generation, reports page/visitor limits as incomplete and preserves registered old roots.",
+    "Retired Catalog pools and relocated sources are separate charges; a retired-segment queue entry must not charge its Catalog slot twice.",
+    "Emergency reserve is a real allocated pool absent from normal Catalog ownership.",
+    "A current generation and stable IO epoch are required for a measured census; a saturated epoch is unknown, and an interrupted native writer conservatively requests recovery when the epoch cannot signal changes."
+  ]
+}

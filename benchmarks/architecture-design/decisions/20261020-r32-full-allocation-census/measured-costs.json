@@ -1,0 +1,13 @@
+{
+  "row_steady_bytes": 655360,
+  "candidate_steady_bytes": 1179648,
+  "retired_bytes": 131072,
+  "allocated_peak_bytes": 1310720,
+  "file_bytes": 6029312,
+  "owners": 64,
+  "fields_per_owner": 16,
+  "scalar": "int64",
+  "byte_gate": "rejected_insufficient_saving",
+  "performance_benchmark": false,
+  "final_matrix": false
+}
