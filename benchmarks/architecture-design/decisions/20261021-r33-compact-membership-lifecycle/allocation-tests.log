@@ -1,0 +1,52 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 10 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyMatureShapeCostsTest
+[ RUN      ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+NATIVE_MATURE_SHAPE_COST groups=8 owners=512 fields=64 row=1835008 candidate=1441792 retired=1179648 allocated_peak=2621440 file=7208960 byte_gate=admit
+NATIVE_MATURE_KIND_COST kind=entity row=131072 candidate=131072
+NATIVE_MATURE_KIND_COST kind=property row=1179648 candidate=393216
+NATIVE_MATURE_KIND_COST kind=hybrid_map row=0 candidate=262144
+NATIVE_MATURE_KIND_COST kind=query_index row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=large_value row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=vector row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=state row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=metadata row=262144 candidate=393216
+NATIVE_MATURE_KIND_COST kind=other row=0 candidate=0
+NATIVE_MATURE_FIXED_COST row_bootstrap=131072 candidate_bootstrap=131072 row_emergency=131072 candidate_emergency=131072
+[       OK ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact (53486 ms)
+[----------] 1 test from HybridPropertyMatureShapeCostsTest (53486 ms total)
+
+[----------] 9 tests from FixedShapes/HybridPropertyShapeCostsTest
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied47
+NATIVE_SHAPE_COST name=occupied47 owners=47 fields=2 columns=0 extensions=94 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=217782 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied47 (724 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied48
+NATIVE_SHAPE_COST name=occupied48 owners=48 fields=2 columns=2 extensions=0 row=655360 candidate=1048576 retired=131072 allocated_peak=1179648 file=5898240 planning_peak=210200 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied48 (257 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied64
+NATIVE_SHAPE_COST name=occupied64 owners=64 fields=2 columns=2 extensions=0 row=655360 candidate=1048576 retired=131072 allocated_peak=1179648 file=5898240 planning_peak=213144 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/occupied64 (306 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/unique_sparse
+NATIVE_SHAPE_COST name=unique_sparse owners=64 fields=1 columns=0 extensions=64 row=655360 candidate=1179648 retired=131072 allocated_peak=1310720 file=6029312 planning_peak=214982 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/unique_sparse (595 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/mixed_null_string
+NATIVE_SHAPE_COST name=mixed_null_string owners=64 fields=4 columns=1 extensions=192 row=655360 candidate=1310720 retired=131072 allocated_peak=1441792 file=6160384 planning_peak=242883 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/mixed_null_string (1920 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/multiple_labels
+NATIVE_SHAPE_COST name=multiple_labels owners=64 fields=16 columns=16 extensions=0 row=655360 candidate=1048576 retired=131072 allocated_peak=1179648 file=5898240 planning_peak=286104 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/multiple_labels (1239 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large
+NATIVE_SHAPE_COST name=shared_large owners=64 fields=1 columns=0 extensions=64 row=1179648 candidate=1572864 retired=131072 allocated_peak=1703936 file=6422528 planning_peak=800080 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large (1037 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096
+NATIVE_SHAPE_COST name=wide4096 owners=64 fields=64 columns=64 extensions=0 row=786432 candidate=1048576 retired=262144 allocated_peak=1310720 file=6029312 planning_peak=543000 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096 (5307 ms)
+[ RUN      ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse
+NATIVE_SHAPE_COST name=interleaved_dense_sparse owners=64 fields=16 columns=8 extensions=64 row=655360 candidate=1310720 retired=131072 allocated_peak=1441792 file=6160384 planning_peak=247238 byte_gate=reject
+[       OK ] FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse (1436 ms)
+[----------] 9 tests from FixedShapes/HybridPropertyShapeCostsTest (12824 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 2 test suites ran. (66311 ms total)
+[  PASSED  ] 10 tests.

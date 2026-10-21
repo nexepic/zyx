@@ -1,0 +1,28 @@
+{
+  "default": {
+    "executed": 167,
+    "failures": 0,
+    "modules": 13,
+    "previously_disabled": 1
+  },
+  "candidate": {
+    "executed": 167,
+    "failures": 0,
+    "modules": 13,
+    "previously_disabled": 1
+  },
+  "public_api_mechanism": {
+    "nodes": 144,
+    "edges": 3192,
+    "ordinary_delta_plans": 4,
+    "prepared_images": 33,
+    "streamed_plans": 0,
+    "file_bytes": 2621440,
+    "purpose": "same-input actual-path verification; not a latency sample or space win"
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "platform": "Linux",
+  "accepted_progress": "15/24 (62.5%)",
+  "fullscale_retry": "running with verified ordinary path, original AS6GiB/file2GiB and1000 batch rows"
+}

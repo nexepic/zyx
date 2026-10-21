@@ -1,3 +1,4 @@
+#include "graph/storage/relocatable/metadata/NativeGraphDeferredIndexImages.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 /**
  * @file NativeGraphWritePlanner.cpp
@@ -389,6 +390,7 @@ namespace graph::storage {
 		edges_(std::move(other.edges_)), global_adjacency_operations_(std::move(other.global_adjacency_operations_)),
 		global_adjacency_operations_canonical_(other.global_adjacency_operations_canonical_),
 		global_adjacency_plan_(std::move(other.global_adjacency_plan_)),
+        global_adjacency_images_(std::move(other.global_adjacency_images_)),
 		global_adjacency_retirement_plan_(std::move(other.global_adjacency_retirement_plan_)),
 		global_adjacency_initial_plan_(std::move(other.global_adjacency_initial_plan_)),
 		global_adjacency_deferred_bulk_(other.global_adjacency_deferred_bulk_),
@@ -425,6 +427,7 @@ namespace graph::storage {
 		global_adjacency_operations_ = std::move(other.global_adjacency_operations_);
 		global_adjacency_operations_canonical_ = other.global_adjacency_operations_canonical_;
 		global_adjacency_plan_ = std::move(other.global_adjacency_plan_);
+        global_adjacency_images_ = std::move(other.global_adjacency_images_);
 		global_adjacency_retirement_plan_ = std::move(other.global_adjacency_retirement_plan_);
 		global_adjacency_initial_plan_ = std::move(other.global_adjacency_initial_plan_);
 		global_adjacency_deferred_bulk_ = other.global_adjacency_deferred_bulk_;
@@ -787,12 +790,17 @@ namespace graph::storage {
 
     void NativeGraphWriteTransaction::stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
             std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool publishCandidate,
-            NativeHybridPropertyConversionDirection direction) {
+            NativeHybridPropertyConversionDirection direction, bool compactColumnMemberships,
+            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission, uint8_t groupCount) {
         requireActive("stage a native property group conversion");
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             fail(FormatError::FERR_UNSUPPORTED_VERSION, "native property group conversion is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
+        if (!groupCount || groupCount > 8U || groupId > RSS_HYBRID_MAX_GROUP_ID - (groupCount - 1U) ||
+            (groupCount > 1U && (!compactColumnMemberships || !allocationAdmission || !publishCandidate ||
+                direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
+            fail(FormatError::FERR_INVALID_HEADER, "native cohort requires1..8groups and explicit gated compact forward publication");
         if (!hybrid_property_detail::validKind(kind) || !groupId || groupId > RSS_HYBRID_MAX_GROUP_ID ||
             (direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID &&
                 direction != NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW) || !account ||
@@ -808,7 +816,8 @@ namespace graph::storage {
         hybrid_conversion_ = NativeGraphHybridPropertyRootMutation{source.database_id,
             source.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE, {},
             NativeGraphHybridPropertyConversion{kind, groupId, std::move(memory), cancellation,
-                placement.first_slot, placement.last_slot, placement.page_owner_id, publishCandidate, direction}};
+                placement.first_slot, placement.last_slot, placement.page_owner_id, publishCandidate, direction,
+                std::move(allocationAdmission), compactColumnMemberships, groupCount}};
     }
 
 	NativeGraphWriteTransaction::NodeChange &NativeGraphWriteTransaction::mutableNode(uint64_t nodeId) {
@@ -1128,7 +1137,6 @@ namespace graph::storage {
             if ((node.inserted || node.erased || node.labels.has_value()) && ++changedNodes > maximumChangedEdges - count)
                 fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization exceeds its combined Entity bound");
         }
-        if (!count && !changedNodes) fail(FormatError::FERR_INVALID_STATE, "covered candidate finalization has no Entity changes");
         utils::OwnedAllocationScope allocation(memory); utils::OwnedHeapReservation boundary(memory);
         const auto admit = [&](size_t bytes) { boundary.set(bytes); };
         using Candidate = CoveredAdjacencyCandidate;
@@ -1139,7 +1147,8 @@ namespace graph::storage {
         if (count) changes.emplace(*this, *context_->indexes, *context_->metadata, indexId, count * 2U, *memory);
         else {
             // Bind/authenticate the existing root and first leaf even though
-            // this Node-only batch will not change any candidate entries.
+            // this batch will not change any candidate entries (including
+            // property-only and logical-ID-reservation publications).
             static_cast<void>(map.visitAll(snapshot_, 1, [](const auto &) { return false; }, admit, stageCancellation));
             boundary.set(0);
         }
@@ -2035,7 +2044,7 @@ namespace graph::storage {
 										  context_->options.maximum_global_adjacency_write_entries);
 		global_adjacency_operations_.push_back({kind, AdjacencyKeyCodec::encode({direction, nodeId, edgeId}), 0U});
 		global_adjacency_operations_canonical_ = false;
-		global_adjacency_plan_.reset();
+		global_adjacency_plan_.reset(); global_adjacency_images_.reset();
 		global_adjacency_retirement_plan_.reset();
 		global_adjacency_initial_plan_.reset();
 		global_adjacency_deferred_bulk_ = false;
@@ -2093,7 +2102,7 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::prepareGlobalAdjacencyMutationPlan() {
-		global_adjacency_plan_.reset();
+		global_adjacency_plan_.reset(); global_adjacency_images_.reset();
 		global_adjacency_retirement_plan_.reset();
 		global_adjacency_initial_plan_.reset();
 		if (global_adjacency_operations_.empty()) {
@@ -2112,6 +2121,28 @@ namespace graph::storage {
 				global_adjacency_deferred_bulk_ = true;
 				return;
 			}
+            const auto memory = utils::OwnedAllocationScope::owner();
+            if (memory && operations.size() < NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD &&
+                std::ranges::all_of(operations, [](const auto &operation) {
+                return operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT;
+            })) {
+                auto proof = std::shared_ptr<NativeGraphDeferredIndexImages>(
+                    new (memory) NativeGraphDeferredIndexImages(*context_->metadata, snapshot_.superblock().generation,
+                        RSS_GLOBAL_ADJACENCY_INDEX_ID, context_->metadata->findIndexRoot(snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID),
+                        memory, context_->options.first_slot, context_->options.last_slot),
+                    std::default_delete<NativeGraphDeferredIndexImages>(), utils::OwnedPmrAllocator<std::byte>(memory));
+                proof->incremental_ = true;
+                proof->plan_ = context_->indexes->planGlobalAdjacencyImagesFromSource(snapshot_, operations.size(),
+                    [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
+                        for (const auto &operation : operations) emit(operation);
+                    }, memory, [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); });
+                proof->assignments_credit_.set(16384U +
+                    (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
+                        size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
+                global_adjacency_images_ = std::move(proof);
+                debug::PerfTrace::addValue("native_graph.write.ordinary_adjacency.incremental_plans", 1);
+                return;
+            }
 			global_adjacency_plan_ = context_->indexes->planScalarIndexTransactionMutation(
 					snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID, operations, true, false,
 					BTreeLeafValueLayout::BLVL_EMPTY);
@@ -2119,7 +2150,7 @@ namespace graph::storage {
 				global_adjacency_retirement_plan_ =
 						context_->indexes->planTreeRetirement(snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID,
 															  context_->options.maximum_global_adjacency_tree_pages);
-				global_adjacency_plan_.reset();
+				global_adjacency_plan_.reset(); global_adjacency_images_.reset();
 			}
 			return;
 		}
@@ -2281,7 +2312,7 @@ namespace graph::storage {
 			eraseProvisionalKey(provisionalKeys[0U]);
 			eraseProvisionalKey(provisionalKeys[1U]);
 			global_adjacency_operations_canonical_ = false;
-			global_adjacency_plan_.reset();
+			global_adjacency_plan_.reset(); global_adjacency_images_.reset();
 			global_adjacency_retirement_plan_.reset();
 			global_adjacency_initial_plan_.reset();
 			properties_.erase(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_EDGE, edgeId}.directoryId());
@@ -2351,6 +2382,7 @@ namespace graph::storage {
 		std::vector<Candidate> candidates;
 		for (size_t stagedOrdinal = 0U; stagedOrdinal < scalar_index_mutations_.size(); ++stagedOrdinal) {
 			StagedScalarIndexMutation &staged = scalar_index_mutations_[stagedOrdinal];
+            staged.images.reset();
 			if (staged.index == nullptr || staged.index_id == 0U || // staged scalar mutations retain their validated local index and identity.
 				!staged.index->usesMetadataStore(*context_->metadata)) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -2368,6 +2400,34 @@ namespace graph::storage {
 			if (staged.operations.empty()) {
 				fail(FormatError::FERR_INVALID_STATE, "native graph staged scalar Index operation stream is empty");
 			}
+            const auto memory = utils::OwnedAllocationScope::owner();
+            if (memory && isSystemCatalogIndexDefinitionId(staged.index_id) && staged.operations.size() <
+                NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD &&
+                std::ranges::all_of(staged.operations, [](const auto &operation) {
+                    return operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT;
+                })) {
+                SystemCatalog schema(*staged.index, *context_->metadata);
+                const auto definition = schema.findIndexDefinitionById(snapshot_, staged.index_id);
+                if (definition && definition->kind == IndexDefinitionKind::IDK_LABEL &&
+                    definition->entity_kind == IndexDefinitionEntityKind::IDEK_EDGE) {
+                    auto proof = std::shared_ptr<NativeGraphDeferredIndexImages>(
+                        new (memory) NativeGraphDeferredIndexImages(*context_->metadata, snapshot_.superblock().generation,
+                            staged.index_id, context_->metadata->findIndexRoot(snapshot_, staged.index_id), memory,
+                            context_->options.first_slot, context_->options.last_slot),
+                        std::default_delete<NativeGraphDeferredIndexImages>(), utils::OwnedPmrAllocator<std::byte>(memory));
+                    proof->incremental_ = true;
+                    proof->plan_ = staged.index->planStreamedMembershipImagesFromSource(snapshot_, *definition,
+                        staged.operations.size(), [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
+                            for (const auto &operation : staged.operations) emit(operation);
+                        }, memory, [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); });
+                    proof->assignments_credit_.set(16384U +
+                        (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
+                            size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
+                    staged.plan.reset(); staged.images = std::move(proof);
+                    debug::PerfTrace::addValue("native_graph.write.ordinary_membership.incremental_plans", 1);
+                    continue;
+                }
+            }
 			staged.plan =
 					staged.index->planScalarIndexTransactionMutation(
 						snapshot_, staged.index_id, staged.operations, true, false, staged.leaf_value_layout);
@@ -3547,6 +3607,11 @@ namespace graph::storage {
 			prepareIndexMutationPlans();
 		}
 		for (const StagedScalarIndexMutation &staged: scalar_index_mutations_) {
+            if (staged.images) {
+                if (staged.plan || staged.retirement_plan)
+                    fail(FormatError::FERR_INVALID_STATE, "ordinary membership images overlap a scalar plan");
+                continue;
+            }
 			if (staged.index == nullptr || staged.index_id == 0U ||
 				!staged.index->usesMetadataStore(*context_->metadata)) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -3715,6 +3780,8 @@ namespace graph::storage {
 				 "native graph transaction has overlapping existing and initial scalar Index mutations");
 		}
 		NativeGraphDerivedStateMutation derivedState;
+        if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
+        for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);
 		derivedState.index_tree_mutations.reserve(pendingDerivedBindings.size());
 		derivedState.private_segment_plan = std::move(deferredAdjacencyPrivateSegmentPlan);
 		for (const EntityPropertyRootMutationPlan &propertyPlan: propertyPlans) {
@@ -3747,7 +3814,7 @@ namespace graph::storage {
 			derivedBindings.push_back({binding.expected_pool_count, std::move(binding.preparer)});
 		}
 		NativeGraphDerivedStatePreparer derivedStatePreparer;
-		if (!derivedBindings.empty()) {
+		if (!derivedBindings.empty() || !derivedState.index_images.empty()) {
 			derivedStatePreparer = [bindings = std::move(derivedBindings),
 									checkpointLsn](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
 				if (batches.size() != bindings.size()) {

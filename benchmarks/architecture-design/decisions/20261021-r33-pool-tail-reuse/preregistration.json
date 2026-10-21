@@ -1,0 +1,12 @@
+{
+  "scope": "R3.3 / R4 bounded native conversion and directory placement",
+  "change": "consume authenticated fragmented destination capacity one page at a time; retain distinct pools in the existing twelve-hint ring",
+  "fixed_shape": "same eight groups, 512 owners, 64 int64 fields, id+token values",
+  "baseline_row_bytes": 1835008,
+  "prior_candidate_bytes": 2621440,
+  "byte_gate": "unchanged at least ten percent total steady allocated byte reduction; include old pins, unused frames, all metadata and other pools; retired/peak/file reported separately",
+  "new_kind_counters": "existing census category arrays only, no additional census or changed denominator",
+  "no_timing_benchmark": true,
+  "no_full_suite": true,
+  "run_only_after_targeted_controls_pass": true
+}

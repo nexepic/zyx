@@ -18,6 +18,7 @@ namespace graph::storage {
 		plan(SystemCatalog &catalog, BTreePageStore &pages, RelocatableMetadataStore &metadata,
 			 const NativeStreamedGraphDeferredPublication *publication,
 			 const NativeStreamedGraphMembershipIndexPlanningOptions &options, const MetadataSnapshotPin &snapshot,
-			 LogSequenceNumber checkpointLsn, OrderedBTreeEntrySource *tokenCountUpdates = nullptr);
+			 LogSequenceNumber checkpointLsn, OrderedBTreeEntrySource *tokenCountUpdates = nullptr,
+             const NativeGraphDeferredIndexPlanningContext *planning = nullptr);
 	};
 } // namespace graph::storage

@@ -1,0 +1,14 @@
+{
+  "timing_benchmark": false,
+  "purpose": "Untimed correctness preparation after verified adjacency/membership images, mixed-pool compatibility and once-only fresh-pool registration",
+  "load_batch_rows": 1000,
+  "binary_sha256": "ff58a4f59480513d4d0d921b8013d03b7ac835196a3504bba5722a331046e2d6",
+  "cases": [
+    {
+      "scale": "medium",
+      "returncode": 1,
+      "exists": true,
+      "bytes": 72744960
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 /**
  * @file QueryEngine.cpp
  * @author Nexepic
@@ -37,6 +38,7 @@
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/optimization/ReadJoinReorderEnvelope.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 
@@ -105,7 +107,12 @@ namespace graph::query {
 					std::vector<std::vector<std::string>> labels;
 					collectJoinLabels(root, false, 0U, labels);
 					if (allowAnchors) collectAnchorLabels(root, 0U, labels);
-					auto batch = backend.readLogicalPlanningStatistics(labels);
+					std::vector<std::string> types;
+                    collectJoinTypes(root, false, 0U, types);
+                    auto batch = backend.readLogicalPlanningStatistics(labels, types);
+                    if (batch.edge_type_counts.size() == types.size())
+                        for (size_t i = 0; i < types.size(); ++i)
+                            type_estimates_.emplace_back(std::move(types[i]), batch.edge_type_counts[i]);
 					statistics_ = batch.graph;
 					if (batch.node_counts.size() == labels.size()) {
 						for (size_t i = 0U; i < labels.size(); ++i)
@@ -126,6 +133,58 @@ namespace graph::query {
 			estimateJoinInput(const logical::LogicalOperator &root) const noexcept override {
 				return estimateCardinality(root, true);
 			}
+
+            [[nodiscard]] std::optional<uint64_t> estimateJoinMaterializedBytes(
+                const logical::LogicalOperator &root) const noexcept override {
+                try {
+                    const auto rows = estimateJoinInput(root);
+                    if (!rows || !rows->isValid()) return std::nullopt;
+                    const logical::LogicalOperator *current = &root;
+                    bool referenceOnly = false;
+                    for (size_t depth = 0; depth < 64U; ++depth) {
+                        if (const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(current)) {
+                            if (!scan->getLabels().empty()) {
+                                const auto count = estimateLabels(scan->getLabels(), false);
+                                if (!statistics_ || !count || *count > statistics_->node_count) return std::nullopt;
+                            }
+                            referenceOnly = scan->getPropertyPredicates().empty() &&
+                                scan->getParameterPropertyPredicates().empty() && scan->getRangePredicates().empty() &&
+                                !scan->getCompositeEquality();
+                            break;
+                        }
+                        const auto *traversal = dynamic_cast<const logical::LogicalTraversal *>(current);
+                        if (!traversal || !traversal->getTargetProperties().empty() || !traversal->getEdgeProperties().empty())
+                            return std::nullopt;
+                        if (!traversal->getEdgeType().empty()) {
+                            bool known = false;
+                            for (const auto &[name, count] : type_estimates_)
+                                if (name == traversal->getEdgeType() && statistics_ && count && *count <= statistics_->edge_count)
+                                    known = true;
+                            if (!known) return std::nullopt;
+                        }
+                        const auto children = traversal->getChildren();
+                        if (children.size() != 1 || !children.front()) return std::nullopt;
+                        current = children.front();
+                    }
+                    if (!referenceOnly) return std::nullopt;
+                    const auto names = root.getOutputVariables();
+                    if (names.empty() || names.size() > 64U) return std::nullopt;
+                    uint64_t width = sizeof(execution::LogicalPlanReadRow);
+                    // Match logicalReadRowBytes for reference-only rows. Hash
+                    // allocator capacity/RSS and unknown property payloads are
+                    // deliberately outside this model; runtime admission remains
+                    // authoritative and includes the actual retained allocations.
+                    for (const auto &name : names) {
+                        const uint64_t binding = sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef);
+                        if (name.empty() || name.size() > std::numeric_limits<uint64_t>::max() - binding ||
+                            width > std::numeric_limits<uint64_t>::max() - binding - name.size()) return std::nullopt;
+                        width += binding + name.size();
+                    }
+                    if (rows->expected_rows && width > std::numeric_limits<uint64_t>::max() / rows->expected_rows)
+                        return std::nullopt;
+                    return rows->expected_rows * width;
+                } catch (...) { return std::nullopt; }
+            }
 			[[nodiscard]] std::optional<uint64_t>
 			estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
 				try {
@@ -183,13 +242,32 @@ namespace graph::query {
 									estimate = {0U, 0U, 0U};
 									continue;
 								}
+
+                                uint64_t edges = statistics.edge_count;
+                                bool typedEstimate = false;
+                                if (refineLabels && !(*traversal)->getEdgeType().empty())
+                                    for (const auto &[name, count] : type_estimates_)
+                                        if (name == (*traversal)->getEdgeType() && count && *count <= edges) { edges = *count; typedEstimate = true; break; }
 								const uint64_t averageAdjacency =
-										statistics.edge_count / statistics.node_count +
-										(static_cast<uint64_t>(statistics.edge_count % statistics.node_count != 0U));
+										edges / statistics.node_count +
+                                        static_cast<uint64_t>(edges % statistics.node_count != 0U);
 								// The runtime deduplicates a `both` traversal by Edge ID, so each
 								// input row has at most the global Edge count in every direction.
-								estimate.expected_rows = saturatingMultiply(estimate.expected_rows, averageAdjacency);
-								estimate.upper_bound = saturatingMultiply(estimate.upper_bound, statistics.edge_count);
+
+                                if (typedEstimate && (edges == 0U || estimate.expected_rows <= std::numeric_limits<uint64_t>::max() / edges)) {
+                                    // Multiply before dividing: rounding the degree first would
+                                    // estimate N rows for a single rare Edge in an N-Node scan.
+                                    const uint64_t product = estimate.expected_rows * edges;
+                                    uint64_t expected = product / statistics.node_count +
+                                        static_cast<uint64_t>(product % statistics.node_count != 0U);
+                                    if ((*traversal)->getDirection() == "both")
+                                        expected = std::min(saturatingMultiply(expected, 2U),
+                                            saturatingMultiply(estimate.upper_bound, edges));
+                                    estimate.expected_rows = expected;
+                                } else {
+                                    estimate.expected_rows = saturatingMultiply(estimate.expected_rows, averageAdjacency);
+                                }
+								estimate.upper_bound = saturatingMultiply(estimate.upper_bound, edges);
 							}
 							return estimate;
 						}
@@ -240,9 +318,21 @@ namespace graph::query {
 				return left * right;
 			}
 
+
+            static void collectJoinTypes(const logical::LogicalOperator &root, bool insideJoin, size_t depth,
+                std::vector<std::string> &types) {
+                if (depth >= 64U || types.size() >= 64U || !optimization::detail::readJoinReorderEnvelope(root)) return;
+                insideJoin = insideJoin || root.getType() == logical::LogicalOpType::LOP_JOIN;
+                const auto *traversal = insideJoin ? dynamic_cast<const logical::LogicalTraversal *>(&root) : nullptr;
+                if (traversal && !traversal->getEdgeType().empty() &&
+                    std::find(types.begin(), types.end(), traversal->getEdgeType()) == types.end())
+                    types.push_back(traversal->getEdgeType());
+                for (const auto *child : root.getChildren())
+                    if (child) collectJoinTypes(*child, insideJoin, depth + 1U, types);
+            }
 			static void collectJoinLabels(const logical::LogicalOperator &root, bool insideJoin, size_t depth,
 				std::vector<std::vector<std::string>> &labels) {
-				if (depth >= 64U || labels.size() >= 64U) return;
+				if (depth >= 64U || labels.size() >= 64U || !optimization::detail::readJoinReorderEnvelope(root)) return;
 				insideJoin = insideJoin || root.getType() == logical::LogicalOpType::LOP_JOIN;
 				if (insideJoin) {
 					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
@@ -285,6 +375,7 @@ namespace graph::query {
 				return estimate;
 			}
 
+            std::vector<std::pair<std::string, std::optional<uint64_t>>> type_estimates_;
 			mutable std::vector<std::pair<std::vector<std::string>, std::optional<uint64_t>>> label_estimates_;
 			const storage::LogicalGraphStatisticsBackend &backend_;
 			std::optional<storage::LogicalGraphCardinalityStatistics> statistics_;

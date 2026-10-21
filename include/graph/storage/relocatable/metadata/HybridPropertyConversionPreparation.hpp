@@ -30,24 +30,28 @@ class HybridPropertyConversionPreparation final {
     utils::OwnedVector<HybridPropertyOwnerMap::Entry> owners_;
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Entry> columns_, extensions_;
     HybridPropertyGroupDirectoryMap::Entry group_{};
+    utils::OwnedVector<HybridPropertyGroupDirectoryMap::Entry> groups_;
+    bool compact_ = false;
 
     using LargeFieldResolver = std::function<std::pmr::vector<std::byte>(EntityPropertyKey, uint32_t, const PropertyValue &)>;
     HybridPropertyConversionPreparation(MetadataWriteBatch &batch, const HybridPropertyGroupConversion &plan,
-        const std::function<void()> &checkpoint = {}, const LargeFieldResolver &largeField = {})
+        const std::function<void()> &checkpoint = {}, const LargeFieldResolver &largeField = {}, bool compactColumns = false)
         : pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(plan.memoryOwner())),
           owners_(utils::OwnedPmrAllocator<HybridPropertyOwnerMap::Entry>(plan.memoryOwner())),
           columns_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
-          extensions_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())) {
+          extensions_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
+          groups_(utils::OwnedPmrAllocator<HybridPropertyGroupDirectoryMap::Entry>(plan.memoryOwner())) {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native field preparation is disabled");
-        const auto &group = plan.group();
+        auto group = plan.group();
         hybrid_property_detail::require(group.semantic_generation == batch.generation() &&
             batch.candidate().database_id.isValid(), "native field preparation has a stale publication generation");
         if (checkpoint) checkpoint();
-        owners_.reserve(plan.members().size()); columns_.reserve(plan.columns().size());
+        compact_ = compactColumns && !plan.columns().empty();
         const auto extensionCount = std::count_if(plan.members().begin(), plan.members().end(), [](const auto &member) {
             return member.source == HybridPropertySource::HPS_EXTENSION;
         });
+        owners_.reserve(compact_ ? size_t(extensionCount) : plan.members().size()); columns_.reserve(plan.columns().size());
         extensions_.reserve(size_t(extensionCount));
         const auto destination = [&](size_t bytes) -> HybridPropertyPageImage & {
             hybrid_property_detail::require(bytes <= RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
@@ -63,8 +67,14 @@ class HybridPropertyConversionPreparation final {
             }
             return pages_.back();
         };
+        if (compact_) {
+            const auto matrix = HybridPropertyColumnMembership::fromColumns(group, plan.columns());
+            group.column_membership = destination(matrix.wireSize()).appendColumnMembership(matrix, group, batch.generation());
+            group.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+        }
         const auto groupSlot = destination(64).appendGroup(group);
         group_ = {HybridPropertyDirectoryCodec::groupKey(group.group_id), HybridPropertyDirectoryCodec::locatorValue(groupSlot)};
+        groups_.push_back(group_);
         for (const auto &column : plan.columns()) {
             if (checkpoint) checkpoint();
             const auto slot = destination(column.wireSize()).appendColumn(column, group, batch.generation());
@@ -74,8 +84,9 @@ class HybridPropertyConversionPreparation final {
         for (const auto &member : plan.members()) {
             if (checkpoint) checkpoint();
             const EntityPropertyKey owner{group.owner_kind, member.owner};
-            owners_.push_back({HybridPropertyDirectoryCodec::ownerKey(owner, member.token),
-                HybridPropertyDirectoryCodec::sourceValue(member.source)});
+            if (!compact_ || member.source == HybridPropertySource::HPS_EXTENSION)
+                owners_.push_back({HybridPropertyDirectoryCodec::ownerKey(owner, member.token),
+                    HybridPropertyDirectoryCodec::sourceValue(member.source)});
             if (member.source != HybridPropertySource::HPS_EXTENSION) continue;
             const auto canonicalBytes = CanonicalPropertyValueCodec::encodedSize(*member.value);
             const bool oversized = canonicalBytes > RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES - RSS_HYBRID_EXTENSION_HEADER_BYTES;

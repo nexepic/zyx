@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/storage/relocatable/property/HybridPropertyColumnMembership.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 #include "graph/storage/relocatable/metadata/Catalog.hpp"
 #include "graph/utils/OwnedPmrAllocator.hpp"
@@ -59,6 +60,10 @@ public:
     }
     [[nodiscard]] SlottedSlotReference appendGroup(const HybridPropertyGroupRecord &group) {
         group.validate(); require(group.semantic_generation <= visible_generation_, "hybrid group is not visible");
+        if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+            require(group.column_membership.page_id == page_.pageId(), "compact group membership must share its page");
+            static_cast<void>(readColumnMembership(group.column_membership, group, visible_generation_));
+        }
         return page_.insert(group.encode());
     }
     [[nodiscard]] SlottedSlotReference appendColumn(const HybridPropertyColumnRecord &column,
@@ -76,7 +81,11 @@ public:
     [[nodiscard]] HybridPropertyGroupRecord readGroup(const SlottedSlotReference &reference,
         EntityPropertyOwnerKind kind, uint64_t group, Generation descriptorGeneration) const {
         const auto bytes = readRecord(reference);
-        return HybridPropertyGroupRecord::decode(bytes, kind, group, descriptorGeneration, visible_generation_);
+        const auto result = HybridPropertyGroupRecord::decode(bytes, kind, group, descriptorGeneration, visible_generation_);
+        hybrid_property_detail::require(result.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+            (result.column_membership.page_id == reference.page_id && result.column_membership.slot_id != reference.slot_id),
+            "compact group and membership must share one page with distinct slots");
+        return result;
     }
     [[nodiscard]] HybridPropertyColumnRecord readColumn(const SlottedSlotReference &reference,
         const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
@@ -84,10 +93,34 @@ public:
         const auto bytes = readRecord(reference);
         return HybridPropertyColumnRecord::decode(bytes, expected, group, descriptorGeneration, visible_generation_);
     }
+    [[nodiscard]] SlottedSlotReference appendColumnMembership(const HybridPropertyColumnMembership &value,
+        const HybridPropertyGroupRecord &group, Generation descriptorGeneration) {
+        value.validateInGroup(group, descriptorGeneration, visible_generation_);
+        std::array<std::byte, HybridPropertyColumnMembership::MAX_BYTES> encoded{};
+        const auto bytes = std::span(encoded).first(value.wireSize()); value.encode(bytes);
+        return page_.insert(bytes);
+    }
+    [[nodiscard]] HybridPropertyColumnMembership readColumnMembership(const SlottedSlotReference &reference,
+        const HybridPropertyGroupRecord &group, Generation descriptorGeneration) const {
+        hybrid_property_detail::require(group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+            group.column_membership == reference, "column membership slot does not belong to its group");
+        return HybridPropertyColumnMembership::decode(readRecord(reference), group, descriptorGeneration, visible_generation_);
+    }
+    void replaceColumnMembership(const SlottedSlotReference &reference, const HybridPropertyColumnMembership &replacement,
+        const HybridPropertyGroupRecord &previousGroup, const HybridPropertyGroupRecord &group, Generation descriptorGeneration) {
+        const auto previous = readColumnMembership(reference, previousGroup, descriptorGeneration);
+        require(replacement.semantic_generation >= previous.semantic_generation,
+            "column membership replacement moves its semantic identity backwards");
+        replacement.validateInGroup(group, descriptorGeneration, visible_generation_);
+        std::array<std::byte, HybridPropertyColumnMembership::MAX_BYTES> encoded{};
+        const auto bytes = std::span(encoded).first(replacement.wireSize()); replacement.encode(bytes); page_.overwrite(reference, bytes);
+    }
     void replaceGroup(const SlottedSlotReference &reference, const HybridPropertyGroupRecord &replacement,
         Generation descriptorGeneration) {
         const auto previous = readGroup(reference, replacement.owner_kind, replacement.group_id, descriptorGeneration);
         replacement.validate();
+        if (replacement.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+            static_cast<void>(readColumnMembership(replacement.column_membership, replacement, descriptorGeneration));
         require(replacement.semantic_generation >= previous.semantic_generation &&
             replacement.semantic_generation <= descriptorGeneration && descriptorGeneration <= visible_generation_,
             "hybrid group replacement moves semantic identity backwards or into the future");
@@ -163,9 +196,17 @@ private:
         const auto magic = LittleEndianCodec::readU32(bytes, 0);
         if (magic == RSS_HYBRID_GROUP_MAGIC) {
             require(bytes.size() >= 64, "hybrid private group record is truncated");
-            static_cast<void>(HybridPropertyGroupRecord::decode(bytes,
+            const auto group = HybridPropertyGroupRecord::decode(bytes,
                 EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])), LittleEndianCodec::readU64(bytes, 8),
-                visible_generation_, visible_generation_));
+                visible_generation_, visible_generation_);
+            if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+                require(group.column_membership.page_id == page_.pageId(), "compact group membership is on another page");
+                static_cast<void>(readColumnMembership(group.column_membership, group, visible_generation_));
+            }
+        } else if (magic == HybridPropertyColumnMembership::MAGIC) {
+            require(bytes.size() >= 64, "hybrid private membership record is truncated");
+            static_cast<void>(HybridPropertyColumnMembership::decodePayload(bytes,
+                EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])), LittleEndianCodec::readU64(bytes, 8), visible_generation_));
         } else if (magic == RSS_HYBRID_COLUMN_MAGIC) {
             require(bytes.size() >= 64, "hybrid private column record is truncated");
             const auto record = HybridPropertyColumnRecord::decodePayload(bytes,

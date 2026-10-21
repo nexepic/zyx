@@ -1,0 +1,142 @@
+{
+  "tests": 10,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T17:11:31Z",
+  "time": "66.311s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyMatureShapeCostsTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T17:11:31Z",
+      "time": "53.486s",
+      "testsuite": [
+        {
+          "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 120,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:11:31Z",
+          "time": "53.486s",
+          "classname": "HybridPropertyMatureShapeCostsTest"
+        }
+      ]
+    },
+    {
+      "name": "FixedShapes\/HybridPropertyShapeCostsTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T17:12:24Z",
+      "time": "12.824s",
+      "testsuite": [
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/occupied47",
+          "value_param": "40-byte object <82-5B 36-24 67-55 00-00 2F-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 6A-73 6F-6E>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:24Z",
+          "time": "0.724s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/occupied48",
+          "value_param": "40-byte object <8D-5B 36-24 67-55 00-00 30-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 00-00 72-33 33-2D>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:25Z",
+          "time": "0.257s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/occupied64",
+          "value_param": "40-byte object <98-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 00-00 68-61 70-65>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:25Z",
+          "time": "0.306s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/unique_sparse",
+          "value_param": "40-byte object <A3-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 01-00 00-00 73-75 6C-74>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:26Z",
+          "time": "0.595s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/mixed_null_string",
+          "value_param": "40-byte object <B1-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 02-00 00-00 63-65 2F-7A>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:26Z",
+          "time": "1.92s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/multiple_labels",
+          "value_param": "40-byte object <C3-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 03-00 00-00 65-2D 74-65>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:28Z",
+          "time": "1.239s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/shared_large",
+          "value_param": "40-byte object <D3-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 2D-72 65-73>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:29Z",
+          "time": "1.037s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/wide4096",
+          "value_param": "40-byte object <E0-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 40-00 00-00 00-00 00-00 40-00 00-00 00-00 00-00 05-00 00-00 6F-6D 70-61>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:31Z",
+          "time": "5.307s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        },
+        {
+          "name": "WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen\/interleaved_dense_sparse",
+          "value_param": "40-byte object <E9-5B 36-24 67-55 00-00 40-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 08-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00>",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:12:36Z",
+          "time": "1.436s",
+          "classname": "FixedShapes\/HybridPropertyShapeCostsTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,703 @@
+{
+  "tests": 67,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T14:59:00Z",
+  "time": "6.053s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "CoveredAdjacencyCandidateTest",
+      "tests": 30,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:59:00Z",
+      "time": "5.651s",
+      "testsuite": [
+        {
+          "name": "NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.103s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.02s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 145,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.018s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.076s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.248s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:00Z",
+          "time": "0.012s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 218,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.138s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.024s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 247,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.016s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.52s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 322,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.183s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 343,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:01Z",
+          "time": "0.129s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.027s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.125s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 481,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.356s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 484,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.144s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 487,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.146s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 490,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.129s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 509,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:02Z",
+          "time": "0.123s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 535,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.259s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "BalancedTypeChangesPreserveTheUnchangedCatalogRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 576,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.133s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CompleteTypeCounterOverflowRefusesMainOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 595,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.123s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 619,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.151s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CompleteUntypedCountUnderflowRefusesMainOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 652,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.123s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "NodeOnlyLifecycleUpdatesCountsWithoutRewritingTheCoveredTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:03Z",
+          "time": "0.143s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "NodeOnlyFinalizationRefusesAnOrdinaryScalarRootAndAnExceededEntityBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 708,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:04Z",
+          "time": "0.017s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "LastEdgeRemovalRetainsAnEmptyCandidateRootAndRecreationKeepsOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 729,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:04Z",
+          "time": "0.228s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "DeterministicSkewedInsertDeleteCyclesKeepEveryDirectionAndCompleteTypeCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 771,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:04Z",
+          "time": "1.117s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "LogicalCoordinatorMaintainsCandidateAndRollsBackOverBudgetBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 820,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:05Z",
+          "time": "0.688s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "LogicalCoordinatorRejectsInvalidSelectionBeforePublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 868,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.117s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeGraphMutationExecutorValidationTest",
+      "tests": 37,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:59:06Z",
+      "time": "0.401s",
+      "testsuite": [
+        {
+          "name": "NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 164,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.016s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "NativePatchesKeepConstraintAndAdmissionFailuresAtomic",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 236,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.011s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 289,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.044s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 335,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.002s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 376,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 405,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.005s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 445,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.003s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 472,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.003s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 533,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.002s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 623,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.009s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 665,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.009s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 697,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.006s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.013s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "ReplacesPersistedNodeLabelsWithoutRewritingItsProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 764,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.009s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 795,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.01s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 828,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.013s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 857,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.01s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "CreatesUntypedRelationshipWithoutResolvingASchemaToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 898,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.007s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 923,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.03s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1004,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.024s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1058,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.003s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1084,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.007s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.013s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsIncompleteOrUnboundedPublicExecutorConfiguration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.002s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1278,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.003s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1333,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1371,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.002s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1442,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.008s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1481,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.011s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1518,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.018s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1554,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.018s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1581,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.013s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1632,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.014s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        },
+        {
+          "name": "CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphMutationExecutor_Validation.cpp",
+          "line": 1663,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:59:06Z",
+          "time": "0.002s",
+          "classname": "NativeGraphMutationExecutorValidationTest"
+        }
+      ]
+    }
+  ]
+}

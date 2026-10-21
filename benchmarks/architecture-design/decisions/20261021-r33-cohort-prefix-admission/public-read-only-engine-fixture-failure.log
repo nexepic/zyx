@@ -1,0 +1,20 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries
+PUBLIC_COHORT_COST adaptive_row=true row=2621440 candidate=2097152
+unknown file: Failure
+C++ exception with description "logical read backend does not support data mutations" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries (26187 ms)
+[----------] 1 test from RelocatableStorageBackendTest (26187 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (26187 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries
+
+ 1 FAILED TEST

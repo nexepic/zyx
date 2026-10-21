@@ -1,0 +1,305 @@
+{
+  "timing_benchmark": false,
+  "binary_sha256": "51eea8814b34435b984a15f0a5fc49f877e7b189c07a3a1d306f606885125afc",
+  "oracle_correction": "DDL returns the documented scalar Index created, not zero rows. Preserve the initial fixture failure; do not repeat already-successful DDL.",
+  "cases": [
+    {
+      "scale": "medium",
+      "name": "create_country",
+      "query": "CREATE INDEX FOR (u:User) ON (u.country)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "Index created"
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "medium",
+      "name": "create_age",
+      "query": "CREATE INDEX FOR (u:User) ON (u.age)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "Index created"
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "medium",
+      "name": "country_count",
+      "query": "MATCH (u:User) WHERE u.country='CN' RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            12500
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "medium",
+      "name": "age_count",
+      "query": "MATCH (u:User) WHERE u.age>=30 RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            77356
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "medium",
+      "name": "multi_count",
+      "query": "MATCH (u:User) WHERE u.country='CN' AND u.age>=30 RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            9669
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "medium",
+      "name": "country_rows",
+      "query": "MATCH (u:User) WHERE u.country='CN' RETURN u.id ORDER BY u.id LIMIT 10",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "user-000000"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000008"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000016"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000024"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000032"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000040"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000048"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000056"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000064"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000072"
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "create_country",
+      "query": "CREATE INDEX FOR (u:User) ON (u.country)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "Index created"
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "create_age",
+      "query": "CREATE INDEX FOR (u:User) ON (u.age)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "Index created"
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "country_count",
+      "query": "MATCH (u:User) WHERE u.country='CN' RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            9125
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "age_count",
+      "query": "MATCH (u:User) WHERE u.age>=30 RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            56464
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "multi_count",
+      "query": "MATCH (u:User) WHERE u.country='CN' AND u.age>=30 RETURN count(u)",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "integer",
+            7057
+          ]
+        ]
+      ]
+    },
+    {
+      "scale": "holdout",
+      "name": "country_rows",
+      "query": "MATCH (u:User) WHERE u.country='CN' RETURN u.id ORDER BY u.id LIMIT 10",
+      "returncode": 0,
+      "passed": true,
+      "expected": [
+        [
+          [
+            "string",
+            "user-000000"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000008"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000016"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000024"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000032"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000040"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000048"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000056"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000064"
+          ]
+        ],
+        [
+          [
+            "string",
+            "user-000072"
+          ]
+        ]
+      ]
+    }
+  ],
+  "inputs": {
+    "medium": {
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee"
+    },
+    "holdout": {
+      "bytes": 265814016,
+      "sha256": "6bf075b56cc6f1f50b33e7fae2e680ff11133e96108d2b05788a8bf6c8fcfb5e"
+    }
+  }
+}

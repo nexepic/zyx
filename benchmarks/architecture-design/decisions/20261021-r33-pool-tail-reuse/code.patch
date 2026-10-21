@@ -1,0 +1,82 @@
+diff --git a/include/graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp b/include/graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp
+index cc6e126e..6418d670 100644
+--- a/include/graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp
++++ b/include/graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp
+@@ -138,7 +138,13 @@ class HybridPropertyDirectoryPreparation final {
+         auto generation = binding.root.root_generation;
+         CatalogEntry pool; size_t used = RSS_PAGE_POOL_DATA_FRAME_COUNT;
+         for (auto &page : dirty) {
+-            checkpoint(); if (used == RSS_PAGE_POOL_DATA_FRAME_COUNT) { pool = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, index, std::min(size_t(RSS_PAGE_POOL_DATA_FRAME_COUNT), dirty.size() - images_.size())); used = 0; }
++            checkpoint();
++            // Consume authenticated partial capacity before reserving another
++            // whole pool. A multi-page request can otherwise strand every tail
++            // smaller than this transaction's dirty-page count.
++            const auto selected = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, index, 1U);
++            if (selected.segment_id != pool.segment_id) used = 0;
++            pool = selected;
+             const PageOwnerHeader owner{page.header().page_id, pool.owner_id, PageOwnerKind::POK_INDEX, 0,
+                 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
+             auto rebound = page.rebindOwner(owner);
+diff --git a/include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp b/include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp
+index 80208c6e..8e55358b 100644
+--- a/include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp
++++ b/include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp
+@@ -129,7 +129,9 @@ class HybridPropertyPoolPlacement final {
+         for (const auto &r : reservations_) if (r.assigned &&
+             (r.pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL || r.pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL || r.pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL)) {
+             auto &hints = metadata_.native_pool_placement_hints_;
+-            auto target = std::find_if(hints.begin(), hints.end(), [&](const auto &h) { return h.kind == r.pool.kind && h.owner_id == r.pool.owner_id; });
++            // Keep distinct destinations in the existing fixed-size hint ring;
++            // one hint per owner forgets reusable tails in its earlier pools.
++            auto target = std::find_if(hints.begin(), hints.end(), [&](const auto &h) { return h.segment_id == r.pool.segment_id; });
+             if (target == hints.end()) target = hints.begin() + (metadata_.native_pool_hint_cursor_++ % hints.size());
+             *target = r.pool;
+         }
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+index f203da40..e988ac69 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -2426,12 +2426,12 @@ namespace graph::storage {
+             struct PreparedFieldImage { CatalogEntry pool; PageLocation location; SlottedPage page; };
+             auto fieldImages = utils::OwnedVector<PreparedFieldImage>(utils::OwnedPmrAllocator<PreparedFieldImage>(conversion.memory));
+             fieldImages.reserve(fields->pages_.size());
+-            CatalogEntry fieldPool;
++            CatalogEntry fieldPool; size_t fieldPoolUsed = 0;
+             for (size_t i = 0; i < fields->pages_.size(); ++i) {
+                 checkpoint();
+-                if (i % RSS_PAGE_POOL_DATA_FRAME_COUNT == 0)
+-                    fieldPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id,
+-                        std::min(size_t(RSS_PAGE_POOL_DATA_FRAME_COUNT), fields->pages_.size() - i), true);
++                const auto selected = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id, 1U, true);
++                if (selected.segment_id != fieldPool.segment_id) fieldPoolUsed = 0;
++                fieldPool = selected;
+                 auto &image = fields->pages_[i];
+                 PageOwnerHeader owner;
+                 owner.page_id = image.pageId(); owner.owner_id = fieldPool.owner_id;
+@@ -2441,7 +2441,7 @@ namespace graph::storage {
+                 const auto admitReference = [&](size_t retained) { referenceCredit.set(retained); };
+                 auto bound = std::move(image).bindPrivateOwner(owner, fieldPool, batch.checkpointLsn(), std::ref(admitReference));
+                 const PageLocation location{owner.page_id, fieldPool.segment_id,
+-                    uint16_t(i % RSS_PAGE_POOL_DATA_FRAME_COUNT + RSS_PAGE_POOL_FIRST_DATA_FRAME),
++                    uint16_t(fieldPoolUsed++ + RSS_PAGE_POOL_FIRST_DATA_FRAME),
+                     fieldPool.generation, bound.stats().contiguous_free_bytes};
+                 fieldImages.push_back({fieldPool, location, std::move(bound)});
+             }
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp
+index d610df16..27315393 100644
+--- a/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp
+@@ -163,5 +163,13 @@ TEST_F(HybridPropertyMatureShapeCostsTest, EightBoundedGroupsKeepWholeDatabaseCo
+         << " row=" << row->steadyAllocatedBytes() << " candidate=" << candidate->steadyAllocatedBytes()
+         << " retired=" << candidate->retired_catalog_bytes << " allocated_peak=" << candidate->totalAllocatedBytes()
+         << " file=" << candidate->file_bytes << " byte_gate=" << (candidate->steadyAllocatedBytes() <= threshold ? "admit" : "reject") << '\n';
++    constexpr std::array<const char *, size_t(NativeStorageAllocationKind::NSAK_COUNT)> kinds{
++        "entity", "property", "hybrid_map", "query_index", "large_value", "vector", "state", "metadata", "other"};
++    for (size_t i = 0; i < kinds.size(); ++i)
++        std::cout << "NATIVE_MATURE_KIND_COST kind=" << kinds[i] << " row=" << row->sealed_pool_bytes[i]
++            << " candidate=" << candidate->sealed_pool_bytes[i] << '\n';
++    std::cout << "NATIVE_MATURE_FIXED_COST row_bootstrap=" << row->bootstrap_bytes
++        << " candidate_bootstrap=" << candidate->bootstrap_bytes << " row_emergency=" << row->emergency_reserve_bytes
++        << " candidate_emergency=" << candidate->emergency_reserve_bytes << '\n';
+ }
+ #endif

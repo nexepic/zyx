@@ -1,0 +1,223 @@
+{
+  "tests": 19,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T17:21:36Z",
+  "time": "0.994s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColumnReadReuseTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T17:21:36Z",
+      "time": "0.161s",
+      "testsuite": [
+        {
+          "name": "SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:36Z",
+          "time": "0.06s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 48,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0.031s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0.03s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 89,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0.037s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSuperblockTest",
+      "tests": 15,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T17:21:37Z",
+      "time": "0.833s",
+      "testsuite": [
+        {
+          "name": "CodecMatchesGoldenFieldsAndRoundTrips",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 111,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0.01s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0.821s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "PersistsAndValidatesTheMetadataEmergencyReserveDescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "AllowsEmptyRootsAndSelectsTheNewestValidGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "PersistsTheTypedPageDirectoryBootstrapFlag",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationDoesNotSerializeOrChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationRejectsEveryMalformedRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationPreservesLifecycleAndReserveFences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsInvalidInMemoryValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 398,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsTruncatedChecksummedAndMalformedDiskBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 447,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 557,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 572,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T17:21:37Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        }
+      ]
+    }
+  ]
+}

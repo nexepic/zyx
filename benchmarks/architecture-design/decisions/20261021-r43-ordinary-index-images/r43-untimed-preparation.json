@@ -1,0 +1,14 @@
+{
+  "timing_benchmark": false,
+  "purpose": "Untimed correctness preparation after bounded streamed adjacency implementation",
+  "load_batch_rows": 1000,
+  "binary_sha256": "ef7aec58502c6a7f6ac98fbe95e588856643119f35036cc3a1e5c2ac8e5770dd",
+  "cases": [
+    {
+      "scale": "medium",
+      "returncode": -25,
+      "exists": true,
+      "bytes": 2147483648
+    }
+  ]
+}

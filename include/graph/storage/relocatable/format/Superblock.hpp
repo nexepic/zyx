@@ -26,7 +26,7 @@ namespace graph::storage {
 	// Version 30 removes retired Property and direct Vector-adjacency roots.
 	// Earlier layouts are deliberately unsupported rather than silently
 	// migrated or reinterpreted.
-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 32 : 31;
+	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 33 : 31;
 	constexpr uint32_t RSS_SUPERBLOCK_BYTES = RSS_PAGE_SIZE;
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 352 : 336;
 	// Crash injection must leave this checksum untouched so a torn inactive
@@ -36,7 +36,11 @@ namespace graph::storage {
 	// the typed physical bootstrap header. Older readers reject this formerly
 	// reserved bit rather than decoding a header as a radix page.
 	constexpr uint32_t RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP = 1U << 0U;
-	constexpr uint32_t RSS_SUPERBLOCK_KNOWN_FLAGS = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+    // Unknown to older isolated readers; publishing compact column selectors
+    // must not leave an old writer able to reinterpret their group authority.
+    constexpr uint32_t RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP = 1U << 1U;
+    constexpr uint32_t RSS_SUPERBLOCK_KNOWN_FLAGS = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP |
+        (RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP : 0U);
 	static_assert(RSS_FILE_BOOTSTRAP_BYTES >= 2U * RSS_SUPERBLOCK_BYTES);
 	struct MetadataEmergencyReserveDescriptor {
 		PhysicalSlotId physical_slot{};

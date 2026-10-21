@@ -1395,7 +1395,9 @@ TEST_F(HybridPropertyOrdinaryConversionTest, FieldRemovalChangesOnlyItsActualFie
         if (pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL && pool.owner_id == hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_OWNER)) ownerPages.push_back(location);
         return true;
     }));
-    ASSERT_GE(fieldPages.size(), 3U); ASSERT_GE(ownerPages.size(), 3U);
+    const bool compact = conversion.conversion->compact_column_memberships;
+    ASSERT_GE(fieldPages.size(), 3U);
+    if (compact) EXPECT_TRUE(ownerPages.empty()); else ASSERT_GE(ownerPages.size(), 3U);
     const std::array<NativeHybridPropertyColumnReplacement, 1> cells{{{{NODE, 1}, 1, std::monostate{}, true}}};
     NativeHybridPropertyColumnWrite write{before.database_id, before.generation, before.hybrid_property_descriptor_root,
         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
@@ -1407,7 +1409,8 @@ TEST_F(HybridPropertyOrdinaryConversionTest, FieldRemovalChangesOnlyItsActualFie
     }
     for (const auto &location : ownerPages)
         unchangedOwnerPages += metadata_->findPageLocationOptional(pin, location.page_id) == std::optional(location);
-    EXPECT_LE(changedFields, 2U); EXPECT_GT(unchangedFields, 0U); EXPECT_GT(unchangedOwnerPages, 0U);
+    EXPECT_LE(changedFields, 2U); EXPECT_GT(unchangedFields, 0U);
+    if (compact) EXPECT_EQ(unchangedOwnerPages, 0U); else EXPECT_GT(unchangedOwnerPages, 0U);
     EXPECT_EQ(properties_->readEntity(pin, {NODE, 1}).entries.size(), 15U);
     EXPECT_EQ(properties_->readEntity(old, {NODE, 1}).entries.size(), 16U);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);

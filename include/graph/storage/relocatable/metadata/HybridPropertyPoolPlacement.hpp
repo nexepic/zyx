@@ -16,7 +16,7 @@ class HybridPropertyPoolPlacement final {
     struct Reservation {
         CatalogEntry pool;
         size_t capacity = 0, assigned = 0, prepared = 0;
-        bool fresh = false, native = false, reconciled = false;
+        bool fresh = false, native = false, reconciled = false, registered = false;
     };
     RelocatableMetadataStore &metadata_;
     MetadataWriteBatch &batch_;
@@ -25,15 +25,16 @@ class HybridPropertyPoolPlacement final {
     utils::OwnedVector<Reservation> reservations_;
     std::optional<uint64_t> next_slot_;
     PhysicalSlotId last_slot_;
+    bool skip_mixed_index_pools_ = false;
     std::function<void()> checkpoint_;
 
     HybridPropertyPoolPlacement(RelocatableMetadataStore &metadata, MetadataWriteBatch &batch,
         const MetadataWriteGuard &writer, const MetadataSnapshotPin &snapshot,
         PhysicalSlotId first, PhysicalSlotId last, std::shared_ptr<std::pmr::memory_resource> memory,
-        std::function<void()> checkpoint)
+        std::function<void()> checkpoint, bool skipMixedIndexPools = false)
         : metadata_(metadata), batch_(batch), writer_(writer), source_(metadata.io_, metadata, snapshot),
           reservations_(utils::OwnedPmrAllocator<Reservation>(memory)), next_slot_(first.value()),
-          last_slot_(last), checkpoint_(std::move(checkpoint)) {}
+          last_slot_(last), skip_mixed_index_pools_(skipMixedIndexPools), checkpoint_(std::move(checkpoint)) {}
     bool visible(PageId id, SegmentId segment, uint16_t frame, Generation generation) const {
         return metadata_.snapshots_.anyActiveSnapshot(writer_, [&](const Superblock &snapshot) {
             const auto route = metadata_.locations_.findPageOptional(snapshot, id);
@@ -54,7 +55,7 @@ class HybridPropertyPoolPlacement final {
         if (!entry || entry->state != SegmentState::SGS_SEALED || entry->kind != kind || entry->owner_id != owner ||
             !metadata_.allocator_.isAllocated(current, entry->physical_slot)) return; // stale advisory hint
         const auto header = source_.readPoolHeader(*entry);
-        size_t capacity = 0;
+        size_t capacity = 0; bool mixedIndexPool = false;
         for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
             checkpoint_(); const bool allocated = SharedPagePoolFrameMap::isAllocated(header, frame);
             std::optional<PageOwnerHeader> page;
@@ -69,13 +70,23 @@ class HybridPropertyPoolPlacement final {
                 // both happen to use the same numeric owner ID.
                 if (kind == SegmentKind::SGK_PROPERTY_PAGE_POOL && page->kind !=
                     (native ? PageOwnerKind::POK_HYBRID_PROPERTY : PageOwnerKind::POK_PROPERTY)) return;
-                require(page->generation == entry->generation && page->owner_id == owner &&
+                const bool mixed = kind == SegmentKind::SGK_INDEX_PAGE_POOL && page->owner_id != owner;
+                mixedIndexPool = mixedIndexPool || mixed;
+                require(page->generation == entry->generation && page->owner_id != 0 &&
+                    (page->owner_id == owner || (mixed && skip_mixed_index_pools_)) &&
                     (kind != SegmentKind::SGK_INDEX_PAGE_POOL || page->kind == PageOwnerKind::POK_INDEX) &&
                     (kind != SegmentKind::SGK_ENTITY_PAGE_POOL || page->kind == PageOwnerKind::POK_ENTITY || page->kind == PageOwnerKind::POK_ENTITY_LABEL),
                     "native placement found a foreign page owner");
                 if (currentFrame) require(page->flags == 0, "native placement found a retired current frame");
             }
             if (!allocated || (!currentFrame && !pinned)) ++capacity;
+        }
+        if (mixedIndexPool) {
+            debug::PerfTrace::addValue("native_graph.write.index_placement.mixed_pool_skipped", 1);
+            // Cache this rejection in the owned per-batch reservations: no
+            // capacity/assignment means no frame is reused or remembered.
+            reservations_.push_back({*entry, 0, 0, 0, false, native, false});
+            return; // Ordinary format permits shared Index owners; do not reuse this target.
         }
         reservations_.push_back({*entry, capacity, 0, 0, false, native, false});
     }
@@ -129,7 +140,9 @@ class HybridPropertyPoolPlacement final {
         for (const auto &r : reservations_) if (r.assigned &&
             (r.pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL || r.pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL || r.pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL)) {
             auto &hints = metadata_.native_pool_placement_hints_;
-            auto target = std::find_if(hints.begin(), hints.end(), [&](const auto &h) { return h.kind == r.pool.kind && h.owner_id == r.pool.owner_id; });
+            // Keep distinct destinations in the existing fixed-size hint ring;
+            // one hint per owner forgets reusable tails in its earlier pools.
+            auto target = std::find_if(hints.begin(), hints.end(), [&](const auto &h) { return h.segment_id == r.pool.segment_id; });
             if (target == hints.end()) target = hints.begin() + (metadata_.native_pool_hint_cursor_++ % hints.size());
             *target = r.pool;
         }

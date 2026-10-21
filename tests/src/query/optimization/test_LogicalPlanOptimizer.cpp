@@ -1244,5 +1244,34 @@ namespace graph::query::optimization {
 			}
 		}
 
+        TEST(LogicalPlanOptimizerTest, JoinUsesBothKnownMemoryCostsAndKeepsTiesOrCardinalityFallback) {
+            class Costs final : public LogicalStatisticsProvider {
+            public:
+                unsigned mode = 0;
+                std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &root) const noexcept override {
+                    const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+                    if (!scan) return std::nullopt;
+                    const uint64_t rows = scan->getVariable() == "a" ? 100 : 10;
+                    return LogicalCardinalityEstimate{0, rows, 100};
+                }
+                std::optional<uint64_t> estimateJoinMaterializedBytes(const logical::LogicalOperator &root) const noexcept override {
+                    const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+                    if (!scan || (mode == 1 && scan->getVariable() == "a")) return std::nullopt;
+                    return scan->getVariable() == "a" || mode == 2 ? 100 : 10000;
+                }
+            } costs;
+            for (costs.mode = 0; costs.mode < 3; ++costs.mode) {
+                auto root = std::make_unique<logical::LogicalJoin>(std::make_unique<logical::LogicalNodeScan>("a"),
+                    std::make_unique<logical::LogicalNodeScan>("b"));
+                auto result = LogicalPlanOptimizer().optimize(std::move(root), &costs);
+                const auto *join = dynamic_cast<const logical::LogicalJoin *>(result.root.get()); ASSERT_NE(join, nullptr);
+                const auto *right = dynamic_cast<const logical::LogicalNodeScan *>(join->getRight()); ASSERT_NE(right, nullptr);
+                // More rows may still be the cheaper retained side. A missing
+                // width falls back to row count; equal byte costs keep order.
+                EXPECT_EQ(right->getVariable(), costs.mode == 0 ? "a" : "b");
+                EXPECT_EQ(result.rewrite_count, costs.mode == 0 ? 1U : 0U);
+            }
+        }
+
 	} // namespace
 } // namespace graph::query::optimization

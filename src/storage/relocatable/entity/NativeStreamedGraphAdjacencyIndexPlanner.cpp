@@ -10,6 +10,9 @@
 
 #include <array>
 #include <utility>
+#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "graph/storage/relocatable/metadata/NativeGraphDeferredIndexImages.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyMutationMerger.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -115,11 +118,84 @@ namespace graph::storage {
 		build.leaf_value_layout = BTreeLeafValueLayout::BLVL_EMPTY;
 		const std::optional<IndexRootLocation> existingRoot =
 				metadata.findIndexRootOptional(planning.current_snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+        const auto &sourceSuperblock = planning.current_snapshot.superblock();
+        const auto sourceDataRoot = sourceSuperblock.usesPageDirectoryBootstrap() ?
+            metadata.pages_.readPageDirectoryBootstrap(sourceSuperblock.page_directory_root).data_page_directory_root :
+            sourceSuperblock.page_directory_root;
+        const auto memory = utils::OwnedAllocationScope::owner();
+        const auto receipt = [&] {
+            return std::shared_ptr<NativeGraphDeferredIndexImages>(
+                new (memory) NativeGraphDeferredIndexImages(metadata, planning.current_snapshot.superblock().generation, RSS_GLOBAL_ADJACENCY_INDEX_ID,
+                    existingRoot, memory, options.first_slot, options.last_slot, planning.private_segments, planning.private_segment_reader, sourceDataRoot),
+                std::default_delete<NativeGraphDeferredIndexImages>(), utils::OwnedPmrAllocator<std::byte>(memory));
+        };
+        const auto attachFreshShape = [&](NativeGraphDeferredIndexPlan &result, const BTreeInitialTreeMutationPlan &fresh) {
+            if (!memory) return;
+            auto proof = receipt(); proof->entry_count_ = fresh.entry_count;
+            for (const auto &pool : fresh.new_pool_mutations) proof->page_count_ += pool.appended_page_count;
+            proof->fresh_mutation_ = std::move(result.mutation); proof->fresh_preparer_ = std::move(result.preparer);
+            result.mutation = {}; result.mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+            result.images = std::move(proof);
+        };
+        const auto hint = [&] {
+            std::lock_guard lock(metadata.streamed_adjacency_shape_mutex_);
+            return metadata.streamed_adjacency_shape_;
+        }();
+        constexpr size_t threshold = NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD;
+        if (memory && existingRoot && hint.data_root == sourceDataRoot && hint.root == existingRoot &&
+            hint.pages && hint.pages <= options.maximum_pages && hint.entries <= options.maximum_entries) {
+            // Probe only the bounded new run. Unknown/stale shape never causes
+            // an index census on the incremental path.
+            utils::OwnedHeapReservation cursorCredit(memory, 65536U);
+            size_t count = 0, added = 0; bool insertionsOnly = true;
+            BTreeIndex existing(RSS_GLOBAL_ADJACENCY_INDEX_ID, pages, metadata, BTreeLeafValueLayout::BLVL_EMPTY);
+            auto cursor = operations();
+            while (auto next = cursor()) {
+                if (++count == threshold) break;
+                if (next->value_or_child != 1U) { insertionsOnly = false; break; }
+                if (!existing.find(planning.current_snapshot, next->key)) ++added;
+            }
+            if (count && count < threshold && insertionsOnly) {
+                if (added > options.maximum_entries - hint.entries) {
+                    debug::PerfTrace::addValue("native_graph.write.streamed_adjacency.bounds_refused", 1);
+                    fail(FormatError::FERR_INVALID_STATE, "streamed adjacency delta exceeds its final entry bound");
+                }
+                auto proof = receipt(); proof->incremental_ = true;
+                const auto source = [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
+                    auto input = operations();
+                    while (auto next = input()) {
+                        if (next->value_or_child != 1U)
+                            fail(FormatError::FERR_INVALID_STATE, "streamed adjacency delta changed its insertion source");
+                        emit({BTreeScalarIndexOperationKind::BSIOP_UPSERT, std::move(next->key), 0});
+                    }
+                };
+                proof->plan_ = pages.planGlobalAdjacencyImagesFromSource(planning.current_snapshot, count, source, memory,
+                    [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); });
+                size_t appended = 0, erased = 0;
+                for (const auto &request : proof->plan_.pool_requests) {
+                    appended += request.appended_page_count; erased += request.expected_retirements.size();
+                }
+                if (proof->plan_.new_pool_mutation) appended += proof->plan_.new_pool_mutation->appended_page_count;
+                for (const auto &pool : proof->plan_.additional_new_pool_mutations) appended += pool.appended_page_count;
+                if (erased > hint.pages || appended > options.maximum_pages - (hint.pages - erased))
+                    fail(FormatError::FERR_INVALID_STATE, "streamed adjacency delta exceeds its final page bound");
+                proof->entry_count_ = hint.entries + added; proof->page_count_ = hint.pages - erased + appended;
+                proof->assignments_credit_.set(16384U +
+                    (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
+                        size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
+                NativeGraphDeferredIndexPlan result; result.mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+                result.images = std::move(proof);
+                debug::PerfTrace::addValue("native_graph.write.streamed_adjacency.incremental_plans", 1);
+                debug::PerfTrace::addValue("native_graph.write.streamed_adjacency.incremental_keys", int64_t(count));
+                return result;
+            }
+        }
+        debug::PerfTrace::addValue("native_graph.write.streamed_adjacency.full_plans", 1);
+
 		if (!existingRoot.has_value()) {
-			return makeFreshPlan(BulkBTreeBuilder::planNativeTree(pages, metadata, planning.current_snapshot,
-																  RSS_GLOBAL_ADJACENCY_INDEX_ID,
-																  insertionEntries(operations), build),
-								 options, checkpointLsn);
+            const auto fresh = BulkBTreeBuilder::planNativeTree(pages, metadata, planning.current_snapshot,
+                RSS_GLOBAL_ADJACENCY_INDEX_ID, insertionEntries(operations), build);
+            auto result = makeFreshPlan(fresh, options, checkpointLsn); attachFreshShape(result, fresh); return result;
 		}
 
 		BTreeIndex existing(RSS_GLOBAL_ADJACENCY_INDEX_ID, pages, metadata, BTreeLeafValueLayout::BLVL_EMPTY);
@@ -155,6 +231,7 @@ namespace graph::storage {
 			std::move(retired.begin(), retired.end(), batches.begin());
 			std::move(fresh.begin(), fresh.end(), batches.begin() + static_cast<ptrdiff_t>(retirementPoolCount));
 		};
+        attachFreshShape(result, replacement);
 		return result;
 	}
 

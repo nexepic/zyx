@@ -1,0 +1,58 @@
+{
+  "timing_benchmark": false,
+  "purpose": "Untimed correctness preparation after verified adjacency/membership images, mixed-pool compatibility and once-only fresh-pool registration and early logical identity reservation",
+  "load_batch_rows": 1000,
+  "binary_sha256": "e5049440952eae65c7cfe273dcdd9acf933f422f72ad7d593211ebad47f5bdda",
+  "cases": [
+    {
+      "scale": "medium",
+      "returncode": 0,
+      "exists": true,
+      "bytes": 313655296,
+      "sha256": "e55db7c3bad581726009a4fd7d4f140f36a8c61cc3ae9a98aa2f1e170357b28a",
+      "work": {
+        "timing_benchmark": false,
+        "ordinary_plans": 859,
+        "ordinary_images": 18618,
+        "ordinary_member_plans": 860,
+        "ordinary_member_images": 5580,
+        "mixed_skips": 1,
+        "fresh_pools": 556,
+        "adjacency_full": 0,
+        "adjacency_delta": 0,
+        "adjacency_frames": 0,
+        "adjacency_keys": 0,
+        "membership_full": 0,
+        "membership_delta": 0,
+        "membership_frames": 0,
+        "membership_keys": 0
+      },
+      "prepared_rows": 1085000
+    },
+    {
+      "scale": "holdout",
+      "returncode": 0,
+      "exists": true,
+      "bytes": 264372224,
+      "sha256": "ee0a13afad38dd6327f1a21bbc154caba084284aa803b3839e44c2a6b94123a1",
+      "work": {
+        "timing_benchmark": false,
+        "ordinary_plans": 771,
+        "ordinary_images": 16727,
+        "ordinary_member_plans": 772,
+        "ordinary_member_images": 5008,
+        "mixed_skips": 1,
+        "fresh_pools": 457,
+        "adjacency_full": 0,
+        "adjacency_delta": 0,
+        "adjacency_frames": 0,
+        "adjacency_keys": 0,
+        "membership_full": 0,
+        "membership_delta": 0,
+        "membership_frames": 0,
+        "membership_keys": 0
+      },
+      "prepared_rows": 935000
+    }
+  ]
+}

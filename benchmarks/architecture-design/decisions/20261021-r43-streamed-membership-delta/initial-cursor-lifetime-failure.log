@@ -1,0 +1,145 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 20 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages
+unknown file: Failure
+C++ exception with description "relocatable external B+Tree sorter permits only one active rewindable source cursor" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages (1495 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild
+unknown file: Failure
+C++ exception with description "relocatable external B+Tree sorter permits only one active rewindable source cursor" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild (376 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:109: Failure
+Expected: (void)tx->commit() throws an exception of type std::system_error.
+  Actual: it throws graph::storage::FormatException with description "relocatable external B+Tree sorter permits only one active rewindable source cursor".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:111: Failure
+Value of: injected.load()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:111: Failure
+Expected equality of these values:
+  work.incremental
+    Which is: 0
+  1
+
+unknown file: Failure
+C++ exception with description "relocatable external B+Tree sorter permits only one active rewindable source cursor" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry (364 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:187: Failure
+Expected equality of these values:
+  work.refused
+    Which is: 0
+  1
+
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication (3151 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts
+unknown file: Failure
+C++ exception with description "relocatable external B+Tree sorter permits only one active rewindable source cursor" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts (1804 ms)
+[----------] 5 tests from RelocatableStorageBackendTest (7191 ms total)
+
+[----------] 13 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores (2 ms)
+[----------] 13 tests from RelocatableMetadataStoreTest (26 ms total)
+
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:155: Failure
+Expected: (void)tx->commit() throws an exception of type std::system_error.
+  Actual: it throws graph::storage::FormatException with description "relocatable external B+Tree sorter permits only one active rewindable source cursor".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:157: Failure
+Value of: injected.load()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:157: Failure
+Expected equality of these values:
+  armed.work.incremental
+    Which is: 0
+  1
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:158: Failure
+Expected equality of these values:
+  tx->state()
+    Which is: 1-byte object <03>
+  LogicalGraphTransactionState::LGTTS_INDETERMINATE
+    Which is: 1-byte object <05>
+
+[  FAILED  ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0, where GetParam() = false (292 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:155: Failure
+Expected: (void)tx->commit() throws an exception of type std::system_error.
+  Actual: it throws graph::storage::FormatException with description "relocatable external B+Tree sorter permits only one active rewindable source cursor".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:157: Failure
+Value of: injected.load()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:157: Failure
+Expected equality of these values:
+  armed.work.incremental
+    Which is: 0
+  1
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp:158: Failure
+Expected equality of these values:
+  tx->state()
+    Which is: 1-byte object <03>
+  LogicalGraphTransactionState::LGTTS_INDETERMINATE
+    Which is: 1-byte object <05>
+
+unknown file: Failure
+C++ exception with description "relocatable location lookup requires an ID and published directory root" thrown in the test body.
+
+[  FAILED  ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1, where GetParam() = true (274 ms)
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest (566 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 3 test suites ran. (7785 ms total)
+[  PASSED  ] 13 tests.
+[  FAILED  ] 7 tests, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry
+[  FAILED  ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication
+[  FAILED  ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts
+[  FAILED  ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0, where GetParam() = false
+[  FAILED  ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1, where GetParam() = true
+
+ 7 FAILED TESTS

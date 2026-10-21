@@ -65,6 +65,12 @@ namespace graph::storage {
 		size_t vector_delta_rebuild_threshold = 0U;
 		size_t maximum_vector_delta_overlay_entries = 0U;
 		size_t maximum_vector_delta_pages = 0U;
+        // Explicit laboratory selection only. The ordinary coordinator maintains
+        // this existing candidate root in the same publication as graph state.
+        // Default writers/readers and the primary-Edge verification stay unchanged.
+        uint64_t covered_adjacency_candidate_index = 0U;
+        size_t maximum_covered_adjacency_changes = 0U;
+        size_t covered_adjacency_workspace_bytes = 0U;
 	};
 
 	struct NativeGraphMutationExecutionResult {

@@ -1,0 +1,14 @@
+{
+  "timing_benchmark": false,
+  "binary_sha256": "51eea8814b34435b984a15f0a5fc49f877e7b189c07a3a1d306f606885125afc",
+  "cases": [
+    {
+      "scale": "medium",
+      "name": "create_country",
+      "query": "CREATE INDEX FOR (u:User) ON (u.country)",
+      "returncode": 0,
+      "passed": false,
+      "expected": []
+    }
+  ]
+}

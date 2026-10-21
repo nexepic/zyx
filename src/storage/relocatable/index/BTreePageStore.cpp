@@ -3085,6 +3085,50 @@ namespace graph::storage {
         return overlay->buildPlan();
     }
 
+    BTreeStructuralMutationPlan BTreePageStore::planStreamedMembershipImagesFromSource(const MetadataSnapshotPin &snapshot,
+        const IndexDefinition &definition, size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !isSystemCatalogIndexDefinitionId(definition.index_id) ||
+            definition.kind != IndexDefinitionKind::IDK_LABEL || definition.entity_kind != IndexDefinitionEntityKind::IDEK_EDGE ||
+            !memory || !source || !sink || !operationCount || operationCount >= 4096U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "streamed membership images require bounded owned EDGE schema");
+        utils::OwnedAllocationScope scope(memory);
+        auto overlay = utils::makeSharedOwned<TransactionBTreeOverlay>(*this, metadata_, snapshot, definition.index_id,
+            false, false, BTreeLeafValueLayout::BLVL_U64, std::move(sink), memory, nullptr, true);
+        size_t emitted = 0;
+        source([&](const BTreeScalarIndexOperation &operation) {
+            if (emitted == operationCount || operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT ||
+                operation.key.size() > RSS_INDEX_KEY_MAX_BYTES || IndexKeyCodec::decodeEntryEntityId(operation.key) != operation.value ||
+                IndexKeyCodec::decodeIntegerEntryValue(operation.key) <= 0)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "streamed membership source changed count, type or owner");
+            ++emitted; overlay->apply(operation);
+        });
+        if (emitted != operationCount)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "streamed membership source is incomplete");
+        return overlay->buildPlan();
+    }
+
+    BTreeStructuralMutationPlan BTreePageStore::planGlobalAdjacencyImagesFromSource(const MetadataSnapshotPin &snapshot,
+        size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !memory || !sink || !source || !operationCount || operationCount >= 4096U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "global adjacency images require one owned bounded source");
+        utils::OwnedAllocationScope scope(memory);
+        auto overlay = utils::makeSharedOwned<TransactionBTreeOverlay>(*this, metadata_, snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID,
+            false, false, BTreeLeafValueLayout::BLVL_EMPTY, std::move(sink), memory, nullptr);
+        size_t emitted = 0;
+        source([&](const BTreeScalarIndexOperation &operation) {
+            if (emitted == operationCount || operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "streamed adjacency image source is incomplete or not insertion-only");
+            ++emitted; overlay->apply(operation);
+        });
+        if (emitted != operationCount)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "streamed adjacency image source changed its size");
+        return overlay->buildPlan();
+    }
+
     BTreeStructuralMutationPlan BTreePageStore::planNativeScalarIndexImages(const MetadataSnapshotPin &snapshot,
         const IndexDefinition &definition, size_t operationCount,
         const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,

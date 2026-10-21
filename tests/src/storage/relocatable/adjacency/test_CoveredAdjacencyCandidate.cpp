@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <map>
+#include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
+#include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
 #include <iterator>
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp"
@@ -23,6 +25,29 @@ protected:
     NativeGraphWritePlannerOptions options() const {
         NativeGraphWritePlannerOptions o; o.first_slot = PhysicalSlotId(40); o.last_slot = PhysicalSlotId(100);
         o.entity_pool_owner_id = 901; o.property_roots = {o.first_slot, o.last_slot, 902}; return o;
+    }
+    NativeGraphMutationExecutorOptions logicalLimits() const {
+        NativeGraphMutationExecutorOptions limits;
+    limits.maximum_index_definitions = limits.maximum_constraint_definitions = 8;
+    limits.maximum_constraint_entity_scan = 128;
+    limits.maximum_constraint_support_collisions = 8;
+    limits.maximum_vector_records = 64; limits.maximum_vector_pages = 8;
+    limits.vector_delta_rebuild_threshold = 8; limits.maximum_vector_delta_overlay_entries = 16;
+    limits.maximum_vector_delta_pages = 4;
+    limits.covered_adjacency_candidate_index = CANDIDATE_INDEX;
+    limits.maximum_covered_adjacency_changes = 2;
+    limits.covered_adjacency_workspace_bytes = 1024 * 1024;
+        return limits;
+    }
+    NativeGraphMutationExecutor logicalExecutor(NativeGraphWritePlanner &planner, PageBackedGraphReadAdapter &graph,
+        NativeGraphMutationExecutorOptions limits) {
+    NativeGraphMutationTokenResolvers tokens;
+    tokens.schema_token = [](const MetadataSnapshotPin &, SystemCatalogSchemaTokenKind, std::string_view) -> std::optional<uint64_t> { return 1; };
+    tokens.property_key_token = [](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 1; };
+    tokens.property_key_name = [](const MetadataSnapshotPin &, uint32_t) -> std::optional<std::string> { return "value"; };
+    return NativeGraphMutationExecutor(planner, graph, *btree_pages_, *vector_pages_, *vector_manifests_, *metadata_,
+        tokens, [](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+        [](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, limits);
     }
     void verifyDerivedPublication(BootstrapPublishFailpoint failpoint);
     void seed() {
@@ -790,4 +815,79 @@ TEST_F(CoveredAdjacencyCandidateTest, DeterministicSkewedInsertDeleteCyclesKeepE
         EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, old, CANDIDATE_INDEX, 256, 8192).edges, 90U);
         EXPECT_EQ(memory->used(), 0U);
     }
+}
+
+TEST_F(CoveredAdjacencyCandidateTest, LogicalCoordinatorMaintainsCandidateAndRollsBackOverBudgetBatch) {
+    seed(); auto old = metadata_->openSnapshot();
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
+    PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+    auto executor = logicalExecutor(planner, graph, logicalLimits());
+    LogicalGraphMutationBatch erase;
+    erase.edge_deletes = {{edges[0].entity_id}, {edges[89].entity_id}};
+    ASSERT_TRUE(executor.execute(erase).committed());
+    auto after = metadata_->openSnapshot();
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, after, CANDIDATE_INDEX, 100, 64).edges, 88U);
+    EXPECT_EQ(scanAll(old, GlobalAdjacencyDirection::GAD_OUT, source).size(), 90U);
+    LogicalGraphMutationBatch tooLarge;
+    tooLarge.edge_deletes = {{edges[1].entity_id}, {edges[2].entity_id}, {edges[3].entity_id}};
+    EXPECT_THROW(executor.execute(tooLarge), FormatException);
+    auto unchanged = metadata_->openSnapshot();
+    EXPECT_EQ(unchanged.superblock().generation, after.superblock().generation);
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, unchanged, CANDIDATE_INDEX, 100, 64).edges, 88U);
+    // A non-topology publication still authenticates and preserves the root.
+    LogicalGraphMutationBatch labels;
+    labels.node_label_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, target}, {"Label"}}};
+    ASSERT_TRUE(executor.execute(labels).committed());
+    auto labeled = metadata_->openSnapshot();
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, labeled, CANDIDATE_INDEX, 100, 64).edges, 88U);
+
+    const LogicalGraphMutationEntityReference from{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, source};
+    const LogicalGraphMutationEntityReference to{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, target};
+    LogicalGraphMutationBatch create;
+    create.edge_creates = {{from, to, "Type", {}}, {from, from, "Type", {}}};
+    ASSERT_TRUE(executor.execute(create).committed());
+    auto inserted = metadata_->openSnapshot();
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, inserted, CANDIDATE_INDEX, 100, 64).edges, 90U);
+    EXPECT_EQ(scanAll(inserted, GlobalAdjacencyDirection::GAD_IN, source).size(), 1U);
+    LogicalGraphMutationBatch properties;
+    properties.property_replacements = {{from, {{"value", graph::PropertyValue(int64_t(7))}}}};
+    ASSERT_TRUE(executor.execute(properties).committed());
+    auto propertyVersion = metadata_->openSnapshot();
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, propertyVersion, CANDIDATE_INDEX, 100, 64).edges, 90U);
+    LogicalGraphMutationBatch detach;
+    detach.node_deletes = {{source, true, 100U}};
+    EXPECT_THROW(executor.execute(detach), FormatException);
+    auto refused = metadata_->openSnapshot();
+    EXPECT_EQ(refused.superblock().generation, propertyVersion.superblock().generation);
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, refused, CANDIDATE_INDEX, 100, 64).edges, 90U);
+}
+
+TEST_F(CoveredAdjacencyCandidateTest, LogicalCoordinatorRejectsInvalidSelectionBeforePublishing) {
+    seed();
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
+    PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+    auto before = metadata_->openSnapshot();
+    for (unsigned mode = 0; mode < 6; ++mode) {
+        auto limits = logicalLimits();
+        if (mode == 0) limits.covered_adjacency_candidate_index = uint64_t(1) << 62;
+        if (mode == 1) limits.maximum_covered_adjacency_changes = 0;
+        if (mode == 2) limits.maximum_covered_adjacency_changes = 65;
+        if (mode == 3) limits.covered_adjacency_workspace_bytes = 0;
+        if (mode == 4) limits.covered_adjacency_workspace_bytes = 1024 * 1024 + 1;
+        if (mode == 5) limits.covered_adjacency_candidate_index = 0;
+        EXPECT_THROW(logicalExecutor(planner, graph, limits), std::invalid_argument) << mode;
+    }
+    auto limits = logicalLimits(); ++limits.covered_adjacency_candidate_index;
+    auto missingRoot = logicalExecutor(planner, graph, limits);
+    LogicalGraphMutationBatch erase; erase.edge_deletes = {{edges[0].entity_id}};
+    EXPECT_THROW(missingRoot.execute(erase), FormatException);
+    limits = logicalLimits(); limits.covered_adjacency_workspace_bytes = 1;
+    auto noWorkspace = logicalExecutor(planner, graph, limits);
+    EXPECT_ANY_THROW(noWorkspace.execute(erase));
+    auto after = metadata_->openSnapshot();
+    EXPECT_EQ(after.superblock().generation, before.superblock().generation);
+    EXPECT_EQ(Candidate::verifyIntegrity(*btree_pages_, *entities_, *metadata_, after, CANDIDATE_INDEX, 100, 64).edges, 90U);
 }

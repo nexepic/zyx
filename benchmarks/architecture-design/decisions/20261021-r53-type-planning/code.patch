@@ -1,0 +1,205 @@
+diff --git a/cmake/SourceSets.cmake b/cmake/SourceSets.cmake
+index e6109c22..b3a97d62 100644
+--- a/cmake/SourceSets.cmake
++++ b/cmake/SourceSets.cmake
+@@ -513,6 +513,7 @@ set(ZYX_NATIVE_TEST_SOURCES
+     "${PROJECT_SOURCE_DIR}/tests/src/debug/test_PerfTraceScopedObserver.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/log/test_Log.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineAnchorPlanning.cpp"
++    "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineTypePlanning.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineLogicalBackend.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineCacheIdentity.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalVectorProcedureBatch.cpp"
+diff --git a/include/graph/storage/LogicalGraphRead.hpp b/include/graph/storage/LogicalGraphRead.hpp
+index 13eb29b3..c66277bc 100644
+--- a/include/graph/storage/LogicalGraphRead.hpp
++++ b/include/graph/storage/LogicalGraphRead.hpp
+@@ -1175,6 +1175,8 @@ namespace graph::storage {
+ 		std::optional<LogicalGraphCardinalityStatistics> graph;
+ 		// One optional cost estimate per requested label combination, in order.
+ 		std::vector<std::optional<uint64_t>> node_counts;
++        // Requested nonempty relationship-type names, in order; missing is unknown.
++        std::vector<std::optional<uint64_t>> edge_type_counts;
+ 	};
+ 
+ 	class LogicalGraphStatisticsBackend {
+@@ -1202,6 +1204,13 @@ namespace graph::storage {
+ 			return result;
+ 		}
+ 
++        [[nodiscard]] virtual LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
++                std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const {
++            auto result = readLogicalPlanningStatistics(labels);
++            result.edge_type_counts.resize(types.size());
++            return result;
++        }
++
+ 
+ 	};
+ 
+diff --git a/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp b/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
+index dd916a62..fbbc1442 100644
+--- a/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
++++ b/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
+@@ -395,6 +395,8 @@ namespace graph::storage {
+ 		estimateLogicalNodeCardinality(std::span<const std::string> labels) const override;
+ 		[[nodiscard]] LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+ 			std::span<const std::vector<std::string>> labels) const override;
++        [[nodiscard]] LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
++            std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const override;
+ 
+ 		[[nodiscard]] std::unique_ptr<LogicalGraphVectorSearchSnapshot>
+ 		openLogicalGraphVectorSearchSnapshot() const override;
+diff --git a/src/query/api/QueryEngine.cpp b/src/query/api/QueryEngine.cpp
+index 1e2e97e7..b4e741c7 100644
+--- a/src/query/api/QueryEngine.cpp
++++ b/src/query/api/QueryEngine.cpp
+@@ -105,7 +105,12 @@ namespace graph::query {
+ 					std::vector<std::vector<std::string>> labels;
+ 					collectJoinLabels(root, false, 0U, labels);
+ 					if (allowAnchors) collectAnchorLabels(root, 0U, labels);
+-					auto batch = backend.readLogicalPlanningStatistics(labels);
++					std::vector<std::string> types;
++                    collectJoinTypes(root, false, 0U, types);
++                    auto batch = backend.readLogicalPlanningStatistics(labels, types);
++                    if (batch.edge_type_counts.size() == types.size())
++                        for (size_t i = 0; i < types.size(); ++i)
++                            type_estimates_.emplace_back(std::move(types[i]), batch.edge_type_counts[i]);
+ 					statistics_ = batch.graph;
+ 					if (batch.node_counts.size() == labels.size()) {
+ 						for (size_t i = 0U; i < labels.size(); ++i)
+@@ -183,13 +188,32 @@ namespace graph::query {
+ 									estimate = {0U, 0U, 0U};
+ 									continue;
+ 								}
++
++                                uint64_t edges = statistics.edge_count;
++                                bool typedEstimate = false;
++                                if (refineLabels && !(*traversal)->getEdgeType().empty())
++                                    for (const auto &[name, count] : type_estimates_)
++                                        if (name == (*traversal)->getEdgeType() && count && *count <= edges) { edges = *count; typedEstimate = true; break; }
+ 								const uint64_t averageAdjacency =
+-										statistics.edge_count / statistics.node_count +
+-										(static_cast<uint64_t>(statistics.edge_count % statistics.node_count != 0U));
++										edges / statistics.node_count +
++                                        static_cast<uint64_t>(edges % statistics.node_count != 0U);
+ 								// The runtime deduplicates a `both` traversal by Edge ID, so each
+ 								// input row has at most the global Edge count in every direction.
+-								estimate.expected_rows = saturatingMultiply(estimate.expected_rows, averageAdjacency);
+-								estimate.upper_bound = saturatingMultiply(estimate.upper_bound, statistics.edge_count);
++
++                                if (typedEstimate && (edges == 0U || estimate.expected_rows <= std::numeric_limits<uint64_t>::max() / edges)) {
++                                    // Multiply before dividing: rounding the degree first would
++                                    // estimate N rows for a single rare Edge in an N-Node scan.
++                                    const uint64_t product = estimate.expected_rows * edges;
++                                    uint64_t expected = product / statistics.node_count +
++                                        static_cast<uint64_t>(product % statistics.node_count != 0U);
++                                    if ((*traversal)->getDirection() == "both")
++                                        expected = std::min(saturatingMultiply(expected, 2U),
++                                            saturatingMultiply(estimate.upper_bound, edges));
++                                    estimate.expected_rows = expected;
++                                } else {
++                                    estimate.expected_rows = saturatingMultiply(estimate.expected_rows, averageAdjacency);
++                                }
++								estimate.upper_bound = saturatingMultiply(estimate.upper_bound, edges);
+ 							}
+ 							return estimate;
+ 						}
+@@ -240,6 +264,18 @@ namespace graph::query {
+ 				return left * right;
+ 			}
+ 
++
++            static void collectJoinTypes(const logical::LogicalOperator &root, bool insideJoin, size_t depth,
++                std::vector<std::string> &types) {
++                if (depth >= 64U || types.size() >= 64U) return;
++                insideJoin = insideJoin || root.getType() == logical::LogicalOpType::LOP_JOIN;
++                const auto *traversal = insideJoin ? dynamic_cast<const logical::LogicalTraversal *>(&root) : nullptr;
++                if (traversal && !traversal->getEdgeType().empty() &&
++                    std::find(types.begin(), types.end(), traversal->getEdgeType()) == types.end())
++                    types.push_back(traversal->getEdgeType());
++                for (const auto *child : root.getChildren())
++                    if (child) collectJoinTypes(*child, insideJoin, depth + 1U, types);
++            }
+ 			static void collectJoinLabels(const logical::LogicalOperator &root, bool insideJoin, size_t depth,
+ 				std::vector<std::vector<std::string>> &labels) {
+ 				if (depth >= 64U || labels.size() >= 64U) return;
+@@ -285,6 +321,7 @@ namespace graph::query {
+ 				return estimate;
+ 			}
+ 
++            std::vector<std::pair<std::string, std::optional<uint64_t>>> type_estimates_;
+ 			mutable std::vector<std::pair<std::vector<std::string>, std::optional<uint64_t>>> label_estimates_;
+ 			const storage::LogicalGraphStatisticsBackend &backend_;
+ 			std::optional<storage::LogicalGraphCardinalityStatistics> statistics_;
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index 22aef654..de16b594 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -6779,13 +6779,37 @@ namespace graph::storage {
+ 
+ 	LogicalGraphPlanningStatistics RelocatableStorageBackend::readLogicalPlanningStatistics(
+ 			std::span<const std::vector<std::string>> labels) const {
++        return readLogicalPlanningStatistics(labels, {});
++    }
++
++    LogicalGraphPlanningStatistics RelocatableStorageBackend::readLogicalPlanningStatistics(
++            std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const {
+ 		requireOpen();
+ 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+ 		LogicalGraphPlanningStatistics result;
+ 		result.node_counts.resize(labels.size());
++        result.edge_type_counts.resize(types.size());
+ 		const auto statistics = system_catalog_->readGraphCardinalityStatistics(snapshot);
+ 		if (!statistics) return result;
+ 		result.graph = LogicalGraphCardinalityStatistics{statistics->node_count, statistics->edge_count};
++        // Planning requests are bounded by the optimizer; authenticate optional
++        // type counts in this same pin, never by opening a graph read snapshot.
++        // Duplicate names share a lookup; malformed inputs remain unavailable.
++        std::map<std::string, std::optional<uint64_t>> typeCounts;
++        for (size_t i = 0; i < types.size(); ++i) {
++            if (types[i].empty()) continue;
++            auto [entry, inserted] = typeCounts.try_emplace(types[i], std::nullopt);
++            if (inserted) try {
++                const auto token = system_catalog_->findSchemaToken(snapshot,
++                    SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, types[i]);
++                if (token) {
++                    const auto count = system_catalog_->readTokenCardinality(snapshot,
++                        SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, *token);
++                    if (count && *count <= statistics->edge_count) entry->second = count;
++                }
++            } catch (...) { }
++            result.edge_type_counts[i] = entry->second;
++        }
+ 		std::map<std::string, std::optional<uint64_t>> names;
+ 		std::vector<uint64_t> tokens;
+ 		for (const auto &combination : labels) for (const auto &label : combination)
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableTokenCardinality.cpp b/tests/src/storage/relocatable/backend/test_RelocatableTokenCardinality.cpp
+index 567ff0ef..5259a69a 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableTokenCardinality.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableTokenCardinality.cpp
+@@ -565,3 +565,24 @@ TEST(NativeMembershipAccessCostTest, IncreasingCandidateCountCannotReenterCandid
+   }
+  }
+ }
++
++TEST_F(RelocatableStorageBackendTest, PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness) {
++ auto options = backendOptions(); options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
++ auto backend = RelocatableStorageBackend::initializeNew(options); backend->open();
++ const auto nodes = backend->createLogicalNodes({{{"Person"}, {}}, {{}, {}}});
++ static_cast<void>(backend->createLogicalEdges({{nodes[0], nodes[1], "KNOWS", {}}, {nodes[0], nodes[0], "", {}}}));
++ const std::vector<std::vector<std::string>> labels{{"Person"}, {}};
++ const std::vector<std::string> types{"KNOWS", "Missing", "", "KNOWS"};
++ const auto before = backend->readLogicalPlanningStatistics(labels, types);
++ ASSERT_TRUE(before.graph); EXPECT_EQ(before.graph->edge_count, 2U);
++ EXPECT_EQ(before.node_counts, (std::vector<std::optional<uint64_t>>{1, 2}));
++ EXPECT_EQ(before.edge_type_counts, (std::vector<std::optional<uint64_t>>{1, std::nullopt, std::nullopt, 1}));
++ static_cast<void>(backend->createLogicalEdges({{nodes[1], nodes[0], "KNOWS", {}}}));
++ const auto after = backend->readLogicalPlanningStatistics(labels, types);
++ ASSERT_TRUE(after.graph); EXPECT_EQ(after.graph->edge_count, 3U);
++ EXPECT_EQ(after.edge_type_counts, (std::vector<std::optional<uint64_t>>{2, std::nullopt, std::nullopt, 2}));
++ EXPECT_EQ(before.edge_type_counts.front(), 1U);
++ backend->close(); backend->open();
++ EXPECT_EQ(backend->readLogicalPlanningStatistics(labels, types).edge_type_counts, after.edge_type_counts);
++ backend->close();
++}

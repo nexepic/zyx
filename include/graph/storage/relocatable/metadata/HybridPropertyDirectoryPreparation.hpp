@@ -138,7 +138,13 @@ class HybridPropertyDirectoryPreparation final {
         auto generation = binding.root.root_generation;
         CatalogEntry pool; size_t used = RSS_PAGE_POOL_DATA_FRAME_COUNT;
         for (auto &page : dirty) {
-            checkpoint(); if (used == RSS_PAGE_POOL_DATA_FRAME_COUNT) { pool = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, index, std::min(size_t(RSS_PAGE_POOL_DATA_FRAME_COUNT), dirty.size() - images_.size())); used = 0; }
+            checkpoint();
+            // Consume authenticated partial capacity before reserving another
+            // whole pool. A multi-page request can otherwise strand every tail
+            // smaller than this transaction's dirty-page count.
+            const auto selected = allocatePool(SegmentKind::SGK_INDEX_PAGE_POOL, index, 1U);
+            if (selected.segment_id != pool.segment_id) used = 0;
+            pool = selected;
             const PageOwnerHeader owner{page.header().page_id, pool.owner_id, PageOwnerKind::POK_INDEX, 0,
                 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
             auto rebound = page.rebindOwner(owner);

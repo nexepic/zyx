@@ -41,6 +41,19 @@ class HybridPropertyDemotionPreparation final {
     NamespaceEdits other_;
     HybridPropertyGroupRecord group_;
     bool group_erased_ = false;
+    template<class Image>
+    static void synchronizeMembershipLiveness(const HybridPropertyGroupRecord &previous,
+        const HybridPropertyGroupRecord &replacement, Generation generation, Image &&image) {
+        if (previous.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP || previous.live == replacement.live) return;
+        hybrid_property_detail::require(replacement.mode == previous.mode && replacement.column_membership == previous.column_membership &&
+            replacement.columns == previous.columns, "native liveness update changes compact membership ownership");
+        const auto reference = previous.column_membership;
+        auto matrix = image(reference.page_id).readColumnMembership(reference, previous, generation);
+        matrix.live = replacement.live; matrix.semantic_generation = generation;
+        // validateInGroup refuses a deleted row whose actual field removals
+        // were omitted; this is not permission to silently clear memberships.
+        image(reference.page_id).replaceColumnMembership(reference, matrix, previous, replacement, generation);
+    }
     explicit HybridPropertyDemotionPreparation(std::shared_ptr<std::pmr::memory_resource> memory)
         : pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(memory)),
           owners_(utils::OwnedPmrAllocator<HybridPropertyOwnerMap::Entry>(memory)),
@@ -112,7 +125,7 @@ private:
             SlottedSlotReference reference;
             HybridPropertyGroupRecord source, replacement;
             int64_t memberships = 0, columns = 0;
-            bool dirty = false;
+            bool dirty = false, matrix_changed = false;
         };
         utils::OwnedVector<GroupWork> groups{utils::OwnedPmrAllocator<GroupWork>(memory)};
         utils::OwnedVector<const HybridPropertyColumnDelta *> ordered{
@@ -143,6 +156,11 @@ private:
                 require(emittedMembers <= 4096U, "native demotion exceeds4096actual emitted members");
             } else require(!effects.columns && effects.memberships >= -64 && effects.memberships <= 64,
                 "invalid compatible native column effects");
+            if (group->source.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+                group->matrix_changed |= bool(pendingMask(group->source)) || plan->action() == HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD ||
+                    (plan->action() != HybridPropertyColumnDelta::Action::HCD_NO_CHANGE &&
+                        plan->action() != HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD &&
+                        plan->sourceColumn().presence != plan->replacementColumn().presence);
             group->memberships += effects.memberships; group->columns += effects.columns;
             group->dirty |= plan->action() != HybridPropertyColumnDelta::Action::HCD_NO_CHANGE || pendingMask(group->source);
             ordered.push_back(plan);
@@ -166,8 +184,13 @@ private:
                 "native mixed group effects underflow or overflow");
             if (!group.dirty) continue;
             group.replacement.memberships = uint32_t(memberships); group.replacement.columns = uint32_t(columns);
-            group.replacement.live |= pendingMask(group.source); group.replacement.semantic_generation = batch.generation(); group.replacement.validate();
-            if (memberships < group.source.memberships) erasedByKind[kindIndex(group.source.owner_kind)] += size_t(group.source.memberships - memberships);
+            group.replacement.live |= pendingMask(group.source); group.replacement.semantic_generation = batch.generation();
+            if (group.source.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP && !columns) {
+                group.replacement.mode = HybridPropertyGroupMode::HPGM_HYBRID;
+                group.replacement.column_membership = {};
+            }
+            group.replacement.validate();
+            if (memberships < group.source.memberships && group.source.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) erasedByKind[kindIndex(group.source.owner_kind)] += size_t(group.source.memberships - memberships);
         }
         const auto groupFor = [&](const SlottedSlotReference &reference) -> const GroupWork & {
             const auto group = std::find_if(groups.begin(), groups.end(), [&](const auto &candidate) { return candidate.reference == reference; });
@@ -177,6 +200,7 @@ private:
         utils::OwnedVector<PageId> sourceIds{utils::OwnedPmrAllocator<PageId>(memory)};
         sourceIds.reserve(groups.size() + ordered.size());
         for (const auto &group : groups) if (group.dirty) sourceIds.push_back(group.reference.page_id);
+        for (const auto &group : groups) if (group.matrix_changed) sourceIds.push_back(group.source.column_membership.page_id);
         for (const auto *plan : ordered) sourceIds.push_back(plan->columnReference().page_id);
         std::sort(sourceIds.begin(), sourceIds.end());
         sourceIds.erase(std::unique(sourceIds.begin(), sourceIds.end()), sourceIds.end());
@@ -194,6 +218,25 @@ private:
             require(image(plan->columnReference().page_id).readColumn(plan->columnReference(),
                 plan->sourceColumn().identity, group.source, batch.generation()) == plan->sourceColumn(), "native mixed column source changed");
         }
+        // Derive the final bitmap from authenticated private source images;
+        // no database-sized selector list or second source copy is retained.
+        for (const auto &group : groups) if (group.matrix_changed) {
+            const auto reference = group.source.column_membership;
+            auto matrix = image(reference.page_id).readColumnMembership(reference, group.source, batch.generation());
+            matrix.live = group.replacement.live;
+            for (const auto *plan : ordered) if (plan->groupReference() == group.reference) {
+                require(matrix.presence(plan->sourceColumn().identity.token) == plan->sourceColumn().presence,
+                    "compact mutation source presence differs from its actual column");
+                if (plan->action() == HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD)
+                    matrix.eraseColumn(plan->sourceColumn().identity.token);
+                else matrix.setPresence(plan->sourceColumn().identity.token, plan->replacementColumn().presence);
+            }
+            require(matrix.column_count == group.replacement.columns, "compact mutation lost its final column count");
+            if (matrix.column_count) {
+                matrix.semantic_generation = batch.generation();
+                image(reference.page_id).replaceColumnMembership(reference, matrix, group.source, group.replacement, batch.generation());
+            } else image(reference.page_id).erase(reference);
+        }
         // Authenticate all groups and columns before changing each shared page once.
         for (const auto &group : groups) if (group.dirty)
             image(group.reference.page_id).replaceGroup(group.reference, group.replacement, batch.generation());
@@ -210,6 +253,7 @@ private:
                 const auto &replacement = change.replacementColumn();
                 image(change.columnReference().page_id).replaceColumn(change.columnReference(),
                     change.sourceColumn().identity, replacement, targetGroup, batch.generation());
+                if (change.sourceGroup().mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) continue;
                 const auto added = replacement.presence & ~change.sourceColumn().presence;
                 for (unsigned slot = 0; slot < RSS_HYBRID_GROUP_CAPACITY; ++slot)
                     if (added & (UINT64_C(1) << slot)) {
@@ -236,7 +280,8 @@ private:
                 const EntityPropertyKey owner{targetGroup.owner_kind, (targetGroup.group_id - 1U) * RSS_HYBRID_GROUP_CAPACITY + slot + 1U};
                 const auto &cell = cells[slot];
                 if (cell.kind == HybridPropertyColumnDelta::CellKind::HCC_MISSING) {
-                    if (change.sourceColumn().presence & (UINT64_C(1) << slot))
+                    if (change.sourceGroup().mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+                        (change.sourceColumn().presence & (UINT64_C(1) << slot)))
                         erasedOwnersFor(targetGroup.owner_kind).push_back(HybridPropertyDirectoryCodec::ownerKey(owner, token));
                     continue;
                 }
@@ -328,26 +373,31 @@ public:
         if (!changes.empty()) result = HybridPropertyDemotionPreparation(batch, snapshot, fields, changes,
             memory, cancellation, largeField, false, owners, true);
         else result.group_ = pendingGroups[0].source;
+        const auto imageFor = [&](PageId id) -> HybridPropertyPageImage & {
+            const auto found = std::find_if(result.pages_.begin(), result.pages_.end(), [&](const auto &page) { return page.pageId() == id; });
+            if (found != result.pages_.end()) return *found;
+            result.pages_.push_back(fields.cloneForMutation(snapshot, id, batch.generation(), memory)); return result.pages_.back();
+        };
         for (size_t i = 0; i < groupCount; ++i) {
             check(); const auto &group = pendingGroups[i];
-            auto image = std::find_if(result.pages_.begin(), result.pages_.end(), [&](const auto &page) { return page.pageId() == group.reference.page_id; });
-            if (image == result.pages_.end()) {
-                result.pages_.push_back(fields.cloneForMutation(snapshot, group.reference.page_id, batch.generation(), memory));
-                image = std::prev(result.pages_.end());
-            }
-            auto current = image->readGroup(group.reference, group.source.owner_kind, group.source.group_id, batch.generation());
+            auto current = imageFor(group.reference.page_id).readGroup(group.reference, group.source.owner_kind, group.source.group_id, batch.generation());
             int64_t memberships = group.source.memberships, columns = group.source.columns;
             for (const auto *change : changes) if (change->groupReference() == group.reference) {
                 memberships += change->effects().memberships; columns += change->effects().columns;
             }
+            const bool droppedMatrix = group.source.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP && !columns;
+            require(current.mode == (droppedMatrix ? HybridPropertyGroupMode::HPGM_HYBRID : group.source.mode) &&
+                current.column_membership == (droppedMatrix ? SlottedSlotReference{} : group.source.column_membership),
+                "pending native group changed its column membership ownership");
             require(memberships >= 0 && memberships <= UINT32_MAX && columns >= 0 && columns <= UINT32_MAX &&
                 current.memberships == uint32_t(memberships) && current.columns == uint32_t(columns) &&
                 (current.live | group.mask) == (group.source.live | group.mask) &&
                 (current.semantic_generation == group.source.semantic_generation || current.semantic_generation == batch.generation()),
                 "pending native group has inconsistent private field effects");
-            current.live |= group.mask; current.semantic_generation = batch.generation(); current.validate();
-            image->replaceGroup(group.reference, current, batch.generation());
-            if (result.group_.owner_kind == current.owner_kind && result.group_.group_id == current.group_id) result.group_ = current;
+            auto replacement = current; replacement.live |= group.mask; replacement.semantic_generation = batch.generation(); replacement.validate();
+            synchronizeMembershipLiveness(current, replacement, batch.generation(), imageFor);
+            imageFor(group.reference.page_id).replaceGroup(group.reference, replacement, batch.generation());
+            if (result.group_.owner_kind == replacement.owner_kind && result.group_.group_id == replacement.group_id) result.group_ = replacement;
         }
         check(); return result;
     }
@@ -498,6 +548,9 @@ public:
             require(memberships >= 0 && memberships <= UINT32_MAX && columns >= 0 && columns <= UINT32_MAX,
                 "native deletion group effects underflow or overflow");
             expected.memberships = uint32_t(memberships); expected.columns = uint32_t(columns);
+            if (expected.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP && !columns) {
+                expected.mode = HybridPropertyGroupMode::HPGM_HYBRID; expected.column_membership = {};
+            }
             if (hasColumnPlan) { expected.live |= pendingMask(group.source); changed |= bool(pendingMask(group.source)); }
             if (changed) expected.semantic_generation = batch.generation();
             require(image(group.reference.page_id).readGroup(group.reference, expected.owner_kind, expected.group_id,
@@ -516,14 +569,16 @@ public:
             result.erasedOwnersFor(extension.owner.owner_kind).push_back(key);
         }
         for (const auto &group : groups) {
-            check(); auto finalGroup = image(group.reference.page_id).readGroup(group.reference, group.source.owner_kind,
+            check(); const auto currentGroup = image(group.reference.page_id).readGroup(group.reference, group.source.owner_kind,
                 group.source.group_id, batch.generation());
+            auto finalGroup = currentGroup;
             require(finalGroup.memberships >= group.extensions, "native owner deletion membership count underflow");
             finalGroup.memberships -= uint32_t(group.extensions); finalGroup.live &= ~group.deleted;
             finalGroup.live |= pendingMask(group.source);
             finalGroup.semantic_generation = batch.generation();
             if (finalGroup.live) {
-                finalGroup.validate(); image(group.reference.page_id).replaceGroup(group.reference, finalGroup, batch.generation());
+                finalGroup.validate(); synchronizeMembershipLiveness(currentGroup, finalGroup, batch.generation(), image);
+                image(group.reference.page_id).replaceGroup(group.reference, finalGroup, batch.generation());
             } else {
                 require(!finalGroup.memberships && !finalGroup.columns, "empty native owner group retains fields or columns");
                 image(group.reference.page_id).erase(group.reference);

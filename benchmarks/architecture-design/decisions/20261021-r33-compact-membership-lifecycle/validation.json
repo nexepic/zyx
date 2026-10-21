@@ -1,0 +1,56 @@
+{
+  "base": "6eb19639",
+  "progress": {
+    "accepted": 15,
+    "total": 24
+  },
+  "experimental_format": [
+    7,
+    33
+  ],
+  "default_format": [
+    5,
+    31
+  ],
+  "candidate_lifecycle": {
+    "tests": 279,
+    "failures": 0,
+    "variant": "ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS=1",
+    "includes_public_backend": true
+  },
+  "candidate_primitives": {
+    "tests": 103,
+    "failures": 0
+  },
+  "default_primitives": {
+    "tests": 47,
+    "failures": 0
+  },
+  "default_lifecycle": {
+    "tests": 8,
+    "failures": 0
+  },
+  "platform": "Linux",
+  "adopted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "raw_control_stdout": "Excluded because two sequentially finishing runner attempts shared a log path; final completed GTest JSON is clean and authoritative.",
+  "allocation": {
+    "tests": 10,
+    "failures": 0,
+    "mature": {
+      "row": 1835008,
+      "candidate": 1441792,
+      "saving_percent": 21.42857142857143,
+      "retired": 1179648,
+      "allocated_peak": 2621440,
+      "file": 7208960,
+      "byte_gate": "admit"
+    },
+    "other_shapes": {
+      "count": 9,
+      "byte_gate": "reject"
+    },
+    "scope": "Measured complete cohort, not automatic per-group production eligibility or R7 timing admission."
+  }
+}

@@ -12,6 +12,7 @@
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp"
+#include "graph/storage/relocatable/metadata/NativeGraphDeferredIndexImages.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyImmutablePreparation.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp"
@@ -358,6 +359,11 @@ namespace graph::storage {
                 const auto &conversion = *request.conversion;
                 const auto memory = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(conversion.memory);
                 constexpr size_t maximumConversionBytes = 1024U * 1024U;
+                if (!conversion.group_count || conversion.group_count > 8U ||
+                    conversion.group_id > RSS_HYBRID_MAX_GROUP_ID - (conversion.group_count - 1U) ||
+                    (conversion.group_count > 1U && (!conversion.compact_column_memberships || !conversion.allocation_admission ||
+                        !conversion.publish_candidate || conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
+                    throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid cohort requires1..8groups and explicit gated compact forward publication");
                 if (conversion.allocation_admission && (!conversion.publish_candidate ||
                     conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID ||
                     !conversion.allocation_admission->maximum_admitted_peak_bytes || !conversion.allocation_admission->maximum_admitted_file_bytes ||
@@ -925,7 +931,7 @@ namespace graph::storage {
 		// its allocator attaches through openSnapshot(). Actual schema reads below
 		// use the writer-fenced pin, so no stale schema is accepted.
 		std::unique_ptr<SlottedPagePool> deferredSchemaPool;
-		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner) {
+		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner || !derivedState.index_images.empty()) {
 			deferredSchemaPool = std::make_unique<SlottedPagePool>(
 					io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 		}
@@ -2160,12 +2166,22 @@ namespace graph::storage {
         MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn,
             pendingNativeMemory ? pendingNativeMemory : hybridVectors ? hybridVectors->fields_.memory : hybridPropertyRootMutation && hybridPropertyRootMutation->conversion ?
                 hybridPropertyRootMutation->conversion->memory : std::shared_ptr<std::pmr::memory_resource>{});
+        // Caller-assigned logical identities must precede every private image
+        // allocation, even though their physical pools are materialized later.
+        for (const auto pageId : pageIds) batch.observeLogicalPageId(PageId(pageId));
+        for (const auto &request : newPoolRequests) batch.observeLogicalSegmentId(request.reservation.segment_id);
+        for (const auto &[id, destination] : freshReplacementPools) batch.observeLogicalSegmentId(destination.segment_id);
         // ROW references were assigned from this source before field planning.
         // Reserve their exact range once; native proposals follow it, and both
         // sets feed the metadata-owned content-index preparation below.
         const auto jointRowLargeFirst = jointNativeContent ? batch.allocateLargeValueIdRange(largeValues.size()) : LargeValueId{};
         std::optional<MetadataSnapshotPin> hybridSource;
         std::unique_ptr<HybridPropertyPoolPlacement> hybridPlacement;
+        std::unique_ptr<HybridPropertyPoolPlacement> streamedAdjacencyPlacement;
+        std::unique_ptr<HybridPropertyPoolPlacement> streamedMembershipPlacement;
+        std::optional<MetadataSnapshotPin> ordinaryIndexSource;
+        std::unique_ptr<HybridPropertyPoolPlacement> ordinaryIndexPlacement;
+
         if (hybridVectors) {
             const auto &fields = hybridVectors->fields_;
             hybridSource.emplace(snapshots_.pinCurrentUnderWrite(writer, current));
@@ -2212,8 +2228,9 @@ namespace graph::storage {
                     *conversionPages, *conversionIndexes, *conversionLargeValues, options);
             if (current.hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext existing(io_, *conversionPages, *this, source, conversion.cancellation);
-                if (existing.groupRecord({conversion.owner_kind, (conversion.group_id - 1U) * 64U + 1U}))
-                    throw FormatException(FormatError::FERR_INVALID_STATE, "ROW conversion group is already native");
+                for (uint64_t offset = 0; offset < conversion.group_count; ++offset)
+                    if (existing.groupRecord({conversion.owner_kind, (conversion.group_id + offset - 1U) * 64U + 1U}))
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "ROW conversion group is already native");
             }
             std::optional<NativeStorageAllocationCensus> allocationCensus;
             std::optional<NativeStorageAllocationFootprint> sourceCost;
@@ -2236,11 +2253,12 @@ namespace graph::storage {
             }
             struct SourceOwner { EntityPropertyKey key; size_t fields; };
             auto owners = utils::OwnedVector<SourceOwner>(utils::OwnedPmrAllocator<SourceOwner>(conversion.memory));
-            owners.reserve(64);
+            owners.reserve(size_t(conversion.group_count) * 64U);
             size_t memberships = 0;
             const uint64_t firstId = (conversion.group_id - 1U) * 64U + 1U;
-            for (uint64_t slot = 0; slot < 64; ++slot) {
+            for (uint64_t slot = 0; slot < uint64_t(conversion.group_count) * 64U; ++slot) {
                 checkpoint();
+                if (slot % 64U == 0) memberships = 0;
                 const auto id = firstId + slot;
                 if (id > RSS_HYBRID_MAX_ENTITY_ID) break;
                 const bool node = conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE;
@@ -2268,7 +2286,10 @@ namespace graph::storage {
             headerWorkspace.reset();
             auto largeFields = utils::OwnedVector<HybridPropertyLargeFieldPreparation>(
                 utils::OwnedPmrAllocator<HybridPropertyLargeFieldPreparation>(conversion.memory));
-            const auto fields = [&] {
+            std::shared_ptr<HybridPropertyConversionPreparation> fields;
+            for (uint64_t groupOffset = 0; groupOffset < conversion.group_count; ++groupOffset) {
+            const auto groupId = conversion.group_id + groupOffset;
+            auto preparedGroup = [&] {
                 detail::PropertyDecodeWorkspace sourceWorkspace(conversion.memory, &checkpoint);
                 // Keep decoded values admitted for the complete source lifetime,
                 // but release per-owner LargeValue wire buffers after decoding.
@@ -2286,9 +2307,10 @@ namespace graph::storage {
                 // source values. Both passes remain within the same fenced pin.
                 auto roots = utils::OwnedVector<PropertyCollectionRoot>(
                     utils::OwnedPmrAllocator<PropertyCollectionRoot>(conversion.memory));
-                roots.reserve(owners.size());
+                roots.reserve(64U);
                 auto cursor = conversionRoots->openScanCursor(source, conversion.cancellation);
                 for (const auto &owner : owners) {
+                    if ((owner.key.entity_id - 1U) / 64U + 1U != groupId) continue;
                     checkpoint();
                     auto root = cursor.readEntityOptional(source, owner.key, nullptr, &admitSourceSlots).value_or(PropertyCollectionRoot{
                         owner.key.entity_id, conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId, {}});
@@ -2302,7 +2324,10 @@ namespace graph::storage {
                     debug::PerfTrace::addValue("native_graph.hybrid.source_owners_decoded", 1);
                 }
                 HybridPropertyGroupConversion plan(conversion.memory, roots, conversion.owner_kind,
-                    conversion.group_id, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, checkpoint);
+                    groupId, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, checkpoint);
+                if (conversion.group_count > 1U && (plan.columns().empty() ||
+                    std::ranges::any_of(plan.members(), [](const auto &member) { return member.source != HybridPropertySource::HPS_COLUMN; })))
+                    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native hybrid cohort requires compact pure-column groups");
                 debug::PerfTrace::addValue("native_graph.hybrid.source_classification_completed", 1);
                 // Directory sources retain their immutable final locator records,
                 // rather than borrow the ROW/planner or keep a second row copy.
@@ -2345,8 +2370,21 @@ namespace graph::storage {
                 };
                 const HybridPropertyConversionPreparation::LargeFieldResolver largeResolver = std::ref(resolveLarge);
                 return utils::shareOwned(std::unique_ptr<HybridPropertyConversionPreparation>(
-                    new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver)));
+                    new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver, conversion.compact_column_memberships)));
             }();
+            if (!fields) fields = std::move(preparedGroup);
+            else {
+                const auto append = [](auto &target, auto &part) {
+                    target.reserve(target.size() + part.size());
+                    target.insert(target.end(), std::make_move_iterator(part.begin()), std::make_move_iterator(part.end()));
+                };
+                append(fields->pages_, preparedGroup->pages_);
+                append(fields->owners_, preparedGroup->owners_);
+                append(fields->columns_, preparedGroup->columns_);
+                append(fields->extensions_, preparedGroup->extensions_);
+                append(fields->groups_, preparedGroup->groups_);
+            }
+            }
             const auto sourceFor = [fields, memory = conversion.memory, checkpoint]<class Map>(
                 std::span<const typename Map::Entry> entries) -> OrderedBTreeEntrySource {
                 return [fields, memory, entries, checkpoint]() -> OrderedBTreeEntryCursor {
@@ -2426,12 +2464,12 @@ namespace graph::storage {
             struct PreparedFieldImage { CatalogEntry pool; PageLocation location; SlottedPage page; };
             auto fieldImages = utils::OwnedVector<PreparedFieldImage>(utils::OwnedPmrAllocator<PreparedFieldImage>(conversion.memory));
             fieldImages.reserve(fields->pages_.size());
-            CatalogEntry fieldPool;
+            CatalogEntry fieldPool; size_t fieldPoolUsed = 0;
             for (size_t i = 0; i < fields->pages_.size(); ++i) {
                 checkpoint();
-                if (i % RSS_PAGE_POOL_DATA_FRAME_COUNT == 0)
-                    fieldPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id,
-                        std::min(size_t(RSS_PAGE_POOL_DATA_FRAME_COUNT), fields->pages_.size() - i), true);
+                const auto selected = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id, 1U, true);
+                if (selected.segment_id != fieldPool.segment_id) fieldPoolUsed = 0;
+                fieldPool = selected;
                 auto &image = fields->pages_[i];
                 PageOwnerHeader owner;
                 owner.page_id = image.pageId(); owner.owner_id = fieldPool.owner_id;
@@ -2441,7 +2479,7 @@ namespace graph::storage {
                 const auto admitReference = [&](size_t retained) { referenceCredit.set(retained); };
                 auto bound = std::move(image).bindPrivateOwner(owner, fieldPool, batch.checkpointLsn(), std::ref(admitReference));
                 const PageLocation location{owner.page_id, fieldPool.segment_id,
-                    uint16_t(i % RSS_PAGE_POOL_DATA_FRAME_COUNT + RSS_PAGE_POOL_FIRST_DATA_FRAME),
+                    uint16_t(fieldPoolUsed++ + RSS_PAGE_POOL_FIRST_DATA_FRAME),
                     fieldPool.generation, bound.stats().contiguous_free_bytes};
                 fieldImages.push_back({fieldPool, location, std::move(bound)});
             }
@@ -2484,10 +2522,11 @@ namespace graph::storage {
                 if (directoryPlans[ordinal]->entry_count != entries.size())
                     throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid directory plan lost a final field locator");
             };
+            fields->pages_.clear(); fields->pages_.shrink_to_fit();
             prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, fields->owners());
             prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, fields->columns());
             prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, fields->extensions());
-            prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, std::span(&fields->group(), 1));
+            prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, std::span<const HybridPropertyGroupDirectoryMap::Entry>(fields->groups_));
 
             for (size_t ordinal = 0; ordinal < directoryPlans.size(); ++ordinal) {
                 if (!directoryPlans[ordinal]) continue;
@@ -2570,29 +2609,50 @@ namespace graph::storage {
             // Remove converted ROW slots from CURRENT physical page images as
             // well as their owner directory. Preserve every unrelated owner and
             // stable slot locator; old pins keep their original physical frames.
-            utils::OwnedVector<SlottedPage> rowPages{utils::OwnedPmrAllocator<SlottedPage>(conversion.memory)};
-            rowPages.reserve(owners.size());
+            // Group authenticated slot references before decoding pages. Fully
+            // removed pages retain only their IDs; keeping their 4KiB bodies
+            // until publication needlessly consumes the conversion workspace.
+            utils::OwnedVector<SlottedSlotReference> rowSlots{utils::OwnedPmrAllocator<SlottedSlotReference>(conversion.memory)};
+            rowSlots.reserve(owners.size());
             for (const auto &owner : owners) {
                 checkpoint(); const auto location = locations_.findEntityPropertyOptional(current, owner.key);
-                if (!location) continue;
-                auto found = std::find_if(rowPages.begin(), rowPages.end(),
-                    [&](const auto &page) { return page.pageId() == location->page_id; });
-                if (found == rowPages.end()) {
-                    rowPages.push_back(conversionPages->read(source, location->page_id)); found = rowPages.end() - 1;
+                if (location) rowSlots.push_back({location->page_id, location->slot_id, location->slot_generation});
+            }
+            std::sort(rowSlots.begin(), rowSlots.end(), [](const auto &left, const auto &right) {
+                return left.page_id < right.page_id || (left.page_id == right.page_id && left.slot_id < right.slot_id);
+            });
+            utils::OwnedVector<SlottedPage> rowPages{utils::OwnedPmrAllocator<SlottedPage>(conversion.memory)};
+            utils::OwnedVector<PageId> changedRowPages{utils::OwnedPmrAllocator<PageId>(conversion.memory)};
+            changedRowPages.reserve(rowSlots.size());
+            utils::OwnedVector<uint64_t> erasedRowPages{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
+            erasedRowPages.reserve(rowSlots.size() + erasedContentPages.size());
+            erasedRowPages.insert(erasedRowPages.end(), erasedContentPages.begin(), erasedContentPages.end());
+            for (size_t begin = 0; begin < rowSlots.size();) {
+                checkpoint();
+                auto page = conversionPages->read(source, rowSlots[begin].page_id);
+                size_t end = begin;
+                while (end < rowSlots.size() && rowSlots[end].page_id == page.pageId()) {
+                    checkpoint();
+                    if (end > begin && rowSlots[end].slot_id == rowSlots[end - 1].slot_id)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "native conversion ROW owners alias one source slot");
+                    page.erase(rowSlots[end++]);
                 }
-                found->erase({location->page_id, location->slot_id, location->slot_generation});
+                changedRowPages.push_back(page.pageId());
+                if (!page.stats().live_slot_count) erasedRowPages.push_back(page.pageId().value());
+                else rowPages.push_back(std::move(page));
+                begin = end;
             }
             // A pool may retire only when every currently routed frame is
-            // replaced or removed by this conversion. Inspect at most 31 frame
+            // replaced or removed by this conversion. Inspect at most31 frame
             // owners per source pool; never scan the database Page Directory.
             utils::OwnedVector<CatalogEntry> retiredRowPools{utils::OwnedPmrAllocator<CatalogEntry>(conversion.memory)};
-            retiredRowPools.reserve(rowPages.size() + supersededContentPages.size());
+            retiredRowPools.reserve(changedRowPages.size() + supersededContentPages.size());
             for (const auto id : supersededContentPages) {
                 const auto location = locations_.findPage(current, PageId(id));
                 retiredRowPools.push_back(catalog_.find(current, location.segment_id));
             }
-            for (const auto &page : rowPages) {
-                const auto location = locations_.findPage(current, page.pageId());
+            for (const auto id : changedRowPages) {
+                const auto location = locations_.findPage(current, id);
                 retiredRowPools.push_back(catalog_.find(current, location.segment_id));
             }
             std::sort(retiredRowPools.begin(), retiredRowPools.end(), [](const auto &a, const auto &b) { return a.segment_id < b.segment_id; });
@@ -2612,22 +2672,18 @@ namespace graph::storage {
                             [&](uint8_t index) { return sourceRowPools.readPageOwner(*pool, index); },
                             [&](PageId id) { return locations_.findPageOptional(current, id); });
                         if (owner) detached = detached && (pool->kind == SegmentKind::SGK_PROPERTY_PAGE_POOL ?
-                            std::any_of(rowPages.begin(), rowPages.end(), [&](const auto &page) { return page.pageId() == owner->page_id; }) :
+                            std::binary_search(changedRowPages.begin(), changedRowPages.end(), owner->page_id) :
                             std::find(supersededContentPages.begin(), supersededContentPages.end(), owner->page_id.value()) != supersededContentPages.end());
                     }
                 }
                 if (!detached || placement.destination(pool->segment_id)) { pool = retiredRowPools.erase(pool); continue; }
                 batch.reserveDataSlot(pool->physical_slot); pool->state = SegmentState::SGS_RETIRED; ++pool;
             }
-            utils::OwnedVector<uint64_t> erasedRowPages{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
-            erasedRowPages.reserve(rowPages.size() + erasedContentPages.size());
-            erasedRowPages.insert(erasedRowPages.end(), erasedContentPages.begin(), erasedContentPages.end());
             utils::OwnedVector<PreparedFieldImage> rowImages{utils::OwnedPmrAllocator<PreparedFieldImage>(conversion.memory)};
             rowImages.reserve(rowPages.size());
             CatalogEntry rowPool; size_t rowFrames = RSS_PAGE_POOL_DATA_FRAME_COUNT;
             for (auto &page : rowPages) {
                 checkpoint();
-                if (page.stats().live_slot_count == 0) { erasedRowPages.push_back(page.pageId().value()); continue; }
                 if (rowFrames == RSS_PAGE_POOL_DATA_FRAME_COUNT || rowPool.owner_id != page.ownerId()) {
                     rowPool = allocatePool(SegmentKind::SGK_PROPERTY_PAGE_POOL, page.ownerId()); rowFrames = 0;
                 }
@@ -2720,6 +2776,7 @@ namespace graph::storage {
                 if (locations_.findEntityPropertyOptional(current, owner.key)) erasedRows.push_back(owner.key);
             if (!erasedRows.empty()) locations_.prepareReplaceEntityProperties(batch, {}, erasedRows);
             pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
+            if (fields->compact_) batch.enableHybridColumnMembership();
             batch.hybrid_property_publication_ = true;
             checkpoint();
             if (conversion.allocation_admission) {
@@ -2767,9 +2824,6 @@ namespace graph::storage {
 		}
 		for (const EntityPageLocation &location: insertedEdges) {
 			batch.observeLogicalEdgeId(location.entity_id);
-		}
-		for (const uint64_t pageId: pageIds) {
-			batch.observeLogicalPageId(PageId(pageId));
 		}
 		// Reserve every private or public destination in this writer-owned set.
 		// `MetadataWriteBatch` fences the physical choice for this generation even
@@ -3155,7 +3209,7 @@ namespace graph::storage {
 		std::vector<IndexTreeMultiPoolMutationPreparer> deferredIndexPreparers;
 		std::vector<NativeGraphDeferredIndexPlan> deferredPlans;
 		const NativeGraphDeferredIndexPlanSink deferIndexPlan = [&deferredPlans](NativeGraphDeferredIndexPlan plan) {
-			if (!plan.preparer) {
+			if (!plan.preparer && !plan.images) {
 				throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "native graph early publication submitted an empty deferred Index plan");
 			}
@@ -3210,7 +3264,45 @@ namespace graph::storage {
 					throw;
 				}
 			}
+            std::set<uint64_t> deferredIndexIds;
 			for (NativeGraphDeferredIndexPlan &plan: deferredPlans) {
+                if (!deferredIndexIds.insert(plan.mutation.index_id).second)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "deferred index plans repeat a root");
+                if (plan.images) {
+                    auto &proof = *plan.images;
+                    const auto &bare = plan.mutation;
+                    if (!privateSegmentSet || !privateSegmentSet->size() || (!proof.private_segments_ || !proof.private_segments_->size()))
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "deferred images have no scoped private source");
+                    const auto first = proof.private_segments_->front(), actualFirst = privateSegmentSet->front();
+                    if (proof.metadata_ != this || proof.source_generation_ != current.generation || proof.materialized_ ||
+                        !proof.memory_ || !proof.reader_ || !proof.entry_count_ || !proof.page_count_ ||
+                        proof.private_segments_->size() != privateSegmentSet->size() || first.segment_id != actualFirst.segment_id ||
+                        first.generation != actualFirst.generation || first.owner_id != actualFirst.owner_id ||
+                        locations_.findIndexRootOptional(current, proof.index_id_) != proof.source_root_ ||
+                        bare.index_id != proof.index_id_ || bare.expected_root || !bare.pool_requests.empty() ||
+                        !bare.new_pool_requests.empty() || bare.replacement_root || bare.stable_replacement_root || bare.retire_root ||
+                        plan.preparer || std::ranges::any_of(effectiveIndexMutations, [&proof](const auto &other) {
+                            return other.index_id == proof.index_id_;
+                        }))
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "deferred images have no exact owned source receipt");
+                    if (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID) {
+                        BTreePageStore schemaPages(*deferredSchemaPool, *this); SystemCatalog schema(schemaPages, *this);
+                        const auto definition = schema.findIndexDefinitionById(*deferredPlanningSnapshot, proof.index_id_);
+                        if (!definition || definition->kind != IndexDefinitionKind::IDK_LABEL ||
+                            definition->entity_kind != IndexDefinitionEntityKind::IDEK_EDGE)
+                            throw FormatException(FormatError::FERR_INVALID_STATE, "streamed receipt lost its EDGE membership schema");
+                    }
+                    { utils::OwnedHeapReservation leaseRead(proof.memory_, 2U * RSS_SEGMENT_SIZE);
+                      static_cast<void>(proof.reader_(proof.private_segments_->front())); }
+                    if (proof.incremental_) {
+                        prepareStreamedAdjacencyImages(batch, writer, *deferredPlanningSnapshot, proof,
+                            proof.index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID ? streamedAdjacencyPlacement : streamedMembershipPlacement);
+                        continue;
+                    }
+                    proof.materialized_ = true;
+                    plan.mutation = std::move(proof.fresh_mutation_); plan.preparer = std::move(proof.fresh_preparer_);
+                }
+
 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
 				const bool replacesRoot = mutation.replacement_root.has_value();
 				const bool retiresRoot = mutation.retire_root;
@@ -3335,6 +3427,49 @@ namespace graph::storage {
 				deferredIndexPreparers.push_back(std::move(plan.preparer));
 			}
 		}
+            std::set<uint64_t> ordinaryImageIds;
+            if (!derivedState.index_images.empty()) {
+                const auto &first = derivedState.index_images.front();
+                if (!first || !first->memory_)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary images require an owned source");
+                ordinaryIndexSource.emplace(snapshots_.pinCurrentUnderWrite(writer, current));
+                ordinaryIndexPlacement.reset(new HybridPropertyPoolPlacement(*this, batch, writer, *ordinaryIndexSource,
+                    first->first_slot_, first->last_slot_, first->memory_, [] {}, true));
+                // The regular frame planner has already budgeted these pools.
+                // Reserve no destinations from them for private image work.
+                const auto exclude = [&](SegmentId id) {
+                    if (!id.isValid() || ordinaryIndexPlacement->contains(id)) return;
+                    const auto pool = catalog_.find(current, id);
+                    if (pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary competing plan lost its Index pool");
+                    ordinaryIndexPlacement->reservations_.push_back({pool, 0, 0, 0, false, false, false});
+                };
+                for (const auto &mutation : effectiveIndexMutations) for (const auto &request : mutation.pool_requests) {
+                    exclude(request.segment_id); exclude(request.replacement_segment_id);
+                }
+            }
+            for (const auto &owned : derivedState.index_images) {
+                if (!owned || !ordinaryImageIds.insert(owned->index_id_).second)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary image receipts repeat an index");
+                auto &proof = *owned;
+                if (proof.metadata_ != this || proof.source_generation_ != current.generation || proof.materialized_ ||
+                    proof.private_segments_ || proof.reader_ || !proof.memory_ || !proof.incremental_ ||
+                    (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID && !isSystemCatalogIndexDefinitionId(proof.index_id_)) ||
+                    locations_.findIndexRootOptional(current, proof.index_id_) != proof.source_root_ ||
+                    std::ranges::any_of(effectiveIndexMutations, [&proof](const auto &other) {return other.index_id == proof.index_id_;}) ||
+                    std::ranges::any_of(deferredPlans, [&proof](const auto &other) {return other.mutation.index_id == proof.index_id_;}))
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary index images lost their exact owned source");
+                if (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID) {
+                    BTreePageStore schemaPages(*deferredSchemaPool, *this); SystemCatalog schema(schemaPages, *this);
+                    const auto definition = schema.findIndexDefinitionById(*ordinaryIndexSource, proof.index_id_);
+                    if (!definition || definition->kind != IndexDefinitionKind::IDK_LABEL ||
+                        definition->entity_kind != IndexDefinitionEntityKind::IDEK_EDGE)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary image receipt lost its EDGE membership schema");
+                }
+                prepareStreamedAdjacencyImages(batch, writer, *ordinaryIndexSource, proof, ordinaryIndexPlacement);
+                debug::PerfTrace::addValue(proof.index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID ?
+                    "native_graph.write.ordinary_adjacency.prepared_images" : "native_graph.write.ordinary_membership.prepared_images", int64_t(proof.images_.size()));
+            }
 		std::vector<CatalogEntry> newPoolEntries;
 		newPoolEntries.reserve(newPoolRequests.size() + freshReplacementPools.size());
 		std::map<uint64_t, size_t> newPoolEntryBySegment;
@@ -4068,6 +4203,26 @@ namespace graph::storage {
 		}
 		debug::ScopedPerfTimer materializationTimer("native_graph.mutation.finalize_materializations");
 		std::set<std::pair<uint64_t, uint8_t>> destinationFrames;
+        // Private images participate in the same final destination validation
+        // as every regular Entity/Property/Index materializer.
+        const auto registerImageFrames = [&](const NativeGraphDeferredIndexImages &proof) {
+            for (const auto &page : proof.installed_pages_)
+                if (!destinationFrames.emplace(page.segment_id.value(), page.page_index).second)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "index image destinations overlap");
+        };
+        for (const auto &proof : derivedState.index_images) registerImageFrames(*proof);
+        for (const auto &plan : deferredPlans) if (plan.images) registerImageFrames(*plan.images);
+        const auto validateImagePools = [&](const auto &placement) {
+            if (!placement) return;
+            for (const auto &reservation : placement->reservations_) if (reservation.prepared) {
+                const auto found = std::ranges::find(allNewPoolEntries, reservation.pool.segment_id, &CatalogEntry::segment_id);
+                if (found != allNewPoolEntries.end() && !hasSameCatalogEntry(*found, reservation.pool))
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "index images conflict with another pool identity");
+            }
+        };
+        validateImagePools(ordinaryIndexPlacement); validateImagePools(streamedAdjacencyPlacement);
+        validateImagePools(streamedMembershipPlacement);
+
 		for (size_t ordinal = 0U; ordinal < materializations.size(); ++ordinal) {
 			const EntityPageReplacementMaterialization &materialization = materializations[ordinal];
 			const EntityPageReplacementMaterialization &planned = plannedMaterializations[ordinal];
@@ -5116,6 +5271,24 @@ namespace graph::storage {
 			publishBatch(batch, writer, options);
 		}
         if (hybridPlacement) hybridPlacement->remember();
+        if (ordinaryIndexPlacement) ordinaryIndexPlacement->remember();
+        if (streamedAdjacencyPlacement) streamedAdjacencyPlacement->remember();
+        if (streamedMembershipPlacement) streamedMembershipPlacement->remember();
+        for (const auto &plan : deferredPlans) if (plan.images) {
+            auto root = plan.images->installed_root_;
+            if (!root) {
+                const auto found = std::ranges::find(publishedDerivedIndexRoots, plan.images->index_id_,
+                    &IndexRootLocation::index_id);
+                if (found != publishedDerivedIndexRoots.end()) root = *found;
+            }
+            if (root) {
+                const auto dataRoot = batch.candidate().usesPageDirectoryBootstrap() ?
+                    batch.pendingBootstrapDataRoot().value_or(plan.images->source_data_root_) : batch.candidate().page_directory_root;
+                std::lock_guard lock(streamed_adjacency_shape_mutex_);
+                auto &hint = plan.images->index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID ? streamed_adjacency_shape_ : streamed_membership_shape_;
+                hint = {batch.generation(), plan.images->entry_count_, plan.images->page_count_, dataRoot, root};
+            }
+        }
 		return batch.candidate();
 	}
 

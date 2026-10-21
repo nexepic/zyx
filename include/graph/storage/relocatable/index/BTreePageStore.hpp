@@ -177,6 +177,9 @@ namespace graph::storage {
 	};
 
 	class BTreePageStore final {
+        friend class NativeStreamedGraphAdjacencyIndexPlanner;
+        friend class NativeGraphWriteTransaction;
+        friend class NativeStreamedGraphMembershipIndexPlanner;
 	public:
 		using NewTreePageFactory = std::function<std::vector<BTreePage>(const CatalogEntry &, std::span<const PageId>)>;
 		// Receives the complete logical Page-ID assignment, then produces one page
@@ -362,6 +365,16 @@ namespace graph::storage {
             const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
             std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
             const CancellationCheckpoint *cancellation) const;
+        // Same immutable dirty-path overlay for the ordinary key-only global
+        // tree. This emits images only; publication needs a private receipt.
+        [[nodiscard]] BTreeStructuralMutationPlan planStreamedMembershipImagesFromSource(const MetadataSnapshotPin &snapshot,
+            const IndexDefinition &definition, size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink) const;
+        [[nodiscard]] BTreeStructuralMutationPlan planGlobalAdjacencyImagesFromSource(const MetadataSnapshotPin &snapshot,
+            size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink) const;
         [[nodiscard]] BTreeStructuralMutationPlan planHybridMapImagesFromSource(const MetadataSnapshotPin &snapshot,
             uint64_t indexId, size_t operationCount,
             const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,

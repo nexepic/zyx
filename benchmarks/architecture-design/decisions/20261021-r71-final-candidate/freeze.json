@@ -1,0 +1,118 @@
+{
+  "accepted_deliverable": "R7.1",
+  "progress": {
+    "accepted": 16,
+    "total": 24,
+    "percent": 66.7
+  },
+  "source_manifest": "benchmarks/architecture-design/decisions/20261021-r33-cohort-prefix-admission/source-complete-working-delta.json",
+  "source_archive": "benchmarks/architecture-design/decisions/20261021-r33-cohort-prefix-admission/source-complete-working-delta.tar.xz",
+  "binaries": {
+    "before": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/start/binaries/zyx-compare-bench",
+      "sha256": "284d6924fb69ad915ce43f2314849d472caf4a85d6e5baf2bf52a73c32e18c0b"
+    },
+    "after-row": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-final/binaries/after-row",
+      "sha256": "19a151759696c0a26415fd99b0d61d2a7ad90446b5ba76a196abff9803be8d87"
+    },
+    "after-hybrid": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-final/binaries/after-hybrid",
+      "sha256": "7a01adeb398cf2120e6dab05214249e2c86f5417adb38caad3d35f58043298a7"
+    }
+  },
+  "frozen_engine_libraries": {
+    "before": {
+      "path": "/workspace/zyx/buildDir_perf_control/libzyx_core.a",
+      "sha256": "c5a08224f63dad1ea5363bac04106c4cce4b856d9ab3997ce34ac2f75a7af6fc",
+      "rebuild_permitted": false
+    },
+    "after-row": {
+      "path": "/workspace/zyx-build-r7-row/libzyx_core.a",
+      "sha256": "887b5e8bf3b5e606c00ac86bba256251bcc92a627354f4b9a8e657412f91ceb7",
+      "rebuild_permitted": false
+    },
+    "after-hybrid": {
+      "path": "/workspace/zyx-build-r7-hybrid/libzyx_core.a",
+      "sha256": "11f556333b045eea7ac090ffba7788e8d7e7819c0a443265d33270ca1a1fbe3f",
+      "rebuild_permitted": false
+    }
+  },
+  "build": {
+    "type": "Release",
+    "coverage": false,
+    "default_format": [
+      5,
+      31
+    ],
+    "isolated_native_format": [
+      7,
+      33
+    ]
+  },
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "correctness": {
+    "medium": "19 successful typed contracts in original run plus one failed correlated case repaired/rerun with R13; all20 final states pass, mixed binary provenance retained",
+    "holdout": "20/20 complete typed contracts after R13",
+    "indexed": "two DDL and four affected semantic contracts per input,12/12; initial DDL-oracle expectation corrected without repeating successful DDL",
+    "graph_index_audits": "both complete scales, physical read-only,8MiB, all routes/primary/endpoints/both directions/types forward-reverse; not property/vector/general integrity",
+    "generic_integrity": "explicit8MiB resource refusal retained, never counted as a pass",
+    "R5_raw_optimized": "6/6 per scale, physical read-only"
+  },
+  "module_evidence": {
+    "R4": "171/171 each configuration,13modules,one existing disabled retained",
+    "R13": "186/186 each configuration,6modules",
+    "R3": {
+      "r33-cohort-final-candidate": {
+        "tests": 8,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      },
+      "r33-cohort-budget-candidate": {
+        "tests": 1,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      },
+      "r33-public-cohort-final-candidate": {
+        "tests": 1,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      },
+      "r33-cohort-lifecycle-controls-candidate": {
+        "tests": 290,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      },
+      "r33-cohort-lifecycle-controls-default": {
+        "tests": 9,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      },
+      "r33-cohort-default-final-default": {
+        "tests": 1,
+        "failures": 0,
+        "modules": "selected; not full suite"
+      }
+    }
+  },
+  "final_choices": {
+    "R3": "explicit gated1..8group pure-column cohort, shared<=1MiB, one publication; default ROW retained",
+    "R5": "canonical key-only plus bounded primary reuse; covering/segmented not automatically adopted"
+  },
+  "timing_benchmark_started": false,
+  "remaining": [
+    "R1.3",
+    "R2.3",
+    "R3.3",
+    "R4.3",
+    "R5.2",
+    "R5.3",
+    "R7.2",
+    "R7.3"
+  ],
+  "limitations": [
+    "Linux only; macOS/Windows not executed",
+    "No full unit suite by user instruction",
+    "Source-complete delta includes prior uncommitted implementations; performance acceptance remains pending"
+  ]
+}

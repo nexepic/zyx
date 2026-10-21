@@ -6779,13 +6779,37 @@ namespace graph::storage {
 
 	LogicalGraphPlanningStatistics RelocatableStorageBackend::readLogicalPlanningStatistics(
 			std::span<const std::vector<std::string>> labels) const {
+        return readLogicalPlanningStatistics(labels, {});
+    }
+
+    LogicalGraphPlanningStatistics RelocatableStorageBackend::readLogicalPlanningStatistics(
+            std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const {
 		requireOpen();
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		LogicalGraphPlanningStatistics result;
 		result.node_counts.resize(labels.size());
+        result.edge_type_counts.resize(types.size());
 		const auto statistics = system_catalog_->readGraphCardinalityStatistics(snapshot);
 		if (!statistics) return result;
 		result.graph = LogicalGraphCardinalityStatistics{statistics->node_count, statistics->edge_count};
+        // Planning requests are bounded by the optimizer; authenticate optional
+        // type counts in this same pin, never by opening a graph read snapshot.
+        // Duplicate names share a lookup; malformed inputs remain unavailable.
+        std::map<std::string, std::optional<uint64_t>> typeCounts;
+        for (size_t i = 0; i < types.size(); ++i) {
+            if (types[i].empty()) continue;
+            auto [entry, inserted] = typeCounts.try_emplace(types[i], std::nullopt);
+            if (inserted) try {
+                const auto token = system_catalog_->findSchemaToken(snapshot,
+                    SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, types[i]);
+                if (token) {
+                    const auto count = system_catalog_->readTokenCardinality(snapshot,
+                        SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, *token);
+                    if (count && *count <= statistics->edge_count) entry->second = count;
+                }
+            } catch (...) { }
+            result.edge_type_counts[i] = entry->second;
+        }
 		std::map<std::string, std::optional<uint64_t>> names;
 		std::vector<uint64_t> tokens;
 		for (const auto &combination : labels) for (const auto &label : combination)

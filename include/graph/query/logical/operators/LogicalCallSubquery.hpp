@@ -24,10 +24,10 @@ public:
 	                    utils::OwnedStringVector importedVars,
 	                    utils::OwnedStringVector returnedVars,
 	                    bool inTransactions = false,
-	                    int64_t batchSize = 0)
+	                    int64_t batchSize = 0, bool optionalMatch = false)
 		: input_(std::move(input)), subquery_(std::move(subquery)),
 		  importedVars_(std::move(importedVars)), returnedVars_(std::move(returnedVars)),
-		  inTransactions_(inTransactions), batchSize_(batchSize) {}
+		  inTransactions_(inTransactions), batchSize_(batchSize), optionalMatch_(optionalMatch) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_CALL_SUBQUERY; }
 
@@ -57,11 +57,11 @@ public:
 			input_ ? input_->clone() : nullptr,
 			subquery_ ? subquery_->clone() : nullptr,
 			importedVars_, returnedVars_,
-			inTransactions_, batchSize_);
+			inTransactions_, batchSize_, optionalMatch_);
 	}
 
 	[[nodiscard]] std::string toString() const override {
-		std::string s = "CallSubquery";
+		std::string s = optionalMatch_ ? "OptionalMatchApply" : "CallSubquery";
 		if (inTransactions_) {
 			s += "(IN TRANSACTIONS";
 			if (batchSize_ > 0) s += " OF " + std::to_string(batchSize_) + " ROWS";
@@ -86,6 +86,7 @@ public:
 	[[nodiscard]] LogicalOperator *getSubquery() const { return subquery_.get(); }
 	[[nodiscard]] const std::vector<std::string> &getImportedVars() const { return importedVars_; }
 	[[nodiscard]] const std::vector<std::string> &getReturnedVars() const { return returnedVars_; }
+	[[nodiscard]] bool isOptionalMatch() const { return optionalMatch_; }
 	[[nodiscard]] bool isInTransactions() const { return inTransactions_; }
 	[[nodiscard]] int64_t getBatchSize() const { return batchSize_; }
 
@@ -96,6 +97,7 @@ private:
 	utils::OwnedStringVector returnedVars_;
 	bool inTransactions_;
 	int64_t batchSize_;
+    bool optionalMatch_ = false;
 };
 
 } // namespace graph::query::logical

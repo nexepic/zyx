@@ -1,0 +1,328 @@
+{
+  "tests": 20,
+  "failures": 7,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T18:59:36Z",
+  "time": "7.785s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 5,
+      "failures": 5,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:59:36Z",
+      "time": "7.191s",
+      "testsuite": [
+        {
+          "name": "StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:36Z",
+          "time": "1.495s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 61,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:37Z",
+          "time": "0.376s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 78,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:38Z",
+          "time": "0.364s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:109\nExpected: (void)tx->commit() throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:111\nValue of: injected.load()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:111\nExpected equality of these values:\n  work.incremental\n    Which is: 0\n  1\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:38Z",
+          "time": "3.151s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:187\nExpected equality of these values:\n  work.refused\n    Which is: 0\n  1\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 194,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:41Z",
+          "time": "1.804s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:59:43Z",
+      "time": "0.026s",
+      "testsuite": [
+        {
+          "name": "StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 87,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 109,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsForeignPrivateRun",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 274,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsAForeignPageStore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 315,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsIncompletePlanningContracts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 345,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 397,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 420,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 445,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsInvalidPublicationFence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 468,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsLargeValueWithoutNativeStore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 503,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsForeignStores",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 527,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest",
+      "tests": 2,
+      "failures": 2,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:59:43Z",
+      "time": "0.566s",
+      "testsuite": [
+        {
+          "name": "IncrementalPublicationRecoversOneCompleteGeneration\/0",
+          "value_param": "false",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.292s",
+          "classname": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:155\nExpected: (void)tx->commit() throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:157\nValue of: injected.load()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:157\nExpected equality of these values:\n  armed.work.incremental\n    Which is: 0\n  1\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:158\nExpected equality of these values:\n  tx->state()\n    Which is: 1-byte object <03>\n  LogicalGraphTransactionState::LGTTS_INDETERMINATE\n    Which is: 1-byte object <05>\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "IncrementalPublicationRecoversOneCompleteGeneration\/1",
+          "value_param": "true",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:59:43Z",
+          "time": "0.274s",
+          "classname": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:155\nExpected: (void)tx->commit() throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"relocatable external B+Tree sorter permits only one active rewindable source cursor\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:157\nValue of: injected.load()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:157\nExpected equality of these values:\n  armed.work.incremental\n    Which is: 0\n  1\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp:158\nExpected equality of these values:\n  tx->state()\n    Which is: 1-byte object <03>\n  LogicalGraphTransactionState::LGTTS_INDETERMINATE\n    Which is: 1-byte object <05>\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable location lookup requires an ID and published directory root\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

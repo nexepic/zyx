@@ -1,0 +1,9 @@
+{
+  "purpose": "Untimed public API loader mechanism integration; no latency sample",
+  "returncode": 0,
+  "nodes": 144,
+  "edges": 3192,
+  "batch_rows": 1000,
+  "binary_sha256": "43d94406878970af72d668c74273c902ce32e109f5d20a597a3d826a66f779ab",
+  "file_bytes": 2621440
+}

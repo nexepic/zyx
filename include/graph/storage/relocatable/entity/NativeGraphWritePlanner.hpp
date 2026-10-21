@@ -73,6 +73,7 @@ namespace graph::storage {
 		// one logical transaction may retain. Keep the adjacency default derived from
 		// that bound: each Edge has one OUT and one IN key mutation.
 		static constexpr size_t DEFAULT_MAXIMUM_LOGICAL_ID_RESERVATION = 10'000'000U;
+        static constexpr size_t DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD = 4096U;
 		PhysicalSlotId first_slot = PhysicalSlotId(1U);
 		PhysicalSlotId last_slot = PhysicalSlotId(std::numeric_limits<uint64_t>::max());
 		uint64_t entity_pool_owner_id = 1U;
@@ -90,7 +91,7 @@ namespace graph::storage {
 		// Rebuild an existing global adjacency tree only for a material batch. This
 		// merges one sequential source pass with the sorted final-state mutations,
 		// avoiding a B+Tree descent and COW split for each bulk Edge operation.
-		size_t global_adjacency_bulk_rebuild_entry_threshold = 4096U;
+		size_t global_adjacency_bulk_rebuild_entry_threshold = DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD;
 		// One durable high-water publication grants this many IDs to the shared
 		// planner context. Unused IDs are intentionally never recycled, preserving
 		// uniqueness across rollback and process crashes.
@@ -191,7 +192,9 @@ namespace graph::storage {
         void stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
             std::shared_ptr<std::pmr::memory_resource> memory,
             const CancellationCheckpoint *cancellation = nullptr, bool publishCandidate = false,
-            NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID);
+            NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID,
+            bool compactColumnMemberships = false,
+            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission = {}, uint8_t groupCount = 1);
         // Isolated-format cells; copied into the same bounded account and
         // committed exclusively under this transaction's pin. The opt-in
         // lifecycle mode includes field insertion/removal and inline writes.
@@ -284,6 +287,7 @@ namespace graph::storage {
 			std::optional<BTreeStructuralMutationPlan> plan;
 			std::optional<BTreeTreeRetirementPlan> retirement_plan;
 			BTreeLeafValueLayout leaf_value_layout = BTreeLeafValueLayout::BLVL_U64;
+            std::shared_ptr<NativeGraphDeferredIndexImages> images;
 		};
 		struct StagedInitialScalarIndexMutation {
 			BTreePageStore *index = nullptr;
@@ -367,6 +371,7 @@ namespace graph::storage {
 		std::vector<BTreeScalarIndexOperation> global_adjacency_operations_;
 		bool global_adjacency_operations_canonical_ = false;
 		std::optional<BTreeStructuralMutationPlan> global_adjacency_plan_;
+        std::shared_ptr<NativeGraphDeferredIndexImages> global_adjacency_images_;
 		std::optional<BTreeTreeRetirementPlan> global_adjacency_retirement_plan_;
 		std::optional<BTreeInitialTreeMutationPlan> global_adjacency_initial_plan_;
 		// Large adjacency batches are encoded into candidate-only scratch and

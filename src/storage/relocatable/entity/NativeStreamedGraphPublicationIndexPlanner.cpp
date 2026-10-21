@@ -35,7 +35,7 @@ namespace graph::storage {
 		OrderedBTreeEntrySource tokenCountUpdates;
 		auto membership = NativeStreamedGraphMembershipIndexPlanner::plan(
 				catalog, adjacencyPages, metadata, publication, options.membership, planning.current_snapshot,
-				checkpointLsn, &tokenCountUpdates);
+				checkpointLsn, &tokenCountUpdates, &planning);
 		auto finalCatalogEntries = prepared.catalog_tokens.final_catalog_entries;
 		if (tokenCountUpdates)
 			finalCatalogEntries = NativeBulkEdgeCatalogTokenMaterializer::overlayEntries(std::move(finalCatalogEntries),

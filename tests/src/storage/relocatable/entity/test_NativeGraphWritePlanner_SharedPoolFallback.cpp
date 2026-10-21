@@ -11,6 +11,9 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
 
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
@@ -67,7 +70,8 @@ namespace {
 	}
 
 	IndexRootLocation appendEmptyIndexRoot(BTreePageStore &indexes, uint64_t indexId, PageId pageId,
-											LogSequenceNumber checkpointLsn) {
+											LogSequenceNumber checkpointLsn,
+        BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64) {
 		SlottedPagePoolAppendRequest request;
 		request.segment_id = SegmentId(71U);
 		request.generation = Generation(1U);
@@ -85,6 +89,7 @@ namespace {
 		header.index_id = indexId;
 		header.page_id = pageId;
 		header.generation = Generation(1U);
+        header.leaf_value_layout = leafValueLayout;
 		static_cast<void>(indexes.append(request, BTreePage::create(owner, header), checkpointLsn));
 		const IndexRootLocation root{indexId, pageId, Generation(1U)};
 		static_cast<void>(indexes.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(checkpointLsn.value() + 1U)));
@@ -220,4 +225,83 @@ TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest,
 			  (std::vector<uint64_t>{seedEdgeId}));
 	current.release();
 	before.release();
+}
+
+TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest, OwnedImagesPreserveUnrelatedIndexesInALegalSharedPool) {
+    BTreePageStore indexes(*slotted_pages_, *metadata_);
+    static_cast<void>(allocateEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U),
+        LogSequenceNumber(2U), BTreeLeafValueLayout::BLVL_EMPTY));
+    const auto foreign = appendEmptyIndexRoot(indexes, 17U, PageId(102U), LogSequenceNumber(4U));
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    const std::array<uint64_t, 0> noLabels{};
+    auto seed = planner.beginTransaction(); const auto source = seed.createNode(noLabels), target = seed.createNode(noLabels);
+    const auto initial = seed.createEdge(source, target, 29U); ASSERT_TRUE(seed.commit().committed());
+    auto old = metadata_->openSnapshot(); const auto originalForeign = metadata_->findPageLocation(old, foreign.root_page_id);
+    int64_t skipped = 0;
+    graph::debug::PerfTrace::ScopedObserver observer(&skipped, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+        if (key == "native_graph.write.index_placement.mixed_pool_skipped") *static_cast<int64_t *>(owner) += value;
+    });
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    graph::utils::OwnedAllocationScope allocation(memory);
+    auto transaction = planner.beginTransaction(); const auto added = transaction.createEdge(source, target, 31U);
+    ASSERT_TRUE(transaction.commit().committed()); EXPECT_GT(skipped, 0);
+    auto current = metadata_->openSnapshot(); GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+    EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+        (std::vector<uint64_t>{initial, added}));
+    EXPECT_EQ(adjacency.scan(old, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+        (std::vector<uint64_t>{initial}));
+    EXPECT_EQ(metadata_->findIndexRoot(current, foreign.index_id), foreign);
+    EXPECT_EQ(metadata_->findPageLocation(current, foreign.root_page_id), originalForeign);
+    current.release(); old.release();
+}
+
+TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest, OwnedImagesAuthenticateSourcePagesInAnotherIndexFamilyPool) {
+    BTreePageStore indexes(*slotted_pages_, *metadata_);
+    const auto foreign = allocateEmptyIndexRoot(indexes, 17U, PageId(101U), LogSequenceNumber(2U));
+    static_cast<void>(appendEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(102U),
+        LogSequenceNumber(4U), BTreeLeafValueLayout::BLVL_EMPTY));
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    const std::array<uint64_t, 0> noLabels{};
+    auto seed = planner.beginTransaction(); const auto source = seed.createNode(noLabels), target = seed.createNode(noLabels);
+    const auto initial = seed.createEdge(source, target, 29U); ASSERT_TRUE(seed.commit().committed());
+    auto old = metadata_->openSnapshot(); const auto originalForeign = metadata_->findPageLocation(old, foreign.root_page_id);
+    const auto root = metadata_->findIndexRoot(old, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+    const auto sourcePool = metadata_->findCatalog(old, metadata_->findPageLocation(old, root.root_page_id).segment_id);
+    ASSERT_EQ(sourcePool.owner_id, foreign.index_id);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    graph::utils::OwnedAllocationScope allocation(memory);
+    auto transaction = planner.beginTransaction(); const auto added = transaction.createEdge(source, target, 31U);
+    ASSERT_TRUE(transaction.commit().committed());
+    auto current = metadata_->openSnapshot(); GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+    EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+        (std::vector<uint64_t>{initial, added}));
+    EXPECT_EQ(adjacency.scan(old, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+        (std::vector<uint64_t>{initial}));
+    EXPECT_EQ(metadata_->findIndexRoot(current, foreign.index_id), foreign);
+    EXPECT_EQ(metadata_->findPageLocation(current, foreign.root_page_id), originalForeign);
+    const auto installed = metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+    EXPECT_NE(metadata_->findPageLocation(current, installed.root_page_id).segment_id, sourcePool.segment_id);
+    current.release(); old.release();
+}
+
+TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest, OwnedImagesReserveExplicitEntitySegmentsBeforeFreshIndexPools) {
+    BTreePageStore indexes(*slotted_pages_, *metadata_);
+    static_cast<void>(allocateEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U),
+        LogSequenceNumber(2U), BTreeLeafValueLayout::BLVL_EMPTY));
+    const auto foreign = appendEmptyIndexRoot(indexes, 17U, PageId(102U), LogSequenceNumber(4U));
+    auto old = metadata_->openSnapshot();
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    graph::utils::OwnedAllocationScope allocation(memory);
+    const std::array<uint64_t, 0> noLabels{};
+    auto transaction = planner.beginTransaction();
+    const auto source = transaction.createNode(noLabels), target = transaction.createNode(noLabels);
+    const auto edge = transaction.createEdge(source, target, 29U);
+    ASSERT_TRUE(transaction.commit().committed());
+    auto current = metadata_->openSnapshot(); GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+    EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+        (std::vector<uint64_t>{edge}));
+    EXPECT_TRUE(adjacency.scan(old, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids.empty());
+    EXPECT_EQ(metadata_->findIndexRoot(current, foreign.index_id), foreign);
+    current.release(); old.release();
 }

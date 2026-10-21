@@ -1,0 +1,29 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMatureShapeCostsTest.CohortSavingDoesNotAuthorizeItsFirstGroupPublication:HybridPropertyMatureShapeCostsTest.CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner:HybridPropertyCohortAdmissionTest.*
+[==========] Running 7 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from HybridPropertyMatureShapeCostsTest
+[ RUN      ] HybridPropertyMatureShapeCostsTest.CohortSavingDoesNotAuthorizeItsFirstGroupPublication
+NATIVE_COHORT_PREFIX_COST groups=8 converted=1 row=1835008 candidate=2097152 byte_gate=reject
+[       OK ] HybridPropertyMatureShapeCostsTest.CohortSavingDoesNotAuthorizeItsFirstGroupPublication (529 ms)
+[ RUN      ] HybridPropertyMatureShapeCostsTest.CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner
+NATIVE_COHORT_ATOMIC_COST groups=8 row=1835008 candidate=1441792 byte_gate=admit
+[       OK ] HybridPropertyMatureShapeCostsTest.CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner (54071 ms)
+[----------] 2 tests from HybridPropertyMatureShapeCostsTest (54601 ms total)
+
+[----------] 5 tests from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (3 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO
+[       OK ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO (6 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup
+[       OK ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup (138 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots
+[       OK ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots (398 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone
+[       OK ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone (782 ms)
+[----------] 5 tests from HybridPropertyCohortAdmissionTest (1330 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 2 test suites ran. (55932 ms total)
+[  PASSED  ] 7 tests.

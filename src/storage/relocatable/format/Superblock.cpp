@@ -140,6 +140,9 @@ namespace graph::storage {
 			validatePageRef(superblock.edge_entity_directory_root);
 			validatePageRef(superblock.entity_property_directory_root);
             validatePageRef(superblock.hybrid_property_descriptor_root);
+            if ((superblock.flags & RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP) &&
+                !superblock.hybrid_property_descriptor_root.isValid())
+                throwSuperblockError(FormatError::FERR_INVALID_HEADER, "compact column membership feature has no native descriptor root");
             if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && superblock.hybrid_property_descriptor_root.isValid()) {
                 throwSuperblockError(FormatError::FERR_UNSUPPORTED_VERSION,
                     "hybrid property descriptor requires the isolated candidate format");

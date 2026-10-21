@@ -1,0 +1,7 @@
+{
+  "include/graph/storage/relocatable/metadata/HybridPropertyDirectoryPreparation.hpp": "afc154812ee9741183f5dc6108ac0cd1b9f1e63c4c4e976a8e9962d02f7b732b",
+  "include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp": "19e2a1880ee099402c1e5cf65c9f5a0b9a9bc79a5d13977ec512a999bdf46ded",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "01739df16688f2ca4d192dafd64c0f8ef28e707676f44ce41e26be2c53e19c7b",
+  "tests/src/storage/relocatable/property/test_HybridPropertyPoolTailReuse.cpp": "b659af1e682baf950d911b08e01144c0ad60b036caebd9284b168fdf390623f1",
+  "tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp": "7bc0ba7adc959e9dc0ddd0eaef8e491a10ca2cc797c546bc3abcbd1ca784b4f4"
+}

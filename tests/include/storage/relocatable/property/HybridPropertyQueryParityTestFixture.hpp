@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdlib>
 
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
@@ -485,6 +486,8 @@ protected:
         auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
         NativeGraphHybridPropertyConversion conversion{kind, 1, memory, nullptr, PhysicalSlotId(40), PhysicalSlotId(180), 903};
         conversion.publish_candidate = true;
+        const auto *compact = std::getenv("ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS");
+        conversion.compact_column_memberships = compact && std::string_view(compact) == "1";
         if (inverse) conversion.direction = NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW;
         NativeGraphHybridPropertyRootMutation request{before.database_id, before.hybrid_property_descriptor_root,
             NativeHybridPropertyRootMode::NHPRM_REPLACE, {}, conversion};

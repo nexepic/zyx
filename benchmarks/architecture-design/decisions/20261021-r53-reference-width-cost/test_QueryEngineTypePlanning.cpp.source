@@ -1,0 +1,84 @@
+#include <gtest/gtest.h>
+#include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/logical/operators/LogicalJoin.hpp"
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
+#include "graph/storage/LogicalGraphRead.hpp"
+
+namespace graph::query {
+namespace {
+class TypePlanningBackend final : public storage::LogicalGraphReadBackend,
+    public storage::LogicalGraphStatisticsBackend {
+public:
+    std::optional<uint64_t> type_count;
+    bool malformed_batch = false;
+    mutable size_t snapshot_opens = 0, planning_reads = 0;
+    mutable std::vector<std::string> requested_types;
+    std::optional<storage::LogicalGraphSchemaIdentity> logicalPlanCacheIdentity() const override {
+        storage::LogicalGraphSchemaIdentity identity;
+        identity.database_token = 1; identity.format_token = 31;
+        // Model the catalog-root identity changing when maintained counts change.
+        identity.catalog_tokens[0] = type_count ? *type_count + 1 : 0;
+        return identity;
+    }
+    std::unique_ptr<storage::LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
+        ++snapshot_opens; throw std::logic_error("planning must not scan graph records");
+    }
+    std::optional<storage::LogicalGraphCardinalityStatistics> readLogicalGraphCardinalityStatistics() const override {
+        return storage::LogicalGraphCardinalityStatistics{1000, 10000};
+    }
+    storage::LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+        std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const override {
+        ++planning_reads;
+        requested_types.assign(types.begin(), types.end());
+        storage::LogicalGraphPlanningStatistics result;
+        result.graph = readLogicalGraphCardinalityStatistics();
+        result.node_counts.resize(labels.size(), 500);
+        if (!malformed_batch) result.edge_type_counts.resize(types.size(), type_count);
+        return result;
+    }
+};
+const logical::LogicalJoin *findJoin(const logical::LogicalOperator &root) {
+    if (const auto *join = dynamic_cast<const logical::LogicalJoin *>(&root)) return join;
+    for (const auto *child : root.getChildren()) if (child) if (const auto *join = findJoin(*child)) return join;
+    return nullptr;
+}
+TEST(QueryEngineTypePlanningTest, UsesSameBatchTypeCountsForJoinAndPreservesUnavailableFallback) {
+    for (unsigned mode = 0; mode < 8; ++mode) {
+        auto backend = std::make_shared<TypePlanningBackend>();
+        if (mode == 0) backend->type_count = 0;
+        if (mode == 2) backend->type_count = 10001; // inconsistent with global count
+        if (mode == 3) { backend->type_count = 0; backend->malformed_batch = true; }
+        if (mode == 4) backend->type_count = 1;
+        if (mode == 5) backend->type_count = 9999;
+        if (mode == 6) backend->type_count = 500; // deterministic tie
+        if (mode == 7) backend->type_count = 400; // fewer rows, wider retained bindings
+        QueryEngine engine(backend);
+        auto plan = engine.buildPlan("MATCH (a)-[r:Rare]->(b), (c:Common) RETURN a, b, c");
+        ASSERT_NE(plan.root, nullptr);
+        const auto *join = findJoin(*plan.root); ASSERT_NE(join, nullptr);
+        const auto *rightTraversal = dynamic_cast<const logical::LogicalTraversal *>(join->getRight());
+        EXPECT_EQ(rightTraversal != nullptr, (mode == 0 || mode == 4)) << mode;
+        EXPECT_EQ(backend->requested_types, (std::vector<std::string>{"Rare"}));
+        EXPECT_EQ(backend->snapshot_opens, 0U);
+        EXPECT_EQ(backend->planning_reads, 1U);
+    }
+}
+TEST(QueryEngineTypePlanningTest, RebuildAfterCatalogIdentityChangeUsesFreshTypeCountsWithoutGraphReads) {
+    auto backend = std::make_shared<TypePlanningBackend>(); QueryEngine engine(backend);
+    backend->type_count = 1;
+    auto rare = engine.buildPlan("MATCH (a)-[r:Rare]->(b), (c:Common) RETURN a, b, c");
+    const auto *first = findJoin(*rare.root); ASSERT_NE(first, nullptr);
+    EXPECT_NE(dynamic_cast<const logical::LogicalTraversal *>(first->getRight()), nullptr);
+    backend->type_count = 10000;
+    auto common = engine.buildPlan("MATCH (a)-[r:Rare]->(b), (c:Common) RETURN a, b, c");
+    const auto *second = findJoin(*common.root); ASSERT_NE(second, nullptr);
+    EXPECT_EQ(dynamic_cast<const logical::LogicalTraversal *>(second->getRight()), nullptr);
+    EXPECT_EQ(backend->planning_reads, 2U); EXPECT_EQ(backend->snapshot_opens, 0U);
+}
+TEST(QueryEngineTypePlanningTest, SingleTraversalDoesNotRequestUnusedTypeStatistics) {
+    auto backend = std::make_shared<TypePlanningBackend>(); QueryEngine engine(backend);
+    ASSERT_NE(engine.buildPlan("MATCH (a)-[r:Rare]->(b) RETURN a, b").root, nullptr);
+    EXPECT_TRUE(backend->requested_types.empty()); EXPECT_EQ(backend->snapshot_opens, 0U);
+}
+}
+}

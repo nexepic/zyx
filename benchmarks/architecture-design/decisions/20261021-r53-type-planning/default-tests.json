@@ -1,0 +1,1239 @@
+{
+  "tests": 114,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T14:58:25Z",
+  "time": "2.267s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "QueryEngineTypePlanningTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "UsesSameBatchTypeCountsForJoinAndPreservesUnavailableFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineTypePlanning.cpp",
+          "line": 45,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineTypePlanningTest"
+        },
+        {
+          "name": "RebuildAfterCatalogIdentityChangeUsesFreshTypeCountsWithoutGraphReads",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineTypePlanning.cpp",
+          "line": 65,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineTypePlanningTest"
+        },
+        {
+          "name": "SingleTraversalDoesNotRequestUnusedTypeStatistics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineTypePlanning.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineTypePlanningTest"
+        }
+      ]
+    },
+    {
+      "name": "QueryEngineAnchorPlanningTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0.002s",
+      "testsuite": [
+        {
+          "name": "OpaqueReadEnvelopesDoNotRequestUnusableAnchorStatistics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineAnchorPlanning.cpp",
+          "line": 37,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineAnchorPlanningTest"
+        },
+        {
+          "name": "TransparentReadsUseOneFrozenBatchAndUnknownCountsKeepTheOriginalAnchor",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineAnchorPlanning.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineAnchorPlanningTest"
+        }
+      ]
+    },
+    {
+      "name": "QueryEngineLogicalBackendBoundaryTest",
+      "tests": 59,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0.309s",
+      "testsuite": [
+        {
+          "name": "RejectsANullLogicalBackendAtConstruction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 420,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "UsesLabelCostsForJoinAndFallsBackOnUnavailableOrInvalidEstimates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 425,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "KeepsFilteredJoinOrderWhenPropertySelectivityIsUnknown",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 465,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ReadsBoundedNativeCardinalityDuringLogicalPlanOptimization",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 478,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "UsesCatalogAdjacencyCardinalityToOrderCartesianTraversalInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 487,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "FallsBackSafelyWhenOptionalCardinalityStatisticsAreUnavailableOrMalformed",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 506,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "IdentifiesItsReadBackendAndAcceptsAnEmptyTransactionOverlayPlan",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 533,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ClearsCachedReadPlansWhenBuildingSchemaMutationPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "RejectsIncompleteExecutionBackendBoundariesBeforeOpeningASnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 561,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "EnforcesExecutionModesForPrebuiltLogicalPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 583,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ValidatesAndExecutesObservabilityPlansWithoutStorageSideEffects",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 612,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ExplainRejectsMalformedAndOverBoundPrebuiltPlanTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 647,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ExplainCapsRenderedIndentForDeepPrebuiltPlanTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 686,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "RejectsUnknownQueryLanguageBeforeParsing",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 708,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ExplainIsSnapshotFreeAndMayInspectAWriteInReadOnlyMode",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 714,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "AdministrationMutationWaitsForTheCompleteCypherResultPipelineBeforePublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 729,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 750,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "AdministrationMutationChecksAnExpiredGuardImmediatelyBeforePublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.075s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "AdministrationObservabilityProceduresExcludeThemselvesAndCommitOnlyAfterTheirResult",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 797,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "BytesFunctionAcceptsHexListsAndBinaryParameters",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 831,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "BytesFunctionRejectsMalformedInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 855,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "EntityIntrospectionListsRespectTheNativeResultBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 863,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ScalarFunctionsRespectTheNativeListAndArgumentBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 880,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileDispatchesItsInnerReadPlanAndAddsOneSummaryRow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 900,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileDispatchesItsInnerCreatePlanThroughOneAtomicBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 914,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileUsesTheLogicalTransactionOverlayInsteadOfTheBaseBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 931,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "LogicalVectorBoundaryDefaultsRemainExplicitAndFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 946,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingSupportsTheBoundedScalarOutputPipeline",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1016,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingDirectResultSharesMaterializationBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1052,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1069,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingRejectsReadOnlyAndUnboundedRequestsBeforeMaintenance",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1092,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TimedOutVectorTrainingDoesNotStartMaintenance",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1111,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingPropagatesCancellationIntoMaintenanceWork",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingDoesNotReportTimeoutAfterSuccessfulMaintenance",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1146,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.02s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorTrainingChecksTheGuardImmediatelyBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ShortestPathProcedureUsesTheLogicalReadSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ShortestPathProcedureRejectsNonMonotonicAdjacencyPages",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1217,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ShortestPathRejectsInvalidReadBudgetsBeforeTraversal",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1230,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TransactionOverlayUsesOnlyManifestApprovedPinnedProcedures",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TransactionOverlayRejectsEveryAutocommitOnlyProcedureBeforeBackendAccess",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "EveryNativeProcedureTimesOutBeforeBackendAccess",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1333,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.046s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "NativeProcedureEntryChecksAnExpiredGuardWithoutPeriodicPriming",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1354,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.046s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TransactionOverlayProcedureTimesOutBeforeOpeningItsSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TransactionOverlayVectorProcedureTimesOutBeforeOpeningItsSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorProcedurePropagatesCancellationIntoTheSearchWork",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TransactionLocalGdsProcedureTimesOutBeforeOpeningItsSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1432,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "GdsProjectionCancellationDoesNotPublishAPartialCatalogEntry",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.002s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "GdsProjectionChecksAnExpiredGuardImmediatelyBeforePublishingItsCatalogMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1480,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.075s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TimedOutGdsCatalogDeletionLeavesTheProjectionVisible",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1501,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.004s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "FailedGdsCatalogResultPipelinesDoNotPublishMutations",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1531,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "TimedOutGdsAlgorithmLeavesItsProjectionReusable",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1556,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.003s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "GdsProcedureRowsRespectTheConfiguredResultBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1579,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorSearchRejectsInvalidArgumentsAndBrokenBackendResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1599,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorSearchValidatesOwnerKeyedPropertiesAtResultMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1648,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorProcedureRuntimeRejectsMalformedAndUnavailableBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1686,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ValidatesScalarGdsArgumentsBeforeCatalogLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1775,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorProcedureRuntimeRejectsMalformedOutputOperators",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1850,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "VectorProcedureRuntimeRejectsInvalidSearchBoundsAndHits",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 1920,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalCardinalityEstimateTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "AcceptsOrderedBoundsAndRejectsInconsistentEstimates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalCardinalityEstimateTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalStatisticsProviderContractTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DestroysProvidersPolymorphically",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalStatisticsProviderContractTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanOptimizerTest",
+      "tests": 32,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "FusesNestedLimitsWithoutChangingTheScan",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 232,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "LeavesAFilterWithAnInvalidChildShapeUntouched",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 261,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesLimitBelowAValidNonDistinctProjection",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesPositiveLimitBelowNonNegativeSkip",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "RetainsDistinctAndMalformedProjectionsAboveLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 317,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "FusesNestedSkipsWhenTheExactSumIsRepresentable",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesDirectLiteralPropertyEqualityIntoNodeScanWithoutRemovingFilter",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 366,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesConjunctiveLiteralEqualitiesIntoOneNodeScanWithoutRemovingTheFilter",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 389,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 427,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 472,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "CanonicalizesConjunctiveBoundsForOneRangeProperty",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 504,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PrefersExclusiveBoundsWhenEqualRangeEndpointsAreConjoined",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 555,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "ReplacesLooserRangeBoundsWithStricterEndpoints",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 598,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "LeavesMalformedOrConflictingExistingScanPredicatesUntouched",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 634,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesEveryNonNullLiteralRepresentationAndRejectsInvalidFilterShapes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 692,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "LeavesMalformedOrOverflowingWindowsForRuntimeValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 803,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "ValidatesStatisticsAndPlanTraversalBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 854,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PlacesTheSmallerCartesianInputOnTheMaterializedRightSide",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 882,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "HandlesEmptyInputsAndInvalidConfiguration",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 907,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "FailsClosedForMalformedOperatorContracts",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 925,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "EnforcesItsFixedPointBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 989,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1002,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1024,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1037,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1054,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1074,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "KeepsUnsupportedOrUncostedAnchorsOnOriginalPath",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1163,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "AnchorCostRuleDoesNotCrossWindowsOptionalOrUnprovenProjectionExpressions",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        },
+        {
+          "name": "RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/optimization\/test_LogicalPlanOptimizer.cpp",
+          "line": 1227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0s",
+          "classname": "LogicalPlanOptimizerTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:25Z",
+      "time": "1.943s",
+      "testsuite": [
+        {
+          "name": "TokenCountsFollowOrdinaryFinalStateAndDetachDeletion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 56,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.122s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:25Z",
+          "time": "0.51s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 174,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:26Z",
+          "time": "0.344s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 249,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:26Z",
+          "time": "0.203s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 287,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:26Z",
+          "time": "0.084s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenStatisticsRebuildRejectsAChangedSourceSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 328,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:26Z",
+          "time": "0.108s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 364,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:26Z",
+          "time": "0.082s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 415,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.071s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 431,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.101s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 456,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.075s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.071s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 506,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.069s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 569,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.098s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeMembershipAccessCostTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T14:58:27Z",
+      "time": "0.008s",
+      "testsuite": [
+        {
+          "name": "UnknownOrInconsistentCountsRetainAuthenticatedCandidates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0s",
+          "classname": "NativeMembershipAccessCostTest"
+        },
+        {
+          "name": "KnownDenseCountsChooseScanOnlyWithinCallerBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 546,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0s",
+          "classname": "NativeMembershipAccessCostTest"
+        },
+        {
+          "name": "IncreasingCandidateCountCannotReenterCandidatePath",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTokenCardinality.cpp",
+          "line": 555,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T14:58:27Z",
+          "time": "0.008s",
+          "classname": "NativeMembershipAccessCostTest"
+        }
+      ]
+    }
+  ]
+}
