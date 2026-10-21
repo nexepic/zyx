@@ -553,3 +553,31 @@ TEST(RelocatableSuperblockTest, AAndBSelectionSurvivesOneCorruptCopyAndRejectsSp
 	expectFormatError([&] { static_cast<void>(SuperblockCodec::selectNewest(corrupt, corrupt)); },
 					  FormatError::FERR_CHECKSUM_MISMATCH);
 }
+
+TEST(RelocatableSuperblockTest, CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor) {
+    auto superblock = validSuperblock(7, 50);
+    superblock.flags |= RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP;
+    EXPECT_THROW(SuperblockCodec::validate(superblock), FormatException);
+    superblock.hybrid_property_descriptor_root = pageRef(25, 1, 7);
+    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(superblock)), superblock);
+        auto raw = SuperblockCodec::encode(superblock);
+        LittleEndianCodec::writeU64(raw, RSS_SUPERBLOCK_HEADER_BYTES - 16U, 0);
+        LittleEndianCodec::writeU64(raw, RSS_SUPERBLOCK_HEADER_BYTES - 8U, 0);
+        recalculateCrc(raw);
+        EXPECT_THROW(SuperblockCodec::decode(raw), FormatException);
+    } else EXPECT_THROW(SuperblockCodec::encode(superblock), FormatException);
+}
+
+TEST(RelocatableSuperblockTest, IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration) {
+    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        EXPECT_EQ(RSS_FORMAT_VERSION, 7);
+        EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 33);
+        auto old = SuperblockCodec::encode(validSuperblock(7, 50));
+        LittleEndianCodec::writeU16(old, 4, 32); recalculateCrc(old);
+        expectFormatError([&] { static_cast<void>(SuperblockCodec::decode(old)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+        EXPECT_THROW(SuperblockCodec::selectNewest(old, old), FormatException);
+    } else {
+        EXPECT_EQ(RSS_FORMAT_VERSION, 5); EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 31);
+    }
+}

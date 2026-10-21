@@ -395,6 +395,8 @@ namespace graph::storage {
 		estimateLogicalNodeCardinality(std::span<const std::string> labels) const override;
 		[[nodiscard]] LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
 			std::span<const std::vector<std::string>> labels) const override;
+        [[nodiscard]] LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+            std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const override;
 
 		[[nodiscard]] std::unique_ptr<LogicalGraphVectorSearchSnapshot>
 		openLogicalGraphVectorSearchSnapshot() const override;

@@ -1,0 +1,32 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T20:05:53Z",
+  "time": "0.023s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "NativeGraphWritePlannerSharedPoolFallbackTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:05:53Z",
+      "time": "0.023s",
+      "testsuite": [
+        {
+          "name": "OwnedImagesReserveExplicitEntitySegmentsBeforeFreshIndexPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_SharedPoolFallback.cpp",
+          "line": 287,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:05:53Z",
+          "time": "0.023s",
+          "classname": "NativeGraphWritePlannerSharedPoolFallbackTest"
+        }
+      ]
+    }
+  ]
+}

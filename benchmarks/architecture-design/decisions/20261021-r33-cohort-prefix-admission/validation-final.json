@@ -1,0 +1,69 @@
+{
+  "tests": {
+    "r33-cohort-final-candidate": {
+      "tests": 8,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    },
+    "r33-cohort-budget-candidate": {
+      "tests": 1,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    },
+    "r33-public-cohort-final-candidate": {
+      "tests": 1,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    },
+    "r33-cohort-lifecycle-controls-candidate": {
+      "tests": 290,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    },
+    "r33-cohort-lifecycle-controls-default": {
+      "tests": 9,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    },
+    "r33-cohort-default-final-default": {
+      "tests": 1,
+      "failures": 0,
+      "modules": "selected; not full suite"
+    }
+  },
+  "raw_source_cohort": {
+    "groups": 8,
+    "owners": 512,
+    "fields": 64,
+    "row": 1835008,
+    "candidate": 1441792,
+    "retired": 1179648,
+    "allocated_peak": 2621440,
+    "file": 7208960,
+    "field": 393216,
+    "hybrid_map": 262144,
+    "metadata": 393216,
+    "entity": 131072,
+    "one_publication": true,
+    "workspace_bytes": 1048576
+  },
+  "public_adaptive_row_cohort": {
+    "row": 2621440,
+    "candidate": 2097152,
+    "saving_percent": 20,
+    "full_entities": true,
+    "logical_update": true,
+    "duplicate_missing_optional": true,
+    "owning_output_after_close": true
+  },
+  "prefix": {
+    "converted": 1,
+    "row": 1835008,
+    "candidate": 2097152,
+    "gate": "reject",
+    "all_row_authority_preserved": true
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "R3_3_performance_admission": "pending R7"
+}

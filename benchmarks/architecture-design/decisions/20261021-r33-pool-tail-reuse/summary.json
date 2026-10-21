@@ -1,0 +1,47 @@
+{
+  "accepted": "15/24 (62.5%)",
+  "new_acceptance": false,
+  "focused_cross_pool_test": 1,
+  "controls": {
+    "candidate": 279,
+    "default": 8
+  },
+  "allocation_cost_test": 1,
+  "fixed_mature_shape": {
+    "owners": 512,
+    "groups": 8,
+    "fields": 64,
+    "row": 1835008,
+    "old_candidate": 2621440,
+    "new_candidate": 2097152,
+    "retired": 1179648,
+    "allocated_peak": 3276800,
+    "file": 7864320,
+    "byte_gate": "reject",
+    "candidate_reduction": 0.2,
+    "candidate_vs_row": 0.14285714285714285
+  },
+  "kind_costs": {
+    "entity": [
+      131072,
+      131072
+    ],
+    "property": [
+      1179648,
+      393216
+    ],
+    "hybrid_map": [
+      0,
+      917504
+    ],
+    "metadata": [
+      262144,
+      393216
+    ]
+  },
+  "bootstrap_each": 131072,
+  "emergency_each": 131072,
+  "same_format_and_encoding": true,
+  "no_timing_benchmark": true,
+  "no_full_suite": true
+}

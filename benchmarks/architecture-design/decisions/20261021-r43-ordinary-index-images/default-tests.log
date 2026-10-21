@@ -1,0 +1,379 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 167 tests from 12 test suites.
+[----------] Global test environment set-up.
+[----------] 75 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedManifestCountDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedManifestCountDivergenceRollsBackCleansUpAndAllowsRetry (373 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry (362 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry (335 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry (326 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry (843 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesTopologyAcrossBothAdjacencyDirections
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesTopologyAcrossBothAdjacencyDirections (295 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeFinalSyncFailureIsIndeterminateAndReopenRecoversTheCompleteGeneration
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeFinalSyncFailureIsIndeterminateAndReopenRecoversTheCompleteGeneration (208 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockShortWriteRetainsOldGraphAndAllowsRetry (309 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockDiskFullRetainsOldGraphAndAllowsRetry (304 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePostPublicationScratchCleanupFailureKeepsCommitVisibleAndRequiresReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePostPublicationScratchCleanupFailureKeepsCommitVisibleAndRequiresReopen (217 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesLargeValuePropertiesAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesLargeValuePropertiesAndSurvivesReopen (299 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesNonConsecutiveDuplicateLargeValueProperties
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesNonConsecutiveDuplicateLargeValueProperties (473 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesLargeValuePoolsAcrossTransactions
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesLargeValuePoolsAcrossTransactions (533 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesParallelSelfLoopAndDistinctTypesInOneGeneration
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesParallelSelfLoopAndDistinctTypesInOneGeneration (207 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesExistingAndPublishesNewRelationshipAndPropertyTokens
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesExistingAndPublishesNewRelationshipAndPropertyTokens (221 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationConflictReleasesScratchAndLease
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationConflictReleasesScratchAndLease (144 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverDisjointAdjacencyPublication
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverDisjointAdjacencyPublication (208 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled (249 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeConcurrentSessionFailsBeforeScratchMutationAndRetrySucceeds
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeConcurrentSessionFailsBeforeScratchMutationAndRetrySucceeds (250 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeHardLinkedDatabaseAliasSharesTheSameSessionLease
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeHardLinkedDatabaseAliasSharesTheSameSessionLease (244 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService (192 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverConcurrentScalarIndexCreation
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverConcurrentScalarIndexCreation (201 ms)
+[ RUN      ] RelocatableStorageBackendTest.OrdinaryFinalEdgeDeletionRetiresGlobalAdjacencyRootAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.OrdinaryFinalEdgeDeletionRetiresGlobalAdjacencyRootAndSurvivesReopen (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDeletionRetiresBothAdjacencyDirectionsAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDeletionRetiresBothAdjacencyDirectionsAndSurvivesReopen (169 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRequiresFiniteSortAndCandidatePageBounds
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRequiresFiniteSortAndCandidatePageBounds (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCandidateBudgetFailureRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCandidateBudgetFailureRetainsOldGraphAndCleansUp (124 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceManifestRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceManifestRetainsOldGraphAndCleansUp (125 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceRunRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceRunRetainsOldGraphAndCleansUp (125 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAppendBoundsRejectBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAppendBoundsRejectBeforeLeasingOrScratch (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectsAnOrdinaryStagedMutationBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectsAnOrdinaryStagedMutationBeforeLeasingOrScratch (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDuplicatePropertyKeysRejectBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDuplicatePropertyKeysRejectBeforeLeasingOrScratch (150 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectedAppendPreservesAnActiveStream
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectedAppendPreservesAnActiveStream (141 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateDiskFullRetainsOldGraphAndAllowsRetry (260 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateShortWriteRetainsOldGraphAndAllowsRetry (260 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataDiskFullRetainsOldGraphAndAllowsRetry (226 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageDiskFullRetainsOldGraphAndAllowsRetry (272 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageShortWriteRetainsOldGraphAndAllowsRetry (288 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageDiskFullRetainsOldGraphAndAllowsRetry (357 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageShortWriteRetainsOldGraphAndAllowsRetry (357 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDiskFullRetainsOldGraphAndAllowsRetry (357 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestShortWriteRetainsOldGraphAndAllowsRetry (357 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDeduplicatedLargeValueSecondManifestShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDeduplicatedLargeValueSecondManifestShortWriteRetainsOldGraphAndAllowsRetry (500 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexDiskFullRetainsOldGraphAndAllowsRetry (283 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexShortWriteRetainsOldGraphAndAllowsRetry (283 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageDiskFullRetainsOldGraphAndAllowsRetry (258 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageShortWriteRetainsOldGraphAndAllowsRetry (260 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeShortPrivateScratchWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeShortPrivateScratchWriteRetainsOldGraphAndAllowsRetry (210 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchDiskFullRetainsOldGraphAndAllowsRetry (210 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataSyncFailureRetainsOldGraphAndAllowsRetry (224 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyDataSyncFailureRetainsOldGraphAndAllowsRetry (270 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueDataSyncFailureRetainsOldGraphAndAllowsRetry (360 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDataSyncFailureRetainsOldGraphAndAllowsRetry (362 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyDataSyncFailureRetainsOldGraphAndAllowsRetry (286 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataDataSyncFailureRetainsOldGraphAndAllowsRetry (258 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorDataSyncFailureRetainsOldGraphAndAllowsRetry (266 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchSyncFailureRetainsOldGraphAndAllowsRetry (214 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages
+[       OK ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages (2401 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild (418 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry (356 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication (5265 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts
+[       OK ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts (4956 ms)
+[ RUN      ] RelocatableStorageBackendTest.OrdinaryAdjacencyUsesBoundedOwnedImagesAndPreservesOldPins
+[       OK ] RelocatableStorageBackendTest.OrdinaryAdjacencyUsesBoundedOwnedImagesAndPreservesOldPins (230 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion (120 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges (474 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure
+[       OK ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure (343 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots (198 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts (82 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot (105 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry (81 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt (68 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness
+[       OK ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness (96 ms)
+[----------] 75 tests from RelocatableStorageBackendTest (30553 ms total)
+
+[----------] 13 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores (2 ms)
+[----------] 13 tests from RelocatableMetadataStoreTest (22 ms total)
+
+[----------] 3 tests from NativeMembershipAccessCostTest
+[ RUN      ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates
+[       OK ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget
+[       OK ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath
+[       OK ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath (8 ms)
+[----------] 3 tests from NativeMembershipAccessCostTest (8 ms total)
+
+[----------] 25 tests from NativeGraphWritePlannerAdjacencyTest
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RejectsEveryInvalidPlannerBoundBeforeAttachingStorage
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RejectsEveryInvalidPlannerBoundBeforeAttachingStorage (1 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.PublishesAuthoritativeEdgesAndBothKeyOnlyDirections
+[       OK ] NativeGraphWritePlannerAdjacencyTest.PublishesAuthoritativeEdgesAndBothKeyOnlyDirections (6 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.KeepsParallelEdgesAndSelfLoopsDistinctAcrossDirections
+[       OK ] NativeGraphWritePlannerAdjacencyTest.KeepsParallelEdgesAndSelfLoopsDistinctAcrossDirections (7 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.EnumeratesNewIncidentEdgesBeforeTheirTransactionCommits
+[       OK ] NativeGraphWritePlannerAdjacencyTest.EnumeratesNewIncidentEdgesBeforeTheirTransactionCommits (9 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.BoundsStagedAdjacencyOperationsBeforeChangingEdgeState
+[       OK ] NativeGraphWritePlannerAdjacencyTest.BoundsStagedAdjacencyOperationsBeforeChangingEdgeState (6 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RejectsAnEdgeWhenItsTwoAdjacencyKeysExceedTheWholeTransactionBudget
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RejectsAnEdgeWhenItsTwoAdjacencyKeysExceedTheWholeTransactionBudget (4 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.CancelsProvisionalAdjacencyKeysWhenAnEdgeIsErasedBeforeCommit
+[       OK ] NativeGraphWritePlannerAdjacencyTest.CancelsProvisionalAdjacencyKeysWhenAnEdgeIsErasedBeforeCommit (4 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.DiscardsAnUnreferencedProvisionalNodeBeforeCommit
+[       OK ] NativeGraphWritePlannerAdjacencyTest.DiscardsAnUnreferencedProvisionalNodeBeforeCommit (2 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.PreservesPinnedOldTreeAndErasesBothDirectionalKeys
+[       OK ] NativeGraphWritePlannerAdjacencyTest.PreservesPinnedOldTreeAndErasesBothDirectionalKeys (17 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RebuildsAnExistingAdjacencyTreeFromOneSortedBulkMerge
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RebuildsAnExistingAdjacencyTreeFromOneSortedBulkMerge (20 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.DeferredBulkMergeCombinesErasureAndUpsertAgainstAnExistingTree
+[       OK ] NativeGraphWritePlannerAdjacencyTest.DeferredBulkMergeCombinesErasureAndUpsertAgainstAnExistingTree (20 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.BuildsTheFirstLargeAdjacencyTreeFromPrivateScratchInOnePublication
+[       OK ] NativeGraphWritePlannerAdjacencyTest.BuildsTheFirstLargeAdjacencyTreeFromPrivateScratchInOnePublication (10 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.BulkMergeErasureRetiresAnEmptyExistingAdjacencyTree
+[       OK ] NativeGraphWritePlannerAdjacencyTest.BulkMergeErasureRetiresAnEmptyExistingAdjacencyTree (13 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RebasesDisjointDeleteOnlyOverlaysOnTheCurrentGlobalRoot
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RebasesDisjointDeleteOnlyOverlaysOnTheCurrentGlobalRoot (15 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RebasesConcurrentLeasedEdgeCreationsWithoutLosingEitherDirection
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RebasesConcurrentLeasedEdgeCreationsWithoutLosingEitherDirection (15 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RebasesConcurrentNodeAndEdgeCreationsWithoutLosingEitherDirection
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RebasesConcurrentNodeAndEdgeCreationsWithoutLosingEitherDirection (15 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RebasesDisjointMixedCreateDeleteBatchesWithoutLosingEitherDirection
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RebasesDisjointMixedCreateDeleteBatchesWithoutLosingEitherDirection (17 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RejectsARebasedDeleteWhenTheSameEdgeChanged
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RejectsARebasedDeleteWhenTheSameEdgeChanged (10 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RecoversBothAdjacencyDirectionsAcrossEverySuperblockInterrupt
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RecoversBothAdjacencyDirectionsAcrossEverySuperblockInterrupt (26 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.ResumesRangesWithLogicalContinuationOnly
+[       OK ] NativeGraphWritePlannerAdjacencyTest.ResumesRangesWithLogicalContinuationOnly (6 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.RelocatesTheGlobalTreeWithoutChangingLogicalAdjacencyRouting
+[       OK ] NativeGraphWritePlannerAdjacencyTest.RelocatesTheGlobalTreeWithoutChangingLogicalAdjacencyRouting (29 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.StreamsASupernodeAcrossMultipleLeavesWithoutSkippingOrDuplicatingEdges
+[       OK ] NativeGraphWritePlannerAdjacencyTest.StreamsASupernodeAcrossMultipleLeavesWithoutSkippingOrDuplicatingEdges (715 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.MaintainsTheGlobalTreeAcrossRandomizedCreateDeleteBatches
+[       OK ] NativeGraphWritePlannerAdjacencyTest.MaintainsTheGlobalTreeAcrossRandomizedCreateDeleteBatches (330 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.MaintainsEdgePropertiesAndBothAdjacencyDirectionsAcrossRandomizedCreateDeleteBatches
+[       OK ] NativeGraphWritePlannerAdjacencyTest.MaintainsEdgePropertiesAndBothAdjacencyDirectionsAcrossRandomizedCreateDeleteBatches (597 ms)
+[ RUN      ] NativeGraphWritePlannerAdjacencyTest.MaintainsTheGlobalTreeAcrossDeterministicCreateDeleteBatches
+[       OK ] NativeGraphWritePlannerAdjacencyTest.MaintainsTheGlobalTreeAcrossDeterministicCreateDeleteBatches (233 ms)
+[----------] 25 tests from NativeGraphWritePlannerAdjacencyTest (2140 ms total)
+
+[----------] 1 test from NativeGraphLabelIndexMutationTest
+[ RUN      ] NativeGraphLabelIndexMutationTest.PublishesLogicalLabelIndexDeltasWithEntityLifecycleAndSnapshots
+[       OK ] NativeGraphLabelIndexMutationTest.PublishesLogicalLabelIndexDeltasWithEntityLifecycleAndSnapshots (21 ms)
+[----------] 1 test from NativeGraphLabelIndexMutationTest (21 ms total)
+
+[----------] 2 tests from NativeGraphWritePlannerSharedPoolFallbackTest
+[ RUN      ] NativeGraphWritePlannerSharedPoolFallbackTest.PublishesThreeScalarIndexesWhenTheirSharedPoolNeedsTwoFreshRebuilds
+[       OK ] NativeGraphWritePlannerSharedPoolFallbackTest.PublishesThreeScalarIndexesWhenTheirSharedPoolNeedsTwoFreshRebuilds (132 ms)
+[ RUN      ] NativeGraphWritePlannerSharedPoolFallbackTest.RebuildsTheGlobalAdjacencyIndexFreshWhenItsCurrentPoolHasNoFrameCapacity
+[       OK ] NativeGraphWritePlannerSharedPoolFallbackTest.RebuildsTheGlobalAdjacencyIndexFreshWhenItsCurrentPoolHasNoFrameCapacity (192 ms)
+[----------] 2 tests from NativeGraphWritePlannerSharedPoolFallbackTest (325 ms total)
+
+[----------] 2 tests from NativeGraphWritePlannerFreshPoolReplacementTest
+[ RUN      ] NativeGraphWritePlannerFreshPoolReplacementTest.MovesStableNodePageIntoFreshPoolWhenItsCurrentPoolIsFull
+[       OK ] NativeGraphWritePlannerFreshPoolReplacementTest.MovesStableNodePageIntoFreshPoolWhenItsCurrentPoolIsFull (96 ms)
+[ RUN      ] NativeGraphWritePlannerFreshPoolReplacementTest.RecoversEitherWholeGenerationWhenFreshPoolReplacementPublicationIsInterrupted
+[       OK ] NativeGraphWritePlannerFreshPoolReplacementTest.RecoversEitherWholeGenerationWhenFreshPoolReplacementPublicationIsInterrupted (314 ms)
+[----------] 2 tests from NativeGraphWritePlannerFreshPoolReplacementTest (410 ms total)
+
+[----------] 11 tests from NativeGraphWritePlannerDurabilityTest
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (15 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.PrePublicationSyncFailureDuringCompoundGraphRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.PrePublicationSyncFailureDuringCompoundGraphRetainsTheOldGenerationAndCanRetryAfterReopen (17 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphPropertyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphPropertyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (15 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphLabelSetCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphLabelSetCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (15 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphAdjacencyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphAdjacencyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (15 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphScalarIndexCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphScalarIndexCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (16 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphMetadataCandidateRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphMetadataCandidateRetainsTheOldGenerationAndCanRetryAfterReopen (16 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.PostPublicationSyncFailureDuringCompoundGraphReportsUncertainDurabilityAndReopensCompleteGeneration
+[       OK ] NativeGraphWritePlannerDurabilityTest.PostPublicationSyncFailureDuringCompoundGraphReportsUncertainDurabilityAndReopensCompleteGeneration (16 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.TornInactiveSuperblockDuringCompoundGraphPublicationRetainsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] NativeGraphWritePlannerDurabilityTest.TornInactiveSuperblockDuringCompoundGraphPublicationRetainsTheOldGenerationAndCanRetryAfterReopen (15 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.RecoversOldEntityAndIndexWhenDerivedPublicationIsInterruptedBeforeSuperblock
+[       OK ] NativeGraphWritePlannerDurabilityTest.RecoversOldEntityAndIndexWhenDerivedPublicationIsInterruptedBeforeSuperblock (10 ms)
+[ RUN      ] NativeGraphWritePlannerDurabilityTest.RecoversNewEntityAndIndexWhenDerivedPublicationIsInterruptedAfterSuperblock
+[       OK ] NativeGraphWritePlannerDurabilityTest.RecoversNewEntityAndIndexWhenDerivedPublicationIsInterruptedAfterSuperblock (12 ms)
+[----------] 11 tests from NativeGraphWritePlannerDurabilityTest (166 ms total)
+
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure (12 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection
+[       OK ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease (5 ms)
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest (150 ms total)
+
+[----------] 1 test from NativeGraphWritePlannerOptionsTest
+[ RUN      ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections
+[       OK ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections (0 ms)
+[----------] 1 test from NativeGraphWritePlannerOptionsTest (0 ms total)
+
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest
+[ RUN      ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations
+[       OK ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations (0 ms)
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest (0 ms total)
+
+[----------] 4 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0 (272 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1 (273 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.OrdinaryImagePublicationRecoversOneCompleteGeneration/0
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.OrdinaryImagePublicationRecoversOneCompleteGeneration/0 (119 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.OrdinaryImagePublicationRecoversOneCompleteGeneration/1
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.OrdinaryImagePublicationRecoversOneCompleteGeneration/1 (119 ms)
+[----------] 4 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest (784 ms total)
+
+[----------] Global test environment tear-down
+[==========] 167 tests from 12 test suites ran. (34583 ms total)
+[  PASSED  ] 167 tests.
+
+  YOU HAVE 1 DISABLED TEST
+

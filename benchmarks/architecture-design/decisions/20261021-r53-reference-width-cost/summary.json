@@ -1,0 +1,16 @@
+{
+  "accepted": "15/24 (62.5%)",
+  "new_acceptance": false,
+  "tests": {
+    "default": 115,
+    "candidate": 115
+  },
+  "model": "logicalReadRowBytes for reference-only rows; not allocator/RSS admission",
+  "remaining": [
+    "physical page/access costs and holdouts",
+    "final production choice",
+    "R7 admission"
+  ],
+  "full_suite": false,
+  "timing_benchmark": false
+}

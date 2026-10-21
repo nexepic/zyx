@@ -179,6 +179,7 @@ namespace graph::storage {
 
 	private:
         friend class RelocatableMetadataStore;
+        void enableHybridColumnMembership();
         friend class NativeStorageAllocationCensus;
         bool publication_prepared_ = false;
         bool hybrid_property_publication_ = false;

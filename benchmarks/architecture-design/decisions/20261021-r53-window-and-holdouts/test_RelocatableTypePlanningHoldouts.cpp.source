@@ -1,0 +1,73 @@
+#include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
+#include "graph/query/api/QueryEngine.hpp"
+#include "CypherParserImpl.hpp"
+
+using namespace relocatable_storage_backend_test;
+
+// Fixed correctness holdout, not a timing benchmark or a fitted cost sample.
+// Compare the same executor and snapshot-backed store with raw versus optimized
+// IR. Parallel edges, an untyped edge, a self-loop and a hot source are retained.
+TEST_F(RelocatableStorageBackendTest, TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen) {
+ auto options = backendOptions(); options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+ auto backend = RelocatableStorageBackend::initializeNew(options); backend->open();
+ std::vector<LogicalGraphNodeCreateRequest> input;
+ for (size_t i = 0; i < 24; ++i) {
+  LogicalGraphNodeCreateRequest node;
+  if (i < 12) node.labels.push_back("Common");
+  if (i < 3) node.labels.push_back("RareNode");
+  if (i % 4) node.properties.push_back({"rank", PropertyValue(int64_t(i))});
+  input.push_back(std::move(node));
+ }
+ const auto nodes = backend->createLogicalNodes(input);
+ std::vector<LogicalGraphEdgeCreateRequest> edges;
+ for (size_t i = 0; i < 64; ++i) edges.push_back({nodes[0], nodes[1 + i % 23], "Frequent", {}});
+ edges.push_back({nodes[0], nodes[1], "Rare", {}});
+ edges.push_back({nodes[0], nodes[1], "Rare", {}});
+ edges.push_back({nodes[0], nodes[0], "Rare", {}});
+ edges.push_back({nodes[1], nodes[2], "Rare", {}});
+ edges.push_back({nodes[2], nodes[3], "Rare", {}});
+ edges.push_back({nodes[3], nodes[4], "Rare", {}});
+ edges.push_back({nodes[0], nodes[2], "", {}});
+ static_cast<void>(backend->createLogicalEdges(edges));
+ const std::vector<std::string> queries{
+  "MATCH (a)-[r:Rare]->(b), (c:Common) RETURN id(r) AS edge, id(c) AS node ORDER BY edge, node",
+  "MATCH (a)-[r:Rare]->(b), (c:Common) RETURN count(*) AS count",
+  "MATCH (a)-[r:Rare]-(b), (c:Common) RETURN id(r) AS edge, id(c) AS node ORDER BY edge, node",
+  "MATCH (a)-[r:Rare]->(b), (c:Common) WHERE b.rank >= 2 RETURN id(r) AS edge, id(c) AS node ORDER BY edge, node",
+  "MATCH (c:Common) OPTIONAL MATCH (c)-[r:Rare]->(b) RETURN c.rank AS rank, b.rank AS target ORDER BY rank, target",
+  "MATCH (a)-[r:Rare]->(b), (c:Common) WITH id(r) AS edge, id(c) AS node ORDER BY edge, node LIMIT 5 RETURN edge, node",
+  "MATCH (a)-[:Rare]->(b)-[:Rare]->(d), (c:Common) RETURN id(a) AS source, id(d) AS target, id(c) AS node ORDER BY source, target, node",
+  "MATCH (a)-[r:Rare]->(b), (c:Common) WHERE b.rank IS NULL RETURN count(*) AS count",
+  "MATCH (a)-[r:Rare]->(b), (c:Common) WITH id(r) AS edge, id(c) AS node LIMIT 5 RETURN edge, node"
+ };
+ for (unsigned round = 0; round < 2; ++round) {
+  if (round) { backend->close(); backend->open(); }
+  graph::query::QueryEngine engine(backend);
+  parser::cypher::CypherParserImpl parser;
+  for (const auto &query : queries) {
+   SCOPED_TRACE(query);
+   SCOPED_TRACE(round);
+   auto raw = parser.parseToLogical(query);
+   const auto expected = engine.executePlan(std::move(raw), {});
+   const auto actual = engine.execute(query);
+   EXPECT_EQ(actual.getColumns(), expected.getColumns());
+   ASSERT_EQ(actual.getRows().size(), expected.getRows().size());
+   for (size_t i = 0; i < actual.getRows().size(); ++i)
+    for (const auto &column : actual.getColumns())
+     EXPECT_EQ(actual.getRows()[i].at(column).asPrimitive(), expected.getRows()[i].at(column).asPrimitive());
+   if (query == queries[2]) EXPECT_EQ(actual.getRows().size(), 132U);
+   if (query == queries[4]) EXPECT_EQ(actual.getRows().size(), 14U);
+   if (query == queries[5]) EXPECT_EQ(actual.getRows().size(), 5U);
+   if (query == queries[7]) {
+    ASSERT_EQ(actual.getRows().size(), 1U);
+    EXPECT_EQ(actual.getRows().front().at("count").asPrimitive(), PropertyValue(int64_t(24)));
+   }
+   if (query == queries[1]) {
+    ASSERT_EQ(actual.getRows().size(), 1U);
+    ASSERT_EQ(actual.getRows().front().size(), 1U);
+    EXPECT_EQ(actual.getRows().front().at("count").asPrimitive(), PropertyValue(int64_t(72)));
+   }
+  }
+ }
+ backend->close();
+}

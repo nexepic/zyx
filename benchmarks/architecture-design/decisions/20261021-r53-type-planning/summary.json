@@ -1,0 +1,17 @@
+{
+  "accepted": "15/24 (62.5%)",
+  "new_acceptance": false,
+  "scope": "R5.3 same-pin maintained type selectivity and JOIN estimate",
+  "passed": {
+    "default": 114,
+    "candidate": 114
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "identity": "existing database/format/catalog/page-directory cache identity; local estimates die with provider",
+  "remaining": [
+    "projected width/page/materialization costing",
+    "held-out plan and resource validation",
+    "production access choice and R7 admission"
+  ]
+}

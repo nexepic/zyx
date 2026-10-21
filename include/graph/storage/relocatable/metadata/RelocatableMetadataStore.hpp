@@ -44,6 +44,7 @@
 #include "graph/storage/relocatable/vector/VectorManifestPage.hpp"
 
 namespace graph::storage {
+    class NativeGraphDeferredIndexImages;
 
     class LargeValueReachabilityReclaimer;
     // Issued only after a complete ownership scan; the borrowed ID list lives
@@ -899,9 +900,10 @@ namespace graph::storage {
 		// metadata batch so final pool allocation cannot overwrite source bytes
 		// before they have been copied into candidate-private segments.
 		std::optional<PhysicalSlotRange> external_private_tail_reservation;
+        std::vector<std::shared_ptr<NativeGraphDeferredIndexImages>> index_images;
 
 		[[nodiscard]] constexpr bool empty() const {
-			return index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
+			return index_images.empty() && index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
 				   vector_deltas.empty() && private_segments.empty() && !private_segment_plan.has_value() &&
 				   !external_private_tail_reservation.has_value();
 		}
@@ -979,9 +981,12 @@ namespace graph::storage {
 	// private scratch source has been durably staged, but before any Index pool
 	// or PageId is assigned. This keeps the two bulk-builder passes inside one
 	// writer-owned candidate without exposing mutable metadata state.
+    class NativeGraphDeferredIndexImages;
+    class HybridPropertyPoolPlacement;
 	struct NativeGraphDeferredIndexPlan {
 		NativeGraphIndexTreeMutation mutation;
 		IndexTreeMultiPoolMutationPreparer preparer;
+        std::shared_ptr<NativeGraphDeferredIndexImages> images;
 	};
 	struct NativeGraphDeferredIndexPlans {
 		std::vector<NativeGraphDeferredIndexPlan> plans;
@@ -1050,6 +1055,12 @@ namespace graph::storage {
         bool publish_candidate = false;
         NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID;
         std::optional<NativeHybridPropertyAllocationAdmission> allocation_admission;
+        // Explicit refinement of the isolated candidate; never inferred from
+        // a caller's descriptor or used by ordinary production ROW writes.
+        bool compact_column_memberships = false;
+        // Explicit maintenance cohort; every group keeps its64-ID/4096-member
+        // bound and shares one<=1MiB account and one final publication gate.
+        uint8_t group_count = 1;
     };
     // Isolated format: scalar/NULL or immutable admitted inline values. Default mode replaces compatible
     // existing columns; explicit lifecycle mode also inserts/removes fields
@@ -1188,6 +1199,9 @@ namespace graph::storage {
 	using CurrentPoolReconciler = std::function<void(const CatalogEntry &, std::span<const PageLocation>)>;
 
 	class RelocatableMetadataStore final {
+        friend class NativeStreamedGraphAdjacencyIndexPlanner;
+        friend class NativeGraphWriteTransaction;
+        friend class NativeStreamedGraphMembershipIndexPlanner;
 		friend class BTreePageStore;
         friend class PropertyCollectionRootStore;
 		friend class DerivedObjectReachabilityReclaimer;
@@ -2024,6 +2038,19 @@ namespace graph::storage {
         size_t native_pool_hint_cursor_ = 0;
         bool native_pool_recovery_required_ = false;
         uint64_t native_safe_io_epoch_ = 0;
+        struct StreamedAdjacencyShape {
+            Generation generation{};
+            uint64_t entries = 0;
+            size_t pages = 0;
+            PhysicalPageRef data_root{};
+            std::optional<IndexRootLocation> root;
+        };
+        mutable std::mutex streamed_adjacency_shape_mutex_;
+        StreamedAdjacencyShape streamed_adjacency_shape_{};
+        StreamedAdjacencyShape streamed_membership_shape_{};
+        void prepareStreamedAdjacencyImages(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
+            const MetadataSnapshotPin &source, NativeGraphDeferredIndexImages &proof,
+            std::unique_ptr<HybridPropertyPoolPlacement> &placement);
         void recoverNativePoolFrames(const MetadataWriteGuard &writer, const Superblock &current);
 	};
 

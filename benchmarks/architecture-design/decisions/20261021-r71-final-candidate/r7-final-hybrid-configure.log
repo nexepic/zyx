@@ -1,0 +1,10 @@
+-- The CXX compiler identification is Clang 19.1.7
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /workspace/zyx-sysroot/usr/bin/clang++-19 - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found PkgConfig: /usr/bin/pkg-config (found version "1.8.1")
+-- Configuring done (1.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/zyx-build-r7-hybrid

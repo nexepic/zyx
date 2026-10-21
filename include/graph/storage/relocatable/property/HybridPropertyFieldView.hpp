@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/storage/relocatable/property/HybridPropertyColumnMembership.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 
 namespace graph::storage {
@@ -31,10 +32,19 @@ public:
             "hybrid field frame has an invalid owner or visibility");
         return HybridPropertyFieldView(SlottedPageReadView::open(owner, payload), visibleGeneration);
     }
+    [[nodiscard]] HybridPropertyColumnMembership readColumnMembership(const SlottedSlotReference &reference,
+        const HybridPropertyGroupRecord &group, Generation descriptorGeneration) const {
+        hybrid_property_detail::require(group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+            group.column_membership == reference, "column membership slot does not belong to its group");
+        return HybridPropertyColumnMembership::decode(page_.read(reference), group, descriptorGeneration, visible_generation_);
+    }
     [[nodiscard]] HybridPropertyGroupRecord readGroup(const SlottedSlotReference &reference,
         EntityPropertyOwnerKind kind, uint64_t group, Generation descriptorGeneration) const {
-        return HybridPropertyGroupRecord::decode(page_.read(reference), kind, group,
-            descriptorGeneration, visible_generation_);
+        const auto result = HybridPropertyGroupRecord::decode(page_.read(reference), kind, group, descriptorGeneration, visible_generation_);
+        hybrid_property_detail::require(result.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+            (result.column_membership.page_id == reference.page_id && result.column_membership.slot_id != reference.slot_id),
+            "compact group and membership must share one page with distinct slots");
+        return result;
     }
     [[nodiscard]] HybridPropertyColumnRecord readColumn(const SlottedSlotReference &reference,
         const HybridPropertyColumnIdentity &identity, const HybridPropertyGroupRecord &group,

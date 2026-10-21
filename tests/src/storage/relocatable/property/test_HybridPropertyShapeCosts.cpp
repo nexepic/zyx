@@ -163,5 +163,138 @@ TEST_F(HybridPropertyMatureShapeCostsTest, EightBoundedGroupsKeepWholeDatabaseCo
         << " row=" << row->steadyAllocatedBytes() << " candidate=" << candidate->steadyAllocatedBytes()
         << " retired=" << candidate->retired_catalog_bytes << " allocated_peak=" << candidate->totalAllocatedBytes()
         << " file=" << candidate->file_bytes << " byte_gate=" << (candidate->steadyAllocatedBytes() <= threshold ? "admit" : "reject") << '\n';
+    constexpr std::array<const char *, size_t(NativeStorageAllocationKind::NSAK_COUNT)> kinds{
+        "entity", "property", "hybrid_map", "query_index", "large_value", "vector", "state", "metadata", "other"};
+    for (size_t i = 0; i < kinds.size(); ++i)
+        std::cout << "NATIVE_MATURE_KIND_COST kind=" << kinds[i] << " row=" << row->sealed_pool_bytes[i]
+            << " candidate=" << candidate->sealed_pool_bytes[i] << '\n';
+    std::cout << "NATIVE_MATURE_FIXED_COST row_bootstrap=" << row->bootstrap_bytes
+        << " candidate_bootstrap=" << candidate->bootstrap_bytes << " row_emergency=" << row->emergency_reserve_bytes
+        << " candidate_emergency=" << candidate->emergency_reserve_bytes << '\n';
+}
+#endif
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyMatureShapeCostsTest, CohortSavingDoesNotAuthorizeItsFirstGroupPublication) {
+    // The registered eight-group total passes the byte gate. Admission must
+    // still authenticate the actual first publication, not borrow that future
+    // saving while the remaining seven groups retain their ROW authority.
+    constexpr size_t groups = 8, fields = 64, owners = groups * 64;
+    seed(NODE, owners, 0);
+    NativeGraphWritePlannerOptions placement; placement.first_slot = PhysicalSlotId(40); placement.last_slot = PhysicalSlotId(80);
+    placement.entity_pool_owner_id = 901; placement.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
+    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement);
+    const auto expected = [](uint64_t id) {
+        PropertyCollectionRoot root{id, graph::Node::typeId, {}};
+        for (uint32_t token = 1; token <= fields; ++token) root.entries.push_back({token, PropertyValue(int64_t(id + token))});
+        return root;
+    };
+    for (size_t group = 0; group < groups; ++group) {
+        auto tx = writer.beginTransaction();
+        for (size_t offset = 1; offset <= 64; ++offset) tx.replaceNodeProperty(expected(group * 64 + offset));
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    const auto old = metadata_->openSnapshot(); const auto before = old.superblock();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    auto conversion = request(NODE, memory); conversion.conversion->publish_candidate = true;
+    conversion.conversion->compact_column_memberships = true;
+    conversion.conversion->allocation_admission.emplace();
+    conversion.conversion->allocation_admission->maximum_admitted_peak_bytes = 32U * 1024U * 1024U;
+    conversion.conversion->allocation_admission->maximum_admitted_file_bytes = 32U * 1024U * 1024U;
+    struct Work { int64_t row = 0, candidate = 0, refused = 0, passed = 0; } work;
+    {
+        graph::debug::PerfTrace::ScopedObserver observe(&work, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+            auto &w = *static_cast<Work *>(owner);
+            if (key == "native_graph.hybrid.allocation_row_bytes") w.row = value;
+            if (key == "native_graph.hybrid.allocation_candidate_bytes") w.candidate = value;
+            if (key == "native_graph.hybrid.allocation_admission_insufficient_saving") w.refused += value;
+            if (key == "native_graph.hybrid.allocation_admission_passed") w.passed += value;
+        });
+        ASSERT_NO_THROW(run(conversion));
+    }
+    ASSERT_EQ(work.refused, 1); EXPECT_EQ(work.passed, 0);
+    EXPECT_GT(work.candidate, work.row / 10 * 9 + work.row % 10 * 9 / 10);
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    for (uint64_t id = 1; id <= owners; ++id) {
+        EXPECT_EQ(properties_->readEntity(old, {NODE, id}), expected(id));
+        EXPECT_EQ(properties_->readEntity(metadata_->openSnapshot(), {NODE, id}), expected(id));
+    }
+    std::cout << "NATIVE_COHORT_PREFIX_COST groups=8 converted=1 row=" << work.row << " candidate=" << work.candidate << " byte_gate=reject\n";
+    auto retry = writer.beginTransaction();
+    auto changed = expected(1); changed.entries.front().value = PropertyValue(int64_t(777)); retry.replaceNodeProperty(changed);
+    ASSERT_TRUE(retry.commit().committed());
+    EXPECT_EQ(properties_->readEntity(metadata_->openSnapshot(), {NODE, 1}), changed);
+    EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), expected(1));
+    // This unchanged one-MiB conversion grant cannot also hold the generic
+    // integrity scanner's32K ROW-field ledger. Preserve its explicit refusal;
+    // complete owner values and both publication roots were checked above.
+    EXPECT_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan(),
+        graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(memory->used(), 0U);
+}
+#endif
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyMatureShapeCostsTest, CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner) {
+    constexpr size_t groups = 8, fields = 64, owners = groups * 64;
+    seed(NODE, owners, 0);
+    NativeGraphWritePlannerOptions placement; placement.first_slot = PhysicalSlotId(40); placement.last_slot = PhysicalSlotId(80);
+    placement.entity_pool_owner_id = 901; placement.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
+    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement);
+    const auto expected = [](uint64_t id) {
+        PropertyCollectionRoot root{id, graph::Node::typeId, {}};
+        for (uint32_t token = 1; token <= fields; ++token) root.entries.push_back({token, PropertyValue(int64_t(id + token))});
+        return root;
+    };
+    for (size_t group = 0; group < groups; ++group) {
+        auto tx = writer.beginTransaction();
+        for (size_t offset = 1; offset <= 64; ++offset) tx.replaceNodeProperty(expected(group * 64 + offset));
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    auto old = metadata_->openSnapshot(); const auto before = old.superblock();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    auto conversion = request(NODE, memory); conversion.conversion->publish_candidate = true;
+    conversion.conversion->compact_column_memberships = true; conversion.conversion->group_count = groups;
+    conversion.conversion->allocation_admission.emplace();
+    conversion.conversion->allocation_admission->maximum_admitted_peak_bytes = 32U * 1024U * 1024U;
+    conversion.conversion->allocation_admission->maximum_admitted_file_bytes = 32U * 1024U * 1024U;
+    struct Work { int64_t row = 0, candidate = 0, peak = 0, passed = 0; } work;
+    {
+        graph::debug::PerfTrace::ScopedObserver observe(&work, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+            auto &w = *static_cast<Work *>(owner);
+            if (key == "native_graph.hybrid.allocation_row_bytes") w.row = value;
+            if (key == "native_graph.hybrid.allocation_candidate_bytes") w.candidate = value;
+            if (key == "native_graph.hybrid.allocation_peak_bytes") w.peak = value;
+            if (key == "native_graph.hybrid.allocation_admission_passed") w.passed += value;
+        });
+        auto nativePlacement = placement; nativePlacement.property_roots.page_owner_id = 903;
+        NativeGraphWritePlanner nativeWriter(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, nativePlacement);
+        auto tx = nativeWriter.beginTransaction();
+        tx.stageHybridPropertyConversion(NODE, 1, memory, nullptr, true,
+            NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID, true, conversion.conversion->allocation_admission, groups);
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    auto current = metadata_->openSnapshot(); ASSERT_EQ(work.passed, 1);
+    EXPECT_LE(work.candidate, work.row / 10 * 9 + work.row % 10 * 9 / 10);
+    EXPECT_EQ(current.superblock().generation.value(), before.generation.value() + 1);
+    EXPECT_EQ(current.superblock().checkpoint_lsn.value(), before.checkpoint_lsn.value() + 1);
+    for (uint64_t id = 1; id <= owners; ++id) {
+        EXPECT_EQ(properties_->readEntity(old, {NODE, id}), expected(id));
+        EXPECT_EQ(properties_->readEntity(current, {NODE, id}), expected(id));
+    }
+    auto reopened = RelocatableMetadataStore::openReadOnly(io_);
+    SlottedPagePool pages(io_, *reopened, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    PropertyCollectionRootStore roots(pages, *reopened); auto pin = reopened->openSnapshot();
+    for (uint64_t id = 1; id <= owners; ++id) EXPECT_EQ(roots.readEntity(pin, {NODE, id}), expected(id));
+    EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
+    EXPECT_EQ(memory->used(), 0U);
+    const auto cost = NativeStorageAllocationCensus(io_, *metadata_, memory).inspect(current);
+    ASSERT_TRUE(cost); ASSERT_TRUE(cost->fullyAttributed()); EXPECT_EQ(cost->steadyAllocatedBytes(), uint64_t(work.candidate));
+    EXPECT_EQ(cost->totalAllocatedBytes(), uint64_t(work.peak));
+    std::cout << "NATIVE_COHORT_ATOMIC_COST groups=8 row=" << work.row << " candidate=" << work.candidate
+        << " retired=" << cost->retired_catalog_bytes << " allocated_peak=" << work.peak << " file=" << cost->file_bytes
+        << " field=" << cost->sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_PROPERTY)]
+        << " hybrid_map=" << cost->sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_HYBRID_MAP)]
+        << " metadata=" << cost->sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_METADATA)]
+        << " entity=" << cost->sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_ENTITY)]
+        << " byte_gate=admit\n";
 }
 #endif

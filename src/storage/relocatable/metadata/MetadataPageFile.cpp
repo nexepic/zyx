@@ -642,7 +642,12 @@ namespace graph::storage {
             if ((roots[base].page_id.isValid() || roots[base + 1].page_id.isValid() || roots[base + 2].page_id.isValid()) &&
                 !roots[base + 3].page_id.isValid())
                 throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid field namespaces have no group root");
-            if ((roots[base + 1].page_id.isValid() || roots[base + 2].page_id.isValid()) && !roots[base].page_id.isValid())
+            // Only the isolated compact cohort can authenticate column
+            // memberships through group-owned matrices instead of OwnerMap.
+            // Extension selectors always retain their explicit owner root.
+            if ((roots[base + 2].page_id.isValid() ||
+                (roots[base + 1].page_id.isValid() &&
+                    !(snapshot.flags & RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP))) && !roots[base].page_id.isValid())
                 throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid field source namespace has no owner root");
         }
         return page;

@@ -1,0 +1,22 @@
+{
+  "purpose": "Untimed same-input public API loader mechanism integration",
+  "returncode": 0,
+  "nodes": 144,
+  "edges": 3192,
+  "batch_rows": 1000,
+  "binary_sha256": "2aaf52b9d4b8a230c4621072786e3946d2f0b6f468510ede2e726b0af61b03f1",
+  "file_bytes": 2621440,
+  "work": {
+    "timing_benchmark": false,
+    "ordinary_plans": 4,
+    "ordinary_images": 33,
+    "adjacency_full": 0,
+    "adjacency_delta": 0,
+    "adjacency_frames": 0,
+    "adjacency_keys": 0,
+    "membership_full": 0,
+    "membership_delta": 0,
+    "membership_frames": 0,
+    "membership_keys": 0
+  }
+}

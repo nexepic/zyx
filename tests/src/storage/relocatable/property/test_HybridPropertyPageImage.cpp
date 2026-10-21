@@ -268,4 +268,34 @@ TEST(HybridPropertyPageImageTest, NativeDirectoriesRejectReservedBitsNoSlotAndOu
     EXPECT_THROW(Codec::columnKey(1, 0), FormatException);
     HybridPropertyOwnerMap::Key zero{}; EXPECT_THROW(Codec::decodeOwnerKey(zero, EntityPropertyOwnerKind::EPOK_NODE), FormatException);
 }
+TEST(HybridPropertyPageImageTest, CompactMembershipSharesAFrameAndSourceCopyRetainsItsOldOwnerBits) {
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    {
+        auto source = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+        auto g = group(); const std::array columns{column(), column(true)};
+        const auto matrix = HybridPropertyColumnMembership::fromColumns(g, columns);
+        g.column_membership = source.appendColumnMembership(matrix, g, Generation(9));
+        g.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+        const auto header = source.appendGroup(g); const auto before = source.serialize();
+        auto candidate = source.clone(Generation(10), memory);
+        auto nextGroup = g; nextGroup.semantic_generation = Generation(10); --nextGroup.memberships;
+        auto changed = matrix; changed.semantic_generation = Generation(10); changed.owners[0][0] &= ~UINT64_C(1);
+        // Source column1 had48 members, so removing one requires demotion and
+        // cannot leave a47-member matrix entry under the existing contract.
+        EXPECT_THROW(candidate.replaceColumnMembership(g.column_membership, changed, g, nextGroup, Generation(10)), FormatException);
+        changed = matrix; changed.semantic_generation = Generation(10);
+        nextGroup = g; nextGroup.semantic_generation = Generation(10);
+        candidate.replaceColumnMembership(g.column_membership, changed, g, nextGroup, Generation(10));
+        candidate.replaceGroup(header, nextGroup, Generation(10));
+        EXPECT_EQ(source.serialize(), before);
+        EXPECT_EQ(source.readColumnMembership(g.column_membership, g, Generation(9)), matrix);
+        EXPECT_EQ(candidate.readColumnMembership(g.column_membership, nextGroup, Generation(10)), changed);
+        auto wrong = g; ++wrong.column_membership.generation;
+        EXPECT_THROW(source.readColumnMembership(g.column_membership, wrong, Generation(9)), FormatException);
+        const auto encoded = nextGroup.encode();
+        EXPECT_EQ(HybridPropertyGroupRecord::decode(encoded, g.owner_kind, g.group_id, Generation(10), Generation(10)), nextGroup);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
 } // namespace

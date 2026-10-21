@@ -1,0 +1,22 @@
+{
+  "accepted": "15/24 (62.5%)",
+  "new_acceptance": false,
+  "controls": {
+    "default": 116,
+    "candidate": 116
+  },
+  "holdouts": {
+    "default": 1,
+    "candidate": 1,
+    "queries": 9,
+    "rounds": "before and after reopen",
+    "raw_vs_optimized_pairs_per_build": 18
+  },
+  "not_a_timing_or_fitted_sample": true,
+  "no_full_suite": true,
+  "remaining": [
+    "physical/access resource admission",
+    "production path integration/choice",
+    "registered full-size holdouts and R7"
+  ]
+}

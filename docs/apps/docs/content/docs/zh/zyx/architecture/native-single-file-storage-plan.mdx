@@ -152,9 +152,9 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 | 构建 | Segment profile／envelope 版本 | Superblock 版本／header 字节 | 属性路由范围 |
 |---|---:|---:|---|
 | 默认 OFF | 5 | 31／336 | 现行 ROW；描述符物理根必须为零，拒绝 kind 16 |
-| 隔离 ON | 6 | 32／352 | ROW 及显式受控 hybrid 候选；非空根仅由内部候选协调器发布 |
+| 隔离 ON | 7 | 33／352 | ROW 及显式受控 hybrid 候选；非空根仅由内部候选协调器发布 |
 
-两种构建互相拒绝对方的文件，不迁移、不重解释旧 A/B 字节。实验 Superblock 在 offset 336..351 新增 `hybrid_property_descriptor_root` 的 16 字节物理引用；metadata emergency reserve 从 header 末尾开始，实验偏移 352，默认偏移 336，宽度均为 32 字节。描述符是 metadata pool 内独立认证的 4096 字节物理 frame（32 字节 header、192 字节 payload、其余为零），不分配 routed MetadataPageId，不属于既有逻辑目录根。数据库／物理根／generation／LSN／CRC 和旧 pin 的恢复、完整性及回收检查适用；第八个图语义 fence 包含该根，两种格式的 token 不同。
+修订的隔离配置为7／33，明确拒绝此前实验6／32文件，不原地迁移。两种构建互相拒绝对方的文件，不迁移、不重解释旧 A/B 字节。实验 Superblock 在 offset 336..351 新增 `hybrid_property_descriptor_root` 的 16 字节物理引用；metadata emergency reserve 从 header 末尾开始，实验偏移 352，默认偏移 336，宽度均为 32 字节。描述符是 metadata pool 内独立认证的 4096 字节物理 frame（32 字节 header、192 字节 payload、其余为零），不分配 routed MetadataPageId，不属于既有逻辑目录根。数据库／物理根／generation／LSN／CRC 和旧 pin 的恢复、完整性及回收检查适用；第八个图语义 fence 包含该根，两种格式的 token 不同。
 
 八个字段命名空间按 Node owner／column／extension／group、Edge owner／column／extension／group 的固定顺序保留 IndexId `0x8000000000000030`..`0x8000000000000037`。它们与 schema definition 范围、全局邻接、System Catalog、Vector mapping 前缀及 LargeValue content index 不重叠；普通图事务的标量 upsert／erase／create（两入口）／drop 均拒绝它们，默认构建也保留此身份范围。描述符请求在准备数据前验证每个非零 IndexId 与其 ordinal 精确匹配，不能绑定其他字段角色或普通索引。最终字段 reader 仍须核对固定 namespace、pin 下目录及实际根页／物理池代际，不能仅信 frame CRC。
 
@@ -981,3 +981,14 @@ storage/relocatable/maintenance/
 ### 2026-10-21：R5覆盖邻接协议原型边界
 
 R5.1协议／完整生命周期原型的字节、故障检测与资源合同见`benchmarks/architecture-design/decisions/20261021-r5-lifecycle-protocol/protocol-zh.md`。它复用既有key-only Packed BTree与Index Root／Page Directory，不新增持久metadata根或格式版本；两种构建均可使用显式实验入口。候选root属于调用方实验namespace，默认图读取仍走canonical key-only邻接。只读对照入口自行认证并保留真实pin，不接受外部报告授予权限；真实overlay仅在测试transaction内暂存，不能写只读文件。Node-only与Edge双向／type索引／统计、A/B、旧pin、空root重建、搬迁／退役已验证；生产writer hook、持久采用协议、成本规划与R7准入仍未完成。
+
+
+### 2026-10-21 R3.3 整批准入与 R7.1 最终候选冻结
+
+证据：`benchmarks/architecture-design/decisions/20261021-r33-cohort-prefix-admission/`。首组转换的实际候选2097152字节高于源1835008，门禁正确拒绝；不能借用未来8组的收益。现增加显式最多8个连续64-ID组的纯列维护转换，每组仍最多4096成员、整体最多512所有者，仍共用同一个至多1MiB账户。全部私有图像、ROW移除、目录、退休与完整成本在一个MetadataWriteBatch内，只在最终空间／峰值／文件门禁通过后发布一次A/B。无新增持久编码／格式、自动晋升或资源额度。已清空ROW页及时只保留ID，避免保存无用页体。
+
+原生事务路径的8项定向检查通过，另有共享额度拒绝1项、公共接入1项通过；候选9个生命周期模块290/290，默认9/9，默认格式提前拒绝1项。分批验证，不是一次总和运行。覆盖完整发布、部分／完整A/B、取消、后续非纯列组、整批收益不足、低额度退款与旧pin。成熟整体源1835008、候选1441792（−21.43%），退休1179648、峰值2621440、文件7208960；字段393216、混合目录262144、元数据393216、实体131072，bootstrap／应急各131072。默认自适应ROW公共接口建库另验证2621440→2097152（−20%）：全部512所有者旧／新值、重开、聚合、64字段完整实体、普通更新、重复／缺失相关OPTIONAL及关闭后拥有型输出均通过。最初误用只读QueryEngine构造器的fixture失败保留，未将它归因于存储。
+
+R5最终候选选择canonical key-only树与有界主记录复用，覆盖／共享分段不自动生产采用；完整理由见`20261021-r52-final-path-selection/`。R3／R5的最终时延和保护准入仍未提前验收。
+
+**R7.1已验收，总进度16/24（66.7%）。** 最终源delta、before／after二进制与静态引擎库、构建选项及必要模块／完整规模正确性冻结在`20261021-r71-final-candidate/`。medium原19项加修复后的失败项、holdout20项均保持正确，按不同二进制来源记录；两套图索引8MiB只读核验及各6项原始／优化计划对照通过。secondary-index输入另完成每套2次DDL及4个受影响语义合同（12/12）；DDL的实际返回为“Index created”，初始零行oracle错误已单列保留，没有重复已成功DDL。通用完整性扫描的8MiB资源拒绝仍明确不是通过。仅Linux／必要模块，无全库单测。尚未启动新的正式计时窗口。按用户规则，进度增长后提交并推送，随后继续R7统一读写／资源／稳态／Kuzu验收。

@@ -1,0 +1,17 @@
+{
+  "accepted": "15/24 (62.5%)",
+  "new_acceptance": false,
+  "scope": "R5.2 explicit laboratory ordinary logical coordinator hook",
+  "tests": {
+    "default": 67,
+    "candidate": 67
+  },
+  "no_timing_benchmark": true,
+  "no_full_suite": true,
+  "remaining": [
+    "persistent production selection and old-writer compatibility",
+    "final covering versus shared-segment choice",
+    "R5.3 cost/planning holdouts",
+    "R7 performance, resources and Kuzu admission"
+  ]
+}

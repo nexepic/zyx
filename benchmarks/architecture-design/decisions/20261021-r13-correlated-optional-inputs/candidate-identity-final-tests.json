@@ -1,0 +1,1959 @@
+{
+  "tests": 186,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T20:46:06Z",
+  "time": "0.726s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0.674s",
+      "testsuite": [
+        {
+          "name": "TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTypePlanningHoldouts.cpp",
+          "line": 10,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.452s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableTypePlanningHoldouts.cpp",
+          "line": 75,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.222s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanUnwindRuntimeTest",
+      "tests": 23,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0.011s",
+      "testsuite": [
+        {
+          "name": "ExecutesParserProducedLiteralAndParameterUnwindPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 50,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "DistinctUsesStructuralKeysForNestedMapAndListValues",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.003s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "DistinctPreservesEveryPublicScalarParameterValueCategory",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "EvaluatesBoundedForwardAndReverseRangesFromParserProducedPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "PreservesOuterBindingsAndUsesPipelineScalarSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 159,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "EvaluatesListLiteralExpressionsWithoutPhysicalExpressionHelpers",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 181,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "CanSuppressScalarExpansionForForeachLowering",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 245,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "ExecutesPublicSnapshotAndExpressionEntryPointsWithTheSameBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 258,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "BuildsDistinctKeysForPublicValuesAndRejectsEmptyColumnSets",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 291,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "BorrowedListsPreserveLargeNestedValuesAndRepeatedExecution",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1056,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "RejectsOversizedTransientRows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1086,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "BoundsScalarProjectionResultsBeforePublicMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "RejectsInputListsAboveRowBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "RejectsEmptyAliasesAndUnboundExpressions",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1801,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "HoldsEvaluatedListBudgetAcrossLimitOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 42,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "HoldsUnchargedInputBindingsDuringExpansion",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "RangeAdmitsListGrowthBeforeAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 90,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "ProjectRetainsEarlierListWhileEvaluatingLaterRange",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 139,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "RangeChecksGuardDuringListConstruction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "FunctionRetainsEarlierArgumentDuringLaterRange",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 190,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "BinaryExpressionRetainsLeftValueDuringRightEvaluation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 220,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "InExpressionRetainsActualValueDuringCandidateEvaluation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        },
+        {
+          "name": "SimpleCaseRetainsComparisonValueDuringWhenEvaluation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime_Budget.cpp",
+          "line": 280,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanUnwindRuntimeTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanReadRuntimeTest",
+      "tests": 62,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0.039s",
+      "testsuite": [
+        {
+          "name": "EnforcesBooleanOrNullSearchedCasePredicates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsInvalidBoundsBeforeOpeningAReadSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ExecutesParserProducedOrderByWithBoundedMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 334,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "AppliesDistinctAndAllUnionSemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 383,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "AppliesParserProducedPaginationWithoutScanningPastLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 429,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PaginatesAcrossMultipleBoundedUnwindBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 465,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ExecutesParserProducedGlobalAndGroupedAggregates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 509,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesEveryNativeAggregateFunctionThroughTheBoundedRuntime",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 536,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesArithmeticComparisonAndThreeValuedBooleanExpressionsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 558,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsInvalidRegularExpressionsAtTheLogicalRuntimeBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesParserProducedStringComparisonOperatorsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesAllDecisiveThreeValuedBooleanOutcomesThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 606,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesSimpleAndSearchedCaseExpressionsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 634,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesListMembershipSlicesAndComprehensionsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 658,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PreservesOpenEndedAndClampedListSliceSemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 688,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PropagatesNullListComprehensionsAndRejectsNonBooleanPredicates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 708,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ListComprehensionRetainsSourceAndOutputUnderOneByteBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 723,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ReduceRetainsSourceAndBothAccumulatorGenerationsUnderOneByteBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 750,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "QuantifierRetainsCopiedSourceListWhileEvaluating",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ScopedListBindingAdmitsShadowCopyBeforeReplacingOuterValue",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 801,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ListLiteralAndSliceShareSourceAndOutputByteBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 829,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PropagatesNullCollectionInputsAndRejectsNonBooleanQuantifiers",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 867,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "MaterializesDynamicMapLiteralsForEachInputRowThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 887,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesQuantifierExpressionsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 907,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesScalarFunctionCallsAndRejectsInvalidCallsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 937,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesNativeScalarFunctionFamiliesThroughTheBoundedRuntime",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 961,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesListLengthAndOrdinaryListSizeThroughTheirDistinctPaths",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 995,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesContinuousPercentileAggregateThroughTheBoundedRuntime",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1011,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "BoundsRetainedAggregatePayloadByMaterializedBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1038,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "NativeConversionContractAcceptsOnlyExplicitToBooleanInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1127,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsNativeScalarFunctionTypeMismatchesAtTheRuntimeBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "NativeRangeContractPreservesNullAndRejectsNonFiniteInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesTemporalArithmeticThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesEverySupportedTemporalArithmeticOperandOrderThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1230,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PreservesArithmeticPrecedenceAssociativityAndFailureSemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1261,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsIntegerArithmeticOverflowAtTheExpressionBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1284,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesReduceDynamicMembershipAndListBoundarySemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1324,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PreservesDynamicInThreeValuedSemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1348,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PropagatesANullDynamicListOperandForInThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1378,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PreservesQuantifierEmptyAndNullSemanticsThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1399,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "EvaluatesTemporalComponentsAndDateTimeDurationArithmeticThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1421,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PreservesNegativeMonthRolloverAcrossTheTemporalEraThroughCypher",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsTemporalArithmeticOverflowAtTheExpressionBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1499,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsTemporalYearAndDateRangeOverflowBeforeReturningAValue",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1521,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ExecutesBoundedCartesianJoinWithoutPhysicalStorageRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1545,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "JoinsOnlyCompatibleBindingsAndRejectsAnUnboundedMaterializedSide",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1568,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "HashJoinPreservesDuplicateCandidateOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "HashJoinChargesBindingIndexMetadataAgainstByteBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "CorrelatesOptionalMatchAndNullExtendsOnlyNewVariables",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1626,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "OptionalMatchPreservesNullBindingsAndDuplicatePatternRows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1646,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "OptionalMatchStopsDownstreamWithoutEmittingRowsAfterCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsOptionalMatchPatternRowsBeyondTheMaterializationBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1700,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "AccountsOptionalMatchBindingIndexMetadataInByteBound",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1713,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ExecutesCorrelatedReadSubqueriesThroughAnExplicitImportBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1735,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "RejectsMalformedCorrelatedSubqueryShapesBeforeExecution",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1765,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "SkipStreamsAnExactBudgetRowWithoutSelectionStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1841,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "ScalarResultPublicationChecksTheSharedBudgetBeforeCopying",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1861,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1886,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "AppliesWithOrderingAndPaginationForAliasStarAndAggregateBodies",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1915,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "LimitExhaustsItsLogicalWindowForSortAndAggregateIncludingZero",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1935,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        },
+        {
+          "name": "HashJoinCanonicalNestedMapsPreserveBagAndSignedZero",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanUnwindRuntime.cpp",
+          "line": 1958,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanReadRuntimeTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalLoadCsvTest",
+      "tests": 14,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "BasicConstruction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 33,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "DefaultParams",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 44,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "GetChildrenNoChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "GetChildrenWithChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 58,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "OutputVariablesNoChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "OutputVariablesWithChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "CloneWithChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 84,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "CloneNoChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 98,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "ToStringWithHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 108,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "ToStringWithoutHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "SetChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 120,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "SetChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "DetachChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 134,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        },
+        {
+          "name": "DetachChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 144,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalLoadCsvTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalCallSubqueryTest",
+      "tests": 19,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "BasicConstruction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "ConstructionWithParams",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 167,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "GetChildrenBothPresent",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "GetChildrenOnlyInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "GetChildrenOnlySubquery",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 200,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "GetChildrenEmpty",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "OutputVariablesNoInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "OutputVariablesWithInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 221,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "CloneBothChildren",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 230,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "CloneNoChildren",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 247,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "ToStringBasic",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 256,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "ToStringInTransactions",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 261,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "ToStringInTransactionsWithBatchSize",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 266,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "SetChildIndex0",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "SetChildIndex1",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 277,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "SetChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "DetachChildIndex0",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 288,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "DetachChildIndex1",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        },
+        {
+          "name": "DetachChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 304,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalCallSubqueryTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalForeachTest",
+      "tests": 17,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "BasicConstruction",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 315,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "WithChildAndBody",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 326,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "GetChildrenBothPresent",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 336,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "GetChildrenOnlyChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "GetChildrenOnlyBody",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 355,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "GetChildrenEmpty",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 364,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "OutputVariablesNoChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 370,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "OutputVariablesWithChild",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 376,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "CloneBothChildren",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 385,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "CloneNoChildren",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 399,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "ToString",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 410,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "SetChildIndex0",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "SetChildIndex1",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 423,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "SetChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 430,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "DetachChildIndex0",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 436,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "DetachChildIndex1",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 445,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        },
+        {
+          "name": "DetachChildInvalidIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/logical\/test_LogicalSubqueryOperators.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalForeachTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanBuilderCoverageTest",
+      "tests": 45,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "ReturnStarWithSkipAndLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 82,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnStarWithSkipOnly",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnStarWithLimitOnly",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 109,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnWithAggregateAndSortSkipLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 125,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnWithNestedAggregate",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnWithDistinctAggregate",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnSimpleWithOrderBySkipLimit",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 237,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "ReturnWithNullInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 256,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "WithAggregates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "WithReturnStar",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 287,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "WithWhereFilter",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "WithNullInputThrows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 312,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "WithDistinct",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 317,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchEmptyPatterns",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 334,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchOptionalWithInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 342,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchMultiplePatternsWithInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 359,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchSinglePatternWithInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 377,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchWithNamedPath",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 391,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchWithVarLengthTraversal",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchWithWhere",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchMaterializesAnonymousNodeAndEdgeVariables",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CreateWithAnonymousNodes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 478,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CreateWithChainAndAnonymousVars",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 491,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CreateWithExistingInput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "SetWithLabelType",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 530,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "SetWithMapMergeType",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "SetWithDefaultType",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "SetNullInputThrows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 557,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "DeleteNullInputThrows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 567,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "RemoveLabelType",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "RemovePropertyType",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 586,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "RemoveNullInputThrows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 595,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MergeSingleNode",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 605,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MergeEdgeChain",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 618,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MergeEdgeMultiChain",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 639,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "UnwindWithLiteralList",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "UnwindWithExpression",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 679,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CallWithYield",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 692,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CallWithYieldPredicate",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 703,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CallWithoutYield",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 720,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CreateIndexComposite",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 733,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "CreateIndexSingle",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 744,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchNamedPathNoRelVar",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        },
+        {
+          "name": "MatchOptionalWithDuplicateVars",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/ir\/test_LogicalPlanBuilder_Coverage.cpp",
+          "line": 784,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderCoverageTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanBuilderFlagsTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T20:46:06Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "InitialState",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/planner\/test_LogicalPlanBuilderFlags.cpp",
+          "line": 12,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderFlagsTest"
+        },
+        {
+          "name": "MarkDataMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/planner\/test_LogicalPlanBuilderFlags.cpp",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderFlagsTest"
+        },
+        {
+          "name": "MarkSchemaMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/planner\/test_LogicalPlanBuilderFlags.cpp",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderFlagsTest"
+        },
+        {
+          "name": "MarkBothMutations",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/planner\/test_LogicalPlanBuilderFlags.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T20:46:06Z",
+          "time": "0s",
+          "classname": "LogicalPlanBuilderFlagsTest"
+        }
+      ]
+    }
+  ]
+}

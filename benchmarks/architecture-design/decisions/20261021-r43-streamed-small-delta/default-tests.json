@@ -1,0 +1,246 @@
+{
+  "tests": 20,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T18:56:02Z",
+  "time": "12.071s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:56:02Z",
+      "time": "11.594s",
+      "testsuite": [
+        {
+          "name": "StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:02Z",
+          "time": "2.373s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 56,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:05Z",
+          "time": "0.418s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 70,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:05Z",
+          "time": "0.352s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:05Z",
+          "time": "4.69s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:10Z",
+          "time": "3.759s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:56:14Z",
+      "time": "0.022s",
+      "testsuite": [
+        {
+          "name": "StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 87,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 109,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsForeignPrivateRun",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 274,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsAForeignPageStore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 315,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedAdjacencyIndexRejectsIncompletePlanningContracts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 345,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 397,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 420,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 445,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsInvalidPublicationFence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 468,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsLargeValueWithoutNativeStore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 503,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "StreamedIndexBundleRejectsForeignStores",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeStreamedGraphAdjacencyIndexPlanner.cpp",
+          "line": 527,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T18:56:14Z",
+      "time": "0.454s",
+      "testsuite": [
+        {
+          "name": "IncrementalPublicationRecoversOneCompleteGeneration\/0",
+          "value_param": "false",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.226s",
+          "classname": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest"
+        },
+        {
+          "name": "IncrementalPublicationRecoversOneCompleteGeneration\/1",
+          "value_param": "true",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T18:56:14Z",
+          "time": "0.227s",
+          "classname": "PartialAndCompleteInactiveSlot\/StreamedAdjacencyBootstrapFaultTest"
+        }
+      ]
+    }
+  ]
+}

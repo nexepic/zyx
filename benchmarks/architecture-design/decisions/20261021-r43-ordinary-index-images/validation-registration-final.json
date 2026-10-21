@@ -1,0 +1,57 @@
+{
+  "default": {
+    "executed": 170,
+    "failures": 0,
+    "modules": 13,
+    "previously_disabled": 1
+  },
+  "candidate": {
+    "executed": 170,
+    "failures": 0,
+    "modules": 13,
+    "previously_disabled": 1
+  },
+  "native_property_controls": {
+    "candidate": 279,
+    "default": 8,
+    "modules": 7,
+    "note": "compatibility run completed before final once-only registration flag; affected ordinary modules rerun after it"
+  },
+  "fresh_registration_red_green": {
+    "red": 1,
+    "red_failure": "relocatable free-space transition does not change slot state",
+    "green": 1,
+    "fixture": "five1000-Edge ordinary batches with old pin; confirms fresh allocation, exact counts, old topology, reopen and integrity"
+  },
+  "public_api": {
+    "purpose": "Untimed public API verification after once-only fresh-pool registration fix",
+    "returncode": 0,
+    "nodes": 144,
+    "edges": 3192,
+    "batch_rows": 1000,
+    "binary_sha256": "ff58a4f59480513d4d0d921b8013d03b7ac835196a3504bba5722a331046e2d6",
+    "file_bytes": 2621440,
+    "work": {
+      "timing_benchmark": false,
+      "ordinary_plans": 4,
+      "ordinary_images": 33,
+      "ordinary_member_plans": 5,
+      "ordinary_member_images": 20,
+      "mixed_skips": 0,
+      "fresh_pools": 0,
+      "adjacency_full": 0,
+      "adjacency_delta": 0,
+      "adjacency_frames": 0,
+      "adjacency_keys": 0,
+      "membership_full": 0,
+      "membership_delta": 0,
+      "membership_frames": 0,
+      "membership_keys": 0
+    }
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "platform": "Linux",
+  "accepted_progress": "15/24 (62.5%)",
+  "fullscale": "registered retry running under unchanged AS6GiB/file2GiB/1000rows"
+}

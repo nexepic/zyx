@@ -18,7 +18,7 @@ class HybridPropertyDirectoryIntegrity final {
 public:
     using LargeValueVisitor = std::function<void(const LargeValueRef &)>;
     struct Report {
-        uint64_t groups = 0, memberships = 0, columns = 0, extensions = 0, large_values = 0;
+        uint64_t groups = 0, memberships = 0, columns = 0, extensions = 0, large_values = 0, directory_selectors = 0;
     };
     [[nodiscard]] static Report verify(const HybridPropertyReadContext &context,
         const MetadataSnapshotPin &snapshot, std::shared_ptr<std::pmr::memory_resource> memory,
@@ -55,11 +55,12 @@ public:
             // Every locally inspected body is required to own its selector.
             // Equal global cardinalities then exclude orphan directory entries
             // without retaining a database-sized key or ownership set.
-            require(countOwners(context, snapshot, kind, memory) == local.memberships &&
+            require(countOwners(context, snapshot, kind, memory) == local.directory_selectors &&
                 countFields(context, snapshot, kind, 1, memory) == local.columns &&
                 countFields(context, snapshot, kind, 2, memory) == local.extensions,
                 "hybrid directories contain entries outside their group ownership");
             add(report.groups, local.groups); add(report.memberships, local.memberships);
+            add(report.directory_selectors, local.directory_selectors);
             add(report.columns, local.columns); add(report.extensions, local.extensions); add(report.large_values, local.large_values);
         }
         context.check();
@@ -89,6 +90,24 @@ public:
                     context.descriptor_->semantic_generation, snapshot.superblock().generation);
                 requireLocator<HybridPropertyGroupDirectoryMap>(context, snapshot, kind, 3,
                     HybridPropertyDirectoryCodec::groupKey(group.group_id), reference, memory);
+                if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+                    require(group.column_membership.page_id == reference.page_id && group.column_membership.slot_id != reference.slot_id,
+                        "compact physical group has no same-page membership record");
+                    static_cast<void>(context.columnMembership(group));
+                }
+            } else if (magic == HybridPropertyColumnMembership::MAGIC) {
+                require(bytes.size() >= 64, "native membership record has a truncated header");
+                const auto groupId = LittleEndianCodec::readU64(bytes, 8);
+                const auto live = LittleEndianCodec::readU64(bytes, 24);
+                require(live != 0, "native membership record has no live group");
+                hybrid_property_detail::validateGroup(groupId, live);
+                const EntityPropertyKey owner{kind, (groupId - 1U) * 64U + 1U + unsigned(std::countr_zero(live))};
+                utils::OwnedHeapReservation boundary(memory);
+                const auto group = context.findGroup(owner, [&](size_t count) { boundary.set(count); });
+                require(group && group->mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+                    group->column_membership == reference, "native membership record has no exact group locator");
+                static_cast<void>(HybridPropertyColumnMembership::decode(bytes, *group,
+                    context.descriptor_->semantic_generation, snapshot.superblock().generation));
             } else if (magic == RSS_HYBRID_COLUMN_MAGIC) {
                 const HybridPropertyColumnIdentity identity{kind,
                     HybridPropertyScalarKind(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
@@ -115,7 +134,7 @@ public:
                 const auto extension = HybridPropertyExtensionView::open(bytes, owner, token, group->semantic_generation,
                     context.descriptor_->semantic_generation, snapshot.superblock().generation, std::ref(admitReference));
                 static_cast<void>(extension);
-                requireSource(context, snapshot, owner, token, HybridPropertySource::HPS_EXTENSION, memory);
+                requireSource(context, snapshot, owner, token, HybridPropertySource::HPS_EXTENSION, memory, &*group);
                 requireLocator<HybridPropertyFieldDirectoryMap>(context, snapshot, kind, 2,
                     HybridPropertyDirectoryCodec::ownerKey(owner, token), reference, memory);
                 if (visitLarge && extension.mode() == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE) {
@@ -162,14 +181,14 @@ private:
     }
     static void requireSource(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,
         EntityPropertyKey owner, uint32_t token, HybridPropertySource expected,
-        const std::shared_ptr<std::pmr::memory_resource> &memory) {
-        require(context.hasRoot(owner.owner_kind, 0), "hybrid field body has no owner namespace");
+        const std::shared_ptr<std::pmr::memory_resource> &memory, const HybridPropertyGroupRecord *knownGroup = nullptr) {
         utils::OwnedHeapReservation boundary(memory);
         const auto admit = [&](size_t bytes) { boundary.set(bytes); };
-        const auto value = context.ownerMap(owner.owner_kind).find(snapshot,
-            HybridPropertyDirectoryCodec::ownerKey(owner, token), std::ref(admit), context.cancellation_);
-        require(value && HybridPropertyDirectoryCodec::decodeSource(*value) == expected,
-            "hybrid field body has no matching authoritative owner selector");
+        std::optional<HybridPropertyGroupRecord> loaded;
+        if (!knownGroup) { loaded = context.findGroup(owner, std::ref(admit)); knownGroup = loaded ? &*loaded : nullptr; }
+        require(knownGroup != nullptr, "hybrid field body has no source group");
+        const auto selected = context.selector(*knownGroup, owner, token, std::ref(admit));
+        require(selected && *selected == expected, "hybrid field body has no matching authoritative selector");
     }
     static void inspectGroup(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,
         const HybridPropertyGroupRecord &group, const std::shared_ptr<std::pmr::memory_resource> &memory,
@@ -203,7 +222,7 @@ private:
                     if (!(column.presence & (UINT64_C(1) << slot))) continue;
                     context.check();
                     requireSource(context, snapshot, {group.owner_kind, first + slot}, key.token,
-                        HybridPropertySource::HPS_COLUMN, memory);
+                        HybridPropertySource::HPS_COLUMN, memory, &group);
                 }
                 add(columnCount, 1); add(bodyCount, uint64_t(std::popcount(column.presence)));
                 return true;
@@ -225,7 +244,7 @@ private:
                     context.check();
                     const auto key = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, group.owner_kind);
                     require(key.owner == owner, "hybrid extension integrity escaped its owner prefix");
-                    requireSource(context, snapshot, owner, key.token, HybridPropertySource::HPS_EXTENSION, memory);
+                    requireSource(context, snapshot, owner, key.token, HybridPropertySource::HPS_EXTENSION, memory, &group);
                     const auto reference = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
                     const auto page = context.fields_.read(snapshot, reference.page_id);
                     utils::OwnedHeapReservation referenceCredit(memory);
@@ -252,6 +271,10 @@ private:
         }
         require(ownerCount == group.memberships && bodyCount == ownerCount && columnCount == group.columns,
             "hybrid group counts or selector/body ownership disagree");
+        const auto columnSelectors = group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ?
+            context.withColumnMembership(group, [](const auto &matrix) { return uint64_t(matrix.memberships()); }) : 0U;
+        require(columnSelectors <= ownerCount, "compact selector count exceeds actual group memberships");
+        add(report.directory_selectors, ownerCount - columnSelectors);
         add(report.memberships, ownerCount); add(report.columns, columnCount); add(report.extensions, extensionCount);
     }
     static uint64_t countOwners(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,

@@ -1,0 +1,205 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 92 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 74 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedManifestCountDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedManifestCountDivergenceRollsBackCleansUpAndAllowsRetry (294 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry (308 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry (304 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry (290 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry (727 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesTopologyAcrossBothAdjacencyDirections
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesTopologyAcrossBothAdjacencyDirections (272 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeFinalSyncFailureIsIndeterminateAndReopenRecoversTheCompleteGeneration
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeFinalSyncFailureIsIndeterminateAndReopenRecoversTheCompleteGeneration (187 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockShortWriteRetainsOldGraphAndAllowsRetry (274 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeGraphSuperblockDiskFullRetainsOldGraphAndAllowsRetry (271 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePostPublicationScratchCleanupFailureKeepsCommitVisibleAndRequiresReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePostPublicationScratchCleanupFailureKeepsCommitVisibleAndRequiresReopen (190 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesLargeValuePropertiesAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesLargeValuePropertiesAndSurvivesReopen (258 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesNonConsecutiveDuplicateLargeValueProperties
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesNonConsecutiveDuplicateLargeValueProperties (416 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesLargeValuePoolsAcrossTransactions
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesLargeValuePoolsAcrossTransactions (473 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesParallelSelfLoopAndDistinctTypesInOneGeneration
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesParallelSelfLoopAndDistinctTypesInOneGeneration (213 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesExistingAndPublishesNewRelationshipAndPropertyTokens
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCommitReusesExistingAndPublishesNewRelationshipAndPropertyTokens (239 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationConflictReleasesScratchAndLease
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationConflictReleasesScratchAndLease (152 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverDisjointAdjacencyPublication
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverDisjointAdjacencyPublication (262 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled (275 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeConcurrentSessionFailsBeforeScratchMutationAndRetrySucceeds
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeConcurrentSessionFailsBeforeScratchMutationAndRetrySucceeds (284 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeHardLinkedDatabaseAliasSharesTheSameSessionLease
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeHardLinkedDatabaseAliasSharesTheSameSessionLease (311 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService (251 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverConcurrentScalarIndexCreation
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicationRebasesOverConcurrentScalarIndexCreation (231 ms)
+[ RUN      ] RelocatableStorageBackendTest.OrdinaryFinalEdgeDeletionRetiresGlobalAdjacencyRootAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.OrdinaryFinalEdgeDeletionRetiresGlobalAdjacencyRootAndSurvivesReopen (138 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDeletionRetiresBothAdjacencyDirectionsAndSurvivesReopen
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDeletionRetiresBothAdjacencyDirectionsAndSurvivesReopen (188 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRequiresFiniteSortAndCandidatePageBounds
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRequiresFiniteSortAndCandidatePageBounds (144 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCandidateBudgetFailureRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCandidateBudgetFailureRetainsOldGraphAndCleansUp (134 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceManifestRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceManifestRetainsOldGraphAndCleansUp (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceRunRetainsOldGraphAndCleansUp
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeCorruptSourceRunRetainsOldGraphAndCleansUp (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAppendBoundsRejectBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAppendBoundsRejectBeforeLeasingOrScratch (114 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectsAnOrdinaryStagedMutationBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectsAnOrdinaryStagedMutationBeforeLeasingOrScratch (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDuplicatePropertyKeysRejectBeforeLeasingOrScratch
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDuplicatePropertyKeysRejectBeforeLeasingOrScratch (161 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectedAppendPreservesAnActiveStream
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeRejectedAppendPreservesAnActiveStream (152 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateDiskFullRetainsOldGraphAndAllowsRetry (283 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorCandidateShortWriteRetainsOldGraphAndAllowsRetry (294 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataDiskFullRetainsOldGraphAndAllowsRetry (262 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageDiskFullRetainsOldGraphAndAllowsRetry (289 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyPageShortWriteRetainsOldGraphAndAllowsRetry (313 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageDiskFullRetainsOldGraphAndAllowsRetry (388 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValuePageShortWriteRetainsOldGraphAndAllowsRetry (382 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDiskFullRetainsOldGraphAndAllowsRetry (380 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestShortWriteRetainsOldGraphAndAllowsRetry (382 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeDeduplicatedLargeValueSecondManifestShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeDeduplicatedLargeValueSecondManifestShortWriteRetainsOldGraphAndAllowsRetry (516 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexDiskFullRetainsOldGraphAndAllowsRetry (302 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyIndexShortWriteRetainsOldGraphAndAllowsRetry (295 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageDiskFullRetainsOldGraphAndAllowsRetry (270 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageShortWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataPageShortWriteRetainsOldGraphAndAllowsRetry (273 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeShortPrivateScratchWriteRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeShortPrivateScratchWriteRetainsOldGraphAndAllowsRetry (224 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchDiskFullRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchDiskFullRetainsOldGraphAndAllowsRetry (221 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePublicDataSyncFailureRetainsOldGraphAndAllowsRetry (237 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePropertyDataSyncFailureRetainsOldGraphAndAllowsRetry (293 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueDataSyncFailureRetainsOldGraphAndAllowsRetry (378 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeLargeValueManifestDataSyncFailureRetainsOldGraphAndAllowsRetry (382 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAdjacencyDataSyncFailureRetainsOldGraphAndAllowsRetry (333 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeMetadataDataSyncFailureRetainsOldGraphAndAllowsRetry (274 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorDataSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgeAllocatorDataSyncFailureRetainsOldGraphAndAllowsRetry (283 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchSyncFailureRetainsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedBulkEdgePrivateScratchSyncFailureRetainsOldGraphAndAllowsRetry (225 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages
+[       OK ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages (2373 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild (442 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry (385 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication (5314 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts
+[       OK ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts (4868 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion (128 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges (488 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure
+[       OK ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure (365 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots (214 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts (77 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts (81 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt (79 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness
+[       OK ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness (141 ms)
+[----------] 74 tests from RelocatableStorageBackendTest (30802 ms total)
+
+[----------] 13 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator (11 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores (3 ms)
+[----------] 13 tests from RelocatableMetadataStoreTest (31 ms total)
+
+[----------] 3 tests from NativeMembershipAccessCostTest
+[ RUN      ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates
+[       OK ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget
+[       OK ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath
+[       OK ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath (8 ms)
+[----------] 3 tests from NativeMembershipAccessCostTest (9 ms total)
+
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0 (297 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1 (296 ms)
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest (593 ms total)
+
+[----------] Global test environment tear-down
+[==========] 92 tests from 4 test suites ran. (31437 ms total)
+[  PASSED  ] 92 tests.
+
+  YOU HAVE 1 DISABLED TEST
+

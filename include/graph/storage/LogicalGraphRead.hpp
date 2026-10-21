@@ -1175,6 +1175,8 @@ namespace graph::storage {
 		std::optional<LogicalGraphCardinalityStatistics> graph;
 		// One optional cost estimate per requested label combination, in order.
 		std::vector<std::optional<uint64_t>> node_counts;
+        // Requested nonempty relationship-type names, in order; missing is unknown.
+        std::vector<std::optional<uint64_t>> edge_type_counts;
 	};
 
 	class LogicalGraphStatisticsBackend {
@@ -1201,6 +1203,13 @@ namespace graph::storage {
 			}
 			return result;
 		}
+
+        [[nodiscard]] virtual LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+                std::span<const std::vector<std::string>> labels, std::span<const std::string> types) const {
+            auto result = readLogicalPlanningStatistics(labels);
+            result.edge_type_counts.resize(types.size());
+            return result;
+        }
 
 
 	};

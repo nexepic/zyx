@@ -1,0 +1,32 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T15:24:12Z",
+  "time": "14.135s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyPoolTailReuseTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T15:24:12Z",
+      "time": "14.135s",
+      "testsuite": [
+        {
+          "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPoolTailReuse.cpp",
+          "line": 10,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T15:24:12Z",
+          "time": "14.135s",
+          "classname": "HybridPropertyPoolTailReuseTest"
+        }
+      ]
+    }
+  ]
+}

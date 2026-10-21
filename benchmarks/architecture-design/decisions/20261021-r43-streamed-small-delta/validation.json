@@ -1,0 +1,16 @@
+{
+  "default": {
+    "tests": 20,
+    "failures": 0
+  },
+  "candidate": {
+    "tests": 20,
+    "failures": 0
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "platform": "Linux",
+  "accepted_progress": "15/24 (62.5%)",
+  "fixture_correction": "The final-entry-bound fixture initially violated backend transaction-record <= total-index-entries/2 validation. Set transaction records to8192 under17000 entry ceiling. No production cap changed.",
+  "publication_fault": "Partial slot write reaches byte116 before stored CRC, exercising torn changed roots rather than an unchanged16-byte prefix."
+}

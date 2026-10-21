@@ -1,0 +1,11 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen
+[       OK ] RelocatableStorageBackendTest.TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen (439 ms)
+[----------] 1 test from RelocatableStorageBackendTest (439 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (439 ms total)
+[  PASSED  ] 1 test.

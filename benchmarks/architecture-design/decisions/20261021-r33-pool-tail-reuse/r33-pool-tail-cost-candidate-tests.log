@@ -1,0 +1,23 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyMatureShapeCostsTest
+[ RUN      ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+NATIVE_MATURE_SHAPE_COST groups=8 owners=512 fields=64 row=1835008 candidate=2097152 retired=1179648 allocated_peak=3276800 file=7864320 byte_gate=reject
+NATIVE_MATURE_KIND_COST kind=entity row=131072 candidate=131072
+NATIVE_MATURE_KIND_COST kind=property row=1179648 candidate=393216
+NATIVE_MATURE_KIND_COST kind=hybrid_map row=0 candidate=917504
+NATIVE_MATURE_KIND_COST kind=query_index row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=large_value row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=vector row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=state row=0 candidate=0
+NATIVE_MATURE_KIND_COST kind=metadata row=262144 candidate=393216
+NATIVE_MATURE_KIND_COST kind=other row=0 candidate=0
+NATIVE_MATURE_FIXED_COST row_bootstrap=131072 candidate_bootstrap=131072 row_emergency=131072 candidate_emergency=131072
+[       OK ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact (165837 ms)
+[----------] 1 test from HybridPropertyMatureShapeCostsTest (165837 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (165837 ms total)
+[  PASSED  ] 1 test.

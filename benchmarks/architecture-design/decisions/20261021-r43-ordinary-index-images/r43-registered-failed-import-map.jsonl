@@ -1,0 +1,6 @@
+{"expected_id":12237,"actual_id":12226,"expected_generation":1,"actual_generation":1,"segment":552,"slot":553,"frame":1,"actual_owner":1,"actual_kind":9}
+{"expected_id":12238,"actual_id":12227,"expected_generation":1,"actual_generation":1,"segment":552,"slot":553,"frame":2,"actual_owner":1,"actual_kind":9}
+{"expected_id":12239,"actual_id":12228,"expected_generation":1,"actual_generation":1,"segment":552,"slot":553,"frame":3,"actual_owner":1,"actual_kind":9}
+{"expected_id":12240,"actual_id":12229,"expected_generation":1,"actual_generation":1,"segment":552,"slot":553,"frame":4,"actual_owner":1,"actual_kind":9}
+{"expected_id":12241,"actual_id":12230,"expected_generation":1,"actual_generation":1,"segment":552,"slot":553,"frame":5,"actual_owner":1,"actual_kind":9}
+{"mismatches":5}

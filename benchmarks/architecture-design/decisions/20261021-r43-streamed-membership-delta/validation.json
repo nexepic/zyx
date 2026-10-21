@@ -1,0 +1,23 @@
+{
+  "default": {
+    "executed": 92,
+    "failures": 0,
+    "modules": 7,
+    "previously_disabled": 1
+  },
+  "candidate": {
+    "executed": 92,
+    "failures": 0,
+    "modules": 7,
+    "previously_disabled": 1
+  },
+  "full_suite": false,
+  "timing_benchmark": false,
+  "platform": "Linux",
+  "accepted_progress": "15/24 (62.5%)",
+  "source_identity": "exact data PageDirectory physical reference including allocation generation plus exact IndexRoot; receipt additionally current source generation/private-reader lease",
+  "hint_slots": 2,
+  "initial_source_bug": "release probe cursor before sorter reopen; original7 failures retained",
+  "fixture_correction": "Read-only reopen proves complete graph/type counts; writable reopen performs existing private-scratch recovery before full integrity. Read-only integrity correctly rejects unrecovered private scratch. Guard unchanged.",
+  "fullscale_preparation_binary": "Frozen adjacency-only r43-row-result-contract; cannot attribute its preparation to this extension"
+}

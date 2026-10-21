@@ -20,6 +20,7 @@
 #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
 #include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
+#include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalNamedPath.hpp"
 #include "graph/query/logical/operators/LogicalCreateNode.hpp"
 #include "graph/query/logical/operators/LogicalCreateEdge.hpp"
@@ -446,9 +447,36 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMatch(
 	// OPTIONAL MATCH with existing pipeline
 	if (clause.optional && input) {
 		std::unique_ptr<LogicalOperator> patternOp = nullptr;
-		std::vector<std::string> requiredVariables;
+        std::vector<std::string> requiredVariables;
+        const auto inputVariables = input->getOutputVariables();
+        std::unordered_set<std::string> referenced, declared;
+        const auto collectProperties = [&](const auto &properties) {
+            for (const auto &[key, expression] : properties) ExpressionUtils::collectVariables(expression.get(), referenced);
+        };
+        for (const auto &part : clause.patterns) {
+            std::vector<std::string> names; collectPatternVariables(part.element, names);
+            declared.insert(names.begin(), names.end());
+            collectProperties(part.element.headNode.propertyExpressions);
+            for (const auto &chain : part.element.chain) {
+                collectProperties(chain.relationship.propertyExpressions);
+                collectProperties(chain.targetNode.propertyExpressions);
+            }
+        }
+        ExpressionUtils::collectVariables(clause.where.get(), referenced);
+        const bool correlated = std::ranges::any_of(inputVariables, [&](const auto &name) {
+            return referenced.contains(name) && !declared.contains(name);
+        });
+        utils::OwnedStringVector imports;
+        if (correlated) {
+            utils::OwnedStdVector<LogicalProjectItem> items;
+            for (const auto &name : inputVariables) if (referenced.contains(name) || declared.contains(name)) {
+                imports.push_back(name);
+                items.emplace_back(utils::makeSharedOwned<VariableReferenceExpression>(name), name);
+            }
+            patternOp = std::make_unique<LogicalProject>(std::make_unique<LogicalSingleRow>(), std::move(items));
+        }
 
-		for (const auto& part : clause.patterns) {
+        for (const auto& part : clause.patterns) {
 			PatternElementAST element = materializeAnonymousMatchVariables(part.element, next_anonymous_variable_);
 			collectPatternVariables(element, requiredVariables);
 			patternOp = buildMatchElement(element, std::move(patternOp));
@@ -459,6 +487,13 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMatch(
 			patternOp = std::make_unique<LogicalFilter>(std::move(patternOp), clause.where);
 		}
 
+        if (correlated) {
+            utils::OwnedStringVector returned;
+            for (const auto &name : patternOp->getOutputVariables())
+                if (std::ranges::find(inputVariables, name) == inputVariables.end()) returned.push_back(name);
+            return std::make_unique<LogicalCallSubquery>(std::move(input), std::move(patternOp),
+                std::move(imports), std::move(returned), false, 0, true);
+        }
 		return std::make_unique<LogicalOptionalMatch>(
 			std::move(input), std::move(patternOp), requiredVariables);
 	}

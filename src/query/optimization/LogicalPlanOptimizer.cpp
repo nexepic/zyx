@@ -7,6 +7,7 @@
 
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
 #include "graph/query/optimization/ReadTraversalAnchorEnvelope.hpp"
+#include "graph/query/optimization/ReadJoinReorderEnvelope.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -299,7 +300,7 @@ namespace graph::query::optimization {
 
 	std::unique_ptr<logical::LogicalOperator>
 	LogicalPlanOptimizer::rewrite(std::unique_ptr<logical::LogicalOperator> root, const size_t depth,
-									  RewriteState &state, const bool allowAnchorReordering) const {
+									  RewriteState &state, const bool allowAnchorReordering, const bool allowJoinReordering) const {
 		if (!root) {
 			throw std::logic_error("logical optimizer received a null operator");
 		}
@@ -318,12 +319,13 @@ namespace graph::query::optimization {
 		}
 
         const bool transparentAnchor = allowAnchorReordering && detail::readTraversalAnchorEnvelope(*root);
+        const bool transparentJoin = allowJoinReordering && detail::readJoinReorderEnvelope(*root);
 		for (size_t index = 0U; index < children.size(); ++index) {
 			if (children[index] == nullptr) {
 				throw std::logic_error("logical optimizer received an operator with a null child");
 			}
 			auto child = root->detachChild(index);
-			root->setChild(index, rewrite(std::move(child), depth + 1U, state, transparentAnchor));
+			root->setChild(index, rewrite(std::move(child), depth + 1U, state, transparentAnchor, transparentJoin));
 		}
 
 		if (root->getType() == logical::LogicalOpType::LOP_FILTER) {
@@ -393,13 +395,20 @@ namespace graph::query::optimization {
 			if (left == nullptr || right == nullptr) {
 				throw std::logic_error("logical JOIN has a null child");
 			}
-			if (state.statistics != nullptr) {
+			if (state.statistics != nullptr && allowJoinReordering) {
 				const std::optional<LogicalCardinalityEstimate> leftEstimate = state.statistics->estimateJoinInput(*left);
 				const std::optional<LogicalCardinalityEstimate> rightEstimate = state.statistics->estimateJoinInput(*right);
 				// The runtime materializes its right child. Reorder only on a strict,
 				// validated estimate, preserving deterministic plans on ties or gaps.
-				if (leftEstimate.has_value() && rightEstimate.has_value() && leftEstimate->isValid() &&
-					rightEstimate->isValid() && leftEstimate->expected_rows < rightEstimate->expected_rows) {
+
+                bool preferLeft = leftEstimate && rightEstimate && leftEstimate->isValid() && rightEstimate->isValid() &&
+                    leftEstimate->expected_rows < rightEstimate->expected_rows;
+                if (leftEstimate && rightEstimate && leftEstimate->isValid() && rightEstimate->isValid()) {
+                    const auto leftBytes = state.statistics->estimateJoinMaterializedBytes(*left);
+                    const auto rightBytes = state.statistics->estimateJoinMaterializedBytes(*right);
+                    if (leftBytes && rightBytes) preferLeft = *leftBytes < *rightBytes;
+                }
+                if (preferLeft) {
 					auto formerLeft = join->detachChild(0U);
 					auto formerRight = join->detachChild(1U);
 					++state.rewrite_count;

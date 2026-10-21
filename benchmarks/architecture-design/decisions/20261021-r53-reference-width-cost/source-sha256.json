@@ -1,0 +1,7 @@
+{
+  "include/graph/query/optimization/LogicalPlanOptimizer.hpp": "8081dc53a4966370824e16cb43cddadf3f135234f6828629e85aeda25a095b7b",
+  "src/query/optimization/LogicalPlanOptimizer.cpp": "8c9ee1fcae91d44afa493f63f97d8f195e06cd1aa342720cb7bb2be7e2dcb666",
+  "src/query/api/QueryEngine.cpp": "a03f592336c8c355d7dbecb1cf21b935fea9a18bc684832ebf3152b821163106",
+  "tests/src/query/optimization/test_LogicalPlanOptimizer.cpp": "a5e3dabd97133f02511406bd20e4b67875ffc0f88465e6bfb0062b3888a0b047",
+  "tests/src/query/api/test_QueryEngineTypePlanning.cpp": "4af4c981882aaa56c7e3d1b942729dbfccc9f473a50182ff4afcded7bd72b123"
+}

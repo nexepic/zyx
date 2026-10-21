@@ -1580,8 +1580,9 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Key> columnKeys{utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Key>(conversion.memory)};
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Key> extensionKeys{utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Key>(conversion.memory)};
     utils::OwnedVector<SlottedSlotReference> references{utils::OwnedPmrAllocator<SlottedSlotReference>(conversion.memory)};
-    ownerKeys.reserve(group.memberships); columnKeys.reserve(group.columns);
-    references.reserve(group.columns + 1U);
+    if (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) ownerKeys.reserve(group.memberships);
+    columnKeys.reserve(group.columns);
+    references.reserve(group.columns + 2U);
     const auto groupBinding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source,
         static_cast<HybridPropertyRootOrdinal>(base + 3));
     HybridPropertyGroupDirectoryMap groups(groupBinding.root.index_id, sourceTrees, *this, groupBinding);
@@ -1589,20 +1590,26 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     const auto sourceGroup = groups.find(source, groupKey, std::ref(admit), conversion.cancellation); boundary.set(0);
     require(bool(sourceGroup), "inverse selected group has no exact directory locator");
     references.push_back(HybridPropertyDirectoryCodec::decodeLocator(*sourceGroup));
-    for (const auto &row : projection.rows())
-        for (const auto &field : row.entries)
-            ownerKeys.push_back(HybridPropertyDirectoryCodec::ownerKey({conversion.owner_kind, row.owner_entity_id}, field.key_token));
-    require(ownerKeys.size() == group.memberships, "inverse selected group lost actual memberships");
+    if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+        const auto matrixPage = sourceFields.read(source, group.column_membership.page_id);
+        static_cast<void>(matrixPage.view().readColumnMembership(group.column_membership, group, descriptor.semantic_generation));
+        references.push_back(group.column_membership);
+    }
+    size_t actualMemberships = 0;
+    for (const auto &row : projection.rows()) for (const auto &field : row.entries) {
+        const EntityPropertyKey owner{conversion.owner_kind, row.owner_entity_id};
+        const auto selected = context.selector(group, owner, field.key_token, std::ref(admit)); boundary.set(0);
+        require(bool(selected), "inverse projected field has no source selector");
+        ++actualMemberships;
+        if (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP || *selected == HybridPropertySource::HPS_EXTENSION)
+            ownerKeys.push_back(HybridPropertyDirectoryCodec::ownerKey(owner, field.key_token));
+    }
+    require(actualMemberships == group.memberships, "inverse selected group lost actual memberships");
     uint64_t bodyMemberships = 0;
     const auto selector = [&](EntityPropertyKey owner, uint32_t token, HybridPropertySource expected) {
-        const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source,
-            static_cast<HybridPropertyRootOrdinal>(base));
-        HybridPropertyOwnerMap map(binding.root.index_id, sourceTrees, *this, binding);
         utils::OwnedHeapReservation selectorBoundary(conversion.memory);
-        const auto admitSelector = [&](size_t bytes) { selectorBoundary.set(bytes); };
-        const auto value = map.find(source, HybridPropertyDirectoryCodec::ownerKey(owner, token), std::ref(admitSelector), conversion.cancellation);
-        require(value && HybridPropertyDirectoryCodec::decodeSource(*value) == expected,
-            "inverse selected body has no exact authoritative selector");
+        const auto value = context.selector(group, owner, token, [&](size_t bytes) { selectorBoundary.set(bytes); });
+        require(value && *value == expected, "inverse selected body has no exact authoritative selector");
     };
     if (descriptor.roots[base + 1].page_id.isValid()) {
         const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source, static_cast<HybridPropertyRootOrdinal>(base + 1));

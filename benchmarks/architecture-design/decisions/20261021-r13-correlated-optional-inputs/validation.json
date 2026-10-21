@@ -1,0 +1,18 @@
+{
+  "r43-ordinary-images-default": {
+    "passed": 171,
+    "disabled": 1
+  },
+  "r13-correlated-optional-controls-default": {
+    "passed": 186,
+    "disabled": 0
+  },
+  "r43-ordinary-images-candidate": {
+    "passed": 171,
+    "disabled": 1
+  },
+  "r13-correlated-optional-controls-candidate": {
+    "passed": 186,
+    "disabled": 0
+  }
+}

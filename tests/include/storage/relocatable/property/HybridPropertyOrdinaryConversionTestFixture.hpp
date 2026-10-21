@@ -1,6 +1,7 @@
 #pragma once
 #include <gtest/gtest.h>
 #include <bit>
+#include <cstdlib>
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
@@ -49,8 +50,13 @@ protected:
     }
     Request request(EntityPropertyOwnerKind kind, std::shared_ptr<std::pmr::memory_resource> memory) {
         const auto current = metadata_->openSnapshot().superblock();
-        return {current.database_id, current.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE,
+        Request result{current.database_id, current.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE,
             {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr, PhysicalSlotId(40), PhysicalSlotId(80), 903}};
+        // Explicit runner-only matrix variant reuses the identical lifecycle
+        // assertions; normal runs continue to exercise the legacy layout.
+        const auto *compact = std::getenv("ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS");
+        result.conversion->compact_column_memberships = compact && std::string_view(compact) == "1";
+        return result;
     }
     void run(const Request &request, bool omitFence = false, std::optional<Generation> expected = {}) {
         const auto current = metadata_->openSnapshot().superblock();

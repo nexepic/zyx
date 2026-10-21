@@ -145,6 +145,9 @@ public:
         const auto column = [&](const HybridPropertyGroupRecord &group, const HybridPropertyColumnRecord &source,
             const SlottedSlotReference &groupReference, const SlottedSlotReference &columnReference) {
             boundaryCredit.set(0);
+            if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+                hybrid_property_detail::require(context.columnMembership(group).presence(source.identity.token) == source.presence,
+                    "native column change has contradictory compact source presence");
             static_assert(std::is_nothrow_default_constructible_v<State>);
             Storage state(nullptr, Deleter{memory});
             state.reset(std::construct_at(static_cast<State *>(memory->allocate(sizeof(State), alignof(State)))));
@@ -217,6 +220,9 @@ private:
         const auto ref = HybridPropertyDirectoryCodec::decodeLocator(*locator);
         const auto page = context.fields_.read(snapshot, ref.page_id);
         const auto column = page.view().readColumn(ref, *group, token, context.descriptor_->semantic_generation);
+        if (group->mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+            require(context.columnMembership(*group).presence(token) == column.presence,
+                "native insertion has contradictory compact source presence");
         const auto bit = UINT64_C(1) << hybridPropertySlotFor(owner);
         require(!(column.presence & bit) && (!pendingOwner || !(column.live & bit)),
             "native insertion conflicts with source column presence or prior owner lifetime");

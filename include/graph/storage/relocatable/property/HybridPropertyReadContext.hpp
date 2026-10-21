@@ -4,10 +4,15 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <algorithm>
+#include <type_traits>
 #include <limits>
 #include <vector>
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyFieldPageStore.hpp"
 
@@ -15,8 +20,8 @@ namespace graph::storage {
 class HybridPropertyReadContextTestAccess;
 class HybridPropertyDirectoryIntegrity;
 // Snapshot-local, with borrowed caller-owned page store and pin. Normal opening
-// reads the actual physical descriptor root. Its nonempty publication/read guard
-// remains until all graph writers, integrity and retirement consumers are ready.
+// reads the actual physical descriptor root in the isolated native format.
+// Decoded metadata stays within this source and its original resource owner.
 // Callbacks borrow fields only during invocation; outputs must own their values.
 class HybridPropertyReadContext final {
 public:
@@ -52,8 +57,8 @@ public:
         const std::function<void(size_t)> &boundaryAdmission = {}, SlottedSlotReference *reference = nullptr) const {
         return findGroup(owner, boundaryAdmission, reference);
     }
-    // First actual membership owner beyond a stable logical cursor. Fieldless
-    // live owners have no LargeValue references and need no maintenance visit.
+    // Next explicit-selector owner for immutable-value maintenance. Compact
+    // column-only owners have primitive values and need no LargeValue visit.
     [[nodiscard]] std::optional<EntityPropertyKey> nextOwnerAfter(EntityPropertyOwnerKind kind, uint64_t afterOwnerId,
         const std::function<void(size_t)> &boundaryAdmission = {}) const {
         check(); require(hybrid_property_detail::validKind(kind) && afterOwnerId <= RSS_HYBRID_MAX_ENTITY_ID,
@@ -83,23 +88,44 @@ public:
         if (!group) return {};
         const bool live = isLive(owner, *group);
         Enumeration result{true, live, true, 0};
-        if (!hasRoot(owner.owner_kind, 0)) {
-            require(group->memberships == 0, "hybrid group memberships have no owner directory");
-            return result;
-        }
-        require(bool(visitor), "hybrid owner enumeration requires a visitor");
-        const auto map = ownerMap(owner.owner_kind);
         const auto checked = [&](uint32_t token, HybridPropertySource source) {
             check();
+            if (result.fields == maximumEntries) return false;
             require(live && result.fields < group->memberships,
                 "hybrid owner membership contradicts group liveness or count");
             require(hasRoot(owner.owner_kind, source == HybridPropertySource::HPS_COLUMN ? 1U : 2U),
                 "hybrid owner membership has no source directory");
-            ++result.fields;
-            return visitor(token, source);
+            ++result.fields; return visitor(token, source);
         };
-        result.complete = HybridPropertyDirectoryCodec::visitOwner(map, snapshot_, owner, maximumEntries,
-            std::ref(checked), boundaryAdmission, cancellation_);
+        if (group->mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+            std::array<uint32_t, HybridPropertyColumnMembership::MAX_COLUMNS> columns{}; size_t count = 0, position = 0;
+            withColumnMembership(*group, [&](const auto &matrix) {
+                require(matrix.visitOwner(owner, columns.size(), [&](uint32_t token) { columns[count++] = token; return true; }),
+                    "compact owner exceeds its bounded column tokens");
+            });
+            const auto remaining = [&] {
+                while (position < count)
+                    if (!checked(columns[position++], HybridPropertySource::HPS_COLUMN)) return false;
+                return true;
+            };
+            if (hasRoot(owner.owner_kind, 0)) {
+                const auto map = ownerMap(owner.owner_kind);
+                const auto extension = [&](uint32_t token, HybridPropertySource source) {
+                    require(source == HybridPropertySource::HPS_EXTENSION, "compact owner has a repeated legacy column selector");
+                    while (position < count && columns[position] < token)
+                        if (!checked(columns[position++], HybridPropertySource::HPS_COLUMN)) return false;
+                    require(position == count || columns[position] != token, "compact owner has two field authorities");
+                    return checked(token, source);
+                };
+                result.complete = HybridPropertyDirectoryCodec::visitOwner(map, snapshot_, owner, maximumEntries,
+                    std::ref(extension), boundaryAdmission, cancellation_);
+            }
+            if (result.complete) result.complete = remaining();
+        } else if (hasRoot(owner.owner_kind, 0)) {
+            const auto map = ownerMap(owner.owner_kind);
+            result.complete = HybridPropertyDirectoryCodec::visitOwner(map, snapshot_, owner, maximumEntries,
+                std::ref(checked), boundaryAdmission, cancellation_);
+        } else require(group->memberships == 0, "hybrid group memberships have no owner directory");
         return result;
     }
     // A disengaged result means this owner still follows ROW routing. Counts
@@ -141,34 +167,29 @@ public:
         SlottedSlotReference groupReference;
         const auto group = findGroup(owner, boundaryAdmission, &groupReference);
         if (!group) return FieldRoute::HFR_ROW;
-        if (!hasRoot(owner.owner_kind, 0)) {
-            require(group->memberships == 0, "hybrid group memberships have no owner directory");
-            return FieldRoute::HFR_MISSING;
-        }
         const auto key = HybridPropertyDirectoryCodec::ownerKey(owner, token);
-        const auto membership = ownerMap(owner.owner_kind).find(snapshot_, key, boundaryAdmission, cancellation_);
-        if (!membership) return FieldRoute::HFR_MISSING;
+        const auto selected = selector(*group, owner, token, boundaryAdmission);
+        if (!selected) return FieldRoute::HFR_MISSING;
         require(isLive(owner, *group) && group->memberships,
             "hybrid field membership belongs to a dead or empty owner group");
-        const auto source = HybridPropertyDirectoryCodec::decodeSource(*membership);
+        const auto source = *selected;
         const size_t role = source == HybridPropertySource::HPS_COLUMN ? 1U : 2U;
         require(hasRoot(owner.owner_kind, role), "hybrid member source directory is absent");
-        const auto binding = bind(owner.owner_kind, role);
-        HybridPropertyFieldDirectoryMap fields(binding.root.index_id, trees_, metadata_, binding);
-        const auto locator = fields.find(snapshot_, role == 1 ?
-            HybridPropertyDirectoryCodec::columnKey(group->group_id, token) : key,
-            boundaryAdmission, cancellation_);
-        require(bool(locator), "hybrid field membership has no source record");
-        const auto reference = HybridPropertyDirectoryCodec::decodeLocator(*locator);
-        const auto page = fields_.read(snapshot_, reference.page_id);
-        check();
         if (role == 1) {
-            const auto column = page.view().readColumn(reference, *group, token, descriptor_->semantic_generation);
+            const auto selectedColumn = columnRecord(*group, token, boundaryAdmission);
+            const auto &column = selectedColumn.column;
             const auto slot = hybridPropertySlotFor(owner); const auto bit = UINT64_C(1) << slot;
             require(bool(column.presence & bit), "hybrid column membership has no present value");
-            if (columnVisitor) columnVisitor(*group, column, groupReference, reference);
+            if (columnVisitor) columnVisitor(*group, column, groupReference, selectedColumn.reference);
             scalar({column.identity.scalar_kind, true, bool(column.nulls & bit), column.words[slot]});
         } else {
+            const auto binding = bind(owner.owner_kind, role);
+            HybridPropertyFieldDirectoryMap fields(binding.root.index_id, trees_, metadata_, binding);
+            const auto locator = fields.find(snapshot_, key, boundaryAdmission, cancellation_);
+            require(bool(locator), "hybrid field membership has no source record");
+            const auto reference = HybridPropertyDirectoryCodec::decodeLocator(*locator);
+            const auto page = fields_.read(snapshot_, reference.page_id);
+            check();
             const auto value = page.view().readExtension(reference, owner, token, *group,
                 descriptor_->semantic_generation, referenceAdmission);
             extension(value);
@@ -181,12 +202,15 @@ private:
     friend class HybridPropertyDirectoryIntegrity;
     friend class HybridPropertyDemotionPreparation;
     friend class HybridPropertyColumnDelta;
+    friend class RelocatableMetadataStore;
     HybridPropertyReadContext(std::shared_ptr<StorageIO> io, SlottedPagePool &pages,
         RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
         std::optional<HybridPropertyDescriptor> descriptor, const CancellationCheckpoint *cancellation)
         : snapshot_(snapshot), metadata_(metadata), generation_(snapshot.superblock().generation),
-          trees_(pages, metadata), fields_(std::move(io), metadata, snapshot),
-          descriptor_(std::move(descriptor)), cancellation_(cancellation) {
+          trees_(pages, metadata), membership_io_(io.get()), fields_(std::move(io), metadata, snapshot),
+          descriptor_(std::move(descriptor)), cancellation_(cancellation),
+          membership_memory_owner_(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+              (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr)) {
         require(metadata_.ownsSnapshot(snapshot_), "hybrid read context requires its own live pin");
         if (descriptor_) require(descriptor_->database_id == snapshot_.superblock().database_id &&
             descriptor_->semantic_generation.isValid() && descriptor_->semantic_generation <= snapshot_.superblock().generation,
@@ -245,15 +269,131 @@ private:
             metadata_.findEdgePageLocationOptional(snapshot_, owner.entity_id);
         require(bool(entity) == isLive(owner, group), "hybrid group liveness disagrees with the Entity Map");
         require(!metadata_.findEntityPropertyLocationOptional(snapshot_, owner), "hybrid group owner still has a competing ROW root");
+        require(group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+            (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP),
+            "compact group is missing its native format feature");
         if (source) *source = reference;
         return group;
+    }
+    [[nodiscard]] std::optional<HybridPropertySource> selector(const HybridPropertyGroupRecord &group,
+        EntityPropertyKey owner, uint32_t token, const std::function<void(size_t)> &admission = {}) const {
+        check(); require(owner.owner_kind == group.owner_kind && hybridPropertyGroupFor(owner) == group.group_id,
+            "hybrid selector has a foreign group or owner");
+        const auto key = HybridPropertyDirectoryCodec::ownerKey(owner, token);
+        std::optional<HybridPropertyOwnerMap::Value> explicitSource;
+        if (hasRoot(owner.owner_kind, 0)) explicitSource = ownerMap(owner.owner_kind).find(snapshot_, key, admission, cancellation_);
+        if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+            const bool column = withColumnMembership(group, [&](const auto &matrix) { return matrix.contains(owner, token); });
+            if (explicitSource) require(!column && HybridPropertyDirectoryCodec::decodeSource(*explicitSource) == HybridPropertySource::HPS_EXTENSION,
+                "compact field has two authorities or a legacy column selector");
+            if (column) return HybridPropertySource::HPS_COLUMN;
+        } else if (!hasRoot(owner.owner_kind, 0))
+            require(!group.memberships, "hybrid group memberships have no owner directory");
+        if (!explicitSource) return {};
+        return HybridPropertyDirectoryCodec::decodeSource(*explicitSource);
+    }
+    struct AuthenticatedColumn {
+        HybridPropertyColumnRecord column;
+        SlottedSlotReference reference;
+    };
+    struct MembershipCache final : utils::OwnedPmrObject {
+        struct Entry {
+            HybridPropertyGroupRecord group;
+            HybridPropertyColumnMembership value;
+            bool valid = false;
+            uint64_t io_epoch = 0;
+        };
+        std::array<Entry, 2> entries{};
+        size_t cursor = 0;
+        struct ColumnEntry {
+            HybridPropertyGroupRecord group;
+            AuthenticatedColumn value;
+            uint64_t io_epoch = 0;
+            bool valid = false;
+        };
+        std::array<ColumnEntry, 8> columns{};
+        size_t column_cursor = 0;
+    };
+    void prepareReadCache() const {
+        if (membership_cache_ || membership_cache_disabled_) return;
+        if (!membership_memory_owner_) membership_cache_disabled_ = true;
+        else try { membership_cache_.reset(new (membership_memory_owner_) MembershipCache); }
+        catch (const query::execution::MaterializedByteLimitExceeded &) { membership_cache_disabled_ = true; }
+        catch (const query::execution::detail::ResourceAdmissionDenied &) { membership_cache_disabled_ = true; }
+    }
+    [[nodiscard]] AuthenticatedColumn columnRecord(const HybridPropertyGroupRecord &group, uint32_t token,
+        const std::function<void(size_t)> &admission) const {
+        check();
+        const auto epoch = membership_io_->dataMutationEpoch();
+        const bool cacheable = epoch != (std::numeric_limits<uint64_t>::max)() &&
+            !StorageIO::SequentialReadScope::activeFor(*membership_io_);
+        if (cacheable && membership_cache_) for (const auto &entry : membership_cache_->columns)
+            if (entry.valid && entry.io_epoch == epoch && entry.group == group && entry.value.column.identity.token == token) {
+                debug::PerfTrace::addValue("native_graph.hybrid.column_cache_hits", 1);
+                // Owning fixed-size return: a reentrant visitor cannot replace
+                // the cache slot backing its own borrowed column callback.
+                return entry.value;
+            }
+        const auto binding = bind(group.owner_kind, 1);
+        HybridPropertyFieldDirectoryMap directory(binding.root.index_id, trees_, metadata_, binding);
+        const auto locator = directory.find(snapshot_, HybridPropertyDirectoryCodec::columnKey(group.group_id, token),
+            admission, cancellation_);
+        require(bool(locator), "hybrid field membership has no source record");
+        const auto reference = HybridPropertyDirectoryCodec::decodeLocator(*locator);
+        const auto page = fields_.read(snapshot_, reference.page_id);
+        check();
+        const AuthenticatedColumn value{page.view().readColumn(reference, group, token, descriptor_->semantic_generation), reference};
+        debug::PerfTrace::addValue("native_graph.hybrid.column_decodes", 1);
+        if (cacheable) {
+            prepareReadCache();
+            if (membership_cache_) {
+                auto &entry = membership_cache_->columns[membership_cache_->column_cursor++ % membership_cache_->columns.size()];
+                entry.group = group; entry.value = value; entry.io_epoch = epoch; entry.valid = true;
+            }
+        }
+        return value;
+    }
+    template<class Visitor>
+    auto withColumnMembership(const HybridPropertyGroupRecord &group, Visitor &&visitor) const
+        -> std::invoke_result_t<Visitor &, const HybridPropertyColumnMembership &> {
+        check(); require(group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+            (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP) && hasRoot(group.owner_kind, 1),
+            "compact membership has no admitted source feature or column directory");
+        const auto epoch = membership_io_->dataMutationEpoch();
+        const bool cacheable = epoch != (std::numeric_limits<uint64_t>::max)() &&
+            !StorageIO::SequentialReadScope::activeFor(*membership_io_);
+        if (cacheable && membership_cache_) for (const auto &entry : membership_cache_->entries)
+            if (entry.valid && entry.io_epoch == epoch && entry.group == group) {
+                debug::PerfTrace::addValue("native_graph.hybrid.column_membership_cache_hits", 1);
+                return visitor(std::as_const(entry.value));
+            }
+        const auto page = fields_.read(snapshot_, group.column_membership.page_id);
+        const auto decoded = page.view().readColumnMembership(group.column_membership, group, descriptor_->semantic_generation);
+        require(hasRoot(group.owner_kind, 0) || decoded.memberships() == group.memberships,
+            "compact group claims extensions without an owner directory");
+        debug::PerfTrace::addValue("native_graph.hybrid.column_membership_decodes", 1);
+        if (!cacheable) return visitor(std::as_const(decoded));
+        prepareReadCache();
+        if (!membership_cache_) return visitor(std::as_const(decoded));
+        auto &entry = membership_cache_->entries[membership_cache_->cursor++ % membership_cache_->entries.size()];
+        entry.group = group; entry.value = decoded; entry.valid = true; entry.io_epoch = epoch;
+        return visitor(std::as_const(entry.value));
+    }
+    [[nodiscard]] HybridPropertyColumnMembership columnMembership(const HybridPropertyGroupRecord &group) const {
+        return withColumnMembership(group, [](const auto &value) { return value; });
     }
     const MetadataSnapshotPin &snapshot_;
     RelocatableMetadataStore &metadata_;
     Generation generation_;
     mutable BTreePageStore trees_;
+    const StorageIO *membership_io_ = nullptr; // owned by fields_, never escaped
     HybridPropertyFieldPageStore fields_;
     std::optional<HybridPropertyDescriptor> descriptor_;
     const CancellationCheckpoint *cancellation_ = nullptr;
+    // Capture at context construction, never charge a later caller's temporary
+    // integrity/maintenance account for metadata retained by this context.
+    std::shared_ptr<std::pmr::memory_resource> membership_memory_owner_;
+    mutable std::unique_ptr<MembershipCache> membership_cache_;
+    mutable bool membership_cache_disabled_ = false;
 };
 } // namespace graph::storage

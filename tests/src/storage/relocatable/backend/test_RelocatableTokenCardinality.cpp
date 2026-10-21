@@ -565,3 +565,24 @@ TEST(NativeMembershipAccessCostTest, IncreasingCandidateCountCannotReenterCandid
   }
  }
 }
+
+TEST_F(RelocatableStorageBackendTest, PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness) {
+ auto options = backendOptions(); options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+ auto backend = RelocatableStorageBackend::initializeNew(options); backend->open();
+ const auto nodes = backend->createLogicalNodes({{{"Person"}, {}}, {{}, {}}});
+ static_cast<void>(backend->createLogicalEdges({{nodes[0], nodes[1], "KNOWS", {}}, {nodes[0], nodes[0], "", {}}}));
+ const std::vector<std::vector<std::string>> labels{{"Person"}, {}};
+ const std::vector<std::string> types{"KNOWS", "Missing", "", "KNOWS"};
+ const auto before = backend->readLogicalPlanningStatistics(labels, types);
+ ASSERT_TRUE(before.graph); EXPECT_EQ(before.graph->edge_count, 2U);
+ EXPECT_EQ(before.node_counts, (std::vector<std::optional<uint64_t>>{1, 2}));
+ EXPECT_EQ(before.edge_type_counts, (std::vector<std::optional<uint64_t>>{1, std::nullopt, std::nullopt, 1}));
+ static_cast<void>(backend->createLogicalEdges({{nodes[1], nodes[0], "KNOWS", {}}}));
+ const auto after = backend->readLogicalPlanningStatistics(labels, types);
+ ASSERT_TRUE(after.graph); EXPECT_EQ(after.graph->edge_count, 3U);
+ EXPECT_EQ(after.edge_type_counts, (std::vector<std::optional<uint64_t>>{2, std::nullopt, std::nullopt, 2}));
+ EXPECT_EQ(before.edge_type_counts.front(), 1U);
+ backend->close(); backend->open();
+ EXPECT_EQ(backend->readLogicalPlanningStatistics(labels, types).edge_type_counts, after.edge_type_counts);
+ backend->close();
+}

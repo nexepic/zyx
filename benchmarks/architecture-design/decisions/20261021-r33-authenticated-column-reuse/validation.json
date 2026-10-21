@@ -1,0 +1,32 @@
+{
+  "candidate_focused": {
+    "modules": 2,
+    "tests": 19,
+    "failures": 0
+  },
+  "candidate_lifecycle": {
+    "modules": 7,
+    "tests": 279,
+    "failures": 0
+  },
+  "default_query_controls": {
+    "modules": 5,
+    "suites": 8,
+    "tests": 116,
+    "failures": 0
+  },
+  "selected_column_work": {
+    "owners": 64,
+    "decodes": 1,
+    "cache_hits": 63
+  },
+  "format_changed": false,
+  "allocation_recheck": false,
+  "timing_benchmark": false,
+  "full_suite": false,
+  "platform": "Linux",
+  "progress": {
+    "accepted": 15,
+    "total": 24
+  }
+}

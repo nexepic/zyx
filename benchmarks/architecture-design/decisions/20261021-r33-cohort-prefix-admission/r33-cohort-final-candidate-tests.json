@@ -1,0 +1,113 @@
+{
+  "tests": 8,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T21:20:13Z",
+  "time": "56.323s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyMatureShapeCostsTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T21:20:13Z",
+      "time": "54.799s",
+      "testsuite": [
+        {
+          "name": "CohortSavingDoesNotAuthorizeItsFirstGroupPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 177,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:20:13Z",
+          "time": "0.544s",
+          "classname": "HybridPropertyMatureShapeCostsTest"
+        },
+        {
+          "name": "CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyShapeCosts.cpp",
+          "line": 236,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:20:14Z",
+          "time": "54.255s",
+          "classname": "HybridPropertyMatureShapeCostsTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T21:21:08Z",
+      "time": "1.524s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:08Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InvalidCohortEnvelopeRefusesBeforeIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:08Z",
+          "time": "0.006s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NonColumnGroupNeverPublishesAnEarlierPreparedGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:08Z",
+          "time": "0.137s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "UnprofitableWholeCohortKeepsEveryRowAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:08Z",
+          "time": "0.186s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "CancellationAfterCompleteCostPreparationKeepsAllRowRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:08Z",
+          "time": "0.401s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 119,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:21:09Z",
+          "time": "0.789s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        }
+      ]
+    }
+  ]
+}

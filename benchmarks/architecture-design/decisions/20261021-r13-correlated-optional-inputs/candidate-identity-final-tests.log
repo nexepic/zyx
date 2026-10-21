@@ -1,0 +1,402 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 186 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen
+[       OK ] RelocatableStorageBackendTest.TypeAndWidthPlanningHoldoutsMatchRawPlansAcrossReopen (452 ms)
+[ RUN      ] RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen
+[       OK ] RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen (222 ms)
+[----------] 2 tests from RelocatableStorageBackendTest (674 ms total)
+
+[----------] 23 tests from LogicalPlanUnwindRuntimeTest
+[ RUN      ] LogicalPlanUnwindRuntimeTest.ExecutesParserProducedLiteralAndParameterUnwindPlans
+[       OK ] LogicalPlanUnwindRuntimeTest.ExecutesParserProducedLiteralAndParameterUnwindPlans (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.DistinctUsesStructuralKeysForNestedMapAndListValues
+[       OK ] LogicalPlanUnwindRuntimeTest.DistinctUsesStructuralKeysForNestedMapAndListValues (3 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.DistinctPreservesEveryPublicScalarParameterValueCategory
+[       OK ] LogicalPlanUnwindRuntimeTest.DistinctPreservesEveryPublicScalarParameterValueCategory (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.EvaluatesBoundedForwardAndReverseRangesFromParserProducedPlans
+[       OK ] LogicalPlanUnwindRuntimeTest.EvaluatesBoundedForwardAndReverseRangesFromParserProducedPlans (1 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.PreservesOuterBindingsAndUsesPipelineScalarSemantics
+[       OK ] LogicalPlanUnwindRuntimeTest.PreservesOuterBindingsAndUsesPipelineScalarSemantics (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.EvaluatesListLiteralExpressionsWithoutPhysicalExpressionHelpers
+[       OK ] LogicalPlanUnwindRuntimeTest.EvaluatesListLiteralExpressionsWithoutPhysicalExpressionHelpers (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.CanSuppressScalarExpansionForForeachLowering
+[       OK ] LogicalPlanUnwindRuntimeTest.CanSuppressScalarExpansionForForeachLowering (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.ExecutesPublicSnapshotAndExpressionEntryPointsWithTheSameBounds
+[       OK ] LogicalPlanUnwindRuntimeTest.ExecutesPublicSnapshotAndExpressionEntryPointsWithTheSameBounds (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.BuildsDistinctKeysForPublicValuesAndRejectsEmptyColumnSets
+[       OK ] LogicalPlanUnwindRuntimeTest.BuildsDistinctKeysForPublicValuesAndRejectsEmptyColumnSets (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.BorrowedListsPreserveLargeNestedValuesAndRepeatedExecution
+[       OK ] LogicalPlanUnwindRuntimeTest.BorrowedListsPreserveLargeNestedValuesAndRepeatedExecution (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.RejectsOversizedTransientRows
+[       OK ] LogicalPlanUnwindRuntimeTest.RejectsOversizedTransientRows (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.BoundsScalarProjectionResultsBeforePublicMaterialization
+[       OK ] LogicalPlanUnwindRuntimeTest.BoundsScalarProjectionResultsBeforePublicMaterialization (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.RejectsInputListsAboveRowBound
+[       OK ] LogicalPlanUnwindRuntimeTest.RejectsInputListsAboveRowBound (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.RejectsEmptyAliasesAndUnboundExpressions
+[       OK ] LogicalPlanUnwindRuntimeTest.RejectsEmptyAliasesAndUnboundExpressions (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.HoldsEvaluatedListBudgetAcrossLimitOutput
+[       OK ] LogicalPlanUnwindRuntimeTest.HoldsEvaluatedListBudgetAcrossLimitOutput (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.HoldsUnchargedInputBindingsDuringExpansion
+[       OK ] LogicalPlanUnwindRuntimeTest.HoldsUnchargedInputBindingsDuringExpansion (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation
+[       OK ] LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange
+[       OK ] LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.RangeChecksGuardDuringListConstruction
+[       OK ] LogicalPlanUnwindRuntimeTest.RangeChecksGuardDuringListConstruction (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange
+[       OK ] LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation
+[       OK ] LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation
+[       OK ] LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation (0 ms)
+[ RUN      ] LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation
+[       OK ] LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation (1 ms)
+[----------] 23 tests from LogicalPlanUnwindRuntimeTest (11 ms total)
+
+[----------] 62 tests from LogicalPlanReadRuntimeTest
+[ RUN      ] LogicalPlanReadRuntimeTest.EnforcesBooleanOrNullSearchedCasePredicates
+[       OK ] LogicalPlanReadRuntimeTest.EnforcesBooleanOrNullSearchedCasePredicates (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsInvalidBoundsBeforeOpeningAReadSnapshot
+[       OK ] LogicalPlanReadRuntimeTest.RejectsInvalidBoundsBeforeOpeningAReadSnapshot (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ExecutesParserProducedOrderByWithBoundedMaterialization
+[       OK ] LogicalPlanReadRuntimeTest.ExecutesParserProducedOrderByWithBoundedMaterialization (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.AppliesDistinctAndAllUnionSemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.AppliesDistinctAndAllUnionSemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.AppliesParserProducedPaginationWithoutScanningPastLimit
+[       OK ] LogicalPlanReadRuntimeTest.AppliesParserProducedPaginationWithoutScanningPastLimit (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PaginatesAcrossMultipleBoundedUnwindBatches
+[       OK ] LogicalPlanReadRuntimeTest.PaginatesAcrossMultipleBoundedUnwindBatches (2 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ExecutesParserProducedGlobalAndGroupedAggregates
+[       OK ] LogicalPlanReadRuntimeTest.ExecutesParserProducedGlobalAndGroupedAggregates (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesEveryNativeAggregateFunctionThroughTheBoundedRuntime
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesEveryNativeAggregateFunctionThroughTheBoundedRuntime (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesArithmeticComparisonAndThreeValuedBooleanExpressionsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesArithmeticComparisonAndThreeValuedBooleanExpressionsThroughCypher (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsInvalidRegularExpressionsAtTheLogicalRuntimeBoundary
+[       OK ] LogicalPlanReadRuntimeTest.RejectsInvalidRegularExpressionsAtTheLogicalRuntimeBoundary (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesParserProducedStringComparisonOperatorsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesParserProducedStringComparisonOperatorsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesAllDecisiveThreeValuedBooleanOutcomesThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesAllDecisiveThreeValuedBooleanOutcomesThroughCypher (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesSimpleAndSearchedCaseExpressionsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesSimpleAndSearchedCaseExpressionsThroughCypher (2 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesListMembershipSlicesAndComprehensionsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesListMembershipSlicesAndComprehensionsThroughCypher (2 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PreservesOpenEndedAndClampedListSliceSemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PreservesOpenEndedAndClampedListSliceSemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PropagatesNullListComprehensionsAndRejectsNonBooleanPredicates
+[       OK ] LogicalPlanReadRuntimeTest.PropagatesNullListComprehensionsAndRejectsNonBooleanPredicates (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ListComprehensionRetainsSourceAndOutputUnderOneByteBudget
+[       OK ] LogicalPlanReadRuntimeTest.ListComprehensionRetainsSourceAndOutputUnderOneByteBudget (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ReduceRetainsSourceAndBothAccumulatorGenerationsUnderOneByteBudget
+[       OK ] LogicalPlanReadRuntimeTest.ReduceRetainsSourceAndBothAccumulatorGenerationsUnderOneByteBudget (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.QuantifierRetainsCopiedSourceListWhileEvaluating
+[       OK ] LogicalPlanReadRuntimeTest.QuantifierRetainsCopiedSourceListWhileEvaluating (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ScopedListBindingAdmitsShadowCopyBeforeReplacingOuterValue
+[       OK ] LogicalPlanReadRuntimeTest.ScopedListBindingAdmitsShadowCopyBeforeReplacingOuterValue (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ListLiteralAndSliceShareSourceAndOutputByteBudget
+[       OK ] LogicalPlanReadRuntimeTest.ListLiteralAndSliceShareSourceAndOutputByteBudget (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PropagatesNullCollectionInputsAndRejectsNonBooleanQuantifiers
+[       OK ] LogicalPlanReadRuntimeTest.PropagatesNullCollectionInputsAndRejectsNonBooleanQuantifiers (2 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.MaterializesDynamicMapLiteralsForEachInputRowThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.MaterializesDynamicMapLiteralsForEachInputRowThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesQuantifierExpressionsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesQuantifierExpressionsThroughCypher (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesScalarFunctionCallsAndRejectsInvalidCallsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesScalarFunctionCallsAndRejectsInvalidCallsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesNativeScalarFunctionFamiliesThroughTheBoundedRuntime
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesNativeScalarFunctionFamiliesThroughTheBoundedRuntime (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesListLengthAndOrdinaryListSizeThroughTheirDistinctPaths
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesListLengthAndOrdinaryListSizeThroughTheirDistinctPaths (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesContinuousPercentileAggregateThroughTheBoundedRuntime
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesContinuousPercentileAggregateThroughTheBoundedRuntime (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.BoundsRetainedAggregatePayloadByMaterializedBytes
+[       OK ] LogicalPlanReadRuntimeTest.BoundsRetainedAggregatePayloadByMaterializedBytes (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.NativeConversionContractAcceptsOnlyExplicitToBooleanInputs
+[       OK ] LogicalPlanReadRuntimeTest.NativeConversionContractAcceptsOnlyExplicitToBooleanInputs (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsNativeScalarFunctionTypeMismatchesAtTheRuntimeBoundary
+[       OK ] LogicalPlanReadRuntimeTest.RejectsNativeScalarFunctionTypeMismatchesAtTheRuntimeBoundary (2 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.NativeRangeContractPreservesNullAndRejectsNonFiniteInputs
+[       OK ] LogicalPlanReadRuntimeTest.NativeRangeContractPreservesNullAndRejectsNonFiniteInputs (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesTemporalArithmeticThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesTemporalArithmeticThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesEverySupportedTemporalArithmeticOperandOrderThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesEverySupportedTemporalArithmeticOperandOrderThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PreservesArithmeticPrecedenceAssociativityAndFailureSemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PreservesArithmeticPrecedenceAssociativityAndFailureSemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsIntegerArithmeticOverflowAtTheExpressionBoundary
+[       OK ] LogicalPlanReadRuntimeTest.RejectsIntegerArithmeticOverflowAtTheExpressionBoundary (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesReduceDynamicMembershipAndListBoundarySemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesReduceDynamicMembershipAndListBoundarySemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PreservesDynamicInThreeValuedSemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PreservesDynamicInThreeValuedSemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PropagatesANullDynamicListOperandForInThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PropagatesANullDynamicListOperandForInThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PreservesQuantifierEmptyAndNullSemanticsThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PreservesQuantifierEmptyAndNullSemanticsThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.EvaluatesTemporalComponentsAndDateTimeDurationArithmeticThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.EvaluatesTemporalComponentsAndDateTimeDurationArithmeticThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PreservesNegativeMonthRolloverAcrossTheTemporalEraThroughCypher
+[       OK ] LogicalPlanReadRuntimeTest.PreservesNegativeMonthRolloverAcrossTheTemporalEraThroughCypher (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsTemporalArithmeticOverflowAtTheExpressionBoundary
+[       OK ] LogicalPlanReadRuntimeTest.RejectsTemporalArithmeticOverflowAtTheExpressionBoundary (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsTemporalYearAndDateRangeOverflowBeforeReturningAValue
+[       OK ] LogicalPlanReadRuntimeTest.RejectsTemporalYearAndDateRangeOverflowBeforeReturningAValue (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ExecutesBoundedCartesianJoinWithoutPhysicalStorageRecords
+[       OK ] LogicalPlanReadRuntimeTest.ExecutesBoundedCartesianJoinWithoutPhysicalStorageRecords (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.JoinsOnlyCompatibleBindingsAndRejectsAnUnboundedMaterializedSide
+[       OK ] LogicalPlanReadRuntimeTest.JoinsOnlyCompatibleBindingsAndRejectsAnUnboundedMaterializedSide (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.HashJoinPreservesDuplicateCandidateOrder
+[       OK ] LogicalPlanReadRuntimeTest.HashJoinPreservesDuplicateCandidateOrder (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.HashJoinChargesBindingIndexMetadataAgainstByteBound
+[       OK ] LogicalPlanReadRuntimeTest.HashJoinChargesBindingIndexMetadataAgainstByteBound (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.CorrelatesOptionalMatchAndNullExtendsOnlyNewVariables
+[       OK ] LogicalPlanReadRuntimeTest.CorrelatesOptionalMatchAndNullExtendsOnlyNewVariables (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.OptionalMatchPreservesNullBindingsAndDuplicatePatternRows
+[       OK ] LogicalPlanReadRuntimeTest.OptionalMatchPreservesNullBindingsAndDuplicatePatternRows (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.OptionalMatchStopsDownstreamWithoutEmittingRowsAfterCancellation
+[       OK ] LogicalPlanReadRuntimeTest.OptionalMatchStopsDownstreamWithoutEmittingRowsAfterCancellation (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsOptionalMatchPatternRowsBeyondTheMaterializationBound
+[       OK ] LogicalPlanReadRuntimeTest.RejectsOptionalMatchPatternRowsBeyondTheMaterializationBound (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.AccountsOptionalMatchBindingIndexMetadataInByteBound
+[       OK ] LogicalPlanReadRuntimeTest.AccountsOptionalMatchBindingIndexMetadataInByteBound (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ExecutesCorrelatedReadSubqueriesThroughAnExplicitImportBoundary
+[       OK ] LogicalPlanReadRuntimeTest.ExecutesCorrelatedReadSubqueriesThroughAnExplicitImportBoundary (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.RejectsMalformedCorrelatedSubqueryShapesBeforeExecution
+[       OK ] LogicalPlanReadRuntimeTest.RejectsMalformedCorrelatedSubqueryShapesBeforeExecution (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow
+[       OK ] LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.SkipStreamsAnExactBudgetRowWithoutSelectionStorage
+[       OK ] LogicalPlanReadRuntimeTest.SkipStreamsAnExactBudgetRowWithoutSelectionStorage (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.ScalarResultPublicationChecksTheSharedBudgetBeforeCopying
+[       OK ] LogicalPlanReadRuntimeTest.ScalarResultPublicationChecksTheSharedBudgetBeforeCopying (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget
+[       OK ] LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.AppliesWithOrderingAndPaginationForAliasStarAndAggregateBodies
+[       OK ] LogicalPlanReadRuntimeTest.AppliesWithOrderingAndPaginationForAliasStarAndAggregateBodies (1 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.LimitExhaustsItsLogicalWindowForSortAndAggregateIncludingZero
+[       OK ] LogicalPlanReadRuntimeTest.LimitExhaustsItsLogicalWindowForSortAndAggregateIncludingZero (0 ms)
+[ RUN      ] LogicalPlanReadRuntimeTest.HashJoinCanonicalNestedMapsPreserveBagAndSignedZero
+[       OK ] LogicalPlanReadRuntimeTest.HashJoinCanonicalNestedMapsPreserveBagAndSignedZero (0 ms)
+[----------] 62 tests from LogicalPlanReadRuntimeTest (39 ms total)
+
+[----------] 14 tests from LogicalLoadCsvTest
+[ RUN      ] LogicalLoadCsvTest.BasicConstruction
+[       OK ] LogicalLoadCsvTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DefaultParams
+[       OK ] LogicalLoadCsvTest.DefaultParams (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenNoChild
+[       OK ] LogicalLoadCsvTest.GetChildrenNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenWithChild
+[       OK ] LogicalLoadCsvTest.GetChildrenWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesNoChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesWithChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneWithChild
+[       OK ] LogicalLoadCsvTest.CloneWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneNoChild
+[       OK ] LogicalLoadCsvTest.CloneNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithoutHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithoutHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChild
+[       OK ] LogicalLoadCsvTest.SetChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChild
+[       OK ] LogicalLoadCsvTest.DetachChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.DetachChildInvalidIndex (0 ms)
+[----------] 14 tests from LogicalLoadCsvTest (0 ms total)
+
+[----------] 19 tests from LogicalCallSubqueryTest
+[ RUN      ] LogicalCallSubqueryTest.BasicConstruction
+[       OK ] LogicalCallSubqueryTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ConstructionWithParams
+[       OK ] LogicalCallSubqueryTest.ConstructionWithParams (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenBothPresent
+[       OK ] LogicalCallSubqueryTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlyInput
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlyInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlySubquery
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlySubquery (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenEmpty
+[       OK ] LogicalCallSubqueryTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesNoInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesNoInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesWithInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesWithInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneBothChildren
+[       OK ] LogicalCallSubqueryTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneNoChildren
+[       OK ] LogicalCallSubqueryTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringBasic
+[       OK ] LogicalCallSubqueryTest.ToStringBasic (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactions
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactions (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex0
+[       OK ] LogicalCallSubqueryTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex1
+[       OK ] LogicalCallSubqueryTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex0
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex1
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.DetachChildInvalidIndex (0 ms)
+[----------] 19 tests from LogicalCallSubqueryTest (0 ms total)
+
+[----------] 17 tests from LogicalForeachTest
+[ RUN      ] LogicalForeachTest.BasicConstruction
+[       OK ] LogicalForeachTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalForeachTest.WithChildAndBody
+[       OK ] LogicalForeachTest.WithChildAndBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenBothPresent
+[       OK ] LogicalForeachTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyChild
+[       OK ] LogicalForeachTest.GetChildrenOnlyChild (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyBody
+[       OK ] LogicalForeachTest.GetChildrenOnlyBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenEmpty
+[       OK ] LogicalForeachTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesNoChild
+[       OK ] LogicalForeachTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesWithChild
+[       OK ] LogicalForeachTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalForeachTest.CloneBothChildren
+[       OK ] LogicalForeachTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalForeachTest.CloneNoChildren
+[       OK ] LogicalForeachTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalForeachTest.ToString
+[       OK ] LogicalForeachTest.ToString (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex0
+[       OK ] LogicalForeachTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex1
+[       OK ] LogicalForeachTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildInvalidIndex
+[       OK ] LogicalForeachTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex0
+[       OK ] LogicalForeachTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex1
+[       OK ] LogicalForeachTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildInvalidIndex
+[       OK ] LogicalForeachTest.DetachChildInvalidIndex (0 ms)
+[----------] 17 tests from LogicalForeachTest (0 ms total)
+
+[----------] 45 tests from LogicalPlanBuilderCoverageTest
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity
+[       OK ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithAggregates
+[       OK ] LogicalPlanBuilderCoverageTest.WithAggregates (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithReturnStar
+[       OK ] LogicalPlanBuilderCoverageTest.WithReturnStar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithWhereFilter
+[       OK ] LogicalPlanBuilderCoverageTest.WithWhereFilter (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.WithNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithDistinct
+[       OK ] LogicalPlanBuilderCoverageTest.WithDistinct (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns
+[       OK ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithWhere
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithWhere (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithDefaultType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithDefaultType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.SetNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemovePropertyType
+[       OK ] LogicalPlanBuilderCoverageTest.RemovePropertyType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeSingleNode
+[       OK ] LogicalPlanBuilderCoverageTest.MergeSingleNode (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithExpression
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithExpression (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithoutYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithoutYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexComposite
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexComposite (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexSingle
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexSingle (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar
+[       OK ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars (0 ms)
+[----------] 45 tests from LogicalPlanBuilderCoverageTest (0 ms total)
+
+[----------] 4 tests from LogicalPlanBuilderFlagsTest
+[ RUN      ] LogicalPlanBuilderFlagsTest.InitialState
+[       OK ] LogicalPlanBuilderFlagsTest.InitialState (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkDataMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkDataMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkBothMutations
+[       OK ] LogicalPlanBuilderFlagsTest.MarkBothMutations (0 ms)
+[----------] 4 tests from LogicalPlanBuilderFlagsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 186 tests from 8 test suites ran. (726 ms total)
+[  PASSED  ] 186 tests.

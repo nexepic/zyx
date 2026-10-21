@@ -1,0 +1,32 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T19:43:14Z",
+  "time": "4.29s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T19:43:14Z",
+      "time": "4.29s",
+      "testsuite": [
+        {
+          "name": "OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStreamedAdjacencyDelta.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T19:43:14Z",
+          "time": "4.29s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    }
+  ]
+}

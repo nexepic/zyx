@@ -1,0 +1,146 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 67 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 30 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (207 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (19 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (17 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (74 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (284 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (11 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (162 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (30 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (16 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (498 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (162 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (127 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (27 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (127 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (359 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (144 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (144 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (134 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (124 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (263 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (134 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (125 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen (152 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication (126 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.NodeOnlyLifecycleUpdatesCountsWithoutRewritingTheCoveredTree
+[       OK ] CoveredAdjacencyCandidateTest.NodeOnlyLifecycleUpdatesCountsWithoutRewritingTheCoveredTree (144 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.NodeOnlyFinalizationRefusesAnOrdinaryScalarRootAndAnExceededEntityBound
+[       OK ] CoveredAdjacencyCandidateTest.NodeOnlyFinalizationRefusesAnOrdinaryScalarRootAndAnExceededEntityBound (16 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.LastEdgeRemovalRetainsAnEmptyCandidateRootAndRecreationKeepsOldPins
+[       OK ] CoveredAdjacencyCandidateTest.LastEdgeRemovalRetainsAnEmptyCandidateRootAndRecreationKeepsOldPins (231 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.DeterministicSkewedInsertDeleteCyclesKeepEveryDirectionAndCompleteTypeCount
+[       OK ] CoveredAdjacencyCandidateTest.DeterministicSkewedInsertDeleteCyclesKeepEveryDirectionAndCompleteTypeCount (1147 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.LogicalCoordinatorMaintainsCandidateAndRollsBackOverBudgetBatch
+[       OK ] CoveredAdjacencyCandidateTest.LogicalCoordinatorMaintainsCandidateAndRollsBackOverBudgetBatch (708 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.LogicalCoordinatorRejectsInvalidSelectionBeforePublishing
+[       OK ] CoveredAdjacencyCandidateTest.LogicalCoordinatorRejectsInvalidSelectionBeforePublishing (118 ms)
+[----------] 30 tests from CoveredAdjacencyCandidateTest (5846 ms total)
+
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots (16 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing (44 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization
+[       OK ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor (8 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences (8 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties (5 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor (9 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode
+[       OK ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication
+[       OK ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication (9 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes (29 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges (25 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity
+[       OK ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints
+[       OK ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp
+[       OK ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData (2 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst
+[       OK ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst (6 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction (1 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing
+[       OK ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement
+[       OK ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement (17 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot (18 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot
+[       OK ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology
+[       OK ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology (14 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields
+[       OK ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields (2 ms)
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest (365 ms total)
+
+[----------] Global test environment tear-down
+[==========] 67 tests from 2 test suites ran. (6211 ms total)
+[  PASSED  ] 67 tests.

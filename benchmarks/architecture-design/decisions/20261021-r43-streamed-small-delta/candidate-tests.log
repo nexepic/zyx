@@ -1,0 +1,55 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 20 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages
+[       OK ] RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages (2365 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild (416 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaDiskFailureKeepsTopologyAndAllowsFreshRetry (356 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication
+[       OK ] RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication (4702 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts
+[       OK ] RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts (3774 ms)
+[----------] 5 tests from RelocatableStorageBackendTest (11614 ms total)
+
+[----------] 13 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPlansOneInitialGlobalTreeFromBothDirections (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignPrivateRun (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsNonInsertionsBeforeInitialPublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsAForeignPageStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts
+[       OK ] RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsIncompletePlanningContracts (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleContainsOnlyTheRequiredGlobalAdjacencyRoot (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleIncludesChangedCatalogBeforeAdjacency (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsInvalidPublicationFence (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsLargeValueWithoutNativeStore (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores
+[       OK ] RelocatableMetadataStoreTest.StreamedIndexBundleRejectsForeignStores (2 ms)
+[----------] 13 tests from RelocatableMetadataStoreTest (26 ms total)
+
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/0 (221 ms)
+[ RUN      ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1
+[       OK ] PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest.IncrementalPublicationRecoversOneCompleteGeneration/1 (219 ms)
+[----------] 2 tests from PartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest (441 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 3 test suites ran. (12082 ms total)
+[  PASSED  ] 20 tests.

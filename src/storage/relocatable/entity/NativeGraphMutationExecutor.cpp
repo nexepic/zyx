@@ -404,6 +404,12 @@ namespace graph::storage {
 		index_definitions_(std::move(indexDefinitions)), constraint_definitions_(std::move(constraintDefinitions)),
 		options_(options), system_catalog_(systemCatalog) {
 		const bool needsResolvers = system_catalog_ == nullptr;
+        const bool covered = options_.covered_adjacency_candidate_index != 0U;
+        if ((covered && ((options_.covered_adjacency_candidate_index >> 62U) ||
+                !options_.maximum_covered_adjacency_changes || options_.maximum_covered_adjacency_changes > 64U ||
+                !options_.covered_adjacency_workspace_bytes || options_.covered_adjacency_workspace_bytes > 1024U * 1024U)) ||
+            (!covered && (options_.maximum_covered_adjacency_changes || options_.covered_adjacency_workspace_bytes)))
+            throw std::invalid_argument("covered adjacency candidate requires an explicit namespace and bounded workspace");
 		if (!indexes_.usesMetadataStore(metadata_) || !vector_pages_.usesMetadataStore(metadata_) ||
 			!vector_manifests_.usesMetadataStore(metadata_) || !index_definitions_ || !constraint_definitions_ ||
 			(needsResolvers && (!tokens_.schema_token || !tokens_.property_key_token || !tokens_.property_key_name)) ||
@@ -523,6 +529,15 @@ namespace graph::storage {
 			transaction.adoptLogicalIdReservation(std::move(reservation));
 		}
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
+        const auto finalizeCoveredAdjacency = [&] {
+            if (!options_.covered_adjacency_candidate_index) return;
+            NativeMutationCheckpoint checkpoint(readControl.checkpoint);
+            auto memory = std::make_shared<query::execution::MaterializedByteBudget>(options_.covered_adjacency_workspace_bytes);
+            // Scalar indexes, constraints and counts have already been staged by
+            // this coordinator. Do not stage a second copy of their deltas.
+            transaction.stageCoveredAdjacencyCandidate(options_.covered_adjacency_candidate_index,
+                options_.maximum_covered_adjacency_changes, std::move(memory), &checkpoint);
+        };
 		NativeReadSession oldStateReads(snapshot);
         const auto coordinateNativeVectors = [&] {
             NativeGraphVectorDeltaOptions vectors;
@@ -575,7 +590,7 @@ namespace graph::storage {
         // Property-only native replacements use the field lifecycle writer,
         // rather than constructing competing ROW roots inside a native group.
         // Mixed ROW/native work uses the ordinary logical coordinator below.
-        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
+        if (!options_.covered_adjacency_candidate_index && snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
             !batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
             batch.node_label_replacements.empty() && batch.node_deletes.empty() && batch.edge_deletes.empty() &&
             !batch.creation_identity_plan) {
@@ -627,7 +642,7 @@ namespace graph::storage {
         }
         // A selected public patch keeps unchanged native fields borrowed and
         // stages only sets/removals, preserving Cypher removal semantics.
-        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && !patches.empty() &&
+        if (!options_.covered_adjacency_candidate_index && snapshot.superblock().hybrid_property_descriptor_root.isValid() && !patches.empty() &&
             batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
             batch.node_label_replacements.empty() && batch.node_deletes.empty() && batch.edge_deletes.empty() &&
             !batch.creation_identity_plan) {
@@ -676,7 +691,7 @@ namespace graph::storage {
         }
         // The native lifecycle coordinator owns the complete Node/Edge deletion
         // closure. Detach discovery is bounded and revalidated under the writer.
-        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
+        if (!options_.covered_adjacency_candidate_index && snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
             batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
             batch.node_label_replacements.empty() && !batch.creation_identity_plan &&
             (!batch.node_deletes.empty() || !batch.edge_deletes.empty())) {
@@ -1319,6 +1334,7 @@ namespace graph::storage {
 		if (!hasStagedWork) {
 			if (batch.creation_identity_plan.has_value() && (!batch.creation_identity_plan->node_id_ranges.empty() ||
 															 !batch.creation_identity_plan->edge_id_ranges.empty())) {
+                finalizeCoveredAdjacency();
                 transaction.native_graph_coordinated_ = true;
 				return {std::move(result), transaction.commit()};
 			}
@@ -1326,6 +1342,7 @@ namespace graph::storage {
 			transaction.rollback();
 			return {std::move(result), {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, base, {}}};
 		}
+        finalizeCoveredAdjacency();
         transaction.native_graph_coordinated_ = true;
 		const NativeGraphWriteCommitResult commit = transaction.commit();
 		if (!commit.committed()) {

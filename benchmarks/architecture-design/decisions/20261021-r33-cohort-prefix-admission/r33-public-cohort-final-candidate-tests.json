@@ -1,0 +1,32 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T21:28:43Z",
+  "time": "33.427s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T21:28:43Z",
+      "time": "33.427s",
+      "testsuite": [
+        {
+          "name": "PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePropertyCohortAdmission.cpp",
+          "line": 8,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T21:28:43Z",
+          "time": "33.427s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    }
+  ]
+}

@@ -13998,9 +13998,14 @@ namespace graph::query::execution {
 						if (!completed) {
 							return false;
 						}
-						if (!emitted && returnedVariables.empty()) {
+						if (!emitted && (returnedVariables.empty() || subquery.isOptionalMatch())) {
 							LogicalPlanReadRow output = std::move(retainedInput);
 							retainedInput = {};
+                            if (subquery.isOptionalMatch()) {
+                                for (const auto &variable : returnedVariables) output.values.emplace(variable, PropertyValue());
+                                admitReferenceResultBytes(outerReservation, logicalReadRowBytes(output, state.shared.context),
+                                    "logical-plan correlated OptionalMatch NULL output exceeded its shared byte bound");
+                            }
 							if (chargedReceiver != nullptr) {
 								return (*chargedReceiver)(std::move(output), std::move(outerReservation));
 							}

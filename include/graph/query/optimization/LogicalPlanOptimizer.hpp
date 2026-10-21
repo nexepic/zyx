@@ -43,6 +43,11 @@ public:
 	// ordinary root annotations or single-scan plans for those reads.
 	[[nodiscard]] virtual std::optional<LogicalCardinalityEstimate>
 	estimateJoinInput(const logical::LogicalOperator &root) const noexcept { return estimate(root); }
+    // Optional runtime retention-cost estimate in bytes for the materialized
+    // side. Unknown widths retain cardinality-based selection. This estimate
+    // never grants memory admission or changes row-window semantics.
+    [[nodiscard]] virtual std::optional<uint64_t>
+    estimateJoinMaterializedBytes(const logical::LogicalOperator &) const noexcept { return std::nullopt; }
 
 	// Exact counts for unconstrained single-label/all-node anchor scans only.
 	// Providers without reliable endpoint counts preserve the original anchor.
@@ -90,7 +95,7 @@ private:
 
 	[[nodiscard]] std::unique_ptr<logical::LogicalOperator> rewrite(
 			std::unique_ptr<logical::LogicalOperator> root, size_t depth, RewriteState &state,
-            bool allowAnchorReordering = true) const;
+            bool allowAnchorReordering = true, bool allowJoinReordering = true) const;
 
 	LogicalOptimizerOptions options_;
 };

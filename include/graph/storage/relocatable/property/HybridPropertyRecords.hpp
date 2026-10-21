@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -25,7 +26,7 @@ constexpr uint64_t RSS_HYBRID_MAX_ENTITY_ID = (UINT64_C(1) << 63U) - 1U;
 constexpr uint64_t RSS_HYBRID_MAX_GROUP_ID = 1 + (RSS_HYBRID_MAX_ENTITY_ID - 1) / 64;
 
 enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3 };
-enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1 };
+enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1, HPGM_COLUMN_MEMBERSHIP_BITMAP = 2 };
 enum class HybridPropertySource : uint8_t { HPS_COLUMN = 1, HPS_EXTENSION = 2 };
 
 namespace hybrid_property_detail {
@@ -70,12 +71,16 @@ struct HybridPropertyGroupRecord {
     Generation semantic_generation{};
     uint64_t live = 0;
     uint32_t memberships = 0, columns = 0;
+    SlottedSlotReference column_membership{};
     constexpr bool operator==(const HybridPropertyGroupRecord &) const = default;
 
     void validate() const {
         using namespace hybrid_property_detail;
-        require(validKind(owner_kind) && mode == HybridPropertyGroupMode::HPGM_HYBRID,
-            "invalid hybrid group namespace or mode");
+        require(validKind(owner_kind) && (mode == HybridPropertyGroupMode::HPGM_HYBRID ||
+            mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP), "invalid hybrid group namespace or mode");
+        if (mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+            require(columns && columns <= 4096U / 48U && column_membership.isValid(), "compact group has no bounded column membership record");
+        else require(column_membership == SlottedSlotReference{}, "legacy group has a column membership locator");
         validateGroup(group_id, live);
         require(semantic_generation.isValid() && live && columns <= memberships / 48U &&
             (!columns || std::popcount(live) >= 48), "invalid hybrid group identity or counts");
@@ -91,6 +96,11 @@ struct HybridPropertyGroupRecord {
         LittleEndianCodec::writeU64(bytes, 24, live);
         LittleEndianCodec::writeU32(bytes, 32, memberships);
         LittleEndianCodec::writeU32(bytes, 36, columns);
+        if (mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+            LittleEndianCodec::writeU64(bytes, 40, column_membership.page_id.value());
+            LittleEndianCodec::writeU16(bytes, 48, column_membership.slot_id);
+            LittleEndianCodec::writeU32(bytes, 52, column_membership.generation);
+        }
         return bytes;
     }
     [[nodiscard]] static HybridPropertyGroupRecord decode(std::span<const std::byte> bytes,
@@ -98,11 +108,16 @@ struct HybridPropertyGroupRecord {
         Generation visibleGeneration) {
         using namespace hybrid_property_detail;
         header(bytes, RSS_HYBRID_GROUP_MAGIC);
-        require(bytes.size() == 64, "hybrid group record has unexpected width"); zero(bytes, 40, 64);
+        require(bytes.size() == 64, "hybrid group record has unexpected width");
         HybridPropertyGroupRecord result{EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])),
             HybridPropertyGroupMode(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
             Generation(LittleEndianCodec::readU64(bytes, 16)), LittleEndianCodec::readU64(bytes, 24),
             LittleEndianCodec::readU32(bytes, 32), LittleEndianCodec::readU32(bytes, 36)};
+        if (result.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+            zero(bytes, 50, 52); zero(bytes, 56, 64);
+            result.column_membership = {PageId(LittleEndianCodec::readU64(bytes, 40)), LittleEndianCodec::readU16(bytes, 48),
+                LittleEndianCodec::readU32(bytes, 52)};
+        } else zero(bytes, 40, 64);
         result.validate();
         require(result.owner_kind == expectedKind && result.group_id == expectedGroup &&
             descriptorGeneration.isValid() && descriptorGeneration <= visibleGeneration &&
