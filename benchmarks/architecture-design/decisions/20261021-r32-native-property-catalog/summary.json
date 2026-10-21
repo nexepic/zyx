@@ -1,0 +1,15 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 6,
+  "passed": {
+    "default": 111,
+    "candidate": 203
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Native owner insertion and mixed/detach/cross-group lifecycle; token-membership validation for raw primitives and full resource/space/steady-state and R5/R7 gates.",
+  "resource_note": "Same1MiB field account, admitted temporary Catalog frontier/keys and retained credit through actual scalar-buffer destruction. Not full process RSS admission."
+}

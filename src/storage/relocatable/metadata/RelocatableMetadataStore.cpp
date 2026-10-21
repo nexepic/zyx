@@ -2531,6 +2531,7 @@ namespace graph::storage {
 		}
 		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
+        MetadataPageReadContext::Scope recoveryReads(snapshots_.createWriterReadContext(writer, current), *io_);
 		const CatalogEntry visible = catalog_.find(current, segmentId);
         const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
             std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
@@ -2576,6 +2577,7 @@ namespace graph::storage {
 		}
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
+        MetadataPageReadContext::Scope recoveryReads(snapshots_.createWriterReadContext(writer, current), *io_);
 		std::map<uint64_t, std::vector<PageLocation>> pagesBySegment;
 		locations_.visitPages(current, [this, &current, &pagesBySegment](const PageLocation &location) {
 			const CatalogEntry target = catalog_.find(current, location.segment_id);
@@ -2739,9 +2741,23 @@ namespace graph::storage {
 			PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
 			const CatalogSlotReservationPreparer *preparer, const EntityPagePoolReservationPreparer *entityPagePreparer,
 			std::span<PageLocation> mutableEntityPages, const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
+        // Only fresh homogeneous private scratch can use this physical path
+        // with native groups. No public page/extent/entity/Vector route is added.
+        const bool scratch = !requests.empty() && requests.size() <= 64U && preparer && !entityPagePreparer &&
+            pages.empty() && extents.empty() && entityPageNodes.empty() && entityPageEdges.empty() &&
+            manifests.empty() && mutableEntityPages.empty() &&
+            (requests.front().kind == SegmentKind::SGK_QUERY_SCRATCH || requests.front().kind == SegmentKind::SGK_BULK_SCRATCH) &&
+            std::ranges::all_of(requests, [&](const auto &entry) {
+                return entry.kind == requests.front().kind && entry.owner_id && entry.owner_id == requests.front().owner_id &&
+                    entry.segment_generation == Generation(1) && entry.state == SegmentState::SGS_SEALED && entry.require_absent;
+            });
+		MetadataWriteGuard writer = beginWrite(scratch);
 		const Superblock current = bootstrap_.recover();
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        if (scratch && current.hybrid_property_descriptor_root.isValid()) {
+            pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
+            batch.hybrid_property_publication_ = true;
+        }
 		const CatalogReservationPublicationRequest request{
 				requests,  pages,	 extents,  entityPageNodes,	   entityPageEdges,	  manifests,
 				firstSlot, lastSlot, preparer, entityPagePreparer, mutableEntityPages};
@@ -2787,10 +2803,24 @@ namespace graph::storage {
         if (nativeActive) {
             if (requests.size() > 64U)
                 throw FormatException(FormatError::FERR_INVALID_HEADER, "native immutable pool retirement exceeds its bound");
-            for (const auto &request : requests)
-                if (!isLargeValueMaintenancePool(catalog_.find(current, request.segment_id)))
+            std::set<uint64_t> scratch;
+            for (const auto &request : requests) {
+                const auto entry = catalog_.find(current, request.segment_id);
+                if (entry.kind == SegmentKind::SGK_BULK_SCRATCH) scratch.insert(entry.segment_id.value());
+                else if (!isLargeValueMaintenancePool(entry))
                     throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                        "native empty-pool retirement requires an immutable LargeValue or content-index pool");
+                        "native retirement requires an immutable maintenance pool or unreachable bulk scratch");
+            }
+            if (!scratch.empty()) {
+                locations_.visitPages(current, [&](const PageLocation &page) {
+                    if (scratch.contains(page.segment_id.value())) throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "native bulk scratch retirement found a public Page route");
+                });
+                locations_.visitExtents(current, [&](const ExtentLocation &extent) {
+                    if (scratch.contains(extent.segment_id.value())) throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "native bulk scratch retirement found a public Extent route");
+                });
+            }
         }
         MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
         if (nativeActive) batch.hybrid_property_publication_ = true;
@@ -2804,7 +2834,8 @@ namespace graph::storage {
 		LogSequenceNumber checkpoint, const MetadataPublishOptions &options) {
 		if(requests.empty() || requests.size()>64U || owner==0U || !checkpoint.isValid())
 			throw FormatException(FormatError::FERR_INVALID_HEADER,"query scratch release requires bounded owner identities");
-		MetadataWriteGuard writer=beginWrite();const Superblock current=bootstrap_.recover();
+		// The authenticated query-kind release below cannot change graph/native fields.
+		MetadataWriteGuard writer=beginWrite(true);const Superblock current=bootstrap_.recover();
 		std::vector<CatalogEntry> released;released.reserve(requests.size());std::set<uint64_t> ids;
 		for(const auto &request:requests){
 			const auto entry=catalog_.find(current,request.segment_id);
@@ -2820,6 +2851,10 @@ namespace graph::storage {
 		locations_.visitExtents(current,[&](const ExtentLocation &extent){if(ids.contains(extent.segment_id.value()))
 			throw FormatException(FormatError::FERR_INVALID_STATE,"query scratch is reachable from a public Extent Directory");});
 		MetadataWriteBatch batch(metadata_page_pool_,current,checkpoint);
+        if (current.hybrid_property_descriptor_root.isValid()) {
+            pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
+            batch.hybrid_property_publication_ = true;
+        }
 		std::ranges::sort(released,{},&CatalogEntry::segment_id);catalog_.prepareUpsert(batch,released);
 		for(const auto &entry:released){batch.reserveDataSlot(entry.physical_slot);allocator_.prepareSetAllocated(batch,entry.physical_slot,false);}
 		publishBatch(batch,writer,options);return batch.candidate();
@@ -2892,8 +2927,23 @@ namespace graph::storage {
             // probe every frame owner and reject a current route, even if its allocation bit is clear.
             const auto source = snapshots_.pinCurrentUnderWrite(writer, current);
             SharedPagePoolAllocator sourcePools(io_, *this, source);
+            std::set<uint64_t> scratch;
+            for (const auto &entry : retirements)
+                if (catalog_.find(current, entry.segment_id).kind == SegmentKind::SGK_BULK_SCRATCH)
+                    scratch.insert(entry.segment_id.value());
+            if (!scratch.empty()) {
+                locations_.visitPages(current, [&](const PageLocation &page) {
+                    if (scratch.contains(page.segment_id.value())) throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "native retired bulk scratch retains a public Page route");
+                });
+                locations_.visitExtents(current, [&](const ExtentLocation &extent) {
+                    if (scratch.contains(extent.segment_id.value())) throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "native retired bulk scratch retains a public Extent route");
+                });
+            }
             for (const auto &entry : retirements) {
                 const auto pool = catalog_.find(current, entry.segment_id);
+                if (pool.kind == SegmentKind::SGK_BULK_SCRATCH) continue;
                 if (pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL && pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL && pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL && pool.kind != SegmentKind::SGK_STATE_PAGE_POOL && !isLargeValueMaintenancePool(pool))
                     throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
                         "native retired-pool release requires a supported detached shared pool");
@@ -4158,12 +4208,16 @@ namespace graph::storage {
 	}
 
 	RelocatableTailTruncationResult RelocatableMetadataStore::truncateReleasedTail() {
-		MetadataWriteGuard writer = beginWrite();
+        // This operation changes no logical directory or field. Its existing
+        // census protects every allocated Catalog/retirement/metadata pool and
+        // refuses truncation while any source snapshot remains pinned.
+		MetadataWriteGuard writer = beginWrite(true);
 		const uint64_t originalBytes = io_->fileSize();
 		if (snapshots_.activeSnapshotCount() != 0U) {
 			return {RelocatableTailTruncationStatus::VTTS_AWAITING_SNAPSHOTS, originalBytes, originalBytes, 0};
 		}
 		const Superblock current = bootstrap_.recover();
+        MetadataPageReadContext::Scope tailReads(snapshots_.createWriterReadContext(writer, current), *io_);
 		if (originalBytes < current.data_region_offset) {
 			throw FormatException(FormatError::FERR_BUFFER_TOO_SMALL,
 								  "relocatable tail truncation found a data file shorter than its bootstrap region");

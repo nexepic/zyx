@@ -19,6 +19,8 @@
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestPage.hpp"
 
+namespace graph { struct PropertyValue; }
+
 namespace graph::storage {
 
 	class MetadataSnapshotPin;
@@ -65,6 +67,16 @@ namespace graph::storage {
 		planNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId, std::span<const uint64_t> oldLabels,
 				 const PropertyCollectionRoot *oldProperties, std::span<const uint64_t> newLabels,
 				 const PropertyCollectionRoot *newProperties) const;
+
+        // Callbacks borrow selected values only for the duration of planning.
+        // The caller authenticates the owner and retains the source snapshot.
+        using PropertyValueLookup = std::function<const PropertyValue *(uint32_t)>;
+        [[nodiscard]] std::vector<NativeVectorMutation>
+        planNodeValues(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+            std::span<const uint64_t> oldLabels, const PropertyValueLookup &oldValues,
+            std::span<const uint64_t> newLabels, const PropertyValueLookup &newValues) const;
+
+        [[nodiscard]] const utils::OwnedStdVector<IndexDefinition> &definitions() const { return definitions_; }
 
 	private:
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyKey(const MetadataSnapshotPin &snapshot,

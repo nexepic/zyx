@@ -1,0 +1,285 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*:HybridPropertyInlineMutationTest.*:HybridPropertyOwnerDeletionTest.*:HybridPropertyMapTransactionsTest.*:HybridPropertyLargeMutationTest.*:HybridPropertyNativeJournalTest.*
+[==========] Running 128 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 22 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (8 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats
+[       OK ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats (9 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether
+[       OK ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether (811 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+[       OK ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse (170 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+[       OK ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount (5594 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable
+[       OK ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable (446 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys
+[       OK ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys (177 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration
+[       OK ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration (793 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner
+[       OK ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner (540 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin (141 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether (226 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate
+[       OK ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate (2540 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes
+[       OK ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes (19 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin (34 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges
+[       OK ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges (232 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster
+[       OK ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster (155 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections (695 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly (572 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry
+[       OK ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry (153 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsIncidentEdgesAndAcceptsTheirLogicallyEmptyMapAfterRemoval
+[       OK ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsIncidentEdgesAndAcceptsTheirLogicallyEmptyMapAfterRemoval (96 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology
+[       OK ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology (480 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB
+[       OK ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB (5545 ms)
+[----------] 22 tests from HybridPropertyOwnerDeletionTest (19445 ms total)
+
+[----------] 8 tests from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo
+[       OK ] HybridPropertyInlineMutationTest.DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo (6 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen
+[       OK ] HybridPropertyInlineMutationTest.ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen (351 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality
+[       OK ] HybridPropertyInlineMutationTest.InlineKindsRoundTripAndNoopUsesRecursiveRowEquality (202 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback
+[       OK ] HybridPropertyInlineMutationTest.NativeStagingOwnsPayloadAcrossMoveConflictAndRollback (19 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging
+[       OK ] HybridPropertyInlineMutationTest.BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging (18 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields
+[       OK ] HybridPropertyInlineMutationTest.ComplexWriteABRecoveryAndErasePreserveAtomicFields (86 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry
+[       OK ] HybridPropertyInlineMutationTest.CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry (345 ms)
+[ RUN      ] HybridPropertyInlineMutationTest.RepeatedSmallWritesReusePhysicalFramesWithoutGrowingPropertyPools
+[       OK ] HybridPropertyInlineMutationTest.RepeatedSmallWritesReusePhysicalFramesWithoutGrowingPropertyPools (602 ms)
+[----------] 8 tests from HybridPropertyInlineMutationTest (1632 ms total)
+
+[----------] 8 tests from HybridPropertyLargeMutationTest
+[ RUN      ] HybridPropertyLargeMutationTest.DisabledOrUnconvertedLargeWritesLeaveTheSourceUntouched
+[       OK ] HybridPropertyLargeMutationTest.DisabledOrUnconvertedLargeWritesLeaveTheSourceUntouched (6 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop
+[       OK ] HybridPropertyLargeMutationTest.MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop (146 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.AColumnDemotesOnlyItsFieldWhenAReplacementNeedsANewLargeValue
+[       OK ] HybridPropertyLargeMutationTest.AColumnDemotesOnlyItsFieldWhenAReplacementNeedsANewLargeValue (408 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.ReplacingRemovingAndDeletingOwnersRetainsSharedGlobalContentAndOldPins
+[       OK ] HybridPropertyLargeMutationTest.ReplacingRemovingAndDeletingOwnersRetainsSharedGlobalContentAndOldPins (134 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.LargeListNoopFollowsRowSignedZeroAndNanEqualityWithoutIdentityChurn
+[       OK ] HybridPropertyLargeMutationTest.LargeListNoopFollowsRowSignedZeroAndNanEqualityWithoutIdentityChurn (183 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.LargeWriteABRecoveryAndPreparationCancellationPublishNoPartialIdentity
+[       OK ] HybridPropertyLargeMutationTest.LargeWriteABRecoveryAndPreparationCancellationPublishNoPartialIdentity (194 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.NativeTransactionsOwnLargeInputsAcrossMoveConflictRollbackAndPreparedCancellation
+[       OK ] HybridPropertyLargeMutationTest.NativeTransactionsOwnLargeInputsAcrossMoveConflictRollbackAndPreparedCancellation (151 ms)
+[ RUN      ] HybridPropertyLargeMutationTest.CorruptLargeContentCannotBeSilentlyDiscardedByRemoveOrOwnerDeletion
+[       OK ] HybridPropertyLargeMutationTest.CorruptLargeContentCannotBeSilentlyDiscardedByRemoveOrOwnerDeletion (29 ms)
+[----------] 8 tests from HybridPropertyLargeMutationTest (1256 ms total)
+
+[----------] 15 tests from HybridPropertyNativeJournalTest
+[ RUN      ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract
+[       OK ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract (8 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity
+[       OK ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity (5 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity (123 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication
+[       OK ] HybridPropertyNativeJournalTest.UnknownStateRefusesColumnFieldAndMapUpdatesBeforeAnyPublication (24 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite (17 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable
+[       OK ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable (458 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame (243 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan
+[       OK ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan (548 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner
+[       OK ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner (137 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence
+[       OK ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence (14 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity
+[       OK ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity (132 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain
+[       OK ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain (778 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose
+[       OK ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose (209 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication
+[       OK ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication (134 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner
+[       OK ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner (137 ms)
+[----------] 15 tests from HybridPropertyNativeJournalTest (2976 ms total)
+
+[----------] 12 tests from HybridPropertyMapTransactionsTest
+[ RUN      ] HybridPropertyMapTransactionsTest.DefaultFormatRejectsMapStagingWithoutChangingTheRowSource
+[       OK ] HybridPropertyMapTransactionsTest.DefaultFormatRejectsMapStagingWithoutChangingTheRowSource (2 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.OwnerProbeIsSnapshotBoundAndDistinguishesPropertylessLiveOwnersFromMissingOwners
+[       OK ] HybridPropertyMapTransactionsTest.OwnerProbeIsSnapshotBoundAndDistinguishesPropertylessLiveOwnersFromMissingOwners (29 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.MergeOwnsChangedValuesPreservesUnmentionedFieldsAndKeepsStoredNullDistinctFromMissing
+[       OK ] HybridPropertyMapTransactionsTest.MergeOwnsChangedValuesPreservesUnmentionedFieldsAndKeepsStoredNullDistinctFromMissing (227 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.ReplaceAndEmptyMapRemoveOnlyFieldsAndEmptyMergeCommitsAFencedNoop
+[       OK ] HybridPropertyMapTransactionsTest.ReplaceAndEmptyMapRemoveOnlyFieldsAndEmptyMergeCommitsAFencedNoop (153 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.MapNoopPreservesSignedZeroButRecursiveNaNStillAdvancesTheSemanticFence
+[       OK ] HybridPropertyMapTransactionsTest.MapNoopPreservesSignedZeroButRecursiveNaNStillAdvancesTheSemanticFence (39 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.MoveRollbackAndConflictingCommitRetainOneImmutableRequestAndRefundItsAccount
+[       OK ] HybridPropertyMapTransactionsTest.MoveRollbackAndConflictingCommitRetainOneImmutableRequestAndRefundItsAccount (27 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.StageQuotaAndCancellationKeepTheTransactionActiveAndCommitEntryCancellationRetainsTheRequest
+[       OK ] HybridPropertyMapTransactionsTest.StageQuotaAndCancellationKeepTheTransactionActiveAndCommitEntryCancellationRetainsTheRequest (22 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.DuplicateTokensOwnersCrossGroupsAndMoreThan64ActualChangesRefuseBeforePublication
+[       OK ] HybridPropertyMapTransactionsTest.DuplicateTokensOwnersCrossGroupsAndMoreThan64ActualChangesRefuseBeforePublication (66 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.WideMapWithOneChangedValueCopiesOnlyTheFieldAndGroupFrames
+[       OK ] HybridPropertyMapTransactionsTest.WideMapWithOneChangedValueCopiesOnlyTheFieldAndGroupFrames (1655 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.EdgeMapReplacementPreservesTheMasterEdgeAndBothAdjacencyDirections
+[       OK ] HybridPropertyMapTransactionsTest.EdgeMapReplacementPreservesTheMasterEdgeAndBothAdjacencyDirections (156 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.UnchangedLargeMapFieldReusesItsValueAndRemovingItDoesNotClaimGlobalRetirement
+[       OK ] HybridPropertyMapTransactionsTest.UnchangedLargeMapFieldReusesItsValueAndRemovingItDoesNotClaimGlobalRetirement (163 ms)
+[ RUN      ] HybridPropertyMapTransactionsTest.MergingThe48thHomogeneousMemberDoesNotAutomaticallyPromoteANewField
+[       OK ] HybridPropertyMapTransactionsTest.MergingThe48thHomogeneousMemberDoesNotAutomaticallyPromoteANewField (500 ms)
+[----------] 12 tests from HybridPropertyMapTransactionsTest (3046 ms total)
+
+[----------] 28 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+[       OK ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (318 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (247 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (180 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+[       OK ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers (239 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks
+[       OK ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks (241 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts
+[       OK ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts (190 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend
+[       OK ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend (195 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation
+[       OK ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation (274 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode
+[       OK ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode (72 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation
+COVERED_CONTROL_COST edges=90 key_only=1703936 candidate=1835008 retired=0 allocated_peak=1835008 file=5373952
+[       OK ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation (170 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges
+[       OK ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges (325 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime
+[       OK ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime (212 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths
+[       OK ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths (317 ms)
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (0 ms)
+[ RUN      ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts
+[       OK ] HybridPropertyQueryParityTest.SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts (2323 ms)
+[ RUN      ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.FieldUpdatesPreserveNonPropertyCatalogStateAndSameExecutorResults (1527 ms)
+[ RUN      ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults
+[       OK ] HybridPropertyQueryParityTest.ScalarIndexAndNativeFieldPublishTogetherWithOldPinAndSameExecutorResults (1556 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses
+[       OK ] HybridPropertyQueryParityTest.UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses (642 ms)
+[ RUN      ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion
+[       OK ] HybridPropertyQueryParityTest.VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion (947 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo
+[       OK ] HybridPropertyQueryParityTest.IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo (269 ms)
+[ RUN      ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex
+[       OK ] HybridPropertyQueryParityTest.MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex (229 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication
+[       OK ] HybridPropertyQueryParityTest.OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication (228 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing
+[       OK ] HybridPropertyQueryParityTest.OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing (281 ms)
+[ RUN      ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors
+[       OK ] HybridPropertyQueryParityTest.OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors (747 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication
+[       OK ] HybridPropertyQueryParityTest.NonNullConstraintAllowsValidFieldPublication (921 ms)
+[ RUN      ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes
+[       OK ] HybridPropertyQueryParityTest.IsolatedOwnerDeletionCoordinatesCatalogCountsAndLabelPropertyIndexes (908 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination
+[       OK ] HybridPropertyQueryParityTest.UnknownCatalogControlNamespaceCannotBypassFieldCoordination (222 ms)
+[ RUN      ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap
+[       OK ] HybridPropertyQueryParityTest.UnrelatedTokenDictionarySizeIsNotAFieldMutationLifetimeCap (3816 ms)
+[----------] 28 tests from HybridPropertyQueryParityTest (17609 ms total)
+
+[----------] 35 tests from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeAndScalarKeysFollowFieldRemovalAndReinsertion (941 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnindexedFieldChangeDoesNotCopyAnUnchangedScalarIndexRoot (871 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange
+[       OK ] HybridPropertyIndexedLifecycleTest.ScalarIndexTracksCanonicalNumericTypeChange (300 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion
+[       OK ] HybridPropertyIndexedLifecycleTest.BootstrapFaultKeepsScalarIndexAndFieldInTheSameRecoveredVersion (361 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion
+[       OK ] HybridPropertyIndexedLifecycleTest.EmptyPartialIndexKeepsItsRootAndAcceptsReinsertion (287 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges
+[       OK ] HybridPropertyIndexedLifecycleTest.UnmatchedPartialIndexDoesNotCopyItsRootWhenItsPropertyChanges (822 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingOldIndexKeyRefusesFieldPublicationInsteadOfRepairingItSilently (268 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication
+[       OK ] HybridPropertyIndexedLifecycleTest.ExistingNewGhostKeyRefusesFieldPublication (263 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterIndexImagePreparationPublishesNeitherRootAndAllowsRetry (252 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys
+[       OK ] HybridPropertyIndexedLifecycleTest.MultipleOwnersShareOneScalarLeafPreparationAndPreserveAllOldKeys (864 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgePropertyIndexAndCanonicalTopologyRemainConsistentAfterFieldUpdate (795 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted
+[       OK ] HybridPropertyIndexedLifecycleTest.OversizedIndexedValueIsStoredAndOnlyItsAccelerationEntryIsOmitted (1710 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.NonNullViolationRefusesBeforePrivateIoAndKeepsIndexAndOldPin (283 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue
+[       OK ] HybridPropertyIndexedLifecycleTest.IntegerConstraintRejectsDoubleButAllowsValidChangeAndMissingValue (380 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue
+[       OK ] HybridPropertyIndexedLifecycleTest.RelationshipTypeConstraintChecksFinalNativeEdgeValue (312 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueSupportAndScalarIndexFollowValidWritesAndRefuseDuplicates (1292 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate
+[       OK ] HybridPropertyIndexedLifecycleTest.CompositeNodeKeyAllowsAtomicSwapAndRefusesMissingOrBatchDuplicate (376 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeUniqueSupportSurvivesBothBootstrapInterruptionBoundaries (1189 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit
+[       OK ] HybridPropertyIndexedLifecycleTest.UniqueConstraintStillChecksValuesBeyondScalarIndexKeyLimit (381 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.MissingConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (283 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo
+[       OK ] HybridPropertyIndexedLifecycleTest.GhostConstraintSupportEntryRefusesWithoutRepairOrPrivateIo (283 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted
+[       OK ] HybridPropertyIndexedLifecycleTest.LastUniqueSupportKeyKeepsActiveEmptyRootAndCanBeReinserted (307 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot
+[       OK ] HybridPropertyIndexedLifecycleTest.UnchangedUniqueKeyAndNonmatchingOwnerKeepSupportPhysicalRoot (280 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterConstraintImagesKeepsBothVersionsAndAllowsRetry (316 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts
+[       OK ] HybridPropertyIndexedLifecycleTest.IsolatedNodeDeletionRemovesAllDerivedKeysAndUpdatesKnownCounts (1302 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch
+[       OK ] HybridPropertyIndexedLifecycleTest.IncidentNodeRefusalKeepsCatalogIndexesAndPhysicalEpoch (256 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults
+[       OK ] HybridPropertyIndexedLifecycleTest.EdgeDeletionPublishesTopologySupportAndCountsAcrossBootstrapFaults (1155 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionPreservesUnknownStatisticsAndDoesNotRewriteCatalog (357 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesGraphCountUnderflowBeforePhysicalIo (272 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo
+[       OK ] HybridPropertyIndexedLifecycleTest.OwnerDeletionRefusesCompleteLabelCountUnderflowBeforePhysicalIo (266 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin
+[       OK ] HybridPropertyIndexedLifecycleTest.CancellationAfterCatalogImagesKeepsEntityIndexesCountsAndOldPin (348 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots
+[       OK ] HybridPropertyIndexedLifecycleTest.CatalogDeletionQuotaFailureRefundsAndPreservesAllPublishedRoots (394 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts
+[       OK ] HybridPropertyIndexedLifecycleTest.SameExecutorPreservesUnsortedDuplicateNeighborGathersAcrossBothLayouts (2325 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion
+[       OK ] HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion (4024 ms)
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot
+[       OK ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot (1605 ms)
+[----------] 35 tests from HybridPropertyIndexedLifecycleTest (25739 ms total)
+
+[----------] Global test environment tear-down
+[==========] 128 tests from 7 test suites ran. (71705 ms total)
+[  PASSED  ] 128 tests.

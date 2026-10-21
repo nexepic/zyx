@@ -1,0 +1,37 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "tests": {
+    "seven-default": {
+      "tests": 195,
+      "failed": 0
+    },
+    "seven-candidate": {
+      "tests": 281,
+      "failed": 0
+    },
+    "namespace-fault-candidate": {
+      "tests": 1,
+      "failed": 0
+    },
+    "extra-candidate": {
+      "tests": 59,
+      "failed": 10
+    },
+    "extra-default-default": {
+      "tests": 59,
+      "failed": 0
+    },
+    "head-metadata-control": {
+      "tests": 59,
+      "failed": 10
+    }
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "control_note": "Two metadata archive members rebuilt from HEAD with current headers and remaining archive members; not a full HEAD checkout. Exactly the same10 failed physical allocator cases as current candidate controls.",
+  "remaining": "Native owner insertion, new property tokens, cross-group/mixed/detach lifecycle and production space/resource/steady-state gates; R5/R7.",
+  "source_note": "Source captured before subsequent shared test fixture extraction. Namespace-fault case is included in281 primary candidate tests and must not be counted twice."
+}

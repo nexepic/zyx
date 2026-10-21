@@ -415,7 +415,7 @@ protected:
 		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
 		ASSERT_TRUE(data->is_open());
 		auto dataIo = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-		auto metadata = RelocatableMetadataStore::open(dataIo);
+		auto metadata = RelocatableMetadataStore::openReadOnly(dataIo);
 		MetadataSnapshotPin snapshot = metadata->openSnapshot();
 		const IndexRootLocation root = metadata->findIndexRoot(snapshot, indexId);
 		const PageLocation location = metadata->findPageLocation(snapshot, root.root_page_id);

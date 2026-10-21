@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 11,
+  "passed": {
+    "candidate": 318,
+    "default": 104
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Cross-group/kind owner deletion and detach, ROW/native mixed work, full production/resource/space/steady-state/R5/R7 admission."
+}

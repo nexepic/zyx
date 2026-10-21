@@ -1,0 +1,11 @@
+{
+  "default-module-build.log": "4d50c4a59b6bc219941d1e5ff41b4d448990a0c55f37e6a8b582fd5a531af33b",
+  "candidate-verified-build.log": "17540529b52eb825a763a87f8ab240f50a776c499eeb8fac391a15205b702749",
+  "zh.md": "cdeffd08a11f8e21ce017c0c96e5e0065516ad1e78f70e4dd42f9554356c44ea",
+  "test-change.patch": "49bc245941ae62a2ebac663cdb7c0c4b45065656ed55eec55f0ea44ec566eeb9",
+  "summary.json": "676c607de4c3c1db1742c87c660115af9830a6ab63344d1f17e4fa54a78f7639",
+  "test_HybridPropertyOwnerInsertionPublication.cpp": "0250379202b8311aa7312301f4f00ea2e0894efbd68aaa1319cff5d3b947f8ba",
+  "en.md": "783c0032d755ad7349e30eab0a371fef1cb628934907c100715920042bf7a925",
+  "candidate-tests.log": "f637d26b90ce37dccf932a1ec24c47c2d32564be253f215357249a80ece153be",
+  "candidate-tests.json": "29484e113550cb2fa05a2c07744ae2a7e34d9920917aa286cf963203c969c24e"
+}

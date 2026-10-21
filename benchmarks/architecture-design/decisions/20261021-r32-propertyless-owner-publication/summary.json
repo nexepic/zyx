@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 7,
+  "passed": {
+    "candidate": 98,
+    "default": 7
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Property-bearing creation, mixed/detach/cross-group lifecycle and full production/R5/R7 admission."
+}

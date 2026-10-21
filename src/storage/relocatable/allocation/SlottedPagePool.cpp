@@ -573,13 +573,21 @@ namespace graph::storage {
 																			 SegmentId segmentId) const {
 		PoolFreeSpaceIndex rebuilt;
 		rebuilt.metadata_generation = snapshot.superblock().generation;
+        const CatalogEntry pool = metadata_.findCatalog(snapshot, segmentId);
 		for (const PageLocation &location: metadata_.findPageLocationsForSegment(snapshot, segmentId)) {
 			if (location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES) {
 				throw FormatException(
 						FormatError::FERR_INVALID_STATE,
 						"relocatable slotted page free-space index exceeds the slotted-page payload limit");
 			}
-			const SharedPagePoolContents contents = pool_.read(snapshot, location.page_id);
+			// Numeric owners are shared by ROW and native fields. Authenticate
+            // the native page through its private read route, but never offer it
+            // as ordinary slotted allocation capacity.
+            const bool native = RSS_HYBRID_PROPERTY_FORMAT_ENABLED &&
+                pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                pool_.readPageOwner(pool, location.page_index).kind == PageOwnerKind::POK_HYBRID_PROPERTY;
+            const SharedPagePoolContents contents = pool_.readKnownLocation(
+                snapshot, pool, location, BufferPoolReadHint::BPRH_NORMAL, native);
 			const PageOwnerKind ownerKind = contents.owner.kind;
 			if (!SlottedPage::supportsOwnerKind(ownerKind)) {
 				continue;
@@ -595,6 +603,7 @@ namespace graph::storage {
 									  "relocatable slotted page pool contains incompatible owner kinds");
 			}
 			rebuilt.owner_kind = ownerKind;
+            if (native) continue;
 			if (!rebuilt.pages.pages
 						 .emplace(location.page_id,
 								  OwnerFreeSpaceIndex::PageInfo{location, stats.reusable_free_slot_count})

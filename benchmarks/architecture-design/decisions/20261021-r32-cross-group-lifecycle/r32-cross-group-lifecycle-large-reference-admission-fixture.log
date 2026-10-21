@@ -1,0 +1,61 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMultipleGroupsTest.*
+[==========] Running 22 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 22 tests from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (2 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots
+[       OK ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots (1261 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories
+[       OK ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories (772 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently
+[       OK ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently (128 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged (602 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory (800 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup
+[       OK ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup (937 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable
+[       OK ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable (1046 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup
+[       OK ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup (621 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ReopenedConversionFindsNeighbourCapacityWithoutDependingOnAnInMemoryHint
+[       OK ] HybridPropertyMultipleGroupsTest.ReopenedConversionFindsNeighbourCapacityWithoutDependingOnAnInMemoryHint (376 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.LifecycleSetUpdates64ExistingColumnCellsAcrossTwoGroupsAtomically
+[       OK ] HybridPropertyMultipleGroupsTest.LifecycleSetUpdates64ExistingColumnCellsAcrossTwoGroupsAtomically (773 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.MapReplacementCanChangeColumnsInTwoNativeGroupsInOneTransaction
+[       OK ] HybridPropertyMultipleGroupsTest.MapReplacementCanChangeColumnsInTwoNativeGroupsInOneTransaction (549 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupColumnChangesRecoverTogetherAcrossBothBootstrapInterruptions
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupColumnChangesRecoverTogetherAcrossBothBootstrapInterruptions (583 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupDemotionChangesOnlyItsFieldAndPreservesTheOtherGroup
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupDemotionChangesOnlyItsFieldAndPreservesTheOtherGroup (799 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupFieldsAndTheirSharedScalarIndexRecoverInOneGeneration
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupFieldsAndTheirSharedScalarIndexRecoverInOneGeneration (974 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupColumnQuotaRefusesWithoutChangingEitherGroup
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupColumnQuotaRefusesWithoutChangingEitherGroup (123 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.MembershipRemovalAndReinsertionMergeEachGroupsCounters
+[       OK ] HybridPropertyMultipleGroupsTest.MembershipRemovalAndReinsertionMergeEachGroupsCounters (554 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.TwoGroupsDemoteTogetherAndLaterIntegersRemainExtensions
+[       OK ] HybridPropertyMultipleGroupsTest.TwoGroupsDemoteTogetherAndLaterIntegersRemainExtensions (1039 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SharedExtensionPageSurvivesDemotionRemovalAndGrowthInDifferentGroups
+[       OK ] HybridPropertyMultipleGroupsTest.SharedExtensionPageSurvivesDemotionRemovalAndGrowthInDifferentGroups (836 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupDemotionRecoversAllOwnerColumnAndExtensionRootsTogether
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupDemotionRecoversAllOwnerColumnAndExtensionRootsTogether (1588 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupMapReplacementCombinesDemotionRemovalAndNewExtensions
+[       OK ] HybridPropertyMultipleGroupsTest.CrossGroupMapReplacementCombinesDemotionRemovalAndNewExtensions (807 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.CrossGroupLargeValueDedupPreservesTheOtherOwnerAndOldPinsOnRemoval
+unknown file: Failure
+C++ exception with description "hybrid large reference requires retained-buffer admission" thrown in the test body.
+
+[  FAILED  ] HybridPropertyMultipleGroupsTest.CrossGroupLargeValueDedupPreservesTheOtherOwnerAndOldPinsOnRemoval (163 ms)
+[----------] 22 tests from HybridPropertyMultipleGroupsTest (15345 ms total)
+
+[----------] Global test environment tear-down
+[==========] 22 tests from 1 test suite ran. (15345 ms total)
+[  PASSED  ] 21 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyMultipleGroupsTest.CrossGroupLargeValueDedupPreservesTheOtherOwnerAndOldPinsOnRemoval
+
+ 1 FAILED TEST

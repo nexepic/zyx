@@ -1,0 +1,44 @@
+{
+  "base_commit": "e6822035f920b731111bf25b710edf9f19d840f2",
+  "scope": [
+    "R3.2"
+  ],
+  "accepted_total": 14,
+  "denominator": 24,
+  "percentage": 58.3,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "related_module_count": 57,
+  "tests": {
+    "related-default": {
+      "registered": 907,
+      "passed": 907,
+      "skipped": 0,
+      "binary_sha256": "d39855703c9a3e2d63ddaabd15c79cfde8606e355e3405e30f113e5052eedbe4"
+    },
+    "related-candidate": {
+      "registered": 1237,
+      "passed": 1236,
+      "skipped": 1,
+      "binary_sha256": "dbecd549b32f18f7ff81e7dff352362eabc4af8b3cbebb0a5aaffc8629281fc0"
+    },
+    "final-affected-default": {
+      "registered": 10,
+      "passed": 10,
+      "skipped": 0,
+      "binary_sha256": "c86f6de93ff21d9e5f884c5da32ec799b53a2b216c10fdd48325b9d9d5cb0a49"
+    },
+    "final-affected-candidate": {
+      "registered": 15,
+      "passed": 15,
+      "skipped": 0,
+      "binary_sha256": "a0e43c4583222f40f07d581730bdba35080837f5845851f848d43c167adb9b2c"
+    }
+  },
+  "validation_note": "Related-module runs preceded the dimension guard and two corrupt-schema tests; final-affected runs rebuilt the current source and exercised those changes. Broad and final binaries have separate hashes.",
+  "excluded": "Unaffected HybridPropertyMatureShapeCostsTest has separately frozen evidence.",
+  "performance_timing_run": false,
+  "full_repository_test_run": false,
+  "remaining": "Actual Vector delta publication and ordinary topology integration; production space/resource gates and remaining R5/R7.",
+  "receipt_correction": "GoogleTest JSON has no top-level skipped count; derive it from per-test result==SKIPPED. The original parser mistake is retained separately; raw test reports are unchanged."
+}

@@ -1,0 +1,45 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerInsertionPublicationTest.*
+[==========] Running 8 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField (169 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PropertylessEdgePublishesEntityAdjacencyAndLiveBitThenAcceptsItsFirstColumnField (194 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialNodePublicationRecoversNeitherEntityNorLiveBit (157 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteNodePublicationRecoversEntityAndLiveBitTogether (157 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialEdgePublicationRecoversNeitherEntityNorLiveBit (182 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteEdgePublicationRecoversEntityAndLiveBitTogether (219 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodeRemainsGuardedUntilItsFieldCoordinatorIsInstalled
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:68: Failure
+Expected equality of these values:
+  error.error()
+    Which is: 1-byte object <09>
+  FormatError::FERR_UNSUPPORTED_VERSION
+    Which is: 1-byte object <03>
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodeRemainsGuardedUntilItsFieldCoordinatorIsInstalled (150 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgeRemainsGuardedUntilItsFieldCoordinatorIsInstalled
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:68: Failure
+Expected equality of these values:
+  error.error()
+    Which is: 1-byte object <09>
+  FormatError::FERR_UNSUPPORTED_VERSION
+    Which is: 1-byte object <03>
+
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgeRemainsGuardedUntilItsFieldCoordinatorIsInstalled (169 ms)
+[----------] 8 tests from HybridPropertyOwnerInsertionPublicationTest (1402 ms total)
+
+[----------] Global test environment tear-down
+[==========] 8 tests from 1 test suite ran. (1402 ms total)
+[  PASSED  ] 6 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingNodeRemainsGuardedUntilItsFieldCoordinatorIsInstalled
+[  FAILED  ] HybridPropertyOwnerInsertionPublicationTest.PropertyBearingEdgeRemainsGuardedUntilItsFieldCoordinatorIsInstalled
+
+ 2 FAILED TESTS

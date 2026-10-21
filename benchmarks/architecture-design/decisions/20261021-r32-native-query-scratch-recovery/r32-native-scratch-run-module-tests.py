@@ -1,0 +1,8 @@
+import json,subprocess,os,sys
+from pathlib import Path
+mode=sys.argv[1];build='/workspace/zyx/buildDir' if mode=='default' else '/workspace/zyx-build-work-candidate';r=Path('/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume')
+obj=['CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/'+p+'.cpp.o' for p in ['index/test_NativeBulkRun','backend/test_RelocatableQueryScratch','property/test_HybridPropertyQueryParity','entity/test_NativeGraphWritePlanner_Vector','entity/test_NativeVectorMutationPlanner','backend/test_RelocatableLogicalGraphReadSnapshot','schema/test_ConstraintMutationValidator']]
+with open(str(r/f'r32-native-scratch-{mode}-verified-build.log'),'w') as out:subprocess.run(['cmake','--build',build,'--target','zyx_core',*obj,'-j3'],stdout=out,stderr=subprocess.STDOUT,check=True)
+template='range-default-final-link.json' if mode=='default' else 'range-candidate-link.json';a=[v for v in json.load(open(r/template)) if not v.endswith('.o')];i=a.index('-o');a[i:i]=obj;a[a.index('-o')+1]=str(r/f'r32-native-scratch-{mode}-tests');a=[('--dependency-file=/tmp/zyx-r32-native-scratch-'+mode+'.d') if v.startswith('--dependency-file=') else v for v in a];subprocess.run(a,cwd=build,check=True)
+with open(str(r/f'r32-native-scratch-{mode}-tests.log'),'w') as out:p=subprocess.run([str(r/f'r32-native-scratch-{mode}-tests'),'--gtest_output=json:'+str(r/f'r32-native-scratch-{mode}-tests.json')],cwd=build,env=dict(os.environ,LLVM_PROFILE_FILE='/tmp/zyx-r32-native-scratch-%p.profraw'),stdout=out,stderr=subprocess.STDOUT)
+print(mode,p.returncode,flush=True);sys.exit(p.returncode)

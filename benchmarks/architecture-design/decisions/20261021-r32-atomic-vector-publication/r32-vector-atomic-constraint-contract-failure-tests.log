@@ -1,0 +1,40 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.NativeVector*:HybridPropertyQueryParityTest.NativeIndexedOwnerDeletion*
+[==========] Running 11 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 11 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen
+[       OK ] HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen (1797 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic
+[       OK ] HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic (3186 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether
+[       OK ] HybridPropertyQueryParityTest.NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether (2435 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback (263 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback
+[       OK ] HybridPropertyQueryParityTest.NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback (259 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries
+[       OK ] HybridPropertyQueryParityTest.NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries (397 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves
+[       OK ] HybridPropertyQueryParityTest.NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves (1797 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount
+[       OK ] HybridPropertyQueryParityTest.NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount (2495 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork
+[       OK ] HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork (1804 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication
+[       OK ] HybridPropertyQueryParityTest.NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication (2279 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:372: Failure
+Expected: (void)ready.commit() throws an exception of type FormatException.
+  Actual: it throws std::runtime_error with description "Constraint violation: 'unique_embedding' has a duplicate key".
+
+[  FAILED  ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo (1910 ms)
+[----------] 11 tests from HybridPropertyQueryParityTest (18628 ms total)
+
+[----------] Global test environment tear-down
+[==========] 11 tests from 1 test suite ran. (18628 ms total)
+[  PASSED  ] 10 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo
+
+ 1 FAILED TEST

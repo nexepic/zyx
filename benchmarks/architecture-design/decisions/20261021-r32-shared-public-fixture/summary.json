@@ -1,0 +1,14 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "test_modules": 2,
+  "passed": {
+    "default": 14,
+    "candidate": 100
+  },
+  "change": "Extract common fixture into a named shared namespace and split public/native lifecycle cases. All test files remain below2000lines.",
+  "performance_benchmark": false,
+  "full_repository_suite": false
+}

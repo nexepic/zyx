@@ -1,0 +1,186 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 85 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 85 tests from RelocatableStorageBackendSchemaTest
+[ RUN      ] RelocatableStorageBackendSchemaTest.BuildsHistoricalScalarEntriesPublishesDefinitionsAndDropsThem
+[       OK ] RelocatableStorageBackendSchemaTest.BuildsHistoricalScalarEntriesPublishesDefinitionsAndDropsThem (50 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.DerivesStableNamesForUnnamedScalarAndVectorIndexes
+[       OK ] RelocatableStorageBackendSchemaTest.DerivesStableNamesForUnnamedScalarAndVectorIndexes (28 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsInvalidVectorMetricsBeforePublishingSchema
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsInvalidVectorMetricsBeforePublishingSchema (14 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsStaleSemanticManifestBeforeVectorTraining
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsStaleSemanticManifestBeforeVectorTraining (36 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.MaintainsUniqueConstraintSupportTreeWithoutPublishingPublicIndexMetadata
+[       OK ] RelocatableStorageBackendSchemaTest.MaintainsUniqueConstraintSupportTreeWithoutPublishingPublicIndexMetadata (54 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PersistsEveryLogicalConstraintKindAndPropertyType
+[       OK ] RelocatableStorageBackendSchemaTest.PersistsEveryLogicalConstraintKindAndPropertyType (209 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PublishesAndReopensDurableConfigurationWithoutMixingRuntimeStatistics
+[       OK ] RelocatableStorageBackendSchemaTest.PublishesAndReopensDurableConfigurationWithoutMixingRuntimeStatistics (34 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PublicGraphWritesReportPublicationFenceCountsAcrossIdLeaseReuse
+[       OK ] RelocatableStorageBackendSchemaTest.PublicGraphWritesReportPublicationFenceCountsAcrossIdLeaseReuse (15 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp:368: Failure
+Expected: (openStatistics.read_bytes) < (PAYLOAD_BYTES / 2U), actual: 23351312 vs 1048576
+
+[  FAILED  ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion (458 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures
+[       OK ] RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures (20 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ConfigurationCandidateShortWriteRetainsTheCompleteOldValueAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.ConfigurationCandidateShortWriteRetainsTheCompleteOldValueAndReopenCanRetry (23 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlCandidateShortWriteLeavesNoDefinitionAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlCandidateShortWriteLeavesNoDefinitionAndReopenCanRetry (38 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlCandidateDiskFullLeavesNoDefinitionAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlCandidateDiskFullLeavesNoDefinitionAndReopenCanRetry (40 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlCandidateShortWriteLeavesNoDefinitionOrSupportTreeAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlCandidateShortWriteLeavesNoDefinitionOrSupportTreeAndReopenCanRetry (45 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlCandidateDiskFullLeavesNoDefinitionOrSupportTreeAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlCandidateDiskFullLeavesNoDefinitionOrSupportTreeAndReopenCanRetry (48 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorIndexDdlCandidateShortWriteLeavesNoDefinitionOrManifestAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.VectorIndexDdlCandidateShortWriteLeavesNoDefinitionOrManifestAndReopenCanRetry (45 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorIndexDdlCandidateDiskFullLeavesNoDefinitionOrManifestAndReopenCanRetry
+[       OK ] RelocatableStorageBackendSchemaTest.VectorIndexDdlCandidateDiskFullLeavesNoDefinitionOrManifestAndReopenCanRetry (47 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ConfigurationFinalPublicationSyncFailureReportsUncertainDurabilityAndReopensTheCompleteNewValue
+[       OK ] RelocatableStorageBackendSchemaTest.ConfigurationFinalPublicationSyncFailureReportsUncertainDurabilityAndReopensTheCompleteNewValue (23 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration (32 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.VectorIndexDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration (36 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.UniqueConstraintDdlFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration (42 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.GraphMutationFinalPublicationSyncFailureReopensOneCompleteLargeValueScalarIndexAndVectorGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.GraphMutationFinalPublicationSyncFailureReopensOneCompleteLargeValueScalarIndexAndVectorGeneration (31 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard
+[       OK ] RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard (736 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.AppliesDurableVariableLengthDepthAsAnUnbypassableExecutionCeiling
+[       OK ] RelocatableStorageBackendSchemaTest.AppliesDurableVariableLengthDepthAsAnUnbypassableExecutionCeiling (48 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.LargeValueReclamationFinalPublicationSyncFailureRequiresReopenAndCanResume
+[       OK ] RelocatableStorageBackendSchemaTest.LargeValueReclamationFinalPublicationSyncFailureRequiresReopenAndCanResume (47 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarIndexDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarIndexDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration (38 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UniqueConstraintDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration
+[       OK ] RelocatableStorageBackendSchemaTest.UniqueConstraintDropFinalPublicationSyncFailureRequiresReopenAndExposesOnlyACompleteSchemaGeneration (37 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorIndexDropMaintenanceFinalPublicationSyncFailureRequiresReopenAndCanRetryPhysicalRetirement
+[       OK ] RelocatableStorageBackendSchemaTest.VectorIndexDropMaintenanceFinalPublicationSyncFailureRequiresReopenAndCanRetryPhysicalRetirement (84 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorIndexDropMaintenanceSecondPhaseFinalSyncFailureRequiresReopenAndResumesFromTheManifestRetirement
+[       OK ] RelocatableStorageBackendSchemaTest.VectorIndexDropMaintenanceSecondPhaseFinalSyncFailureRequiresReopenAndResumesFromTheManifestRetirement (84 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ResolvesExactUniqueNodeLookupsThroughThePinnedSupportTree
+[       OK ] RelocatableStorageBackendSchemaTest.ResolvesExactUniqueNodeLookupsThroughThePinnedSupportTree (55 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPersistedUniqueSupportTreeEntriesWithMismatchedEntityValues
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPersistedUniqueSupportTreeEntriesWithMismatchedEntityValues (42 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexEntriesWithMismatchedEntityValues
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexEntriesWithMismatchedEntityValues (29 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord (28 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarRangeIndexEntriesWithMismatchedEntityValues
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPersistedScalarRangeIndexEntriesWithMismatchedEntityValues (32 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPersistedCompositeRangeIndexEntriesWithMismatchedEntityValues
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPersistedCompositeRangeIndexEntriesWithMismatchedEntityValues (32 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsIndexCandidatePagesWithMismatchedOwners
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsIndexCandidatePagesWithMismatchedOwners (46 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsIndexCandidatePagesWithChecksumCorruption
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsIndexCandidatePagesWithChecksumCorruption (24 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes
+[       OK ] RelocatableStorageBackendSchemaTest.ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes (34 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForExactIndexCandidates
+[       OK ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForExactIndexCandidates (18 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForScalarRangeIndexes
+[       OK ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForScalarRangeIndexes (19 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarRangeVerificationUsesOneGlobalPropertyBatch
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarRangeVerificationUsesOneGlobalPropertyBatch (42 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamStopsBeforeReadingLaterBatches
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamStopsBeforeReadingLaterBatches (66 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamsEnforceNodeResultBounds
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamsEnforceNodeResultBounds (31 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamsEnforceProducerByteBounds
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamsEnforceProducerByteBounds (29 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RangeIndexCandidatesRetainOnlyVerifiedIndexedProperties
+[       OK ] RelocatableStorageBackendSchemaTest.RangeIndexCandidatesRetainOnlyVerifiedIndexedProperties (17 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamConsumesMultipleBatchesInLogicalOrder
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamConsumesMultipleBatchesInLogicalOrder (61 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ExactCandidateStreamDescendsIndexRootOnceAcrossBatches
+[       OK ] RelocatableStorageBackendSchemaTest.ExactCandidateStreamDescendsIndexRootOnceAcrossBatches (68 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamPreservesOrderWithinValueBatches
+[       OK ] RelocatableStorageBackendSchemaTest.ScalarRangeCandidateStreamPreservesOrderWithinValueBatches (126 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamsRemainBoundToTheirSnapshotAcrossIndexUpdates
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamsRemainBoundToTheirSnapshotAcrossIndexUpdates (51 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamKeepsConcurrentWriterInvisibleToPinnedSnapshot
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamKeepsConcurrentWriterInvisibleToPinnedSnapshot (53 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamsApplyLivenessWithoutBreakingAnOlderSnapshot
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamsApplyLivenessWithoutBreakingAnOlderSnapshot (61 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CandidateStreamsRejectAnIndexedPropertyAfterReplacementAndPreserveOldSnapshot
+[       OK ] RelocatableStorageBackendSchemaTest.CandidateStreamsRejectAnIndexedPropertyAfterReplacementAndPreserveOldSnapshot (44 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UniqueCandidateStreamEnforcesProducerByteBound
+[       OK ] RelocatableStorageBackendSchemaTest.UniqueCandidateStreamEnforcesProducerByteBound (32 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ReusesCatalogDescriptorAcrossEntityPagesDuringInsertionPlanning
+[       OK ] RelocatableStorageBackendSchemaTest.ReusesCatalogDescriptorAcrossEntityPagesDuringInsertionPlanning (86 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.GroupsBulkNodeInsertionsByBoundedEntityPageTargets
+[       OK ] RelocatableStorageBackendSchemaTest.GroupsBulkNodeInsertionsByBoundedEntityPageTargets (66 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ResolvesBulkNodeMutationsThroughOneSortedDirectoryBatch
+[       OK ] RelocatableStorageBackendSchemaTest.ResolvesBulkNodeMutationsThroughOneSortedDirectoryBatch (502 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ResolvesBulkEdgeMutationsThroughOneSortedDirectoryBatch
+[       OK ] RelocatableStorageBackendSchemaTest.ResolvesBulkEdgeMutationsThroughOneSortedDirectoryBatch (532 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CompositeRangeCandidatesRetainLogicalIndexFieldOrder
+[       OK ] RelocatableStorageBackendSchemaTest.CompositeRangeCandidatesRetainLogicalIndexFieldOrder (19 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CompositeRangeCandidateStreamStopsAtFirstBatch
+[       OK ] RelocatableStorageBackendSchemaTest.CompositeRangeCandidateStreamStopsAtFirstBatch (74 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.CompositeRangeAppliesUpperBoundBeforeCandidateBudget
+[       OK ] RelocatableStorageBackendSchemaTest.CompositeRangeAppliesUpperBoundBeforeCandidateBudget (20 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForCompositeRangeIndexes
+[       OK ] RelocatableStorageBackendSchemaTest.ReusesTheSnapshotReadSessionForCompositeRangeIndexes (20 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ResolvesScalarNodeRangesThroughPinnedIndexes
+[       OK ] RelocatableStorageBackendSchemaTest.ResolvesScalarNodeRangesThroughPinnedIndexes (20 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PermitsAtomicUniqueKeySwapAndPublishesOnlyTheFinalSupportTreeState
+[       OK ] RelocatableStorageBackendSchemaTest.PermitsAtomicUniqueKeySwapAndPublishesOnlyTheFinalSupportTreeState (43 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.DetachDeleteErasesEdgeUniqueSupportEntryInTheSamePublication
+[       OK ] RelocatableStorageBackendSchemaTest.DetachDeleteErasesEdgeUniqueSupportEntryInTheSamePublication (83 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.NamedRelationshipConstraintsExcludeUntypedRelationships
+[       OK ] RelocatableStorageBackendSchemaTest.NamedRelationshipConstraintsExcludeUntypedRelationships (76 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PublishesScalarIndexBatchesOnlyAfterEveryHistoricalTreeBuilds
+[       OK ] RelocatableStorageBackendSchemaTest.PublishesScalarIndexBatchesOnlyAfterEveryHistoricalTreeBuilds (40 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsFailedScalarIndexBatchWithoutPublishingAPartialDefinitionSet
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsFailedScalarIndexBatchWithoutPublishingAPartialDefinitionSet (16 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsScalarIndexesThatExceedThePublishedDefinitionCapacity
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsScalarIndexesThatExceedThePublishedDefinitionCapacity (11 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsInvalidOrExistingScalarIndexBatchesBeforePublication
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsInvalidOrExistingScalarIndexBatchesBeforePublication (13 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.BuildsHistoricalVectorStateAndPublishesItsDefinitionAtomically
+[       OK ] RelocatableStorageBackendSchemaTest.BuildsHistoricalVectorStateAndPublishesItsDefinitionAtomically (124 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.SearchesSnapshotPinnedLogicalVectorStateWithBoundedExactRefinement
+[       OK ] RelocatableStorageBackendSchemaTest.SearchesSnapshotPinnedLogicalVectorStateWithBoundedExactRefinement (22 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ReturnsNoHitsBeforeAVectorIndexHasMatchingProperties
+[       OK ] RelocatableStorageBackendSchemaTest.ReturnsNoHitsBeforeAVectorIndexHasMatchingProperties (13 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.UsesPublishedAdjacencyCandidatesWithExactRawRefinement
+[       OK ] RelocatableStorageBackendSchemaTest.UsesPublishedAdjacencyCandidatesWithExactRawRefinement (65 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RanksPersistentAdjacencyCandidatesWithGenerationCheckedPq
+[       OK ] RelocatableStorageBackendSchemaTest.RanksPersistentAdjacencyCandidatesWithGenerationCheckedPq (142 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDerivedVectorSearchBudgetCombinationsBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDerivedVectorSearchBudgetCombinationsBeforeCandidateTraversal (77 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ValidatesNonFiniteAndZeroCosineQueriesAtTheStorageSearchBoundary
+[       OK ] RelocatableStorageBackendSchemaTest.ValidatesNonFiniteAndZeroCosineQueriesAtTheStorageSearchBoundary (40 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaManifestCountThatDisagreesWithItsPersistedOverlay
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaManifestCountThatDisagreesWithItsPersistedOverlay (90 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsPartialAndStaleVectorManifestIdentitiesAtTheSearchBoundary
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsPartialAndStaleVectorManifestIdentitiesAtTheSearchBoundary (180 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsStaleAndNonFiniteRawVectorRecordsBeforeScoring
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsStaleAndNonFiniteRawVectorRecordsBeforeScoring (60 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsMalformedAndNonBijectiveSemanticVectorMappings
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsMalformedAndNonBijectiveSemanticVectorMappings (107 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsMissingAdjacencyMappingBeforeCandidateExpansion
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsMissingAdjacencyMappingBeforeCandidateExpansion (78 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsCorruptPqInventoryMappingsAndCodesBeforeRefinement
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsCorruptPqInventoryMappingsAndCodesBeforeRefinement (192 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.ExecutesTheExistingVectorProcedureOverTheLogicalSearchBoundary
+[       OK ] RelocatableStorageBackendSchemaTest.ExecutesTheExistingVectorProcedureOverTheLogicalSearchBoundary (27 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.TrainsAndReusesAPersistentPqGenerationThroughTheLogicalProcedure
+[       OK ] RelocatableStorageBackendSchemaTest.TrainsAndReusesAPersistentPqGenerationThroughTheLogicalProcedure (125 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.PersistsPqSubspaceSelectionForDivisibleAndPrimeDimensions
+[       OK ] RelocatableStorageBackendSchemaTest.PersistsPqSubspaceSelectionForDivisibleAndPrimeDimensions (140 ms)
+[----------] 85 tests from RelocatableStorageBackendSchemaTest (6631 ms total)
+
+[----------] Global test environment tear-down
+[==========] 85 tests from 1 test suite ran. (6631 ms total)
+[  PASSED  ] 84 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion
+
+ 1 FAILED TEST

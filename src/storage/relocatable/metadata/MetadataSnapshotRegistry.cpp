@@ -164,7 +164,7 @@ namespace graph::storage {
         return MetadataWriteGuard(state_, std::move(lock), initialize);
     }
 
-	MetadataSnapshotPin MetadataSnapshotRegistry::pinCurrentUnderWrite(const MetadataWriteGuard &guard,
+	std::shared_ptr<MetadataPageReadContext> MetadataSnapshotRegistry::createWriterReadContext(const MetadataWriteGuard &guard,
 																	   const Superblock &current) const {
 		if (!guard.isValid() || guard.state_.get() != state_.get() ||
 			!sameSuperblock(state_->bootstrap->recover(), current)) {
@@ -174,7 +174,12 @@ namespace graph::storage {
 		}
 		SuperblockCodec::validate(current);
 		// Allocate before registration so an allocation failure cannot leak a pin.
-		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), current, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
+        return std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), current, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
+    }
+
+    MetadataSnapshotPin MetadataSnapshotRegistry::pinCurrentUnderWrite(const MetadataWriteGuard &guard,
+        const Superblock &current) const {
+        auto readContext = createWriterReadContext(guard, current);
 		{
 			std::lock_guard snapshotsLock(state_->snapshots_mutex);
 			auto [position, inserted] =

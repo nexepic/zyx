@@ -1,0 +1,94 @@
+diff --git a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+index 68113fce..5b10647c 100644
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+@@ -14,7 +14,7 @@ projectOrder: 1
+ 
+ Updated: 2026-10-21. Plan ID: `cow-performance-20261019`. **This is the sole active optimization entry point. R0–R7 has 24 deliverables, with 14/24 accepted (58.3%). The latest request covers all unfinished deliverables. The earlier fixed five, R3.2/R3.3/R5.1/R5.2/R5.3, retain their existing contracts; performance acceptance is not counted early. R7.3 is still required for overall 100% closure.**
+ 
+-**Latest implementation boundary (2026-10-21):** Isolated format 32 supports explicit forward/inverse conversion, field/map mutation and demotion, all-owner LargeValue reclamation, schema-bearing Node/Edge deletion with atomic scalar/composite/constraint indexes and counts, pool relocation/reuse/recovery, whole allocation accounting and same-executor controls. R5.1 covering-tree protocol/lifecycle is accepted with explicit read-only backend and overlay controls. Default format 31 remains ROW. Current R3 whole-cost shapes fail the 10% space gate; production adoption is not claimed. General native topology writers and VECTOR coordination remain guarded; R3.2/R3.3, R5 production/planning and R7 remain open. Linux/affected-module verification only; no intermediate timing benchmark or full repository suite.
++**Latest implementation boundary (2026-10-21):** Isolated format 32 supports explicit forward/inverse conversion, field/map mutation and demotion, all-owner LargeValue reclamation, schema-bearing Node/Edge deletion with atomic scalar/composite/constraint indexes and counts, explicit atomic field/Vector bootstrap and delta, pool relocation/reuse/recovery, whole allocation accounting and same-executor controls. R5.1 covering-tree protocol/lifecycle is accepted with explicit read-only backend and overlay controls. Default format 31 remains ROW. Current R3 whole-cost shapes fail the 10% space gate; production adoption is not claimed. Unrelated field writes can preserve existing Vector state. Explicit Vector coordination uses an internal same-batch proof; general native topology writers remain guarded; R3.2/R3.3, R5 production/planning and R7 remain open. Linux/affected-module verification only; no intermediate timing benchmark or full repository suite.
+ 
+ The objective is to reduce positioning, decoding, conversion, materialization, and metadata work per query/update while preserving existing public capabilities. Retain the engine and make evidence-backed structural changes within it; do not replace the entire backend or promise to outperform Kuzu on every workload.
+ 
+@@ -760,3 +760,33 @@ The acceptance contract, explicit detection phases and resource/performance boun
+ Final 56 related modules exclude only the independently frozen unaffected mature multi-group space case:897 default passes;1223 candidate passes / 1 conditional skip. Master records, both directions, type indexes/statistics, old pins, reopen, retirement/relocation, consistency detection and same-executor/overlay controls have evidence. R5.1 is accepted. **Total 14/24 (58.3%), one newly accepted item; commit and push to remote work under the user's progress rule.**
+ 
+ This is not production admission. R3.2/R3.3 and R5.2/R5.3 remain, including ordinary writer hooks/persistent selection, final covering/shared-segment choice, complete resources/steady-state/costs/planning and final R7 performance/Kuzu comparison. No intermediate timing benchmark or full repository suite; candidate rejection does not shrink the denominator.
++
++### 2026-10-21 R3.2: Vector dependency isolation and semantically unchanged field publication
++
++Evidence: `benchmarks/architecture-design/decisions/20261021-r32-vector-independent-publication/`. Bounded schema proofs authenticate VECTOR definitions and canonical directions. Field writes check the mapping/Manifest pair and dimension bound, then resolve dependencies using actual Node labels and property tokens. Unrelated fields, nonmatching owners and unpopulated indexes no longer cause a blanket refusal. A missing indexed property token cannot masquerade as an empty index. Unknown control state remains refused.
++
++The Vector planner now accepts borrowed selected values; the owning-root entry delegates to the same implementation and retains existing BFloat16/metric semantics. Different logical properties with identical encoded vectors may publish while preserving the logical and physical mapping/Manifest routes. Actual embedding changes and indexed-owner deletion still refuse until atomic delta coordination is installed. The64-owner/1MiB limits remain; temporary encoding is admitted before allocation without copying complete property roots.
++
++Regressions cover live/empty indexes, exact-search reopen, unchanged physical roots, old pins, BFloat16 equivalence versus actual change, incomplete mapping publication, missing property tokens, excessive dimensions and refusal/refunds before writes.57 related modules: default907 passed; candidate1236 passed and1 conditional skip. After the dimension guard and two corrupt-schema cases, only affected groups were rerun: default10 passed; candidate15 passed. The mature multi-group space case retains separate evidence. No full repository suite or timing benchmark. Actual Vector deltas and ordinary topology integration remain unfinished in R3.2. **Total14/24 (58.3%), accepted growth0; no commit or push.**
++
++### 2026-10-21 R3.2: Reject residual Vector mappings before owner deletion
++
++Evidence: `benchmarks/architecture-design/decisions/20261021-r32-vector-owner-delete-proof/`. A regression reproduced successful native owner deletion leaving a mapping after a low-level property replacement deliberately removed embedding without Vector coordination. Every deleted Node now checks the actual Node-to-Vector mapping before label-scope selection. Missing or nonmatching properties/labels cannot hide residual membership. Existing mappings refuse before writes until atomic removal is coordinated; damaged indexes are not silently repaired.
++
++A companion case allows deletion of an isolated Node outside the Vector label while other Nodes retain a populated Vector index. The initial fixture used the wrong ROW property pool owner; it now derives the owner from the actual source route. Fixture failure and the reproduced publication defect have separate logs. Final affected Vector planner/query/deletion groups: default10 passed; candidate18 passed. Prior57-module907/default and1236/candidate plus1 conditional skip evidence remains separate. No full repository suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**
++
++### 2026-10-21 R3.2: Separate private preparation from final metadata publication
++
++Evidence: `benchmarks/architecture-design/decisions/20261021-r32-shared-batch-preparation/`. The native field entry still creates read stores before acquiring its writer and retains an authenticated source pin. Its private preparation function now accepts an existing MetadataWriteBatch and placement, checks the shared source and unpublished descriptor, and prepares fields, directories, indexes, counts and retirement without final publication. The outer entry retains source and placement until its single publish outcome, then records validated reuse hints. No-ops still do not publish.
++
++This internal structure is needed for subsequent same-batch Vector coordination. Actual Vector delta/bootstrap integration and ordinary native topology writers remain unfinished. Refactored field/index/deletion/map/LargeValue/journal and same-executor affected groups: default32 passed; candidate128 passed. Prior57-module and Vector-defect evidence remains separate, not counted as a fresh broad run. No full repository suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**
++
++### 2026-10-21 R3.2/R6.1: Atomic field and Vector bootstrap/delta publication
++
++Protocol and raw evidence: `benchmarks/architecture-design/decisions/20261021-r32-atomic-vector-publication/`. Explicit field/map/owner transactions can call `coordinateHybridPropertyVectors`, reusing existing BFloat16/metric and Vector bootstrap/delta planners. A separate temporary transaction stages Vector work against the same source, then transfers only its derived work. The original field transaction retains its staging guards; cancellation callbacks cannot append unrelated scalar operations. Failed staging blocks commit, moves preserve state/accounting, and known pre-publication cancellation permits retry.
++
++Commit constructs a non-forgeable internal proof bound to its metadata and actual derived object. Metadata constrains root namespaces/work shapes and rechecks every Vector semantic transition against authoritative old/final selected fields. Fields, scalar/constraint support, counts, independent LargeValue, forward/reverse/delta mappings, Raw/Manifest and retirement share one MetadataWriteBatch and one final publish. No intermediate commit or new persistent format. ROW equality precedes Vector byte comparison: a regression first reproduced a signed-zero delta for an omitted field mutation; the fixed no-op preserves generation, VectorId and IO epoch.
++
++All13 current affected cases pass: first publication, replacement, last field deletion/recreation, retirement of the last insert-only delta while retaining the base, indexed-owner deletion/counts, old pins/Raw records, moves to a different transaction object, invalid values and64KiB refusal/refunds, cancellation/retry, callback staging guards, both A/B interruption boundaries,64-owner work in the original1MiB account,512-dimensional independent values, and UNIQUE coexistence/duplicate refusal before writes. Successful paths run full integrity inspection. Default/ordinary Vector/query controls51 pass. Prior58 related modules: default934 passed; candidate1276 passed,1 conditional skip and1 read-fixture failure. After binding the fixture's LargeValueStore, only affected groups were rerun; the candidate broad run is not misreported as fully green. Initial build/fixture/exception-contract failures and the actual signed-zero regression are retained.
++
++The1MiB account covers admitted containers and conservative Vector frontiers, not process RSS admission. A populated delta can still refuse on quota; steady maintenance and full resource validation remain open. General native topology writers, R3 production space gates, R5 production/planning and R7 are unfinished. No full repository suite or intermediate timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**
+diff --git a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+index 1a7059a2..bde8386e 100644
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+@@ -14,7 +14,7 @@ projectOrder: 1
+ 
+ 更新：2026-10-21。计划标识：`cow-performance-20261019`。**本页是当前优化的唯一实施入口。新路线 R0–R7 共 24 项，已验收 14/24（58.3%）。按用户最新要求继续完成全部未完成项；原固定五项 R3.2/R3.3/R5.1/R5.2/R5.3 仍按既定合同推进，性能准入不提前计数。R7.3 仍是整体 100% 所需的最终收尾项。**
+ 
+-**最新实现边界（2026-10-21）：** 格式32的隔离原型已贯通显式双向转换、字段／map修改与降级、LargeValue全所有者回收、带schema的Node／Edge删除及标量／复合／约束索引与统计原子协调、池搬迁／复用／恢复、完整分配核对和同执行器对照。R5.1覆盖树协议／生命周期原型已验收，并有显式只读backend及overlay对照。默认格式31仍保留ROW。当前R3完整成本形状未通过10%空间门槛，不宣称生产采用；普通native拓扑writer与VECTOR协调仍受保护，R3.2／R3.3、R5生产／规划和R7继续待办。验证仅覆盖Linux和必要模块，没有中途性能基准或全库单测。
++**最新实现边界（2026-10-21）：** 格式32的隔离原型已贯通显式双向转换、字段／map修改与降级、LargeValue全所有者回收、带schema的Node／Edge删除及标量／复合／约束索引与统计原子协调、显式字段／VECTOR bootstrap与delta同批发布、池搬迁／复用／恢复、完整分配核对和同执行器对照。R5.1覆盖树协议／生命周期原型已验收，并有显式只读backend及overlay对照。默认格式31仍保留ROW。当前R3完整成本形状未通过10%空间门槛，不宣称生产采用；无关字段可保留既有向量状态，显式向量协调使用内部同批证明；普通native拓扑writer仍受保护，R3.2／R3.3、R5生产／规划和R7继续待办。验证仅覆盖Linux和必要模块，没有中途性能基准或全库单测。
+ 
+ 目标是在保留现有公开能力的前提下，减少每次查询和更新所需的定位、解码、转换、物化及元数据维护工作。保留现有引擎，进行有证据支持的局部结构性重构；不整体重写 backend，不承诺所有负载超过 Kuzu。
+ 
+@@ -760,3 +760,33 @@ overlay既有节点表和pool序号表改为保留owner的精确分配；已精
+ 最终56相关模块（排除已独立冻结、未受影响的成熟多组空间例）：默认897通过，候选1223通过／1条件跳过。协议和原型所需的主记录、双向生命周期、type索引／统计、旧pin、重开、退役／搬迁、一致性检测及同执行器／overlay对照已有证据，R5.1验收完成。**总计14/24（58.3%），本轮增加1项；按用户约定提交并推送远程work。**
+ 
+ 这不是生产准入。R3.2／R3.3与R5.2／R5.3继续待办：普通writer hook／持久选择和覆盖／共享分段最终取舍、完整资源／稳态／成本与计划选择，以及R7最终性能／Kuzu对照均未关闭。没有中途性能基准或全库单测，不以候选拒绝减少分母。
++
++### 2026-10-21 R3.2：向量依赖隔离与语义不变的字段发布
++
++证据：`benchmarks/architecture-design/decisions/20261021-r32-vector-independent-publication/`。有界schema证明现认证VECTOR定义及canonical方向；字段写入先检查映射／Manifest成对存在和维度上限，再按真实Node标签和属性token判定依赖。无关字段、非匹配owner及空索引不再因存在VECTOR定义而被整体拒绝；实际缺失的索引属性token不能被当作空索引。未知控制状态仍拒绝。
++
++向量规划器增加借用选定值的只读准备入口，普通完整root入口委托同一实现，沿用现有BFloat16／metric语义。逻辑属性不同而编码向量相同时，属性可发布且映射／Manifest的逻辑与物理位置保持；真正向量变化／索引owner删除仍拒绝，等待同批原子增量发布。单次仍受64owner／1MiB限制，临时向量编码先计费，不复制完整属性树。
++
++真实非空／空向量索引、精确搜索重开、物理root不变、旧pin、BFloat16等价与真实变化、缺映射半发布、缺属性token、超维度及写前拒绝／退款均有回归。57相关模块：默认907通过；候选1236通过、1条件跳过；随后维度防护及两个损坏schema新增用例仅重跑受影响组，默认10通过、候选15通过。成熟多组空间例保留独立证据，无全库单测或性能基准。R3.2的真实向量增量和普通拓扑接入仍未完成，**总计14/24（58.3%），验收增长0，不提交、不推送。**
++
++### 2026-10-21 R3.2：删除前拒绝残留向量映射
++
++证据：`benchmarks/architecture-design/decisions/20261021-r32-vector-owner-delete-proof/`。回归先复现：低层属性替换移除embedding但故意不协调VECTOR后，原生owner删除会成功发布并遗留映射。现对每个待删Node查询实际Node→Vector映射，检查位于标签范围判断之前；即使属性／标签不再匹配，也不能把残留映射误当作无依赖。存在映射时写前拒绝，等待真正原子删除协调，不尝试自动修复损坏索引。
++
++同一组还验证：其他节点仍有非空VECTOR索引时，不属于该向量标签的孤立Node可正常删除。夹具最初用了错误的ROW属性池owner，已改为从实际源路由读取；夹具失败与真实发布缺陷的失败日志分开保留。最终只重跑向量规划／查询及删除相关组：默认10通过、候选18通过；前一轮57模块907／1236加1条件跳过证据独立保留。无全库单测或性能基准，**总计14/24（58.3%），验收增长0，不提交、不推送。**
++
++### 2026-10-21 R3.2：私有准备与最终元数据发布分离
++
++证据：`benchmarks/architecture-design/decisions/20261021-r32-shared-batch-preparation/`。原生字段入口继续在取写锁前创建读取组件并持有已认证source pin；私有prepare函数现在接受现有MetadataWriteBatch和placement，核对同一源及尚未替换的descriptor，在该批次中准备字段、目录、索引、统计和退役，不执行最终publish。外层保留source pin及placement到单次publish结果确定后，再记录已验证的复用提示。no-op仍不发布。
++
++这是后续VECTOR同批协调所需的内部结构，不是已经接通向量增量／bootstrap，也未放开普通native拓扑writer。拆分后的字段／索引／删除／map／大值／journal及同执行器相关验证：默认32通过、候选128通过；此前57模块与向量缺陷回归证据独立保留，没有重复声称全跑。无全库单测或性能基准，**总计14/24（58.3%），验收增长0，不提交、不推送。**
++
++### 2026-10-21 R3.2／R6.1：字段与向量 bootstrap／delta 同批原子发布
++
++协议及原始证据：`benchmarks/architecture-design/decisions/20261021-r32-atomic-vector-publication/`。显式字段／map／owner事务可调用`coordinateHybridPropertyVectors`，复用已有BFloat16／metric及Vector bootstrap／delta规划。向量暂存放在独立临时事务中，核对同一源后仅转移其派生工作；原字段事务的暂存保护始终保留，取消回调不能附加无关scalar操作。失败暂存阻断commit，移动保留状态及账户；确定在发布前的取消仍可重试。
++
++commit内部生成仅能绑定当前metadata和实际derived对象的不可构造证明；元数据层限制其根命名空间及工作形状，并用真实旧／最终选定字段重新核对全部向量语义。字段、标量／约束、统计、独立LargeValue、Node／反向／delta映射、Raw／Manifest及退役共用一个MetadataWriteBatch和一次最终publish。没有分次提交或新持久格式。ROW相等规则先于向量字节比较；回归先复现+0／-0错误触发差分，修复后整个no-op不改变generation／VectorId／IO epoch。
++
++当前13项定向用例通过：首次向量发布、真实替换、最后字段删除／重建、仅INSERT的最后delta退役并保留base、索引owner删除／统计、旧pin／原Raw、真正跨对象移动、非法值及64KiB拒绝／退款、取消重试、回调暂存保护、两种A/B中断重开、64-owner批次在原1MiB账户内完成、512维独立大值及UNIQUE共存／重复值写前拒绝；成功路径均做完整integrity。默认／普通向量及查询对照51项通过。此前58相关模块默认934通过，候选1276通过／1条件跳过／1读取夹具失败；补齐LargeValueStore绑定后只重跑受影响组，未冒称候选宽回归全绿。初始编译／夹具／异常合同错误和有符号零真实失败均保留。
++
++1MiB包括已计费容器及保守的向量工作前沿，不是进程RSS准入；较大既有delta可因额度拒绝，仍需稳态维护／完整资源验证。普通native拓扑writer、R3完整生产空间门槛、R5生产／规划与R7尚未完成。无全库单测或中途性能基准。**总计14/24（58.3%），验收增长0，不提交、不推送。**

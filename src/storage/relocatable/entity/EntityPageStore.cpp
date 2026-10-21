@@ -721,7 +721,10 @@ namespace graph::storage {
 		const NativeGraphPrivateSegmentImagePreparer &privateSegmentImagePreparer,
 		const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer,
 		const NativeGraphDeferredIndexPlanner &deferredIndexPlanner,
-		const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner) {
+        const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner,
+        const NativeHybridTopologyPublication *hybridTopology) {
+        if (hybridTopology && hybridTopology->entities_ != this)
+            fail(FormatError::FERR_INVALID_STATE, "native topology proof belongs to another Entity store");
 		if (!propertyRoots.usesMetadataStore(metadata_) || !propertyOptions.first_slot.isValid() ||
 			propertyOptions.first_slot > propertyOptions.last_slot || propertyOptions.page_owner_id == 0U ||
 			(derivedState.empty() ? static_cast<bool>(derivedStatePreparer) : !derivedStatePreparer) ||
@@ -735,7 +738,7 @@ namespace graph::storage {
 										 &propertyOptions, &auxiliaryPages, &derivedState, &derivedStatePreparer,
 										 &vectorBootstrapPreparer, &vectorDeltaPreparer, checkpointLsn, options,
 									 logicalIdReservation, &privateSegmentImagePreparer, &privateSegmentPreparer,
-									 &deferredIndexPlanner, &earlyPublicationPlanner);
+                                     &deferredIndexPlanner, &earlyPublicationPlanner, hybridTopology);
 	}
 
 	EntityPageBatchResult EntityPageStore::applyBatchTransactionInternal(
@@ -751,7 +754,8 @@ namespace graph::storage {
 		const NativeGraphPrivateSegmentImagePreparer *privateSegmentImagePreparer,
 		const NativeGraphPrivateSegmentPreparer *privateSegmentPreparer,
 		const NativeGraphDeferredIndexPlanner *deferredIndexPlanner,
-		const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner) {
+        const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner,
+        const NativeHybridTopologyPublication *hybridTopology) {
 		debug::ScopedPerfTimer timer("native_graph.entity_batch");
 		const bool hasDerivedState = derivedState != nullptr && !derivedState->empty();
 		const bool hasVectorBootstrap = hasDerivedState && !derivedState->vector_bootstraps.empty();
@@ -1618,7 +1622,7 @@ namespace graph::storage {
 		const NativeGraphPrivateSegmentPreparer noPrivateSegmentPreparer{};
 		const NativeGraphEarlyPublicationPlanner noEarlyPublicationPlanner{};
 		const NativeGraphDeferredIndexPlanner noDeferredIndexPlanner{};
-		const NativeGraphDerivedStateMutation &activeDerivedState = hasDerivedState ? *derivedState : noDerivedState;
+		const NativeGraphDerivedStateMutation &activeDerivedState = derivedState != nullptr ? *derivedState : noDerivedState;
 		const NativeGraphDerivedStatePreparer &activeDerivedStatePreparer =
 				hasDerivedState ? *derivedStatePreparer : noDerivedStatePreparer;
 		const NativeGraphVectorBootstrapPreparer &activeVectorBootstrapPreparer =
@@ -2065,8 +2069,12 @@ namespace graph::storage {
 					activeDerivedStatePreparer, activeVectorBootstrapPreparer, activeVectorDeltaPreparer, {}, {}, {},
 					options, logicalIdReservation, snapshot.superblock().generation,
 					activePrivateSegmentImagePreparer, activePrivateSegmentPreparer, activeDeferredIndexPlanner,
-					activeEarlyPublicationPlanner);
+                    activeEarlyPublicationPlanner, {}, std::nullopt, std::nullopt, nullptr, hybridTopology);
 		} catch (...) {
+            // This adapter cannot authorize ordinary pool reconciliation for
+            // native graphs. Keep the original publication error; the typed
+            // metadata writer/recovery owns native candidate-frame cleanup.
+            if (hybridTopology) throw;
 			// A callback may already have written a candidate frame when another pool
 			// fails or A/B Superblock publication is interrupted. Once metadata releases
 			// its writer guard, reconciliation restores the currently reachable generation.

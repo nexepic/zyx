@@ -1,0 +1,137 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 61 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMismatchedLegacyPrivateScratchHeadersBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMismatchedLegacyPrivateScratchHeadersBeforeMaterialization (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsEveryMalformedPrivateScratchRequestBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsEveryMalformedPrivateScratchRequestBeforePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInhomogeneousAndOvercommittedPrivateScratchCandidatesBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInhomogeneousAndOvercommittedPrivateScratchCandidatesBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedCompactPrivateScratchPlansBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedCompactPrivateScratchPlansBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedDerivedIndexDefinitionsBeforeAnyMaterializer
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedDerivedIndexDefinitionsBeforeAnyMaterializer (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaHeadersAndUnmatchedMappingTransitionsBeforeMaterialization
+[       OK ] RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaHeadersAndUnmatchedMappingTransitionsBeforeMaterialization (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication (0 ms)
+[----------] 9 tests from RelocatableMetadataStoreTest (13 ms total)
+
+[----------] 49 tests from RelocatablePhysicalSegmentAllocatorTest
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.AllocatesZeroesPublishesAndReadsOneFixedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.AllocatesZeroesPublishesAndReadsOneFixedSlot (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeSuccessfulAllocationUsesExactlyOneDataFenceAndOneSuperblockFence
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeSuccessfulAllocationUsesExactlyOneDataFenceAndOneSuperblockFence (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeAllocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteSegment
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeAllocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteSegment (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeShortDataSegmentWriteDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeShortDataSegmentWriteDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeDataSegmentDiskFullDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeDataSegmentDiskFullDoesNotPublishAndReopenRetainsOldGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationShortWriteRetainsSourceAndReopenCanRetry (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationDestinationDiskFullRetainsSourceAndReopenCanRetry (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeShortMetadataPageWriteDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeShortMetadataPageWriteDoesNotPublishAndReopenRetainsOldGeneration (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeMetadataPageDiskFullDoesNotPublishAndReopenRetainsOldGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeMetadataPageDiskFullDoesNotPublishAndReopenRetainsOldGeneration (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationPrePublicationSyncFailureRetainsSourceAndReopenCanRetry (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteDestination
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocationFinalFenceFailureReportsUncertainDurabilityAndReopensTheCompleteDestination (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataShortWriteRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataShortWriteRetainsTheRetireQueueAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataDiskFullRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseMetadataDiskFullRetainsTheRetireQueueAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleasePrePublicationSyncFailureRetainsTheRetireQueueAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleasePrePublicationSyncFailureRetainsTheRetireQueueAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetiredSegmentReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataShortWriteRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataShortWriteRetainsTheRetiredSlotAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataDiskFullRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimMetadataDiskFullRetainsTheRetiredSlotAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimPrePublicationSyncFailureRetainsTheRetiredSlotAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimPrePublicationSyncFailureRetainsTheRetiredSlotAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRetireQueueReclaimFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseFinalFenceFailureReportsUncertainDurabilityAndReopensTheReleasedSlot (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataShortWriteRetainsTheSourceAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleaseMetadataDiskFullRetainsTheSourceAndReopenCanRetry (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRelocatedSourceReleasePrePublicationSyncFailureRetainsTheSourceAndReopenCanRetry (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativePrePublicationSyncFailureReclaimsTailAndReopensPriorGeneration
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativePrePublicationSyncFailureReclaimsTailAndReopensPriorGeneration (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PersistentNativeSyncFailurePoisonsWriterUntilReopenAndNeverPublishesTheCandidate
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PersistentNativeSyncFailurePoisonsWriterUntilReopenAndNeverPublishesTheCandidate (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.OwnsCodecBytesBeforeMetadataPublication
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.OwnsCodecBytesBeforeMetadataPublication (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PersistsAndReadsExplicitSubtypeHeaderExtensions
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PersistsAndReadsExplicitSubtypeHeaderExtensions (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.AtomicallyAllocatesBatchesAndRejectsDuplicateLogicalIds
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.AtomicallyAllocatesBatchesAndRejectsDuplicateLogicalIds (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PublishesFullSegmentExtentBindingsAndRejectsMalformedBindings
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PublishesFullSegmentExtentBindingsAndRejectsMalformedBindings (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RetiresAfterPublicationAndReusesOnlyAfterTheLastSnapshotReleases
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RetiresAfterPublicationAndReusesOnlyAfterTheLastSnapshotReleases (8 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReusesAReleasedPhysicalSlotAcrossSegmentKindsAfterReopen
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReusesAReleasedPhysicalSlotAcrossSegmentKindsAfterReopen (7 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReusesOnePhysicalSlotAcrossEveryAllocatableKindOnlyAfterTheSnapshotReleases
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReusesOnePhysicalSlotAcrossEveryAllocatableKindOnlyAfterTheSnapshotReleases (58 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RelocatesWholeSegmentsAndDefersSourceReuseUntilSnapshotsRelease
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RelocatesWholeSegmentsAndDefersSourceReuseUntilSnapshotsRelease (9 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.PublishesRetireQueueReclamationAtomicallyAcrossCrashRecoveryBoundaries (8 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReclaimsRetiredWholeSegmentsAfterReopenAndLastSnapshotRelease
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReclaimsRetiredWholeSegmentsAfterReopenAndLastSnapshotRelease (6 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptRelocationSourceWithoutPublishingTheDestination
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptRelocationSourceWithoutPublishingTheDestination (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RecoversPriorGenerationAfterInterruptedRelocationBeforeSuperblockPublication (5 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.DoesNotWriteOrPublishWhenTheRequestedRangeCannotFitTheBatch
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.DoesNotWriteOrPublishWhenTheRequestedRangeCannotFitTheBatch (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsMalformedRequestsBeforeMetadataMutation
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsMalformedRequestsBeforeMetadataMutation (0 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptPayloadEnvelopeAndFreeSpaceMappings
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.RejectsCorruptPayloadEnvelopeAndFreeSpaceMappings (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ReopensAndValidatesTheCatalogEnvelopeIdentity
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ReopensAndValidatesTheCatalogEnvelopeIdentity (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.LeavesDataUnreachableWhenMetadataPublicationStopsBeforeTheInactiveSuperblockWrite
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.LeavesDataUnreachableWhenMetadataPublicationStopsBeforeTheInactiveSuperblockWrite (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.FailsClosedWhenMetadataReferencesAnUnwrittenPhysicalSlot
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.FailsClosedWhenMetadataReferencesAnUnwrittenPhysicalSlot (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.ValidatesStorageIdentityAndCheckedOffsets
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.ValidatesStorageIdentityAndCheckedOffsets (0 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRecoveryRejectsFramedRoutesIntoWholeSegmentObjects
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRecoveryRejectsFramedRoutesIntoWholeSegmentObjects (4 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeRecoveryAuthenticatesWholeSegmentCatalogIdentityBeforeSkippingItsBody
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeRecoveryAuthenticatesWholeSegmentCatalogIdentityBeforeSkippingItsBody (3 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.NativeDiskFullFallsBackToTheEmergencyReserveThenRotatesItAtomically
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.NativeDiskFullFallsBackToTheEmergencyReserveThenRotatesItAtomically (10 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationRetainsThePublishedDescriptorAcrossDiskFullAndPublicationBoundaries
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationRetainsThePublishedDescriptorAcrossDiskFullAndPublicationBoundaries (12 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry
+[       OK ] RelocatablePhysicalSegmentAllocatorTest.EmergencyReserveRotationPrePublicationSyncFailureRetainsTheDescriptorAndReopenCanRetry (12 ms)
+[----------] 49 tests from RelocatablePhysicalSegmentAllocatorTest (308 ms total)
+
+[----------] 3 tests from RelocatablePhysicalSegmentAllocatorTypedIOTest
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.WritesOnlyCompleteGenerationTaggedExtentPages
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.WritesOnlyCompleteGenerationTaggedExtentPages (1 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.RejectsAShortReadInAnUnusedTrailingExtentPage
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.RejectsAShortReadInAnUnusedTrailingExtentPage (2 ms)
+[ RUN      ] RelocatablePhysicalSegmentAllocatorTypedIOTest.SequentialExtentReadsDoNotRetainScanPages
+[       OK ] RelocatablePhysicalSegmentAllocatorTypedIOTest.SequentialExtentReadsDoNotRetainScanPages (2 ms)
+[----------] 3 tests from RelocatablePhysicalSegmentAllocatorTypedIOTest (5 ms total)
+
+[----------] Global test environment tear-down
+[==========] 61 tests from 3 test suites ran. (327 ms total)
+[  PASSED  ] 61 tests.

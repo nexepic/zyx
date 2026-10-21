@@ -105,6 +105,21 @@ namespace graph::storage {
 			return bytes;
 		}
 
+        [[nodiscard]] PageOwnerHeader readRecoveryOwner(const StorageIO &io, uint64_t offset, uint64_t fileBytes) {
+            // Reconciliation runs under the metadata writer: allocated frames
+            // cannot be legitimately truncated during this routing census.
+            // Keep the complete-frame boundary check, but authenticate only the
+            // independently checksummed header. Do not fetch/cache value bodies.
+            if (offset > fileBytes || RSS_PAGE_SIZE > fileBytes - offset)
+                throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+                    "relocatable reconciled shared page is truncated");
+            std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> bytes{};
+            if (io.readAtSequential(offset, bytes.data(), bytes.size()) != bytes.size())
+                throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+                    "relocatable reconciled shared page owner header is truncated");
+            return PageOwnerHeaderCodec::decode(bytes);
+        }
+
 		void writeTypedPage(StorageIO &io, uint64_t offset, Generation generation,
 							const std::array<std::byte, RSS_PAGE_SIZE> &bytes) {
 			io.writeAt({offset, generation.value()}, bytes.data(), bytes.size());
@@ -1677,6 +1692,11 @@ namespace graph::storage {
 		return PageOwnerHeaderCodec::decode(bytes);
 	}
 
+    PageOwnerHeader SharedPagePoolAllocator::readRecoveryPageOwner(const CatalogEntry &entry, uint8_t frameIndex, uint64_t fileBytes) const {
+        const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
+        return readRecoveryOwner(*io_, poolOffset + uint64_t(frameIndex) * RSS_PAGE_SIZE, fileBytes);
+    }
+
 	bool SharedPagePoolAllocator::reconcilePoolFrames(
 			const CatalogEntry &entry, const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
 			const std::function<CatalogEntry(SegmentId)> &findCatalog,
@@ -1690,6 +1710,7 @@ namespace graph::storage {
 		// ZYX_COV_EXCL_STOP
 		SharedPagePoolHeader header = readPoolHeader(entry);
 		SharedPagePoolHeader reconciled = header;
+        const uint64_t fileBytes = io_->fileSize();
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
 		struct FrameState {
@@ -1705,11 +1726,7 @@ namespace graph::storage {
 				continue;
 			}
 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
-			const std::array<std::byte, RSS_PAGE_SIZE> page = readTypedPage(
-					*io_, pageOffset, entry.generation, "relocatable reconciled shared page owner header is truncated");
-			std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> ownerBytes{};
-			std::copy_n(page.begin(), ownerBytes.size(), ownerBytes.begin());
-			const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
+            const PageOwnerHeader owner = readRecoveryOwner(*io_, pageOffset, fileBytes);
 			frames.push_back({frameIndex, owner, findPageLocation(owner.page_id)});
 		}
 		const auto compatibleKind = [nativeHybridFields](SegmentKind pool, PageOwnerKind owner) {
@@ -1843,6 +1860,7 @@ namespace graph::storage {
 												  "relocatable Page Directory references an unallocated pool frame");
 			}
 		}
+        const uint64_t fileBytes = io_->fileSize();
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
 		const bool canReclaimRetired = metadata_.activeSnapshotCount() == 0U;
@@ -1853,7 +1871,7 @@ namespace graph::storage {
 				continue;
 			}
 			const std::optional<PageLocation> &location = locationsByFrame[frameIndex];
-			const PageOwnerHeader owner = readPageOwner(entry, frameIndex);
+			const PageOwnerHeader owner = readRecoveryOwner(*io_, poolOffset + uint64_t(frameIndex) * RSS_PAGE_SIZE, fileBytes);
 			if (location.has_value()) {
 				const uint8_t invalidMappedOwner =
 						static_cast<uint8_t>(owner.page_id != location->page_id) |
@@ -1874,7 +1892,7 @@ namespace graph::storage {
 			}
 		}
 		for (const uint8_t frameIndex: reactivateFrames) {
-			const PageOwnerHeader retired = readPageOwner(entry, frameIndex);
+			const PageOwnerHeader retired = readRecoveryOwner(*io_, poolOffset + uint64_t(frameIndex) * RSS_PAGE_SIZE, fileBytes);
 			PageOwnerHeader active = retired;
 			active.flags = 0;
 			const auto activeBytes = PageOwnerHeaderCodec::encode(active);

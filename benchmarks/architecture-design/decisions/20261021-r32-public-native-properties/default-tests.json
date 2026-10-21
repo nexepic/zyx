@@ -1,0 +1,1187 @@
+{
+  "tests": 111,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-21T07:01:49Z",
+  "time": "7.858s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 14,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:49Z",
+      "time": "3.01s",
+      "testsuite": [
+        {
+          "name": "ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 478,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:49Z",
+          "time": "0.31s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 494,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:49Z",
+          "time": "0.234s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 501,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:50Z",
+          "time": "0.165s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 508,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:50Z",
+          "time": "0.221s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 527,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:50Z",
+          "time": "0.219s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 549,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:50Z",
+          "time": "0.168s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReadControlDoesNotGrantAuthorityToAWritableBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 565,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:50Z",
+          "time": "0.171s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 572,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:51Z",
+          "time": "0.258s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 591,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:51Z",
+          "time": "0.063s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 602,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:51Z",
+          "time": "0.151s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 614,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:51Z",
+          "time": "0.304s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 657,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:51Z",
+          "time": "0.196s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.297s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "DefaultProfileRemainsRow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyQueryParity.cpp",
+          "line": 691,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.246s",
+          "classname": "HybridPropertyQueryParityTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeGraphWritePlannerVectorTest",
+      "tests": 27,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:52Z",
+      "time": "1.079s",
+      "testsuite": [
+        {
+          "name": "PublishesRawMappingsAndManifestInOneGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.008s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineBootstrapPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 277,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.004s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 397,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.003s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RefusesToOverwriteAPublishedVectorBootstrapState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 458,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 483,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.014s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineDeltaPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 666,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.015s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaInsertForANodeOutsideTheGraphSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 714,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaAfterStagingBootstrapForTheSameIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 741,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsSecondBootstrapForTheSameIndexInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 764,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.002s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsSecondDeltaForTheSameIndexInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 779,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesLogicalCreateAndReplacementThroughNativeVectorState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 808,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.018s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 870,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.039s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsVectorInsertionForANodeErasedByTheSameTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 944,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.007s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 986,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.021s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1061,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.016s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "AppendsAFullTailDeltaPageToItsExistingRawPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.015s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.021s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesANewRawPoolWhenTheCurrentRawPoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.019s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "MovesTheManifestToANewPoolWhenCowFramesAreExhausted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:52Z",
+          "time": "0.721s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.008s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1395,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.008s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1438,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.019s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1512,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.023s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1570,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.024s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        },
+        {
+          "name": "RecoversNativeVectorDeltaAcrossSuperblockInterruptions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Vector.cpp",
+          "line": 1669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.036s",
+          "classname": "NativeGraphWritePlannerVectorTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeVectorMutationPlannerTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:53Z",
+      "time": "0.004s",
+      "testsuite": [
+        {
+          "name": "EmitsOrderedEraseThenInsertForChangedIndexedValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMissingIndexedPropertyTokenBeforeInferringMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsZeroNormCosineValuesAtBothSemanticBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "EnforcesPerNodeMutationBudgetAcrossVectorIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        },
+        {
+          "name": "BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeVectorMutationPlannerContractsTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:53Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "RejectsInvalidConstructorDefinitionsAndBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeVectorMutationPlanner.cpp",
+          "line": 194,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0s",
+          "classname": "NativeVectorMutationPlannerContractsTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 33,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:53Z",
+      "time": "3.762s",
+      "testsuite": [
+        {
+          "name": "ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.131s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ResumesAnAdjacentScanFromAnotherSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.094s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "LogicalReadSnapshotValidatesAllVisitorCallbacks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:53Z",
+          "time": "0.106s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PropertyPresenceProbeAvoidsValueMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 365,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.128s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 442,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.067s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 485,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.118s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 575,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.124s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 647,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.068s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 694,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.09s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ScopedPatternReadsAvoidUnrequestedLargeEntityProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 746,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.187s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.16s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ShortestPathScalarConsumersAvoidCompletePropertyDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 876,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:54Z",
+          "time": "0.207s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 970,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.192s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "LogicalEdgeMaterializationRecordsTraceWhenEnabled",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1029,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.09s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1078,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.089s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1109,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.147s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "AdjacencyTopologyVisitorHonorsEarlyTermination",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.088s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.104s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1202,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.11s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1221,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:55Z",
+          "time": "0.122s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1298,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.1s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1403,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.097s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.081s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1500,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.091s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.094s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1607,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.114s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1701,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.094s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1730,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.101s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1772,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.104s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1855,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:56Z",
+          "time": "0.168s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1894,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0.094s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1932,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0.095s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 1976,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0.088s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "ConstraintMutationValidatorTest",
+      "tests": 27,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-21T07:01:57Z",
+      "time": "0.001s",
+      "testsuite": [
+        {
+          "name": "PlansNativeUsableSupportTransitionsForReplaceAndCreate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 149,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsDuplicateAgainstAValidatedSupportTreeCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "AppliesNodeKeyAndTypeChecksToTheBatchFinalState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 181,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "ValidatesAdditionalDdlDefinitionsAgainstTheCompleteGraph",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsAnActiveSupportConstraintWithoutAPublishedRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 220,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "ResolvesEqualLabelAndRelationshipTypeNamesThroughSeparateDomains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 231,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsIncompleteAdaptersAndInvalidAffectedEntityRequests",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 269,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "AllowsAnAtomicUniqueKeySwapAgainstChangedSupportCandidates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 329,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsMalformedAndOverBudgetSupportTreeCandidates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "UsesFullSnapshotValidationWhenDdlAndExistingConstraintsShareABatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 376,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "ValidatesUntypedEdgeConstraintsWithoutAllocatingAToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 398,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "ValidatesEveryDeclaredPropertyTypeInTheFullSnapshotPath",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 417,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsEmptyAndUnresolvedSchemaNamesBeforePlanningMutations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 451,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "AppliesCreatedEntitiesAndDeletesDuringFullSnapshotValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 481,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "PlansCreatedEdgeUniqueTransitionsThroughTheAffectedEntityPath",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 527,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsDuplicateBatchKeysAndUnknownReferenceKinds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 555,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsMismatchedPersistedEntitiesAndStaleSupportEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "StopsAtTheFirstDifferentSupportDigestAndRejectsInvalidFullScans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 606,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "PlansPersistedEdgeUniqueTransitionsDuringFullSnapshotValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 636,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsInvalidTargetsDuringFullSnapshotValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 671,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "AppliesRepeatedUpdatesAndRejectsExplicitNullProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 719,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 749,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "AllowsAKeyReleasedByADeletedSupportTreeCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 768,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsAStaleTargetKeyEntryForTheMutatedEntity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 793,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "RejectsDuplicateEntitiesAndMissingSupportRootsDuringFullSnapshotValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 811,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        },
+        {
+          "name": "BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/schema\/test_ConstraintMutationValidator.cpp",
+          "line": 839,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-21T07:01:57Z",
+          "time": "0s",
+          "classname": "ConstraintMutationValidatorTest"
+        }
+      ]
+    }
+  ]
+}

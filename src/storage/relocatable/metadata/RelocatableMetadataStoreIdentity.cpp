@@ -49,9 +49,17 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable logical Segment ID reservation requires a positive count and checkpoint LSN");
 		}
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
+        // Namespace-only reservations do not alter graph/native ownership.
+        // Native scratch callers retain the existing bounded64-fragment batch.
+        if (current.hybrid_property_descriptor_root.isValid() && count > 64U)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native logical Segment reservation exceeds64IDs");
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        if (current.hybrid_property_descriptor_root.isValid()) {
+            pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
+            batch.hybrid_property_publication_ = true;
+        }
 		std::vector<SegmentId> segmentIds;
 		segmentIds.reserve(count);
 		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {

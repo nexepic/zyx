@@ -431,3 +431,13 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, PressureSampleExcludesOneObserve
  EXPECT_EQ(pressure.active_snapshot_count,0U);EXPECT_FALSE(pressure.oldest_generation.isValid());
  observer.release();EXPECT_THROW(registry.snapshotPressure(&observer),std::invalid_argument);
 }
+
+TEST_F(RelocatableMetadataSnapshotRegistryTest, WriterDecodeCacheDoesNotConsumePinsOrChangeTheReclamationBarrier) {
+    const auto initial = superblock(1, 1); SuperblockFile bootstrap(io); bootstrap.initializeNew(initial);
+    MetadataSnapshotRegistry registry(bootstrap, MetadataSnapshotRegistryLimits{.maximum_pins_per_generation = 1U});
+    auto writer = registry.beginWrite(); auto pin = registry.pinCurrentUnderWrite(writer, initial);
+    auto context = registry.createWriterReadContext(writer, initial);
+    ASSERT_TRUE(context); EXPECT_TRUE(context->authenticates(initial)); EXPECT_EQ(registry.activeSnapshotCount(), 1U);
+    expectFormatError([&] { (void)registry.pinCurrentUnderWrite(writer, initial); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+    context.reset(); EXPECT_EQ(registry.activeSnapshotCount(), 1U); pin.release(); EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+}

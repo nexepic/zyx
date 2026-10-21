@@ -1,0 +1,20 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "progress": "58.3%",
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 5,
+  "tests": {
+    "default": {
+      "passed": 111
+    },
+    "candidate": {
+      "passed": 185
+    }
+  },
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "implemented": "Public property-only existing-token native map replacements with scalar/constraint/Vector coordination;64-owner batch, noop generation, pins, integrity, mixed-route refusal.",
+  "remaining": "Native public deletion/patch/create/mixed batches and production gates, R5/R7."
+}

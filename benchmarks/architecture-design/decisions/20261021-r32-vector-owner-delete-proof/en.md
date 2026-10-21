@@ -1,0 +1,6 @@
+
+### 2026-10-21 R3.2: Reject residual Vector mappings before owner deletion
+
+Evidence: `benchmarks/architecture-design/decisions/20261021-r32-vector-owner-delete-proof/`. A regression reproduced successful native owner deletion leaving a mapping after a low-level property replacement deliberately removed embedding without Vector coordination. Every deleted Node now checks the actual Node-to-Vector mapping before label-scope selection. Missing or nonmatching properties/labels cannot hide residual membership. Existing mappings refuse before writes until atomic removal is coordinated; damaged indexes are not silently repaired.
+
+A companion case allows deletion of an isolated Node outside the Vector label while other Nodes retain a populated Vector index. The initial fixture used the wrong ROW property pool owner; it now derives the owner from the actual source route. Fixture failure and the reproduced publication defect have separate logs. Final affected Vector planner/query/deletion groups: default10 passed; candidate18 passed. Prior57-module907/default and1236/candidate plus1 conditional skip evidence remains separate. No full repository suite or timing benchmark. **Total14/24 (58.3%), accepted growth0; no commit or push.**

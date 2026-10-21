@@ -586,3 +586,27 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReachableOwnerChecksumCorrup
 	expectFormatError([&] { allocator_ = std::make_unique<SharedPagePoolAllocator>(io_, *metadata_); },
 					  FormatError::FERR_CHECKSUM_MISMATCH);
 }
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, RecoveryRejectsACompleteHeaderWithATruncatedFrameTail) {
+    switchToNativeIo(); const auto allocation = createPool(31, 91, 40, {}, 2);
+    const auto offset = poolOffset(allocation.pool.physical_slot) + uint64_t(allocation.location.page_index) * RSS_PAGE_SIZE;
+    io_->truncate(offset + RSS_PAGE_OWNER_HEADER_BYTES);
+    expectFormatError([&] { SharedPagePoolAllocator recovery(io_, *metadata_); }, FormatError::FERR_BUFFER_TOO_SMALL);
+}
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, RecoveryStillAuthenticatesEveryOwnerHeaderChecksum) {
+    const auto allocation = createPool(31, 91, 40, {}, 2);
+    const auto offset = poolOffset(allocation.pool.physical_slot) + uint64_t(allocation.location.page_index) * RSS_PAGE_SIZE;
+    std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> bytes{};
+    ASSERT_EQ(io_->readAt(offset, bytes.data(), bytes.size()), bytes.size()); bytes.back() ^= std::byte{1};
+    io_->writeAt(offset, bytes.data(), bytes.size());
+    EXPECT_THROW(allocator_->reconcilePool(SegmentId(31)), FormatException);
+}
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, RecoveryReadsHeadersWithoutScanningAllocatedValueBodies) {
+    const std::vector<std::byte> payload(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, std::byte{0x55});
+    (void)createPool(31, 91, 40, payload, 2);
+    for (uint64_t i = 1; i < RSS_PAGE_POOL_DATA_FRAME_COUNT; ++i)
+        (void)allocator_->appendPage({SegmentId(31), Generation(1), PageId(91 + i), 77, PageOwnerKind::POK_INDEX, 0, payload}, LogSequenceNumber(2 + i));
+    io_->resetStats(); allocator_->reconcilePool(SegmentId(31));
+    RecordProperty("recovery_read_bytes", std::to_string(io_->stats().read_bytes));
+    EXPECT_LT(io_->stats().read_bytes, uint64_t(RSS_PAGE_POOL_DATA_FRAME_COUNT) * RSS_PAGE_SIZE);
+}

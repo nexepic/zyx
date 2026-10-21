@@ -1,0 +1,78 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *Joint*:*Pending*
+[==========] Running 31 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 14 tests from HybridPropertyOwnerInsertionPublicationTest
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndExistingFieldChangeShareTheirColumnImage
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndExistingFieldChangeShareTheirColumnImage (182 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointEdgeBirthAndExistingFieldChangeShareTheirColumnImage
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointEdgeBirthAndExistingFieldChangeShareTheirColumnImage (207 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndExistingFieldDemotionShareTheirGroupLiveMask
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndExistingFieldDemotionShareTheirGroupLiveMask (355 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialJointNodeBirthAndExistingFieldPublicationKeepsBothOldStates
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialJointNodeBirthAndExistingFieldPublicationKeepsBothOldStates (299 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteJointNodeBirthAndExistingFieldPublicationRecoversBothNewStates
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteJointNodeBirthAndExistingFieldPublicationRecoversBothNewStates (300 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointNodeAndEdgeBirthPublishBothNativeGroupLiveMasks
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointNodeAndEdgeBirthPublishBothNativeGroupLiveMasks (387 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointPropertylessNodeAndEdgeBirthPreserveBothNativeColumns
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointPropertylessNodeAndEdgeBirthPreserveBothNativeColumns (395 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndDeletionMergeOneFinalColumnAndLiveMask
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointNodeBirthAndDeletionMergeOneFinalColumnAndLiveMask (178 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointEdgeBirthAndDeletionMergeTheirColumnAndCanonicalAdjacency
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointEdgeBirthAndDeletionMergeTheirColumnAndCanonicalAdjacency (204 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointPropertylessBirthAndDeletionDemoteOnlyTheRemainingSourceMembers
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointPropertylessBirthAndDeletionDemoteOnlyTheRemainingSourceMembers (348 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.PartialJointBirthAndDeletionRetainTheOldOwnerAndAllOldFields
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.PartialJointBirthAndDeletionRetainTheOldOwnerAndAllOldFields (304 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.CompleteJointBirthAndDeletionPublishTheNewOwnerAndAllNewFields
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.CompleteJointBirthAndDeletionPublishTheNewOwnerAndAllNewFields (292 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointSecondGroupBirthAndFirstGroupFieldChangePreserveBothSources
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointSecondGroupBirthAndFirstGroupFieldChangePreserveBothSources (392 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPublicationTest.JointSecondGroupBirthAndFirstGroupDemotionKeepTheirLiveMasksSeparate
+[       OK ] HybridPropertyOwnerInsertionPublicationTest.JointSecondGroupBirthAndFirstGroupDemotionKeepTheirLiveMasksSeparate (619 ms)
+[----------] 14 tests from HybridPropertyOwnerInsertionPublicationTest (4468 ms total)
+
+[----------] 7 tests from HybridPropertyOwnerInsertionPlanTest
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages
+[       OK ] HybridPropertyOwnerInsertionPlanTest.DisabledOrRowOwnerCannotAcquirePendingColumnImages (7 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingOwnerColumnCarriesSeparateLivenessWithoutPublishingAnEntity
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingOwnerColumnCarriesSeparateLivenessWithoutPublishingAnEntity (36 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.IncompatiblePendingValueDemotesOnlyItsFieldAndKeepsBorrowedValuesAlive
+[       OK ] HybridPropertyOwnerInsertionPlanTest.IncompatiblePendingValueDemotesOnlyItsFieldAndKeepsBorrowedValuesAlive (33 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingGroupPreparationCombinesColumnAndLiveBitWithoutPhysicalAllocation
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingGroupPreparationCombinesColumnAndLiveBitWithoutPhysicalAllocation (35 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PropertylessPendingOwnerPreservesOlderColumnBytesAndRejectsDuplicateDeclarations
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PropertylessPendingOwnerPreservesOlderColumnBytesAndRejectsDuplicateDeclarations (35 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingDemotionProducesCompleteDirectoriesAndRefundsPartialPreparationOnCancel
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingDemotionProducesCompleteDirectoriesAndRefundsPartialPreparationOnCancel (32 ms)
+[ RUN      ] HybridPropertyOwnerInsertionPlanTest.PendingNodeAndEdgeGroupsShareOneBoundedPrivatePreparation
+[       OK ] HybridPropertyOwnerInsertionPlanTest.PendingNodeAndEdgeGroupsShareOneBoundedPrivatePreparation (109 ms)
+[----------] 7 tests from HybridPropertyOwnerInsertionPlanTest (291 ms total)
+
+[----------] 10 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.JointPropertyPublicationCoordinatesNativeAndRowLargeValuesAndNewNames
+[       OK ] HybridPropertyQueryParityTest.JointPropertyPublicationCoordinatesNativeAndRowLargeValuesAndNewNames (1212 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointPropertyPublicationRelabelsNativeOwnerAndMaintainsItsFieldAndScalarIndex
+[       OK ] HybridPropertyQueryParityTest.JointPropertyPublicationRelabelsNativeOwnerAndMaintainsItsFieldAndScalarIndex (2383 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointPropertyPublicationMergesNativeAndRowPatchesWithoutDroppingOtherFields
+[       OK ] HybridPropertyQueryParityTest.JointPropertyPublicationMergesNativeAndRowPatchesWithoutDroppingOtherFields (1102 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointPropertyPublicationRecoversBothLayoutsLargeValuesAndVectorTogether
+[       OK ] HybridPropertyQueryParityTest.JointPropertyPublicationRecoversBothLayoutsLargeValuesAndVectorTogether (3365 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionAndFieldChangeMergeTheSameNativeColumn
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionAndFieldChangeMergeTheSameNativeColumn (1183 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionAndFieldChangeShareThresholdDemotionAndLargeExtension
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionAndFieldChangeShareThresholdDemotionAndLargeExtension (1306 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionRejectsIncidentNodeAndThenDetachesItsRowEdges
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionRejectsIncidentNodeAndThenDetachesItsRowEdges (1802 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionRemovesNativeAndRowNodesWhileOldPinsRemainLive
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionRemovesNativeAndRowNodesWhileOldPinsRemainLive (1105 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionRemovesNativeAndRowEdgesAndCanonicalAdjacencyTogether
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionRemovesNativeAndRowEdgesAndCanonicalAdjacencyTogether (687 ms)
+[ RUN      ] HybridPropertyQueryParityTest.JointOwnerDeletionRecoversNativeRowFieldsAndVectorAcrossBothHeaders
+[       OK ] HybridPropertyQueryParityTest.JointOwnerDeletionRecoversNativeRowFieldsAndVectorAcrossBothHeaders (3382 ms)
+[----------] 10 tests from HybridPropertyQueryParityTest (17531 ms total)
+
+[----------] Global test environment tear-down
+[==========] 31 tests from 3 test suites ran. (22291 ms total)
+[  PASSED  ] 31 tests.

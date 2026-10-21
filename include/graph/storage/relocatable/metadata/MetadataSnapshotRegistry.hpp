@@ -100,6 +100,10 @@ namespace graph::storage {
 		// Creates a short-lived read pin for the current durable root while this
 		// registry's writer guard is held. Typed preparers use it to validate
 		// source bytes without attempting to recursively acquire the reader lock.
+        // Creates a source-bound decoded cache without registering a reader pin.
+        // Writer maintenance must retain its original reclamation/pin limits.
+        [[nodiscard]] std::shared_ptr<MetadataPageReadContext> createWriterReadContext(
+            const MetadataWriteGuard &guard, const Superblock &current) const;
 		[[nodiscard]] MetadataSnapshotPin pinCurrentUnderWrite(const MetadataWriteGuard &guard,
 															   const Superblock &current) const;
 

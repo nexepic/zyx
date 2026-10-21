@@ -1,0 +1,43 @@
+{
+  "base_commit": "e6822035f920b731111bf25b710edf9f19d840f2",
+  "scope": [
+    "R3.2"
+  ],
+  "accepted_total": 14,
+  "denominator": 24,
+  "percentage": 58.3,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "related_module_count": 57,
+  "tests": {
+    "related-default": {
+      "registered": 907,
+      "passed": 907,
+      "skipped": 0,
+      "binary_sha256": "d39855703c9a3e2d63ddaabd15c79cfde8606e355e3405e30f113e5052eedbe4"
+    },
+    "related-candidate": {
+      "registered": 1237,
+      "passed": 1236,
+      "skipped": 1,
+      "binary_sha256": "dbecd549b32f18f7ff81e7dff352362eabc4af8b3cbebb0a5aaffc8629281fc0"
+    },
+    "final-affected-default": {
+      "registered": 32,
+      "passed": 32,
+      "skipped": 0,
+      "binary_sha256": "a70ef341acc8338eb2adab0ece35d202eeaa4f9e54ae6519ed4486bf4df79f61"
+    },
+    "final-affected-candidate": {
+      "registered": 128,
+      "passed": 128,
+      "skipped": 0,
+      "binary_sha256": "7b2b0cae4f9bc18cb09a067dd035cb66736a7251a277d6c7cb0fcd9ac47bda01"
+    }
+  },
+  "validation_note": "Prior related-module runs preceded the dependency/deletion fixes and shared-batch preparation refactor; final-affected runs rebuilt the current source and exercised affected field/publication paths. Broad and final binaries have separate hashes.",
+  "excluded": "Unaffected HybridPropertyMatureShapeCostsTest has separately frozen evidence.",
+  "performance_timing_run": false,
+  "full_repository_test_run": false,
+  "remaining": "Actual Vector delta publication and ordinary topology integration; production space/resource gates and remaining R5/R7."
+}

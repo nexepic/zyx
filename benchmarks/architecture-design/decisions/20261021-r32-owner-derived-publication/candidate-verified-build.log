@@ -1,0 +1,127 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:1:
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyOrdinaryConversionTestFixture.hpp:53:133: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+   53 |             {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr, PhysicalSlotId(40), PhysicalSlotId(80), 903}};
+      |                                                                                                                                     ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:2:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:288:27: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  288 |     exercise({.kind = NODE});
+      |                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:291:27: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  291 |     exercise({.kind = EDGE});
+      |                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:306:51: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  306 |     exercise({.kind = NODE, .withProperties = true});
+      |                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:309:51: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  309 |     exercise({.kind = EDGE, .withProperties = true});
+      |                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:312:91: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  312 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("new string")});
+      |                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:315:91: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  315 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue("new string")});
+      |                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:330:65: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  330 |     exercise({.kind = NODE, .withProperties = true, .owners = 48});
+      |                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:333:65: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  333 |     exercise({.kind = EDGE, .withProperties = true, .owners = 48});
+      |                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:336:114: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  336 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("extension"), .extensionField = true});
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:339:114: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  339 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue("extension"), .extensionField = true});
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:342:72: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  342 |     exercise({.kind = NODE, .withProperties = true, .withCatalog = true});
+      |                                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:345:72: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  345 |     exercise({.kind = EDGE, .withProperties = true, .withCatalog = true});
+      |                                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:348:126: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  348 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue(std::string(70000, 'x')), .extensionField = true});
+      |                                                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:351:126: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  351 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue(std::string(70000, 'x')), .extensionField = true});
+      |                                                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:354:102: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  354 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue(std::string(70000, 'x'))});
+      |                                                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:357:102: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  357 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue(std::string(70000, 'x'))});
+      |                                                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:360:156: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  360 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("new name"), .extensionField = true, .withCatalog = true, .allocateName = true});
+      |                                                                                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:363:156: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  363 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue("new name"), .extensionField = true, .withCatalog = true, .allocateName = true});
+      |                                                                                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:378:91: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  378 |     exercise({.kind = NODE, .withProperties = true, .withCatalog = true, .withIndex = true});
+      |                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:381:91: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  381 |     exercise({.kind = EDGE, .withProperties = true, .withCatalog = true, .withIndex = true});
+      |                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:396:218: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  396 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(100)), PropertyValue(int64_t(1))}), .withCatalog = true, .derived = DerivedCase::ODC_VECTOR});
+      |                                                                                                                                                                                                                          ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:405:108: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  405 |     exercise({.kind = NODE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_UNIQUE});
+      |                                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:408:110: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  408 |     exercise({.kind = NODE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_REQUIRED});
+      |                                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:411:109: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  411 |     exercise({.kind = NODE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_INTEGER});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:414:109: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  414 |     exercise({.kind = NODE, .withCatalog = true, .derived = DerivedCase::ODC_REQUIRED, .expectFailure = true});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:417:169: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  417 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("invalid"), .withCatalog = true, .derived = DerivedCase::ODC_INTEGER, .expectFailure = true});
+      |                                                                                                                                                                         ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:426:108: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  426 |     exercise({.kind = EDGE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_UNIQUE});
+      |                                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:429:110: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  429 |     exercise({.kind = EDGE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_REQUIRED});
+      |                                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:432:109: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  432 |     exercise({.kind = EDGE, .withProperties = true, .withCatalog = true, .derived = DerivedCase::ODC_INTEGER});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:435:109: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  435 |     exercise({.kind = EDGE, .withCatalog = true, .derived = DerivedCase::ODC_REQUIRED, .expectFailure = true});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:438:169: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  438 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue("invalid"), .withCatalog = true, .derived = DerivedCase::ODC_INTEGER, .expectFailure = true});
+      |                                                                                                                                                                         ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:447:145: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  447 |     exercise({.kind = NODE, .withProperties = true, .owners = 62, .withCatalog = true, .derived = DerivedCase::ODC_UNIQUE, .expectFailure = true});
+      |                                                                                                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:450:169: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  450 |     exercise({.kind = EDGE, .withProperties = true, .initial = PropertyValue(int64_t(1)), .withCatalog = true, .derived = DerivedCase::ODC_UNIQUE, .expectFailure = true});
+      |                                                                                                                                                                         ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp:453:217: warning: missing field 'completeFault' initializer [-Wmissing-designated-field-initializers]
+  453 |     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("new name"), .extensionField = true, .withCatalog = true, .allocateName = true, .derived = DerivedCase::ODC_REQUIRED, .expectFailure = true});
+      |                                                                                                                                                                                                                         ^
+40 warnings generated.

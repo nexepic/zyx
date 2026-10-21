@@ -1,261 +1,7 @@
-#include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
-#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
-#include "graph/query/execution/MaterializedByteBudget.hpp"
-#include "CypherParserImpl.hpp"
-#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
-#include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
-#include "graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp"
-#include "graph/storage/LogicalGraphTransactionOverlay.hpp"
-#include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
-#include <iostream>
-#include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
-#include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
-#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
-#include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
-#include "graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp"
+#include "storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp"
 
-using namespace graph;
-using namespace graph::storage;
-namespace {
-// Test-only transaction: the real overlay owns staged final states. It cannot
-// publish to the read-only file and carries the same retained private account.
-class ReadControlOverlayTransaction final : public LogicalGraphTransaction, public LogicalGraphTransactionMemoryProvider {
-    std::unique_ptr<LogicalGraphReadSnapshot> source_;
-    std::shared_ptr<std::pmr::memory_resource> memory_;
-    uint64_t next_node_ = 1000, next_edge_ = 10000; bool active_ = true;
-public:
-    ReadControlOverlayTransaction(std::unique_ptr<LogicalGraphReadSnapshot> source, std::shared_ptr<std::pmr::memory_resource> memory)
-        : source_(std::move(source)), memory_(std::move(memory)) {}
-    LogicalGraphTransactionState state() const override { return active_ ? LogicalGraphTransactionState::LGTTS_ACTIVE : LogicalGraphTransactionState::LGTTS_ROLLED_BACK; }
-    bool isReadOnly() const override { return false; }
-    LogicalGraphReadSnapshot &readSnapshot() override { return *source_; }
-    std::shared_ptr<std::pmr::memory_resource> retainedWriteMemory() const override { return memory_; }
-    LogicalGraphMutationBatchResult previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
-        if (!active_) throw std::logic_error("test overlay transaction has ended");
-        LogicalGraphMutationBatchResult result;
-        for (size_t i = 0; i < batch.node_creates.size(); ++i) result.created_node_ids.push_back(next_node_ + i);
-        for (size_t i = 0; i < batch.edge_creates.size(); ++i) result.created_edge_ids.push_back(next_edge_ + i);
-        return result;
-    }
-    LogicalGraphMutationBatchResult stageMutationBatch(LogicalGraphMutationBatch batch) override {
-        auto result = previewMutationBatch(batch); next_node_ += batch.node_creates.size(); next_edge_ += batch.edge_creates.size(); return result;
-    }
-    LogicalGraphMutationBatchResult commit() override { throw std::logic_error("read control overlay cannot publish"); }
-    void rollback() override { active_ = false; }
-};
-class HybridPropertyQueryParityTest : public relocatable_storage_backend_test::RelocatableStorageBackendTest {
-protected:
-    using Rows = std::vector<std::vector<PropertyValue>>;
-    const std::array<std::string, 7> queries{{
-        "MATCH (n:Person) WHERE n.age >= 20 AND n.age < 25 RETURN n.age AS age ORDER BY age",
-        "MATCH (n:Person) RETURN count(n) AS count, sum(n.age) AS total",
-        "MATCH (n:Person) WHERE n.age = 7 RETURN n.note AS note, n.missing AS missing",
-        "MATCH (n:Person) WHERE n.age < 3 OPTIONAL MATCH (n)-[r:KNOWS]->(m) RETURN n.age AS age, count(r) AS edges ORDER BY age",
-        "MATCH (n)-[r:KNOWS]->(m) WHERE n.age < 4 RETURN n.age AS source, r.weight AS weight, m.age AS target ORDER BY source, weight, target",
-        "MATCH (n:Person) RETURN n.age AS age ORDER BY age DESC LIMIT 3",
-        "MATCH (n)-[r:KNOWS]->(m) RETURN r.weight AS weight, m.age AS age, m.note AS note, m.missing AS missing ORDER BY weight"
-    }};
-    void seed(bool propertyIndex = true, bool constraint = false, bool firstSolo = false, bool interleavedEdges = false, size_t edgeCount = 64, bool hotSource = false, bool mixedUntyped = false) {
-        materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
-        RelocatableStorageBackend backend(options); backend.open();
-        std::vector<LogicalGraphNodeCreateRequest> nodes;
-        for (int64_t i = 0; i < 64; ++i)
-            nodes.push_back({{firstSolo && i == 0 ? "Solo" : "Person"}, {{"age", PropertyValue(i)}, {"note", PropertyValue(i == 7 ? "seven" : "person")}}});
-        const auto ids = backend.createLogicalNodes(nodes); ASSERT_EQ(ids.size(), 64U);
-        std::vector<LogicalGraphEdgeCreateRequest> edges;
-        for (size_t i = 0; i < edgeCount; ++i)
-            edges.push_back({ids[hotSource ? 0U : i / 2U], ids[interleavedEdges ? ((i % 32U) * 13U) % 32U : (i / 2U + 1U) % ids.size()], mixedUntyped && i % 3U == 0U ? "" : "KNOWS", {{"weight", PropertyValue(int64_t(i))}}});
-        ASSERT_EQ(backend.createLogicalEdges(edges).size(), edgeCount);
-        if (propertyIndex) static_cast<void>(backend.createLogicalNodeIndex({"person_age", "Person", {"age"}}));
-        if (constraint) static_cast<void>(backend.createLogicalConstraint({"person_age_required",
-            LogicalGraphConstraintEntityKind::LGCEK_NODE, LogicalGraphConstraintKind::LGCK_NOT_NULL,
-            "Person", {"age"}, LogicalGraphConstraintPropertyType::LGCPT_NONE}));
-        backend.close();
-    }
-    std::array<Rows, 7> read() {
-        auto options = backendOptions(); options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
-        RelocatableStorageBackend backend(options); backend.open();
-        query::execution::LogicalPlanReadRuntime runtime(backend);
-        query::execution::LogicalPlanReadRuntimeBounds bounds;
-        bounds.maximum_node_records = 128; bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128;
-        bounds.maximum_node_page_records = 16; bounds.maximum_metadata_pages_per_node_page = 8192;
-        bounds.maximum_adjacency_page_records = 16; bounds.maximum_property_entries = 16; bounds.maximum_rows = 1024; bounds.maximum_distinct_rows = 1024;
-        parser::cypher::CypherParserImpl parser; std::array<Rows, 7> output;
-        for (size_t i = 0; i < queries.size(); ++i) {
-            auto plan = parser.parseToLogical(queries[i]);
-            const auto result = runtime.executeToQueryResult(*plan.root, bounds);
-            for (const auto &row : result.getRows()) {
-                std::vector<PropertyValue> values;
-                for (const auto &column : result.getColumns()) values.push_back(row.at(column).asPrimitive());
-                output[i].push_back(std::move(values));
-            }
-        }
-        backend.close(); return output;
-    }
-    static constexpr uint64_t COVERED_INDEX = 700;
-    void buildCovered(bool removeOne = false, bool wrongNeighbor = false, size_t edgeCount = 64) {
-        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        auto metadata = RelocatableMetadataStore::open(io); EntityPageStore entities(io, *metadata);
-        SlottedPagePool pages(io, *metadata); BTreePageStore trees(pages, *metadata);
-        EntityLabelSetStore labels(io, *metadata, pages); PropertyCollectionRootStore roots(pages, *metadata);
-        NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(180);
-        options.entity_pool_owner_id = 901; options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(180), 902};
-        NativeGraphWritePlanner planner(*metadata, entities, labels, roots, trees, options); auto tx = planner.beginTransaction();
-        std::vector<BTreePageEntry> entries;
-        for (uint64_t id = 1; id <= edgeCount; ++id) {
-            const auto edge = entities.readEdge(tx.baseSnapshot(), id);
-            for (const auto direction : {GlobalAdjacencyDirection::GAD_OUT, GlobalAdjacencyDirection::GAD_IN}) {
-                if (removeOne && id == 1 && direction == GlobalAdjacencyDirection::GAD_IN) continue;
-                auto record = CoveredAdjacencyCandidate::entry(direction, id, edge.source_node_id, edge.target_node_id, edge.type_id);
-                if (wrongNeighbor && id == 1 && direction == GlobalAdjacencyDirection::GAD_OUT) LittleEndianCodec::writeU64(record.value, 0, 64);
-                const auto encoded = CoveredAdjacencyCandidate::Map::encode(record.key, record.value);
-                entries.push_back({std::vector<std::byte>(encoded.begin(), encoded.end()), 0});
-            }
-        }
-        std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) { return a.key < b.key; });
-        const OrderedBTreeEntrySource source = [&]() -> OrderedBTreeEntryCursor {
-            return [&, ordinal = size_t{0}]() mutable -> std::optional<BTreePageEntry> {
-                if (ordinal == entries.size()) return {}; return entries[ordinal++];
-            };
-        };
-        const BulkBTreeBuildOptions build{PhysicalSlotId(40), PhysicalSlotId(180), COVERED_INDEX, entries.size(), 32, BTreeLeafValueLayout::BLVL_EMPTY};
-        tx.stageScalarIndexCreate(trees, BulkBTreeBuilder::planNativeTree(trees, *metadata, tx.baseSnapshot(), COVERED_INDEX, source, build));
-        ASSERT_TRUE(tx.commit().committed()); io->flushStream();
-    }
-    std::array<Rows, 7> controlRows(bool covered, std::shared_ptr<query::execution::MaterializedByteBudget> memory, bool boundExpansion = false, bool multiHop = false) {
-        auto options = backendOptions(); options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
-        RelocatableStorageBackend backend(options); backend.open();
-        auto snapshot = covered ? backend.openCoveredAdjacencyCandidateReadSnapshot(COVERED_INDEX, 64, 8192, memory) : backend.openLogicalGraphReadSnapshot();
-        query::execution::LogicalPlanReadRuntime runtime(backend);
-        query::execution::LogicalPlanReadRuntimeBounds bounds;
-        bounds.maximum_node_records = 128; bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128;
-        bounds.maximum_node_page_records = 16; bounds.maximum_metadata_pages_per_node_page = 8192;
-        bounds.maximum_adjacency_page_records = 16; bounds.maximum_property_entries = 16; bounds.maximum_rows = 1024; bounds.maximum_distinct_rows = 1024;
-        const std::array<std::vector<std::string>, 7> columns{{{"age"}, {"count", "total"}, {"note", "missing"}, {"age", "edges"},
-            {"source", "weight", "target"}, {"age"}, {"weight", "age", "note", "missing"}}};
-        parser::cypher::CypherParserImpl parser; std::array<Rows, 7> output;
-        for (size_t i = 0; i < queries.size(); ++i) {
-            const auto text = multiHop && i == 6 ?
-                "MATCH (n:Person) WHERE n.age = 0 WITH n MATCH (n)-[:KNOWS*2]->(m) RETURN 0 AS weight, m.age AS age, m.note AS note, m.missing AS missing ORDER BY age" : boundExpansion && i == 6 ?
-                "MATCH (n:Person) WHERE n.age = 0 WITH n MATCH (n)-[r:KNOWS]->(m) RETURN r.weight AS weight, m.age AS age, m.note AS note, m.missing AS missing ORDER BY weight" : queries[i];
-            auto plan = parser.parseToLogical(text);
-            (void)runtime.executeWithSnapshot(*snapshot, *plan.root, bounds, [&](const auto &row) {
-                std::vector<PropertyValue> values;
-                for (const auto &column : columns[i]) values.push_back(std::get<PropertyValue>(row.values.at(column)));
-                output[i].push_back(std::move(values)); return true;
-            }, {});
-        }
-        snapshot.reset(); EXPECT_EQ(memory->used(), 0U); backend.close(); return output;
-    }
-    NativeStorageAllocationFootprint wholeCost() {
-        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
-        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        auto metadata = RelocatableMetadataStore::openReadOnly(io); auto pin = metadata->openSnapshot();
-        auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
-        const auto epoch = io->dataMutationEpoch(); const auto cost = NativeStorageAllocationCensus(io, *metadata, memory).inspect(pin);
-        if (!cost || !cost->fullyAttributed()) throw std::runtime_error("incomplete whole allocation proof");
-        EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(io->dataMutationEpoch(), epoch); return *cost;
-    }
-    void addCatalogControl(bool unknown, size_t unusedTokens = 0) {
-        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        auto metadata = RelocatableMetadataStore::open(io);
-        EntityPageStore entities(io, *metadata); SlottedPagePool pages(io, *metadata);
-        BTreePageStore trees(pages, *metadata); EntityLabelSetStore labels(io, *metadata, pages);
-        PropertyCollectionRootStore roots(pages, *metadata); SystemCatalog catalog(trees, *metadata);
-        NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(180);
-        options.entity_pool_owner_id = 901; options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(180), 902};
-        NativeGraphWritePlanner planner(*metadata, entities, labels, roots, trees, options);
-        auto tx = planner.beginTransaction(); auto session = catalog.beginWrite(tx);
-        for (size_t i = 0; i < unusedTokens; ++i) (void)session.ensurePropertyToken("unused_" + std::to_string(i));
-        session.setConfiguration("read_hint", PropertyValue(int64_t(7))); session.finish();
-        if (unknown) {
-            const std::array<std::byte, 2> key{std::byte{254}, std::byte{1}};
-            tx.stageScalarIndexUpsert(trees, RSS_SYSTEM_CATALOG_INDEX_ID, key, 1);
-        }
-        ASSERT_TRUE(tx.commit().committed()); io->flushStream();
-    }
-    void setAge(int64_t value, bool expectRefusal = false, bool eraseOwner = false) {
-        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-        ASSERT_TRUE(file->is_open()); auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        auto metadata = RelocatableMetadataStore::open(io);
-        // Writable-open recovery may repair pool bitmaps before the first
-        // writer. Complete it through an independently checked metadata-only
-        // lease before asserting that schema refusal does no private IO.
-        if (expectRefusal) (void)metadata->reserveNativeGraphLogicalIds(1, 0);
-        auto old = metadata->openSnapshot();
-        const uint64_t owner = eraseOwner ? 64 : 1;
-        SlottedPagePool pages(io, *metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
-        BTreePageStore trees(pages, *metadata); SystemCatalog catalog(trees, *metadata);
-        const auto token = catalog.findPropertyToken(old, "age"); ASSERT_TRUE(token);
-        const auto catalogRoot = metadata->findIndexRoot(old, RSS_SYSTEM_CATALOG_INDEX_ID);
-        const auto catalogLocation = metadata->findPageLocation(old, catalogRoot.root_page_id);
-        const auto statistics = catalog.readGraphCardinalityStatistics(old);
-        PropertyCollectionRootStore roots(pages, *metadata); const auto beforeRoot = roots.readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, owner});
-        std::vector<uint64_t> ageIndexes;
-        for (const auto &definition : catalog.readIndexDefinitions(old, 128))
-            if (definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE && definition.kind == IndexDefinitionKind::IDK_PROPERTY &&
-                definition.property_names.size() == 1 && definition.property_names.front() == "age") ageIndexes.push_back(definition.index_id);
-        const auto age = std::ranges::find(beforeRoot.entries, *token, &PropertyCollectionRootEntry::key_token);
-        ASSERT_NE(age, beforeRoot.entries.end());
-        const auto oldKey = IndexKeyCodec::encodeEntryKey(age->value, owner);
-        const auto newKey = IndexKeyCodec::encodeEntryKey(PropertyValue(value), owner);
-        const auto before = old.superblock(); const auto epoch = io->dataMutationEpoch();
-        auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
-        const std::array<NativeHybridPropertyColumnReplacement, 1> cells{{
-            {{EntityPropertyOwnerKind::EPOK_NODE, owner}, *token, value, false}}};
-        const std::array<EntityPropertyKey, 1> deleted{{{EntityPropertyOwnerKind::EPOK_NODE, owner}}};
-        NativeHybridPropertyColumnWrite change{before.database_id, before.generation, before.hybrid_property_descriptor_root,
-            eraseOwner ? std::span<const NativeHybridPropertyColumnReplacement>{} : std::span(cells),
-            memory, PhysicalSlotId(40), PhysicalSlotId(180), 903, nullptr, true,
-            eraseOwner ? std::span(deleted) : std::span<const EntityPropertyKey>{}};
-        if (expectRefusal) {
-            EXPECT_THROW((void)metadata->mutateHybridPropertyColumns(change, LogSequenceNumber(before.checkpoint_lsn.value() + 1)), FormatException);
-            EXPECT_EQ(metadata->openSnapshot().superblock(), before); EXPECT_EQ(io->dataMutationEpoch(), epoch);
-        } else {
-            EXPECT_NO_THROW((void)metadata->mutateHybridPropertyColumns(change, LogSequenceNumber(before.checkpoint_lsn.value() + 1)));
-            auto current = metadata->openSnapshot();
-            if (eraseOwner) {
-                EXPECT_NE(metadata->findPageLocation(current, metadata->findIndexRoot(current, RSS_SYSTEM_CATALOG_INDEX_ID).root_page_id), catalogLocation);
-                ASSERT_TRUE(statistics); const auto counts = catalog.readGraphCardinalityStatistics(current); ASSERT_TRUE(counts);
-                EXPECT_EQ(counts->node_count, statistics->node_count - 1); EXPECT_EQ(counts->edge_count, statistics->edge_count);
-                EXPECT_FALSE(metadata->findNodePageLocationOptional(current, owner));
-            } else {
-                EXPECT_EQ(metadata->findIndexRoot(current, RSS_SYSTEM_CATALOG_INDEX_ID), catalogRoot);
-                EXPECT_EQ(catalog.readGraphCardinalityStatistics(current), statistics);
-                const auto cell = roots.readEntityPropertyOptional(current, {EntityPropertyOwnerKind::EPOK_NODE, owner}, *token);
-                ASSERT_TRUE(cell); EXPECT_EQ(cell->value, PropertyValue(value));
-            }
-            for (const auto index : ageIndexes) {
-                BTreeIndex tree(index, trees, *metadata);
-                if (eraseOwner) EXPECT_FALSE(tree.find(current, newKey));
-                else EXPECT_EQ(tree.find(current, newKey), std::optional<uint64_t>(owner));
-                if (eraseOwner || oldKey != newKey) EXPECT_FALSE(tree.find(current, oldKey));
-                EXPECT_EQ(tree.find(old, oldKey), std::optional<uint64_t>(owner));
-            }
-        }
-        EXPECT_EQ(roots.readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, owner}), beforeRoot);
-        EXPECT_EQ(memory->used(), 0U); io->flushStream();
-    }
-    void convert(EntityPropertyOwnerKind kind, bool inverse = false) {
-        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-        ASSERT_TRUE(file->is_open()); auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        auto metadata = RelocatableMetadataStore::open(io); const auto before = metadata->openSnapshot().superblock();
-        auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
-        NativeGraphHybridPropertyConversion conversion{kind, 1, memory, nullptr, PhysicalSlotId(40), PhysicalSlotId(180), 903};
-        conversion.publish_candidate = true;
-        if (inverse) conversion.direction = NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW;
-        NativeGraphHybridPropertyRootMutation request{before.database_id, before.hybrid_property_descriptor_root,
-            NativeHybridPropertyRootMode::NHPRM_REPLACE, {}, conversion};
-        NativeGraphDerivedStateMutation derived;
-        static_cast<void>(metadata->mutateNativeGraphPagesWithLargeValues({}, {}, {}, {}, {}, {}, derived,
-            LogSequenceNumber(before.checkpoint_lsn.value() + 1), [](auto, auto, auto, auto, auto, auto) {},
-            [](auto &) {}, {}, {}, {}, {}, {}, {}, {}, before.generation, {}, {}, {}, {}, {}, request));
-        EXPECT_EQ(memory->used(), 0U); io->flushStream();
-    }
-};
-}
+using namespace hybrid_property_query_parity_test;
+
 TEST_F(HybridPropertyQueryParityTest, ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults) {
     seed(true, false, false, true); buildCovered();
     auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
@@ -503,6 +249,202 @@ TEST_F(HybridPropertyQueryParityTest, ScalarIndexAndNativeFieldPublishTogetherWi
     EXPECT_EQ(changed[1], (Rows{{PropertyValue(int64_t(64)), PropertyValue(int64_t(2116))}}));
     EXPECT_EQ(changed[5], (Rows{{PropertyValue(int64_t(100))}, {PropertyValue(int64_t(63))}, {PropertyValue(int64_t(62))}}));
     setAge(0); EXPECT_EQ(read(), baseline);
+}
+TEST_F(HybridPropertyQueryParityTest, UnrelatedFieldPreservesLiveVectorStateAndIndexedOwnerDeletionRefuses) {
+    seed(false, false, false, false, 64, false, false, true);
+    const auto search = [&] {
+        auto options = backendOptions(); options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+        RelocatableStorageBackend backend(options); backend.open();
+        auto snapshot = backend.openLogicalGraphVectorSearchSnapshot();
+        LogicalGraphVectorSearchRequest request; request.index_name = "person_embedding";
+        request.query_vector = {0.0F, 1.0F}; request.top_k = 4;
+        request.mode = LogicalGraphVectorSearchMode::LGVSM_EXACT;
+        request.maximum_mapping_entries = 128; request.maximum_raw_vector_reads = 128;
+        const auto result = snapshot->searchLogicalVector(request);
+        std::vector<std::pair<uint64_t, float>> hits;
+        for (const auto &hit : result.hits) hits.emplace_back(hit.node_id, hit.score);
+        return hits;
+    };
+    const auto before = search(); ASSERT_EQ(before.size(), 4U); EXPECT_EQ(before.front().first, 1U);
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    setAge(100); EXPECT_EQ(search(), before);
+    setAge(0); EXPECT_EQ(search(), before);
+    setEmbedding(PropertyValue(std::vector<PropertyValue>{PropertyValue(0.0), PropertyValue(1.0001)}), false);
+    EXPECT_EQ(search(), before);
+    setEmbedding(PropertyValue(std::vector<PropertyValue>{PropertyValue(0.0), PropertyValue(2.0)}), true);
+    EXPECT_EQ(search(), before);
+    setAge(0, true, true); EXPECT_EQ(search(), before);
+}
+TEST_F(HybridPropertyQueryParityTest, VectorDefinitionWithoutPopulationAllowsUnrelatedFieldAndIsolatedDeletion) {
+    seed(false);
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodeVectorIndex({"person_embedding", "Person", "embedding", 2, "l2"}); backend.close();
+    convert(EntityPropertyOwnerKind::EPOK_NODE); setAge(100); setAge(0); setAge(0, false, true);
+    EXPECT_EQ(read()[1], (Rows{{PropertyValue(int64_t(63)), PropertyValue(int64_t(1953))}}));
+}
+TEST_F(HybridPropertyQueryParityTest, IncompleteVectorPublicationRefusesUnrelatedFieldWithoutPrivateIo) {
+    seed(false, false, false, false, 64, false, false, true);
+    {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::open(io); EntityPageStore entities(io, *metadata);
+        SlottedPagePool pages(io, *metadata); BTreePageStore trees(pages, *metadata);
+        EntityLabelSetStore labels(io, *metadata, pages); PropertyCollectionRootStore roots(pages, *metadata);
+        SystemCatalog catalog(trees, *metadata); auto pin = metadata->openSnapshot();
+        const auto definitions = catalog.readIndexDefinitions(pin, 128);
+        const auto definition = std::ranges::find(definitions, IndexDefinitionKind::IDK_VECTOR, &IndexDefinition::kind);
+        ASSERT_NE(definition, definitions.end()); const auto index = definition->index_id; pin.release();
+        NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(180);
+        options.entity_pool_owner_id = 901; options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(180), 902};
+        NativeGraphWritePlanner planner(*metadata, entities, labels, roots, trees, options); auto tx = planner.beginTransaction();
+        tx.stageScalarIndexDrop(trees, index, 128); ASSERT_TRUE(tx.commit().committed()); io->flushStream();
+    }
+    convert(EntityPropertyOwnerKind::EPOK_NODE); setAge(100, true);
+}
+TEST_F(HybridPropertyQueryParityTest, MissingVectorPropertyTokenCannotBeTreatedAsAnEmptyIndex) {
+    seed(false); addCatalogControl(false, 0, 2, false);
+    convert(EntityPropertyOwnerKind::EPOK_NODE); setAge(100, true);
+}
+TEST_F(HybridPropertyQueryParityTest, OversizedVectorDimensionsRefuseBeforeWorkspaceOrPhysicalPublication) {
+    seed(false); addCatalogControl(false, 0, UINT32_MAX);
+    convert(EntityPropertyOwnerKind::EPOK_NODE); setAge(100, true);
+}
+TEST_F(HybridPropertyQueryParityTest, OwnerDeletionRefusesAStaleVectorMappingEvenWhenItsPropertyIsMissing) {
+    seed(false, false, false, false, 64, false, false, true);
+    {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::open(io); EntityPageStore entities(io, *metadata);
+        SlottedPagePool pages(io, *metadata); BTreePageStore trees(pages, *metadata);
+        EntityLabelSetStore labels(io, *metadata, pages); PropertyCollectionRootStore roots(pages, *metadata);
+        SystemCatalog catalog(trees, *metadata); auto pin = metadata->openSnapshot();
+        auto properties = roots.readEntity(pin, {EntityPropertyOwnerKind::EPOK_NODE, 64});
+        const auto token = catalog.findPropertyToken(pin, "embedding"); ASSERT_TRUE(token);
+        ASSERT_EQ(std::erase_if(properties.entries, [&](const auto &entry) { return entry.key_token == *token; }), 1U);
+        const auto route = metadata->findEntityPropertyLocationOptional(pin, {EntityPropertyOwnerKind::EPOK_NODE, 64});
+        ASSERT_TRUE(route);
+        const auto propertyOwner = metadata->findCatalog(pin, metadata->findPageLocation(pin, route->page_id).segment_id).owner_id;
+        pin.release();
+        NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(180);
+        options.entity_pool_owner_id = 901; options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(180), propertyOwner};
+        NativeGraphWritePlanner planner(*metadata, entities, labels, roots, trees, options); auto tx = planner.beginTransaction();
+        // Deliberately use the low-level property primitive without its semantic
+        // Vector coordinator to leave a well-formed but stale mapping.
+        tx.replaceNodeProperty(properties); ASSERT_TRUE(tx.commit().committed()); io->flushStream();
+    }
+    convert(EntityPropertyOwnerKind::EPOK_NODE); setAge(0, true, true);
+}
+TEST_F(HybridPropertyQueryParityTest, OwnerOutsideVectorLabelScopeCanDeleteWhileOtherOwnersKeepLiveVectors) {
+    seed(false, false, true, false, 0, false, false, true);
+    const auto before = read(); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    setAge(0, false, true, 1); EXPECT_EQ(read(), before);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}));
+    const auto result = exactVectorSearch(); ASSERT_EQ(result.size(), 4U); EXPECT_EQ(result.front().first, 2U); EXPECT_FLOAT_EQ(result.front().second, 1.0F);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic) {
+    seed(false); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodeVectorIndex({"person_embedding", "Person", "embedding", 2, "l2"}); backend.close();
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    const PropertyValue value(std::vector<PropertyValue>{PropertyValue(0.0), PropertyValue(1.0)});
+    coordinateVectorField(value); ASSERT_EQ(exactVectorSearch().size(), 1U);
+    coordinateVectorField(PropertyValue(), true); EXPECT_TRUE(exactVectorSearch().empty());
+    coordinateVectorField(value); const auto result = exactVectorSearch(); ASSERT_EQ(result.size(), 1U); EXPECT_EQ(result.front().first, 1U);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeIndexedOwnerDeletionPublishesVectorRemovalFieldsAndCountsTogether) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(), false, true);
+    const auto result = exactVectorSearch({63.0F, 1.0F}); ASSERT_EQ(result.size(), 4U); EXPECT_EQ(result.front().first, 63U);
+    EXPECT_EQ(read()[1], (Rows{{PropertyValue(int64_t(63)), PropertyValue(int64_t(1953))}}));
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorInvalidValueSealsCommitAcrossMovesAndRefundsOnRollback) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)}), false, false, true);
+    const auto result = exactVectorSearch(); ASSERT_FALSE(result.empty()); EXPECT_EQ(result.front().first, 1U);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorQuotaRefusalSealsCommitWithoutWritingAndRefundsOnRollback) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}), false, false, true, 65536);
+    const auto result = exactVectorSearch(); ASSERT_FALSE(result.empty()); EXPECT_EQ(result.front().first, 1U);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorAndPropertyRecoverTogetherAtBothBootstrapInterruptionBoundaries) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    const PropertyValue previous(std::vector<PropertyValue>{PropertyValue(int64_t(0)), PropertyValue(int64_t(1))});
+    const PropertyValue replacement(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)});
+    for (const auto point : {BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
+        MetadataPublishOptions publish; publish.bootstrap_failpoint = point;
+        coordinateVectorField(replacement, false, false, false, 1024 * 1024, publish);
+        auto options = backendOptions(); options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+        RelocatableStorageBackend backend(options); backend.open(); auto snapshot = backend.openLogicalGraphReadSnapshot();
+        EXPECT_EQ(snapshot->readNodeProperty(1, "embedding"), point == BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE ? replacement : previous);
+        snapshot.reset(); backend.close();
+        const auto result = exactVectorSearch(); ASSERT_FALSE(result.empty());
+        EXPECT_EQ(result.front().first, point == BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE ? 2U : 1U);
+    }
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorKnownPrepublicationCancellationPreservesPlanForRetryAcrossMoves) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}), false, false, false, 1024 * 1024, {}, NativeVectorTestAction::NVTA_CANCEL);
+    const auto result = exactVectorSearch(); ASSERT_FALSE(result.empty()); EXPECT_EQ(result.front().first, 2U);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorMaximum64OwnerBatchKeepsOldPinsAndFitsTheOriginalOneMiBAccount) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}), false, false, false, 1024 * 1024, {}, NativeVectorTestAction::NVTA_ALL_OWNERS);
+    const auto result = exactVectorSearch(); ASSERT_EQ(result.size(), 4U);
+    for (size_t i = 0; i < result.size(); ++i) { EXPECT_EQ(result[i].first, i + 1U); EXPECT_FLOAT_EQ(result[i].second, 19801.0F); }
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}), false, false, false,
+        1024 * 1024, {}, NativeVectorTestAction::NVTA_PROBE_STAGING);
+    const auto result = exactVectorSearch(); ASSERT_FALSE(result.empty()); EXPECT_EQ(result.front().first, 2U);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorLargeArrayAndIndependentValueManifestShareTheAtomicPublication) {
+    seed(false); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodeVectorIndex({"person_embedding", "Person", "embedding", 512, "l2"}); backend.close();
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>(512, PropertyValue(1.0))));
+    auto result = exactVectorSearch(std::vector<float>(512, 1.0F)); ASSERT_EQ(result.size(), 1U); EXPECT_FLOAT_EQ(result.front().second, 0.0F);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>(512, PropertyValue(2.0))));
+    result = exactVectorSearch(std::vector<float>(512, 1.0F)); ASSERT_EQ(result.size(), 1U); EXPECT_FLOAT_EQ(result.front().second, 512.0F);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorUniqueSupportPublishesTogetherAndDuplicateRefusesBeforePrivateIo) {
+    seed(false, false, false, false, 64, false, false, true);
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalConstraint({"unique_embedding", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+        LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {"embedding"}, LogicalGraphConstraintPropertyType::LGCPT_NONE}); backend.close();
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(100.0), PropertyValue(100.0)}));
+    const auto before = exactVectorSearch(); ASSERT_FALSE(before.empty()); EXPECT_EQ(before.front().first, 2U);
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1)), PropertyValue(int64_t(1))}), false, false,
+        false, 1024 * 1024, {}, NativeVectorTestAction::NVTA_CONSTRAINT_FAILURE);
+    EXPECT_EQ(exactVectorSearch(), before);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorLastInsertOnlyDeltaRetiresItsRootAndKeepsTheBaseAndOldPin) {
+    seed(false); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodeVectorIndex({"person_embedding", "Person", "embedding", 2, "l2"}); backend.close();
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    const PropertyValue value(std::vector<PropertyValue>{PropertyValue(0.0), PropertyValue(1.0)});
+    coordinateVectorField(value);
+    coordinateVectorField(value, false, false, false, 1024 * 1024, {}, NativeVectorTestAction::NVTA_SECOND_OWNER);
+    ASSERT_EQ(exactVectorSearch().size(), 2U);
+    coordinateVectorField(PropertyValue(), true, false, false, 1024 * 1024, {}, NativeVectorTestAction::NVTA_SECOND_OWNER);
+    const auto result = exactVectorSearch(); ASSERT_EQ(result.size(), 1U); EXPECT_EQ(result.front().first, 1U); EXPECT_FLOAT_EQ(result.front().second, 0.0F);
+}
+TEST_F(HybridPropertyQueryParityTest, NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo) {
+    seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    setEmbedding(PropertyValue(std::vector<PropertyValue>{PropertyValue(0.0), PropertyValue(1.0)}), false);
+    const auto before = exactVectorSearch();
+    coordinateVectorField(PropertyValue(std::vector<PropertyValue>{PropertyValue(-0.0), PropertyValue(1.0)}), false, false, false,
+        1024 * 1024, {}, NativeVectorTestAction::NVTA_ROW_NOOP);
+    EXPECT_EQ(exactVectorSearch(), before);
 }
 TEST_F(HybridPropertyQueryParityTest, NonNullConstraintAllowsValidFieldPublication) {
     seed(false, true); const auto baseline = read(); convert(EntityPropertyOwnerKind::EPOK_NODE);

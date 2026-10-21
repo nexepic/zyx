@@ -20,6 +20,9 @@
 #include <unordered_set>
 #include <utility>
 
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -39,6 +42,14 @@
 namespace graph::storage {
 
 	namespace {
+
+        class NativeMutationCheckpoint final : public CancellationCheckpoint {
+        public:
+            explicit NativeMutationCheckpoint(const std::function<void()> &callback) : callback_(callback) {}
+            void check() const override { if (callback_) callback_(); }
+        private:
+            const std::function<void()> &callback_;
+        };
 
 		struct ResolvedProperties {
 			std::vector<PropertyCollectionRootEntry> entries;
@@ -513,6 +524,201 @@ namespace graph::storage {
 		}
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
 		NativeReadSession oldStateReads(snapshot);
+        const auto coordinateNativeVectors = [&] {
+            NativeGraphVectorDeltaOptions vectors;
+            vectors.maximum_records = std::min(size_t(128), options_.maximum_vector_records);
+            vectors.maximum_raw_pages = std::min(size_t(128), options_.maximum_vector_pages);
+            vectors.maximum_overlay_entries = std::min(size_t(4096), options_.maximum_vector_delta_overlay_entries);
+            vectors.rebuild_threshold = std::min(vectors.maximum_overlay_entries, options_.vector_delta_rebuild_threshold);
+            vectors.maximum_delta_pages = std::min(size_t(128), options_.maximum_vector_delta_pages);
+            transaction.coordinateHybridPropertyVectors(vector_pages_, vector_manifests_, vectors);
+        };
+        struct NativePropertyTokens {
+            utils::OwnedHeapReservation credit;
+            NativeGraphWritePlanner &writer;
+            SystemCatalog *catalog;
+            const NativeGraphMutationTokenResolvers &callbacks;
+            const MetadataSnapshotPin &source;
+            std::optional<NativeGraphWriteTransaction> transaction;
+            std::optional<SystemCatalogWriteSession> session;
+            std::map<std::string, uint32_t, std::less<>> names;
+            NativePropertyTokens(std::shared_ptr<std::pmr::memory_resource> memory, NativeGraphWritePlanner &w,
+                SystemCatalog *c, const NativeGraphMutationTokenResolvers &resolvers, const MetadataSnapshotPin &snapshot)
+                : credit(std::move(memory)), writer(w), catalog(c), callbacks(resolvers), source(snapshot) {}
+            std::optional<uint32_t> existing(std::string_view name) const {
+                return catalog ? catalog->findPropertyToken(source, name) : callbacks.property_key_token(source, name);
+            }
+            std::optional<uint32_t> ensure(std::string_view name) {
+                if (const auto token = existing(name)) return token;
+                if (!catalog) fail(FormatError::FERR_UNSUPPORTED_VERSION, "new native property names require the Catalog coordinator");
+                if (const auto found = names.find(name); found != names.end()) return found->second;
+                if (names.size() == 64U || name.size() > (1024U * 1024U - 65536U) / 4U)
+                    fail(FormatError::FERR_INVALID_STATE, "native property dictionary input exceeds its bounded frontier");
+                const size_t extra = 4U * (name.size() + 128U);
+                credit.set((credit.bytes() ? credit.bytes() : 65536U) + extra);
+                if (!transaction) {
+                    transaction.emplace(writer.beginTransaction());
+                    if (transaction->baseSuperblock() != source.superblock())
+                        fail(FormatError::FERR_INVALID_STATE, "native dictionary source changed while staging fields");
+                    session.emplace(catalog->beginWrite(*transaction));
+                }
+                const auto token = session->ensurePropertyToken(name); names.emplace(name, token); return token;
+            }
+        };
+        const auto finishNativeTokens = [&](NativePropertyTokens &tokens) {
+            if (!tokens.session) return;
+            tokens.session->finish(); tokens.session.reset();
+            std::map<std::string, uint32_t, std::less<>>().swap(tokens.names);
+            transaction.adoptHybridPropertyCatalog(std::move(*tokens.transaction), std::move(tokens.credit));
+            tokens.transaction.reset();
+        };
+        // Property-only native replacements use the field lifecycle writer,
+        // rather than constructing competing ROW roots inside a native group.
+        // Mixed ROW/native work uses the ordinary logical coordinator below.
+        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
+            !batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
+            batch.node_label_replacements.empty() && batch.node_deletes.empty() && batch.edge_deletes.empty() &&
+            !batch.creation_identity_plan) {
+            NativeMutationCheckpoint checkpoint(readControl.checkpoint);
+            const auto ownerOf = [](const LogicalGraphPropertyMutationRequest &request) {
+                return EntityPropertyKey{request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE ?
+                    EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE, request.entity.value};
+            };
+            bool native = false, allNative = true;
+            for (const auto &request : batch.property_replacements) {
+                checkpoint.check();
+                const bool routed = transaction.isHybridPropertyOwner(ownerOf(request), &checkpoint);
+                native |= routed; allNative &= routed;
+            }
+            if (native && allNative) {
+                if (batch.property_replacements.size() > 64U)
+                    fail(FormatError::FERR_INVALID_STATE, "native public property batch exceeds64owners");
+                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                utils::OwnedHeapReservation inputCredit(memory);
+                size_t bytes = batch.property_replacements.size() * sizeof(PropertyCollectionRoot), entries = 0;
+                for (const auto &request : batch.property_replacements) {
+                    if (request.properties.size() > 4096U - entries)
+                        fail(FormatError::FERR_INVALID_STATE, "native public property batch exceeds4096fields");
+                    entries += request.properties.size();
+                    for (const auto &property : request.properties) {
+                        checkpoint.check();
+                        const auto size = CanonicalPropertyValueCodec::encodedSize(property.value);
+                        if (size > 1024U * 1024U - bytes || sizeof(PropertyCollectionRootEntry) > 1024U * 1024U - bytes - size)
+                            fail(FormatError::FERR_INVALID_STATE, "native public property input exceeds one MiB");
+                        bytes += size + sizeof(PropertyCollectionRootEntry);
+                    }
+                }
+                inputCredit.set(bytes);
+                utils::OwnedAllocationScope allocation(memory);
+                NativePropertyTokens nativeTokens(memory, writer_, system_catalog_, tokens_, snapshot);
+                std::vector<PropertyCollectionRoot> roots; roots.reserve(batch.property_replacements.size());
+                const auto resolveExisting = [&](std::string_view key) { return nativeTokens.ensure(key); };
+                for (const auto &request : batch.property_replacements) {
+                    auto resolved = resolveProperties(request.properties, resolveExisting, readControl.checkpoint);
+                    roots.push_back(request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE ?
+                        nodeRoot(request.entity.value, std::move(resolved.entries)) : edgeRoot(request.entity.value, std::move(resolved.entries)));
+                }
+                transaction.stageHybridPropertyMaps(roots, NativeHybridPropertyMapMode::NHPMM_REPLACE, memory, &checkpoint);
+                std::vector<PropertyCollectionRoot>().swap(roots); inputCredit.set(0);
+                coordinateNativeVectors(); finishNativeTokens(nativeTokens);
+                checkpoint.check();
+                return {{}, transaction.commit()};
+            }
+        }
+        // A selected public patch keeps unchanged native fields borrowed and
+        // stages only sets/removals, preserving Cypher removal semantics.
+        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && !patches.empty() &&
+            batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
+            batch.node_label_replacements.empty() && batch.node_deletes.empty() && batch.edge_deletes.empty() &&
+            !batch.creation_identity_plan) {
+            NativeMutationCheckpoint checkpoint(readControl.checkpoint);
+            const auto ownerOf = [](const LogicalGraphPropertyPatchRequest &patch) {
+                return EntityPropertyKey{patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE ?
+                    EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE, patch.entity.value};
+            };
+            bool native = false, allNative = true;
+            for (const auto &patch : patches) {
+                checkpoint.check(); const bool routed = transaction.isHybridPropertyOwner(ownerOf(patch), &checkpoint);
+                native |= routed; allNative &= routed;
+            }
+            if (native && allNative) {
+                if (patches.size() > 64U) fail(FormatError::FERR_INVALID_STATE, "native public patches exceed64owners");
+                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                utils::OwnedAllocationScope allocation(memory);
+                NativePropertyTokens nativeTokens(memory, writer_, system_catalog_, tokens_, snapshot);
+                {
+                    utils::OwnedVector<NativeHybridPropertyColumnReplacement> cells{
+                        utils::OwnedPmrAllocator<NativeHybridPropertyColumnReplacement>(memory)};
+                    const auto resolve = [&](std::string_view name) { return nativeTokens.ensure(name); };
+                    for (const auto &patch : patches) {
+                        const auto owner = ownerOf(patch);
+                        for (const auto &property : patch.sets) {
+                            checkpoint.check(); const auto token = resolve(property.key);
+                            if (!token || !*token) fail(FormatError::FERR_UNSUPPORTED_VERSION, "native public patches require existing property tokens");
+                            if (cells.size() == 64U) fail(FormatError::FERR_INVALID_STATE, "native public patches exceed64field operations");
+                            cells.push_back({owner, *token, OwnedPropertyValue(property.value), false});
+                        }
+                        for (const auto &name : patch.removals) {
+                            checkpoint.check(); const auto token = nativeTokens.existing(name);
+                            if (!token) continue; // Removing an unknown field is a logical no-op.
+                            if (cells.size() == 64U) fail(FormatError::FERR_INVALID_STATE, "native public patches exceed64field operations");
+                            cells.push_back({owner, *token, {}, true});
+                        }
+                    }
+                    if (cells.empty()) {
+                        const auto base = transaction.baseSuperblock(); transaction.rollback();
+                        return {{}, {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, base, {}}};
+                    }
+                    transaction.stageHybridPropertyColumns(cells, memory, &checkpoint, true);
+                }
+                coordinateNativeVectors(); finishNativeTokens(nativeTokens); checkpoint.check(); return {{}, transaction.commit()};
+            }
+        }
+        // The native lifecycle coordinator owns the complete Node/Edge deletion
+        // closure. Detach discovery is bounded and revalidated under the writer.
+        if (snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
+            batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
+            batch.node_label_replacements.empty() && !batch.creation_identity_plan &&
+            (!batch.node_deletes.empty() || !batch.edge_deletes.empty())) {
+            NativeMutationCheckpoint checkpoint(readControl.checkpoint); bool native = false, allNative = true;
+            for (const auto &node : batch.node_deletes) {
+                checkpoint.check(); const bool routed = transaction.isHybridPropertyOwner({EntityPropertyOwnerKind::EPOK_NODE, node.node_id}, &checkpoint);
+                native |= routed; allNative &= routed;
+            }
+            for (const auto &edge : batch.edge_deletes) {
+                checkpoint.check(); const bool routed = transaction.isHybridPropertyOwner({EntityPropertyOwnerKind::EPOK_EDGE, edge.edge_id}, &checkpoint);
+                native |= routed; allNative &= routed;
+            }
+            if (native && allNative) {
+                if (batch.node_deletes.size() > 64U || batch.edge_deletes.size() > 64U - batch.node_deletes.size())
+                    fail(FormatError::FERR_INVALID_STATE, "native public deletion exceeds64owners");
+                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                utils::OwnedAllocationScope allocation(memory);
+                std::array<EntityPropertyKey, 64> owners{}; size_t count = 0;
+                const auto append = [&](EntityPropertyKey owner) {
+                    const auto selected = std::span(owners).first(count);
+                    if (std::ranges::find(selected, owner) != selected.end()) return;
+                    if (count == owners.size()) fail(FormatError::FERR_INVALID_STATE, "native detach closure exceeds64owners");
+                    allNative &= transaction.isHybridPropertyOwner(owner, &checkpoint);
+                    owners[count++] = owner;
+                };
+                for (const auto &node : batch.node_deletes) { checkpoint.check(); append({EntityPropertyOwnerKind::EPOK_NODE, node.node_id}); }
+                for (const auto &edge : batch.edge_deletes) { checkpoint.check(); append({EntityPropertyOwnerKind::EPOK_EDGE, edge.edge_id}); }
+                for (const auto &node : batch.node_deletes) if (node.detach) {
+                    checkpoint.check(); const auto limit = std::min(size_t(64), node.maximum_detach_edges);
+                    // Standard set/vector and fixed Entity-page scratch used by
+                    // the bounded canonical adjacency discovery are paid first.
+                    utils::OwnedHeapReservation discovery(memory, 32U * 1024U + 256U * limit);
+                    const auto incident = transaction.collectIncidentEdgeIds(node.node_id, limit);
+                    for (const auto edge : incident) { checkpoint.check(); append({EntityPropertyOwnerKind::EPOK_EDGE, edge}); }
+                }
+                if (allNative) {
+                    transaction.stageHybridPropertyOwnerDeletion(std::span(owners).first(count), memory, &checkpoint);
+                    coordinateNativeVectors(); checkpoint.check(); return {{}, transaction.commit()};
+                }
+            }
+        }
+
 		std::optional<SystemCatalogWriteSession> catalogSession;
 		if (system_catalog_ != nullptr) {
 			catalogSession.emplace(system_catalog_->beginWrite(transaction));
@@ -1113,12 +1319,14 @@ namespace graph::storage {
 		if (!hasStagedWork) {
 			if (batch.creation_identity_plan.has_value() && (!batch.creation_identity_plan->node_id_ranges.empty() ||
 															 !batch.creation_identity_plan->edge_id_ranges.empty())) {
+                transaction.native_graph_coordinated_ = true;
 				return {std::move(result), transaction.commit()};
 			}
 			const Superblock base = transaction.baseSuperblock();
 			transaction.rollback();
 			return {std::move(result), {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, base, {}}};
 		}
+        transaction.native_graph_coordinated_ = true;
 		const NativeGraphWriteCommitResult commit = transaction.commit();
 		if (!commit.committed()) {
 			result = {};

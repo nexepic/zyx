@@ -1,0 +1,439 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 195 tests from 14 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from NativeBulkRunFragmentLayoutBuilderTest
+[ RUN      ] NativeBulkRunFragmentLayoutBuilderTest.PlansExactRangesWithoutRetainingEntries
+[       OK ] NativeBulkRunFragmentLayoutBuilderTest.PlansExactRangesWithoutRetainingEntries (0 ms)
+[ RUN      ] NativeBulkRunFragmentLayoutBuilderTest.RejectsInvalidBoundsEntriesAndReuse
+[       OK ] NativeBulkRunFragmentLayoutBuilderTest.RejectsInvalidBoundsEntriesAndReuse (0 ms)
+[----------] 2 tests from NativeBulkRunFragmentLayoutBuilderTest (0 ms total)
+
+[----------] 8 tests from NativeBulkRunFragmentCodecTest
+[ RUN      ] NativeBulkRunFragmentCodecTest.RoundTripsStrictlySortedEntriesWithIndependentRecordChecksums
+[       OK ] NativeBulkRunFragmentCodecTest.RoundTripsStrictlySortedEntriesWithIndependentRecordChecksums (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.RejectsUnsortedDuplicateAndEmptyInputBeforeItCanReachScratchStorage
+[       OK ] NativeBulkRunFragmentCodecTest.RejectsUnsortedDuplicateAndEmptyInputBeforeItCanReachScratchStorage (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.RejectsEmptyAndUnownedWireFramesBeforeDecodingFields
+[       OK ] NativeBulkRunFragmentCodecTest.RejectsEmptyAndUnownedWireFramesBeforeDecodingFields (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.FailsClosedForHeaderDimensionsAndRecordIntegrityCorruption
+[       OK ] NativeBulkRunFragmentCodecTest.FailsClosedForHeaderDimensionsAndRecordIntegrityCorruption (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.ExhaustivelyRejectsEverySingleBitWireCorruption
+[       OK ] NativeBulkRunFragmentCodecTest.ExhaustivelyRejectsEverySingleBitWireCorruption (3 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.RejectsTruncatedAndOversizedRecordFrames
+[       OK ] NativeBulkRunFragmentCodecTest.RejectsTruncatedAndOversizedRecordFrames (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.RejectsEachIndependentAggregateDimensionMismatch
+[       OK ] NativeBulkRunFragmentCodecTest.RejectsEachIndependentAggregateDimensionMismatch (0 ms)
+[ RUN      ] NativeBulkRunFragmentCodecTest.RejectsChecksumValidMalformedNestedRecordFrames
+[       OK ] NativeBulkRunFragmentCodecTest.RejectsChecksumValidMalformedNestedRecordFrames (0 ms)
+[----------] 8 tests from NativeBulkRunFragmentCodecTest (3 ms total)
+
+[----------] 1 test from NativeBulkRunValueObjectTest
+[ RUN      ] NativeBulkRunValueObjectTest.ValidatesFragmentAndManifestIdentitiesAcrossBothManifestLevels
+[       OK ] NativeBulkRunValueObjectTest.ValidatesFragmentAndManifestIdentitiesAcrossBothManifestLevels (0 ms)
+[----------] 1 test from NativeBulkRunValueObjectTest (0 ms total)
+
+[----------] 38 tests from NativeBulkRunStoreTest
+[ RUN      ] NativeBulkRunStoreTest.BindsScratchStorageToItsOwningMetadataCoordinator
+[       OK ] NativeBulkRunStoreTest.BindsScratchStorageToItsOwningMetadataCoordinator (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.ReadsOnlyTheMatchingTransactionPrivateFragmentAndReleasesItsSlot
+[       OK ] NativeBulkRunStoreTest.ReadsOnlyTheMatchingTransactionPrivateFragmentAndReleasesItsSlot (7 ms)
+[ RUN      ] NativeBulkRunStoreTest.PersistsASeparateCanonicalEdgeRunAsTransactionPrivateOpaqueScratch
+[       OK ] NativeBulkRunStoreTest.PersistsASeparateCanonicalEdgeRunAsTransactionPrivateOpaqueScratch (6 ms)
+[ RUN      ] NativeBulkRunStoreTest.OpenOpaquePayloadReaderPinsAndAuthenticatesPrivateScratch
+[       OK ] NativeBulkRunStoreTest.OpenOpaquePayloadReaderPinsAndAuthenticatesPrivateScratch (6 ms)
+[ RUN      ] NativeBulkRunStoreTest.BatchWritePublishesOrderedPrivateFragmentsThroughOnePhysicalAllocation
+[       OK ] NativeBulkRunStoreTest.BatchWritePublishesOrderedPrivateFragmentsThroughOnePhysicalAllocation (8 ms)
+[ RUN      ] NativeBulkRunStoreTest.BatchWriteRejectsMoreFragmentsThanItsExplicitMemoryBound
+[       OK ] NativeBulkRunStoreTest.BatchWriteRejectsMoreFragmentsThanItsExplicitMemoryBound (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsInvalidStoreAndScratchBoundsBeforeMetadataMutation
+[       OK ] NativeBulkRunStoreTest.RejectsInvalidStoreAndScratchBoundsBeforeMetadataMutation (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsInvalidScratchWriteInputsWithoutPublishingAnything
+[       OK ] NativeBulkRunStoreTest.RejectsInvalidScratchWriteInputsWithoutPublishingAnything (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsEntriesThatExceedTheBoundedIndexKeyFrame
+[       OK ] NativeBulkRunStoreTest.RejectsEntriesThatExceedTheBoundedIndexKeyFrame (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsInvalidReadAndManifestReleaseLocations
+[       OK ] NativeBulkRunStoreTest.RejectsInvalidReadAndManifestReleaseLocations (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.WritableOpenRecoveryReclaimsEveryUnpublishedScratchFragment
+[       OK ] NativeBulkRunStoreTest.WritableOpenRecoveryReclaimsEveryUnpublishedScratchFragment (9 ms)
+[ RUN      ] NativeBulkRunStoreTest.WritableOpenRecoveryContinuesAfterEachBoundedScratchBatch
+[       OK ] NativeBulkRunStoreTest.WritableOpenRecoveryContinuesAfterEachBoundedScratchBatch (12 ms)
+[ RUN      ] NativeBulkRunStoreTest.ManifestProvidesARewindableOrderedSourceAcrossMultipleFragments
+[       OK ] NativeBulkRunStoreTest.ManifestProvidesARewindableOrderedSourceAcrossMultipleFragments (8 ms)
+[ RUN      ] NativeBulkRunStoreTest.CandidatePayloadReaderProvidesTheSameRewindableManifestCursorWithoutMetadata
+[       OK ] NativeBulkRunStoreTest.CandidatePayloadReaderProvidesTheSameRewindableManifestCursorWithoutMetadata (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsAManifestWhoseFragmentBoundariesAreNotGloballyOrdered
+[       OK ] NativeBulkRunStoreTest.RejectsAManifestWhoseFragmentBoundariesAreNotGloballyOrdered (5 ms)
+[ RUN      ] NativeBulkRunStoreTest.ParentManifestExtendsTheRunBeyondOneLeafManifestAndRemainsRewindable
+[       OK ] NativeBulkRunStoreTest.ParentManifestExtendsTheRunBeyondOneLeafManifestAndRemainsRewindable (18 ms)
+[ RUN      ] NativeBulkRunStoreTest.StreamingWriterUsesBoundedFragmentsAndBuildsAHierarchicalManifest
+[       OK ] NativeBulkRunStoreTest.StreamingWriterUsesBoundedFragmentsAndBuildsAHierarchicalManifest (7 ms)
+[ RUN      ] NativeBulkRunStoreTest.StreamingWriterFlushesBoundedAllocationBatchesIntoAParentManifest
+[       OK ] NativeBulkRunStoreTest.StreamingWriterFlushesBoundedAllocationBatchesIntoAParentManifest (19 ms)
+[ RUN      ] NativeBulkRunStoreTest.StreamingWriterLiftsASoleLeafRootBeneathAnExistingParentLevel
+[       OK ] NativeBulkRunStoreTest.StreamingWriterLiftsASoleLeafRootBeneathAnExistingParentLevel (25 ms)
+[ RUN      ] NativeBulkRunStoreTest.BoundedFanInMergeStreamsTwoIndependentRunsWithoutDuplicateKeys
+[       OK ] NativeBulkRunStoreTest.BoundedFanInMergeStreamsTwoIndependentRunsWithoutDuplicateKeys (18 ms)
+[ RUN      ] NativeBulkRunStoreTest.BoundedFanInMergeRejectsDuplicateKeysAcrossInputRuns
+[       OK ] NativeBulkRunStoreTest.BoundedFanInMergeRejectsDuplicateKeysAcrossInputRuns (11 ms)
+[ RUN      ] NativeBulkRunStoreTest.BoundedFanInMergeValidatesResourceLimitsAndOwnershipBeforeReadingScratch
+[       OK ] NativeBulkRunStoreTest.BoundedFanInMergeValidatesResourceLimitsAndOwnershipBeforeReadingScratch (10 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsInvalidScratchWriteReleaseAndRecoveryInputsBeforeMutation
+[       OK ] NativeBulkRunStoreTest.RejectsInvalidScratchWriteReleaseAndRecoveryInputsBeforeMutation (6 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsCheckpointLsnOverflowBeforeScratchPublication
+[       OK ] NativeBulkRunStoreTest.RejectsCheckpointLsnOverflowBeforeScratchPublication (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsTerminalCheckpointBeforeReservingScratchIdentifiers
+[       OK ] NativeBulkRunStoreTest.RejectsTerminalCheckpointBeforeReservingScratchIdentifiers (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.StreamingWriterRejectsInvalidInputAndOneShotReuse
+[       OK ] NativeBulkRunStoreTest.StreamingWriterRejectsInvalidInputAndOneShotReuse (5 ms)
+[ RUN      ] NativeBulkRunStoreTest.StreamingWriterValidatesEveryResourceBoundBeforeAllocatingScratch
+[       OK ] NativeBulkRunStoreTest.StreamingWriterValidatesEveryResourceBoundBeforeAllocatingScratch (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.SourceRejectsAStoredManifestAboveItsConfiguredDepth
+[       OK ] NativeBulkRunStoreTest.SourceRejectsAStoredManifestAboveItsConfiguredDepth (10 ms)
+[ RUN      ] NativeBulkRunStoreTest.ManifestWritersRejectEmptyForeignAndMixedLevelReferencesBeforePublication
+[       OK ] NativeBulkRunStoreTest.ManifestWritersRejectEmptyForeignAndMixedLevelReferencesBeforePublication (13 ms)
+[ RUN      ] NativeBulkRunStoreTest.ReleaseManifestRecursivelyReclaimsFragmentsAndParentManifests
+[       OK ] NativeBulkRunStoreTest.ReleaseManifestRecursivelyReclaimsFragmentsAndParentManifests (24 ms)
+[ RUN      ] NativeBulkRunStoreTest.ReleaseManifestRejectsAliasedFragmentsAndChildrenBeforeReclaimingScratch
+[       OK ] NativeBulkRunStoreTest.ReleaseManifestRejectsAliasedFragmentsAndChildrenBeforeReclaimingScratch (16 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsCheckpointOverflowBeforeAnyReleaseMutation
+[       OK ] NativeBulkRunStoreTest.RejectsCheckpointOverflowBeforeAnyReleaseMutation (10 ms)
+[ RUN      ] NativeBulkRunStoreTest.ReadOnlyIntegrityScanFailsClosedOnUnpublishedScratch
+[       OK ] NativeBulkRunStoreTest.ReadOnlyIntegrityScanFailsClosedOnUnpublishedScratch (2 ms)
+[ RUN      ] NativeBulkRunStoreTest.RejectsAnUnadvanceableCheckpointBeforeAllocatingScratch
+[       OK ] NativeBulkRunStoreTest.RejectsAnUnadvanceableCheckpointBeforeAllocatingScratch (0 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryAndBulkRecoveryReclaimOnlyTheirOwnScratchKinds
+[       OK ] NativeBulkRunStoreTest.QueryAndBulkRecoveryReclaimOnlyTheirOwnScratchKinds (11 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReleaseRejectsForeignGenerationOwnerDuplicatesAndBulkKindAtomically
+[       OK ] NativeBulkRunStoreTest.QueryScratchReleaseRejectsForeignGenerationOwnerDuplicatesAndBulkKindAtomically (9 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicPageRegistration
+[       OK ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicPageRegistration (4 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicExtentRegistration
+[       OK ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicExtentRegistration (4 ms)
+[----------] 38 tests from NativeBulkRunStoreTest (300 ms total)
+
+[----------] 3 tests from NativeBulkRunCandidateSourceTest
+[ RUN      ] NativeBulkRunCandidateSourceTest.RejectsEachMissingCandidateSourceContractBeforeReadingPayloads
+[       OK ] NativeBulkRunCandidateSourceTest.RejectsEachMissingCandidateSourceContractBeforeReadingPayloads (0 ms)
+[ RUN      ] NativeBulkRunCandidateSourceTest.FailsClosedOnManifestCountAndHierarchyDivergence
+[       OK ] NativeBulkRunCandidateSourceTest.FailsClosedOnManifestCountAndHierarchyDivergence (0 ms)
+[ RUN      ] NativeBulkRunCandidateSourceTest.FailsClosedWhenDecodedFragmentsBreakGlobalKeyOrder
+[       OK ] NativeBulkRunCandidateSourceTest.FailsClosedWhenDecodedFragmentsBreakGlobalKeyOrder (0 ms)
+[----------] 3 tests from NativeBulkRunCandidateSourceTest (0 ms total)
+
+[----------] 6 tests from NativeBulkRunMergerTest
+[ RUN      ] NativeBulkRunMergerTest.RewindablyMergesCandidateInputsWithoutWritingScratch
+[       OK ] NativeBulkRunMergerTest.RewindablyMergesCandidateInputsWithoutWritingScratch (0 ms)
+[ RUN      ] NativeBulkRunMergerTest.OrdersSourcesWhoseInitialKeysArriveInReversePriorityOrder
+[       OK ] NativeBulkRunMergerTest.OrdersSourcesWhoseInitialKeysArriveInReversePriorityOrder (0 ms)
+[ RUN      ] NativeBulkRunMergerTest.RejectsDuplicateUnorderedAndOverboundCandidateInputs
+[       OK ] NativeBulkRunMergerTest.RejectsDuplicateUnorderedAndOverboundCandidateInputs (0 ms)
+[ RUN      ] NativeBulkRunMergerTest.RejectsInvalidCandidateSourceFactoriesBeforeReadingScratch
+[       OK ] NativeBulkRunMergerTest.RejectsInvalidCandidateSourceFactoriesBeforeReadingScratch (0 ms)
+[ RUN      ] NativeBulkRunMergerTest.OrderedSourceFailsClosedForInvalidAndIncoherentInputCursors
+[       OK ] NativeBulkRunMergerTest.OrderedSourceFailsClosedForInvalidAndIncoherentInputCursors (0 ms)
+[ RUN      ] NativeBulkRunMergerTest.OrderedSourceRejectsAnEmptyBTreeKeyBeforeExposingIt
+[       OK ] NativeBulkRunMergerTest.OrderedSourceRejectsAnEmptyBTreeKeyBeforeExposingIt (0 ms)
+[----------] 6 tests from NativeBulkRunMergerTest (0 ms total)
+
+[----------] 4 tests from NativeBulkRunManifestCodecTest
+[ RUN      ] NativeBulkRunManifestCodecTest.RejectsCorruptionForeignReferencesAndInvalidDimensions
+[       OK ] NativeBulkRunManifestCodecTest.RejectsCorruptionForeignReferencesAndInvalidDimensions (0 ms)
+[ RUN      ] NativeBulkRunManifestCodecTest.DeterministicWireFuzzEitherFailsClosedOrRoundTripsCanonicalBytes
+[       OK ] NativeBulkRunManifestCodecTest.DeterministicWireFuzzEitherFailsClosedOrRoundTripsCanonicalBytes (0 ms)
+[ RUN      ] NativeBulkRunManifestCodecTest.RejectsNonCanonicalShapesBeforeEncoding
+[       OK ] NativeBulkRunManifestCodecTest.RejectsNonCanonicalShapesBeforeEncoding (0 ms)
+[ RUN      ] NativeBulkRunManifestCodecTest.RejectsMixedLevelOwnershipAndAggregateShapesBeforeEncoding
+[       OK ] NativeBulkRunManifestCodecTest.RejectsMixedLevelOwnershipAndAggregateShapesBeforeEncoding (0 ms)
+[----------] 4 tests from NativeBulkRunManifestCodecTest (0 ms total)
+
+[----------] 52 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled
+[       OK ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled (130 ms)
+[ RUN      ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot
+[       OK ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks
+[       OK ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks (106 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization (129 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget
+[       OK ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues
+[       OK ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues (123 ms)
+[ RUN      ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties
+[       OK ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties (125 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode (68 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties
+[       OK ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties (182 ms)
+[ RUN      ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput
+[       OK ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput (141 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode
+[       OK ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode (186 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen (198 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled
+[       OK ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen (150 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination (93 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage (109 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation
+[       OK ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation (110 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication
+[       OK ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication (96 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns (101 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns (79 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom
+[       OK ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns
+[       OK ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation
+[       OK ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges
+[       OK ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay
+[       OK ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation
+[       OK ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation (101 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages
+[       OK ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages (163 ms)
+[ RUN      ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown
+[       OK ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions
+[       OK ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions (92 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty
+[       OK ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty (86 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins
+[       OK ] RelocatableStorageBackendTest.QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins (141 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchEnforcesDiskFragmentsAndPhysicalReadOnlyPermissions
+[       OK ] RelocatableStorageBackendTest.QueryScratchEnforcesDiskFragmentsAndPhysicalReadOnlyPermissions (59 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+[       OK ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection (22749 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchInternalPolicyCanDenyPermissionWithoutWritingTheFile
+[       OK ] RelocatableStorageBackendTest.QueryScratchInternalPolicyCanDenyPermissionWithoutWritingTheFile (38 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites (219 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchDatabaseQuotaIsSharedAcrossSessionsAndRefundedAfterCleanup
+[       OK ] RelocatableStorageBackendTest.QueryScratchDatabaseQuotaIsSharedAcrossSessionsAndRefundedAfterCleanup (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchPublicationFaultsPreserveGraphAndRecoverOrphanQuota
+[       OK ] RelocatableStorageBackendTest.QueryScratchPublicationFaultsPreserveGraphAndRecoverOrphanQuota (472 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchAllocatorPublicationInterleavesWithGraphWritesWithoutLosingRoots
+[       OK ] RelocatableStorageBackendTest.QueryScratchAllocatorPublicationInterleavesWithGraphWritesWithoutLosingRoots (451 ms)
+[ RUN      ] RelocatableStorageBackendTest.CorruptScratchReadAndOrphanRecoveryNeverReclaimUserPagesOrRefundQuota
+[       OK ] RelocatableStorageBackendTest.CorruptScratchReadAndOrphanRecoveryNeverReclaimUserPagesOrRefundQuota (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchHandleGrantIsSharedAndRetainedUntilObjectDestruction
+[       OK ] RelocatableStorageBackendTest.QueryScratchHandleGrantIsSharedAndRetainedUntilObjectDestruction (60 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease
+[       OK ] RelocatableStorageBackendTest.QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld
+[       OK ] RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder
+[       OK ] RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder (396 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchHandleGrantUsesTheCallingQueryAllowanceAndRefundsAfterDestruction
+[       OK ] RelocatableStorageBackendTest.QueryScratchHandleGrantUsesTheCallingQueryAllowanceAndRefundsAfterDestruction (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder
+[       OK ] RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder (45 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery
+[       OK ] RelocatableStorageBackendTest.NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery (330 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted (80 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle (64 ms)
+[----------] 52 tests from RelocatableStorageBackendTest (29331 ms total)
+
+[----------] 3 tests from QueryScratchDiskBudgetTest
+[ RUN      ] QueryScratchDiskBudgetTest.ThreeLevelsRefundOnlyReclaimedExtentsAndRetainOrphans
+[       OK ] QueryScratchDiskBudgetTest.ThreeLevelsRefundOnlyReclaimedExtentsAndRetainOrphans (0 ms)
+[ RUN      ] QueryScratchDiskBudgetTest.ConcurrentDomainsCannotOverAdmitProcessQuota
+[       OK ] QueryScratchDiskBudgetTest.ConcurrentDomainsCannotOverAdmitProcessQuota (0 ms)
+[ RUN      ] QueryScratchDiskBudgetTest.SlotsMovesAndInvalidConfigurationPreserveOwnership
+[       OK ] QueryScratchDiskBudgetTest.SlotsMovesAndInvalidConfigurationPreserveOwnership (0 ms)
+[----------] 3 tests from QueryScratchDiskBudgetTest (0 ms total)
+
+[----------] 14 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+[       OK ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (295 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (229 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (163 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+[       OK ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers (219 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks
+[       OK ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks (225 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts
+[       OK ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts (171 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend
+[       OK ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend (172 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation
+[       OK ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation (261 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode
+[       OK ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode (66 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation
+COVERED_CONTROL_COST edges=90 key_only=1703936 candidate=1835008 retired=0 allocated_peak=1835008 file=5373952
+[       OK ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation (156 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges
+[       OK ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges (312 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime
+[       OK ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime (194 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths
+[       OK ] HybridPropertyQueryParityTest.CoveredSameExecutorMultiHopRetainsAllParallelEdgePaths (296 ms)
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (246 ms)
+[----------] 14 tests from HybridPropertyQueryParityTest (3011 ms total)
+
+[----------] 27 tests from NativeGraphWritePlannerVectorTest
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesRawMappingsAndManifestInOneGeneration
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesRawMappingsAndManifestInOneGeneration (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineBootstrapPayload
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineBootstrapPayload (2 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsBootstrapMappingsToMissingOrErasedNodesBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState (3 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning (3 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RefusesToOverwriteAPublishedVectorBootstrapState
+[       OK ] NativeGraphWritePlannerVectorTest.RefusesToOverwriteAPublishedVectorBootstrapState (7 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsMalformedDeltaContractsAndDuplicateSemanticTransitionsBeforePublication (14 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineDeltaPayload
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsZeroNormCosineDeltaPayload (15 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaInsertForANodeOutsideTheGraphSnapshot
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaInsertForANodeOutsideTheGraphSnapshot (7 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaAfterStagingBootstrapForTheSameIndex
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaAfterStagingBootstrapForTheSameIndex (2 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsSecondBootstrapForTheSameIndexInOneTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsSecondBootstrapForTheSameIndexInOneTransaction (2 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsSecondDeltaForTheSameIndexInOneTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsSecondDeltaForTheSameIndexInOneTransaction (7 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesLogicalCreateAndReplacementThroughNativeVectorState
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesLogicalCreateAndReplacementThroughNativeVectorState (18 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion
+[       OK ] NativeGraphWritePlannerVectorTest.MaintainsNativeVectorMappingsAcrossLabelLossGainAndNodeDeletion (39 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsVectorInsertionForANodeErasedByTheSameTransaction
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsVectorInsertionForANodeErasedByTheSameTransaction (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration
+[       OK ] NativeGraphWritePlannerVectorTest.ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration (22 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail (16 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.AppendsAFullTailDeltaPageToItsExistingRawPool
+[       OK ] NativeGraphWritePlannerVectorTest.AppendsAFullTailDeltaPageToItsExistingRawPool (15 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool
+[       OK ] NativeGraphWritePlannerVectorTest.ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool (21 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesANewRawPoolWhenTheCurrentRawPoolIsFull
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesANewRawPoolWhenTheCurrentRawPoolIsFull (19 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.MovesTheManifestToANewPoolWhenCowFramesAreExhausted
+[       OK ] NativeGraphWritePlannerVectorTest.MovesTheManifestToANewPoolWhenCowFramesAreExhausted (731 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication
+[       OK ] NativeGraphWritePlannerVectorTest.RejectsDeltaThatExceedsTheHardOverlayCapBeforePublication (8 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder
+[       OK ] NativeGraphWritePlannerVectorTest.PublishesTwoVectorDeltaRangesInGlobalVectorIdOrder (19 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased
+[       OK ] NativeGraphWritePlannerVectorTest.RetiresDeltaMappingWhenAnOverlayOnlyVectorIsErased (23 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay
+[       OK ] NativeGraphWritePlannerVectorTest.PreservesDerivedPqStateWithSnapshotSafeBaseDeltaOverlay (24 ms)
+[ RUN      ] NativeGraphWritePlannerVectorTest.RecoversNativeVectorDeltaAcrossSuperblockInterruptions
+[       OK ] NativeGraphWritePlannerVectorTest.RecoversNativeVectorDeltaAcrossSuperblockInterruptions (37 ms)
+[----------] 27 tests from NativeGraphWritePlannerVectorTest (1094 ms total)
+
+[----------] 9 tests from NativeVectorMutationPlannerTest
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue
+[       OK ] NativeVectorMutationPlannerTest.EmitsOrderedEraseThenInsertForChangedIndexedValue (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions
+[       OK ] NativeVectorMutationPlannerTest.IgnoresEquivalentBfloat16AndUnrelatedLabelTransitions (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties
+[       OK ] NativeVectorMutationPlannerTest.EmitsMembershipInsertAndEraseWithoutReadingIrrelevantProperties (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership
+[       OK ] NativeVectorMutationPlannerTest.RejectsMissingIndexedPropertyTokenBeforeInferringMembership (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries
+[       OK ] NativeVectorMutationPlannerTest.RejectsZeroNormCosineValuesAtBothSemanticBoundaries (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning
+[       OK ] NativeVectorMutationPlannerTest.RejectsMalformedInputsAndResolverTokensBeforeVectorPlanning (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes
+[       OK ] NativeVectorMutationPlannerTest.EnforcesPerNodeMutationBudgetAcrossVectorIndexes (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot
+[       OK ] NativeVectorMutationPlannerTest.SkipsAnIndexedLabelWhosePropertyIsAbsentFromAnOtherwiseCanonicalRoot (0 ms)
+[ RUN      ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope
+[       OK ] NativeVectorMutationPlannerTest.BorrowedSelectedValuesMatchOwningRootsAndRespectLabelScope (0 ms)
+[----------] 9 tests from NativeVectorMutationPlannerTest (4 ms total)
+
+[----------] 1 test from NativeVectorMutationPlannerContractsTest
+[ RUN      ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds
+[       OK ] NativeVectorMutationPlannerContractsTest.RejectsInvalidConstructorDefinitionsAndBounds (0 ms)
+[----------] 1 test from NativeVectorMutationPlannerContractsTest (0 ms total)
+
+[----------] 27 tests from ConstraintMutationValidatorTest
+[ RUN      ] ConstraintMutationValidatorTest.PlansNativeUsableSupportTransitionsForReplaceAndCreate
+[       OK ] ConstraintMutationValidatorTest.PlansNativeUsableSupportTransitionsForReplaceAndCreate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey
+[       OK ] ConstraintMutationValidatorTest.ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateAgainstAValidatedSupportTreeCandidate
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateAgainstAValidatedSupportTreeCandidate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesNodeKeyAndTypeChecksToTheBatchFinalState
+[       OK ] ConstraintMutationValidatorTest.AppliesNodeKeyAndTypeChecksToTheBatchFinalState (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesAdditionalDdlDefinitionsAgainstTheCompleteGraph
+[       OK ] ConstraintMutationValidatorTest.ValidatesAdditionalDdlDefinitionsAgainstTheCompleteGraph (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsAnActiveSupportConstraintWithoutAPublishedRoot
+[       OK ] ConstraintMutationValidatorTest.RejectsAnActiveSupportConstraintWithoutAPublishedRoot (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ResolvesEqualLabelAndRelationshipTypeNamesThroughSeparateDomains
+[       OK ] ConstraintMutationValidatorTest.ResolvesEqualLabelAndRelationshipTypeNamesThroughSeparateDomains (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsIncompleteAdaptersAndInvalidAffectedEntityRequests
+[       OK ] ConstraintMutationValidatorTest.RejectsIncompleteAdaptersAndInvalidAffectedEntityRequests (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AllowsAnAtomicUniqueKeySwapAgainstChangedSupportCandidates
+[       OK ] ConstraintMutationValidatorTest.AllowsAnAtomicUniqueKeySwapAgainstChangedSupportCandidates (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsMalformedAndOverBudgetSupportTreeCandidates
+[       OK ] ConstraintMutationValidatorTest.RejectsMalformedAndOverBudgetSupportTreeCandidates (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.UsesFullSnapshotValidationWhenDdlAndExistingConstraintsShareABatch
+[       OK ] ConstraintMutationValidatorTest.UsesFullSnapshotValidationWhenDdlAndExistingConstraintsShareABatch (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesUntypedEdgeConstraintsWithoutAllocatingAToken
+[       OK ] ConstraintMutationValidatorTest.ValidatesUntypedEdgeConstraintsWithoutAllocatingAToken (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.ValidatesEveryDeclaredPropertyTypeInTheFullSnapshotPath
+[       OK ] ConstraintMutationValidatorTest.ValidatesEveryDeclaredPropertyTypeInTheFullSnapshotPath (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsEmptyAndUnresolvedSchemaNamesBeforePlanningMutations
+[       OK ] ConstraintMutationValidatorTest.RejectsEmptyAndUnresolvedSchemaNamesBeforePlanningMutations (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesCreatedEntitiesAndDeletesDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.AppliesCreatedEntitiesAndDeletesDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.PlansCreatedEdgeUniqueTransitionsThroughTheAffectedEntityPath
+[       OK ] ConstraintMutationValidatorTest.PlansCreatedEdgeUniqueTransitionsThroughTheAffectedEntityPath (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateBatchKeysAndUnknownReferenceKinds
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateBatchKeysAndUnknownReferenceKinds (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsMismatchedPersistedEntitiesAndStaleSupportEntries
+[       OK ] ConstraintMutationValidatorTest.RejectsMismatchedPersistedEntitiesAndStaleSupportEntries (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.StopsAtTheFirstDifferentSupportDigestAndRejectsInvalidFullScans
+[       OK ] ConstraintMutationValidatorTest.StopsAtTheFirstDifferentSupportDigestAndRejectsInvalidFullScans (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.PlansPersistedEdgeUniqueTransitionsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.PlansPersistedEdgeUniqueTransitionsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsInvalidTargetsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.RejectsInvalidTargetsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AppliesRepeatedUpdatesAndRejectsExplicitNullProperties
+[       OK ] ConstraintMutationValidatorTest.AppliesRepeatedUpdatesAndRejectsExplicitNullProperties (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull
+[       OK ] ConstraintMutationValidatorTest.RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.AllowsAKeyReleasedByADeletedSupportTreeCandidate
+[       OK ] ConstraintMutationValidatorTest.AllowsAKeyReleasedByADeletedSupportTreeCandidate (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsAStaleTargetKeyEntryForTheMutatedEntity
+[       OK ] ConstraintMutationValidatorTest.RejectsAStaleTargetKeyEntryForTheMutatedEntity (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.RejectsDuplicateEntitiesAndMissingSupportRootsDuringFullSnapshotValidation
+[       OK ] ConstraintMutationValidatorTest.RejectsDuplicateEntitiesAndMissingSupportRootsDuringFullSnapshotValidation (0 ms)
+[ RUN      ] ConstraintMutationValidatorTest.BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics
+[       OK ] ConstraintMutationValidatorTest.BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics (0 ms)
+[----------] 27 tests from ConstraintMutationValidatorTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 195 tests from 14 test suites ran. (33748 ms total)
+[  PASSED  ] 195 tests.

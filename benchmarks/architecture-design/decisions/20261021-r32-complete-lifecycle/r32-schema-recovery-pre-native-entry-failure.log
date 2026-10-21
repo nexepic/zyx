@@ -1,0 +1,28 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *NormalReopenDoesNotScan*:*RecoveryRejectsACompleteHeader*:*RecoveryStillAuthenticates*:*RecoveryReadsHeaders*
+[==========] Running 4 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendSchemaTest
+[ RUN      ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp:370: Failure
+Expected: (openStatistics.read_bytes) < (PAYLOAD_BYTES / 2U), actual: 21004688 vs 1048576
+
+[  FAILED  ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion (451 ms)
+[----------] 1 test from RelocatableStorageBackendSchemaTest (451 ms total)
+
+[----------] 3 tests from RelocatableSharedPagePoolAllocatorFaultTest
+[ RUN      ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryRejectsACompleteHeaderWithATruncatedFrameTail
+[       OK ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryRejectsACompleteHeaderWithATruncatedFrameTail (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryStillAuthenticatesEveryOwnerHeaderChecksum
+[       OK ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryStillAuthenticatesEveryOwnerHeaderChecksum (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryReadsHeadersWithoutScanningAllocatedValueBodies
+[       OK ] RelocatableSharedPagePoolAllocatorFaultTest.RecoveryReadsHeadersWithoutScanningAllocatedValueBodies (63 ms)
+[----------] 3 tests from RelocatableSharedPagePoolAllocatorFaultTest (69 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 2 test suites ran. (521 ms total)
+[  PASSED  ] 3 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendSchemaTest.NormalReopenDoesNotScanTheLargeValueDataRegion
+
+ 1 FAILED TEST

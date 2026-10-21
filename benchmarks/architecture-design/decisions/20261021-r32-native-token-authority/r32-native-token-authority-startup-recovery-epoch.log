@@ -1,0 +1,29 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.RawNativeFieldMutationRejectsTokensMissingFromTheCatalog:HybridPropertyQueryParityTest.NativeNewPropertyToken*:HybridPropertyQueryParityTest.PublicNativePropertyReplacementEnforcesRequiredFields*:HybridPropertyQueryParityTest.NewNativeTokenFieldsAndVectorRecoverTogetherAcrossBootstrapWriteFaults
+[==========] Running 4 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 4 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementEnforcesRequiredFieldsAndPublishesNewTokensAtomically
+[       OK ] HybridPropertyQueryParityTest.PublicNativePropertyReplacementEnforcesRequiredFieldsAndPublishesNewTokensAtomically (2413 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeNewPropertyTokenIsSharedBy64OwnersInTheOriginalBudget
+[       OK ] HybridPropertyQueryParityTest.NativeNewPropertyTokenIsSharedBy64OwnersInTheOriginalBudget (2259 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NewNativeTokenFieldsAndVectorRecoverTogetherAcrossBootstrapWriteFaults
+[       OK ] HybridPropertyQueryParityTest.NewNativeTokenFieldsAndVectorRecoverTogetherAcrossBootstrapWriteFaults (3351 ms)
+[ RUN      ] HybridPropertyQueryParityTest.RawNativeFieldMutationRejectsTokensMissingFromTheCatalog
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:407: Failure
+Expected equality of these values:
+  io->dataMutationEpoch()
+    Which is: 15
+  epoch
+    Which is: 12
+
+[  FAILED  ] HybridPropertyQueryParityTest.RawNativeFieldMutationRejectsTokensMissingFromTheCatalog (182 ms)
+[----------] 4 tests from HybridPropertyQueryParityTest (8207 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test suite ran. (8208 ms total)
+[  PASSED  ] 3 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.RawNativeFieldMutationRejectsTokensMissingFromTheCatalog
+
+ 1 FAILED TEST

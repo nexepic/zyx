@@ -2958,7 +2958,11 @@ namespace graph::storage {
 			// A normal open follows the published roots and must not scan every data
 			// pool. A writable allocator reconciles its selected pool before frame
 			// reuse; routed reads still authenticate each current owner header.
-			const SharedPagePoolOpenMode poolOpenMode = isReadOnly()
+            // Native publication owns recovery and frame reuse under its typed
+            // metadata proof. Ordinary allocator attachment must not reconcile
+            // native pools before that publication acquires its writer.
+            const bool nativeDescriptor = metadata_->openSnapshot().superblock().hybrid_property_descriptor_root.isValid();
+			const SharedPagePoolOpenMode poolOpenMode = isReadOnly() || nativeDescriptor
 																? SharedPagePoolOpenMode::SPPOM_READ_ONLY
 																: SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION;
 			slotted_pages_ = std::make_unique<SlottedPagePool>(data_file_->io(), *metadata_, poolOpenMode);
@@ -3320,6 +3324,10 @@ namespace graph::storage {
 
 	NativeGraphWriteCommitResult
 	RelocatableStorageBackend::commitNativeGraphWriteTransaction(NativeGraphWriteTransaction &transaction) {
+        // This private backend entry publishes typed catalog/index builders.
+        // The transaction and metadata writer independently exclude graph/field
+        // changes before accepting schema-only native-layout preservation.
+        transaction.native_schema_coordinated_ = true;
 		const Superblock before = transaction.baseSnapshot().superblock();
 		try {
 			return transaction.commit();

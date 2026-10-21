@@ -1,0 +1,10 @@
+{
+  "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "ff7b9caff5e3001afb24d369a583bc5c0b2081e3b6d2059a9c473d056c3a508a",
+  "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "16b61225e68759837c04f7953677e97e92a763be8deb7e103ec8ddaa932b35a5",
+  "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "15866630930d081a2ae476bd85ce456a5a3d7926dc0ddd7c9faf558a66df47ab",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "ce5ba1f54f8aadc281cb79ef9e340ab1bfd3f0977f65977af018b146fe123859",
+  "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "7ff5a3bf5ddec92d9627d6c694fc3701fd89c1c6f864c899efb9ac37f4bd6fb8",
+  "include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp": "543d5526e86099fa9998bdc91059f26202544a32a9ff364f05348782f02ccc1d",
+  "tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": "ca2c6dfaeb4fa31f184e75102d806ac5a7aa7abcd76258b60ce507b4c6443a1b",
+  "tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp": "9135b9101a116dce1ee4e7fb7a4e96c34993093c6bfc31b63f99d6e13d05eba7"
+}

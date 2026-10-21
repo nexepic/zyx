@@ -1,0 +1,15 @@
+{
+  "accepted": 14,
+  "denominator": 24,
+  "accepted_growth": 0,
+  "commit_push": false,
+  "modules": 5,
+  "passed": {
+    "default": 7,
+    "candidate": 59
+  },
+  "publication_installed": false,
+  "full_repository_test_run": false,
+  "performance_benchmark": false,
+  "remaining": "Actual same-batch leased Entity/field/derived publication; mixed/detach/cross-group and production/R5/R7 gates."
+}

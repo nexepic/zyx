@@ -1,0 +1,27 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphan*:HybridPropertyQueryParityTest.NativeBulkScratchRetirement*:NativeBulkRunStoreTest.Query*
+[==========] Running 7 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from NativeBulkRunStoreTest
+[ RUN      ] NativeBulkRunStoreTest.QueryAndBulkRecoveryReclaimOnlyTheirOwnScratchKinds
+[       OK ] NativeBulkRunStoreTest.QueryAndBulkRecoveryReclaimOnlyTheirOwnScratchKinds (12 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReleaseRejectsForeignGenerationOwnerDuplicatesAndBulkKindAtomically
+[       OK ] NativeBulkRunStoreTest.QueryScratchReleaseRejectsForeignGenerationOwnerDuplicatesAndBulkKindAtomically (10 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicPageRegistration
+[       OK ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicPageRegistration (5 ms)
+[ RUN      ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicExtentRegistration
+[       OK ] NativeBulkRunStoreTest.QueryScratchReclamationRejectsCorruptPublicExtentRegistration (5 ms)
+[----------] 4 tests from NativeBulkRunStoreTest (34 ms total)
+
+[----------] 3 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields
+[       OK ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields (2331 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanBulkScratchAndPreservesFields
+[       OK ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanBulkScratchAndPreservesFields (2343 ms)
+[ RUN      ] HybridPropertyQueryParityTest.NativeBulkScratchRetirementWaitsForOldPinThenRecoversWithoutChangingFields
+[       OK ] HybridPropertyQueryParityTest.NativeBulkScratchRetirementWaitsForOldPinThenRecoversWithoutChangingFields (1706 ms)
+[----------] 3 tests from HybridPropertyQueryParityTest (6381 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 2 test suites ran. (6415 ms total)
+[  PASSED  ] 7 tests.

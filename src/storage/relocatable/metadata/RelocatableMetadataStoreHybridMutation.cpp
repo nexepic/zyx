@@ -24,6 +24,8 @@
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/schema/ConstraintMutationValidator.hpp"
 #include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
+#include "graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp"
+#include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
@@ -40,7 +42,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
         throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column publication is disabled");
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
-    require(request.memory && (request.replacements.empty() != request.owner_deletions.empty()) &&
+    require(request.memory && request.pending_owner_additions.empty() && (request.replacements.empty() != request.owner_deletions.empty()) &&
         request.replacements.size() <= RSS_HYBRID_GROUP_CAPACITY && request.owner_deletions.size() <= RSS_HYBRID_GROUP_CAPACITY &&
         (request.owner_deletions.empty() || request.field_lifecycle) &&
         request.first_slot.isValid() && request.last_slot >= request.first_slot && request.field_pool_owner_id,
@@ -77,6 +79,39 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
         current.hybrid_property_descriptor_root.isValid() && current.hybrid_property_descriptor_root == request.expected_descriptor,
         "native column publication has a stale or foreign source fence");
     auto source = snapshots_.pinCurrentUnderWrite(writer, current);
+    MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn, request.memory);
+    HybridPropertyPoolPlacement placement(*this, batch, writer, source, request.first_slot, request.last_slot, request.memory, check);
+    if (!prepareHybridPropertyColumns(batch, writer, source, request, replacements,
+        sourcePages, sourceTrees, sourceValues, sourceEntities, sourceLabels, placement)) return current;
+    check(); publishBatch(batch, writer, options); placement.remember(); return batch.candidate();
+}
+
+bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &batch,
+    const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
+    const NativeHybridPropertyColumnWrite &request, std::span<const NativeHybridPropertyColumnReplacement> replacements,
+    SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &sourceValues,
+    EntityPageStore &sourceEntities, EntityLabelSetStore &sourceLabels, HybridPropertyPoolPlacement &placement,
+    const NativeHybridVectorPublication *hybridVectors, const NativeHybridTopologyPublication *hybridTopology,
+    std::span<const NativeGraphLargeValueMutation> jointValues) {
+    const auto &current = source.superblock();
+    const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
+    const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
+    require(ownsSnapshot(source) && batch.current() == current &&
+        current.database_id == request.expected_database_id && current.generation == request.expected_generation &&
+        current.hybrid_property_descriptor_root == request.expected_descriptor &&
+        batch.candidate().hybrid_property_descriptor_root == current.hybrid_property_descriptor_root,
+        "native field preparation requires one owned source and unpublished descriptor");
+    if (hybridTopology || !request.pending_owner_additions.empty())
+        require(hybridTopology && !hybridVectors && hybridTopology->metadata_ == this && hybridTopology->source_ == current &&
+            hybridTopology->schema_preserved_ && request.field_lifecycle &&
+            request.owner_deletions.data() == hybridTopology->owner_deletions_.data() &&
+            request.owner_deletions.size() == hybridTopology->owner_deletions_.size() &&
+            replacements.data() == hybridTopology->field_changes_.data() && replacements.size() == hybridTopology->field_changes_.size() &&
+            replacements.size() <= 64U &&
+            request.pending_owner_additions.size() <= 64U,
+            "native pending owner liveness requires its sealed new-owner graph publication");
+    utils::OwnedAllocationScope allocation(request.memory);
+    size_t verifiedVectorSemantics = 0;
     utils::OwnedStdVector<IndexDefinition> schemaDefinitions;
     utils::OwnedStdVector<ConstraintDefinition> constraintDefinitions;
     const bool hasCatalog = bool(locations_.findIndexRootOptional(current, RSS_SYSTEM_CATALOG_INDEX_ID));
@@ -84,13 +119,12 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
         // A field-only change preserves owner counts, labels, relationship
         // types and their indexes. Prove the schema/control ranges before
         // preparing scalar/composite and constraint support deltas below.
-        // Vector state and topology deletion still need dedicated coordinators.
+        // Embedding deltas and general topology writes need their own coordinators.
         SystemCatalog schema(sourceTrees, *this);
         auto schemaState = schema.readFieldMutationSchema(source, 4096, request.cancellation);
         schemaDefinitions = std::move(schemaState.indexes);
         constraintDefinitions = std::move(schemaState.constraints);
     }
-    MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn, request.memory);
     HybridPropertyReadContext context(io_, sourcePages, *this, source, request.cancellation);
     HybridPropertyFieldPageStore fields(io_, *this, source);
     utils::OwnedVector<HybridPropertyColumnDelta> deltas{utils::OwnedPmrAllocator<HybridPropertyColumnDelta>(request.memory)};
@@ -100,10 +134,42 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     utils::OwnedVector<InlineChange> inlineChanges{utils::OwnedPmrAllocator<InlineChange>(request.memory)};
     inlineChanges.reserve(replacements.size());
     std::optional<HybridPropertyGroupRecord> sourceGroup;
+    bool multipleGroups = false;
     SlottedSlotReference groupReference;
     utils::OwnedHeapReservation boundary(request.memory), referenceCredit(request.memory);
     const auto admit = [&](size_t bytes) { boundary.set(bytes); };
     const auto admitReference = [&](size_t bytes) { referenceCredit.set(bytes); };
+    if (!request.pending_owner_additions.empty() || !replacements.empty()) {
+        const auto owner = !request.pending_owner_additions.empty() ? request.pending_owner_additions.front() : replacements.front().owner;
+        sourceGroup = context.groupRecord(owner, std::ref(admit), &groupReference);
+        boundary.set(0); require(bool(sourceGroup), "native field work has no installed source group");
+    }
+    SystemCatalog propertyTokens(sourceTrees, *this);
+    const auto registeredToken = [&](uint32_t token) {
+        return !hasCatalog || bool(propertyTokens.findPropertyName(source, token));
+    };
+    const auto allocatedToken = [&](uint32_t token) { return
+        (hybridVectors && std::ranges::binary_search(hybridVectors->new_property_tokens_, token)) ||
+        (hybridTopology && std::ranges::binary_search(hybridTopology->new_property_tokens_, token)); };
+    if (hasCatalog) {
+        const auto newTokens = hybridVectors ? hybridVectors->new_property_tokens_ : hybridTopology ?
+            hybridTopology->new_property_tokens_ : std::span<const uint32_t>{};
+        for (const auto token : newTokens) {
+            check(); require(token && !propertyTokens.findPropertyName(source, token),
+                "native new property token already has a source Catalog identity");
+        }
+        for (const auto &cell : replacements) {
+            check(); const bool allocated = allocatedToken(cell.token);
+            require(allocated || registeredToken(cell.token),
+                "native field token is missing its Catalog identity and sealed allocation");
+            if (allocated) {
+                require(context.visitField(cell.owner, cell.token, [](const auto &) {}, [](const auto &) {},
+                    std::ref(admit), std::ref(admitReference)) == HybridPropertyReadContext::FieldRoute::HFR_MISSING,
+                    "native new property token collides with existing field membership");
+                boundary.set(0); referenceCredit.set(0);
+            }
+        }
+    }
     struct EntityImage { EntityPage page; uint64_t owner_id; };
     utils::OwnedHeapReservation entityCredit(request.memory);
     utils::OwnedVector<EntityImage> entityImages{utils::OwnedPmrAllocator<EntityImage>(request.memory)};
@@ -132,32 +198,41 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
             return true;
         }), "native field publication did not complete its bounded State control census");
     }
-    if (!request.owner_deletions.empty()) {
-        const auto kind = request.owner_deletions.front().owner_kind;
-        const bool nodes = kind == EntityPropertyOwnerKind::EPOK_NODE;
+    if (!request.owner_deletions.empty() && !hybridTopology) {
+        const size_t nodeCount = size_t(std::ranges::count_if(request.owner_deletions, [](const auto owner) { return owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE; }));
+        const size_t edgeCount = request.owner_deletions.size() - nodeCount;
         const auto adjacencyRoot = locations_.findIndexRootOptional(current, RSS_GLOBAL_ADJACENCY_INDEX_ID);
-        if (nodes && !adjacencyRoot) {
+        if (nodeCount && !adjacencyRoot) {
             bool hasEdge = false;
             require(locations_.visitEdgePageLocationsAfter(current, 0, 1, [&](const auto &) { hasEdge = true; return false; }) && !hasEdge,
                 "native Node deletion cannot prove isolation without the global adjacency root");
-        } else if (!nodes) require(bool(adjacencyRoot), "native Edge deletion has no global adjacency root");
+        }
+        if (edgeCount) require(bool(adjacencyRoot), "native Edge deletion has no global adjacency root");
         SharedPagePoolAllocator entityPools(io_, *this, source);
         entityImages.reserve(request.owner_deletions.size());
-        if (nodes) erasedNodes.reserve(request.owner_deletions.size());
-        else { erasedEdges.reserve(request.owner_deletions.size()); erasedAdjacency.reserve(request.owner_deletions.size() * 2U); }
+        erasedNodes.reserve(nodeCount); erasedEdges.reserve(edgeCount); erasedAdjacency.reserve(edgeCount * 2U);
         size_t fieldsSeen = 0;
         for (const auto owner : request.owner_deletions) {
-            check(); require(owner.isValid() && owner.owner_kind == kind, "native owner deletion crosses entity kinds");
+            check(); require(owner.isValid(), "native owner deletion has an invalid owner namespace or ID");
+            const bool nodes = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE;
             if (nodes) {
                 const auto record = sourceEntities.readNode(source, owner.entity_id);
                 if (adjacencyRoot) {
                     AdjacencySet adjacency(RSS_GLOBAL_ADJACENCY_INDEX_ID, sourceTrees, *this,
                         BTreeRootReadBinding{current.database_id, current.generation, *adjacencyRoot});
                     for (const auto direction : {GlobalAdjacencyDirection::GAD_OUT, GlobalAdjacencyDirection::GAD_IN}) {
-                        const auto lower = AdjacencyKeyCodec::lowerBoundFixed(direction, owner.entity_id); bool incident = false;
-                        require(adjacency.visitPrefix(source, std::span<const std::byte>(lower).first(9), 1,
-                            [&](const auto &) { incident = true; return false; }, std::ref(admit), request.cancellation) && !incident,
-                            "native Node deletion requires deleting its incident Edges first");
+                        const auto lower = AdjacencyKeyCodec::lowerBoundFixed(direction, owner.entity_id);
+                        require(adjacency.visitPrefix(source, std::span<const std::byte>(lower).first(9), request.owner_deletions.size() + 1U,
+                            [&](const auto &entry) {
+                                check(); const auto key = AdjacencyKeyCodec::decode(entry.key);
+                                require(std::ranges::find(request.owner_deletions, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_EDGE, key.edge_id}) != request.owner_deletions.end(),
+                                    "native Node deletion has an incident Edge outside its atomic deletion batch");
+                                const auto edge = sourceEntities.readEdge(source, key.edge_id);
+                                require(key.direction == direction && key.node_id == owner.entity_id &&
+                                    (direction == GlobalAdjacencyDirection::GAD_OUT ? edge.source_node_id : edge.target_node_id) == owner.entity_id,
+                                    "native Node deletion found a stale incident adjacency key");
+                                return true;
+                            }, std::ref(admit), request.cancellation), "native Node deletion exceeded its bounded incident Edge proof");
                         boundary.set(0);
                     }
                 }
@@ -203,6 +278,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
             }
             const auto membership = context.visitOwner(owner, 4097, [&](uint32_t token, HybridPropertySource route) {
                 check(); require(fieldsSeen < 4096, "native owner deletion exceeded its bounded field work"); ++fieldsSeen;
+                require(registeredToken(token), "native owner deletion found a field without a Catalog identity");
                 if (route == HybridPropertySource::HPS_EXTENSION)
                     static_cast<void>(context.visitField(owner, token, [](const auto &) {}, [&](const HybridPropertyExtensionView &value) {
                         if (value.reference()) {
@@ -229,9 +305,15 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
         std::sort(erasedNodes.begin(), erasedNodes.end()); std::sort(erasedEdges.begin(), erasedEdges.end());
         std::sort(erasedAdjacency.begin(), erasedAdjacency.end());
     }
+    if (!request.owner_deletions.empty()) {
+        sourceGroup = context.groupRecord(request.owner_deletions.front(), std::ref(admit), &groupReference);
+        boundary.set(0); require(bool(sourceGroup), "native owner deletion has no installed source group");
+    }
     deltas.reserve(replacements.size()); changes.reserve(replacements.size());
     for (const auto &replacement : replacements) {
         check(); require(request.field_lifecycle || !replacement.erase, "compatible column writes cannot remove memberships");
+        require(std::ranges::find(request.owner_deletions, replacement.owner) == request.owner_deletions.end(),
+            "native field change targets an owner erased by the same batch");
         if (request.field_lifecycle) {
             require(replacement.owner.isValid() && replacement.token, "native field mutation has an invalid key");
             for (const auto &previous : replacements) {
@@ -241,8 +323,10 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
             }
             const auto group = context.groupRecord(replacement.owner, std::ref(admit)); boundary.set(0);
             require(bool(group), "native field mutation has no source group");
-            if (sourceGroup) require(*group == *sourceGroup, "native field mutations must share one exact source group");
-            else {
+            if (sourceGroup && *group != *sourceGroup) {
+                multipleGroups = true;
+            }
+            if (!sourceGroup || *group != *sourceGroup) {
                 sourceGroup = *group;
                 const size_t base = replacement.owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? 0U : 4U;
                 const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source,
@@ -256,6 +340,15 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
         }
         PropertyValue scalar;
         const auto &value = replacement.propertyValue(scalar);
+        if (std::ranges::find(request.pending_owner_additions, replacement.owner) != request.pending_owner_additions.end()) {
+            require(!replacement.erase && std::ranges::find(request.pending_owner_additions, replacement.owner) != request.pending_owner_additions.end(),
+                "native creation field does not name a declared pending owner");
+            auto insertion = HybridPropertyColumnDelta::planPendingOwnerColumnMember(context, source, replacement.owner,
+                replacement.token, batch.generation(), request.memory, value);
+            if (insertion) deltas.push_back(std::move(*insertion));
+            else inlineChanges.push_back({&replacement, {}, true});
+            continue;
+        }
         auto delta = HybridPropertyColumnDelta::planExistingColumn(context, source, replacement.owner,
             replacement.token, batch.generation(), request.memory, replacement.erase ? nullptr : &value);
         if (delta) { deltas.push_back(std::move(*delta)); continue; }
@@ -339,9 +432,34 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     utils::OwnedVector<HybridPropertyColumnDelta> merged{utils::OwnedPmrAllocator<HybridPropertyColumnDelta>(request.memory)};
     std::optional<HybridPropertyColumnWritePreparation> compatible;
     std::optional<HybridPropertyDemotionPreparation> lifecycle;
-    if (!request.owner_deletions.empty()) {
+    const bool onlyCompatibleColumns = multipleGroups && request.pending_owner_additions.empty() &&
+        request.owner_deletions.empty() && inlineChanges.empty() && std::ranges::all_of(changes, [](const auto *change) {
+            const auto effects = change->effects();
+            return change->action() != HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD &&
+                !effects.memberships && !effects.columns && !effects.clear_live && !effects.set_live;
+        });
+    if (onlyCompatibleColumns) {
+        // This existing preparer authenticates all source groups/columns and
+        // clones each shared page once. Derived keys below still cover the
+        // complete original replacement span in this single metadata batch.
+        compatible.emplace(source, fields, changes, request.memory, request.cancellation);
+    } else if (!request.owner_deletions.empty()) {
         lifecycle.emplace(HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, source, fields,
-            request.owner_deletions, request.memory, request.cancellation));
+            request.owner_deletions, request.memory, request.cancellation, changes, largeResolver, request.pending_owner_additions));
+    } else if (!request.pending_owner_additions.empty()) {
+        std::sort(changes.begin(), changes.end(), [](auto *a, auto *b) { return a->columnReference() < b->columnReference(); });
+        merged.reserve(changes.size());
+        for (size_t begin = 0; begin < changes.size();) {
+            size_t end = begin + 1;
+            while (end < changes.size() && changes[end]->columnReference() == changes[begin]->columnReference()) ++end;
+            merged.push_back(HybridPropertyColumnDelta::mergeExistingColumnChanges(
+                std::span(changes).subspan(begin, end - begin), request.memory,
+                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, request.cancellation));
+            begin = end;
+        }
+        changes.clear(); for (const auto &delta : merged) changes.push_back(&delta);
+        lifecycle.emplace(HybridPropertyDemotionPreparation::preparePendingOwners(batch, context, source, fields,
+            changes, request.pending_owner_additions, request.memory, request.cancellation, largeResolver));
     } else if (request.field_lifecycle) {
         std::sort(changes.begin(), changes.end(), [](auto *a, auto *b) { return a->columnReference() < b->columnReference(); });
         merged.reserve(changes.size());
@@ -354,40 +472,58 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
             begin = end;
         }
         changes.clear(); for (const auto &delta : merged) changes.push_back(&delta);
-        if (!changes.empty()) lifecycle.emplace(batch, source, fields, changes, request.memory, request.cancellation, largeResolver);
+        if (!changes.empty()) {
+            if (multipleGroups) lifecycle.emplace(HybridPropertyDemotionPreparation::prepareGroups(
+                batch, source, fields, changes, request.memory, request.cancellation, largeResolver));
+            else lifecycle.emplace(batch, source, fields, changes, request.memory, request.cancellation, largeResolver);
+        }
         else {
             lifecycle.emplace(HybridPropertyDemotionPreparation(request.memory));
             lifecycle->group_ = *sourceGroup;
         }
-        if (!inlineChanges.empty()) {
+    } else compatible.emplace(source, fields, changes, request.memory, request.cancellation);
+    if (!inlineChanges.empty()) {
+            require(bool(lifecycle), "native extensions require lifecycle preparation");
             auto &images = lifecycle->pages_;
             const auto image = [&](PageId id) -> HybridPropertyPageImage & {
                 for (auto &page : images) if (page.pageId() == id) return page;
                 images.push_back(fields.cloneForMutation(source, id, batch.generation(), request.memory));
                 return images.back();
             };
-            require(image(groupReference.page_id).readGroup(groupReference, sourceGroup->owner_kind,
-                sourceGroup->group_id, batch.generation()) == lifecycle->group_, "native extension mutation lost its private group");
-            auto finalGroup = lifecycle->group_;
-            int64_t memberships = finalGroup.memberships;
-            for (const auto &change : inlineChanges) memberships += change.insert ? 1 : change.replacement->erase ? -1 : 0;
-            require(memberships >= 0 && memberships <= UINT32_MAX, "native extension mutation overflows memberships");
-            finalGroup.memberships = uint32_t(memberships);
-            finalGroup.semantic_generation = batch.generation(); finalGroup.validate();
             for (const auto &change : inlineChanges) {
                 check(); const auto &replacement = *change.replacement;
+                SlottedSlotReference ownerGroupReference;
+                const auto ownerGroup = context.groupRecord(replacement.owner, std::ref(admit), &ownerGroupReference);
+                boundary.set(0); require(bool(ownerGroup), "native extension lost its authenticated source group");
+                auto finalGroup = image(ownerGroupReference.page_id).readGroup(ownerGroupReference, ownerGroup->owner_kind,
+                    ownerGroup->group_id, batch.generation());
+                uint64_t expectedLive = ownerGroup->live;
+                for (const auto owner : request.pending_owner_additions)
+                    if (owner.owner_kind == ownerGroup->owner_kind && hybridPropertyGroupFor(owner) == ownerGroup->group_id)
+                        expectedLive |= UINT64_C(1) << hybridPropertySlotFor(owner);
+                for (const auto owner : request.owner_deletions)
+                    if (owner.owner_kind == ownerGroup->owner_kind && hybridPropertyGroupFor(owner) == ownerGroup->group_id)
+                        expectedLive &= ~(UINT64_C(1) << hybridPropertySlotFor(owner));
+                require(finalGroup.live == expectedLive && (finalGroup.semantic_generation == ownerGroup->semantic_generation ||
+                    finalGroup.semantic_generation == batch.generation()), "native extension found an inconsistent private group");
+                const int64_t memberships = int64_t(finalGroup.memberships) + (change.insert ? 1 : replacement.erase ? -1 : 0);
+                require(memberships >= 0 && memberships <= UINT32_MAX, "native extension mutation overflows memberships");
+                finalGroup.memberships = uint32_t(memberships); finalGroup.semantic_generation = batch.generation(); finalGroup.validate();
+                image(ownerGroupReference.page_id).replaceGroup(ownerGroupReference, finalGroup, batch.generation());
+                if (finalGroup.owner_kind == lifecycle->group_.owner_kind && finalGroup.group_id == lifecycle->group_.group_id)
+                    lifecycle->group_ = finalGroup;
                 const auto key = HybridPropertyDirectoryCodec::ownerKey(replacement.owner, replacement.token);
                 if (!change.insert) {
                     auto &oldImage = image(change.reference.page_id);
                     // Keep the record bytes alive while the authenticated view borrows them.
                     const auto bytes = oldImage.readRecord(change.reference);
                     static_cast<void>(HybridPropertyExtensionView::open(bytes, replacement.owner, replacement.token,
-                        sourceGroup->semantic_generation, descriptor.semantic_generation, current.generation, std::ref(admitReference)));
+                        ownerGroup->semantic_generation, descriptor.semantic_generation, current.generation, std::ref(admitReference)));
                     referenceCredit.set(0);
                     if (replacement.erase) oldImage.erase(change.reference);
-                } else lifecycle->owners_.push_back({key, HybridPropertyDirectoryCodec::sourceValue(HybridPropertySource::HPS_EXTENSION)});
+                } else lifecycle->ownersFor(replacement.owner.owner_kind).push_back({key, HybridPropertyDirectoryCodec::sourceValue(HybridPropertySource::HPS_EXTENSION)});
                 if (replacement.erase) {
-                    lifecycle->erased_owners_.push_back(key); lifecycle->erased_extensions_.push_back(key); continue;
+                    lifecycle->erasedOwnersFor(replacement.owner.owner_kind).push_back(key); lifecycle->erasedExtensionsFor(replacement.owner.owner_kind).push_back(key); continue;
                 }
                 PropertyValue scalar;
                 const auto &value = replacement.propertyValue(scalar);
@@ -420,24 +556,27 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
                     destination = images.back().appendExtension(encoded, replacement.owner, replacement.token, finalGroup, batch.generation(), std::ref(admitReference));
                     referenceCredit.set(0);
                 }
-                lifecycle->extensions_.push_back({key, HybridPropertyDirectoryCodec::locatorValue(*destination)});
+                lifecycle->extensionsFor(replacement.owner.owner_kind).push_back({key, HybridPropertyDirectoryCodec::locatorValue(*destination)});
             }
-            image(groupReference.page_id).replaceGroup(groupReference, finalGroup, batch.generation()); lifecycle->group_ = finalGroup;
             const auto entryLess = [](const auto &a, const auto &b) { return a.key < b.key; };
-            std::sort(lifecycle->owners_.begin(), lifecycle->owners_.end(), entryLess);
-            std::sort(lifecycle->extensions_.begin(), lifecycle->extensions_.end(), entryLess);
-            std::sort(lifecycle->erased_owners_.begin(), lifecycle->erased_owners_.end());
-            std::sort(lifecycle->erased_extensions_.begin(), lifecycle->erased_extensions_.end());
-        }
-    } else compatible.emplace(source, fields, changes, request.memory, request.cancellation);
+            for (const auto kind : {EntityPropertyOwnerKind::EPOK_NODE, EntityPropertyOwnerKind::EPOK_EDGE}) {
+                auto &owners = lifecycle->ownersFor(kind); auto &extensions = lifecycle->extensionsFor(kind);
+                auto &erasedOwners = lifecycle->erasedOwnersFor(kind); auto &erasedExtensions = lifecycle->erasedExtensionsFor(kind);
+                std::sort(owners.begin(), owners.end(), entryLess); std::sort(extensions.begin(), extensions.end(), entryLess);
+                std::sort(erasedOwners.begin(), erasedOwners.end()); std::sort(erasedExtensions.begin(), erasedExtensions.end());
+            }
+    }
     auto &fieldImages = lifecycle ? lifecycle->pages_ : compatible->pages_;
-    if (fieldImages.empty()) { check(); return current; }
+    if (fieldImages.empty() && jointValues.empty()) { check(); return false; }
     utils::OwnedVector<BTreePage> indexImages{utils::OwnedPmrAllocator<BTreePage>(request.memory)};
     utils::OwnedVector<uint64_t> erasedPages{utils::OwnedPmrAllocator<uint64_t>(request.memory)};
     utils::OwnedVector<IndexRootLocation> changedRoots{utils::OwnedPmrAllocator<IndexRootLocation>(request.memory)};
     utils::OwnedVector<uint64_t> erasedRoots{utils::OwnedPmrAllocator<uint64_t>(request.memory)};
-    if (lifecycle) {
-        const auto kind = lifecycle->group_.owner_kind;
+    if (lifecycle) for (const auto kind : {EntityPropertyOwnerKind::EPOK_NODE, EntityPropertyOwnerKind::EPOK_EDGE}) {
+        const bool erasedAnyGroup = !lifecycle->erasedGroups(kind).empty();
+        if (lifecycle->owners(kind).empty() && lifecycle->erasedOwners(kind).empty() && lifecycle->extensions(kind).empty() &&
+            lifecycle->erasedColumns(kind).empty() && lifecycle->erasedExtensions(kind).empty() && !erasedAnyGroup &&
+            !(kind == EntityPropertyOwnerKind::EPOK_EDGE && !erasedAdjacency.empty())) continue;
         const size_t base = kind == EntityPropertyOwnerKind::EPOK_NODE ? 0U : 4U;
         const auto prepareDirectory = [&]<class Map>(size_t role, std::span<const typename Map::Entry> upserts,
             std::span<const typename Map::Key> erases, bool adjacency = false) {
@@ -450,8 +589,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
                 if (adjacency) { require(bool(globalRoot), "native Edge deletion lost the global adjacency namespace"); return BTreeRootReadBinding{current.database_id, current.generation, *globalRoot}; }
                 return HybridPropertyDirectoryCodec::bindRoot(descriptor, source, ordinal);
             };
-            if (lifecycle->group_erased_ && !adjacency && sourceRoot.page_id.isValid()) {
-                require(upserts.empty(), "erased native group retained directory upserts");
+            if (erasedAnyGroup && !adjacency && sourceRoot.page_id.isValid() && upserts.empty()) {
                 Map map(index, sourceTrees, *this, binding()); utils::OwnedHeapReservation censusBoundary(request.memory);
                 size_t position = 0; bool exclusive = true;
                 const bool exhausted = map.visitAll(source, erases.size() + 1U, [&](const auto &entry) {
@@ -566,24 +704,36 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
                 if (indexImages[i].header().page_id == root) generation = Generation(1);
             if (!adjacency) descriptor.roots[base + role] = {root, generation}; changedRoots.push_back({index, root, generation});
         };
-        prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, {}, lifecycle->erasedColumns());
-        prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, lifecycle->owners(), lifecycle->erasedOwners());
-        prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, lifecycle->extensions(), lifecycle->erasedExtensions());
-        const auto erasedGroup = lifecycle->erasedGroup();
-        if (erasedGroup) prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, {}, std::span(&*erasedGroup, 1));
-        if (!erasedAdjacency.empty()) prepareDirectory.template operator()<AdjacencySet>(0, {}, erasedAdjacency, true);
+        prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, {}, lifecycle->erasedColumns(kind));
+        prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, lifecycle->owners(kind), lifecycle->erasedOwners(kind));
+        prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, lifecycle->extensions(kind), lifecycle->erasedExtensions(kind));
+        prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, {}, lifecycle->erasedGroups(kind));
+        if (kind == EntityPropertyOwnerKind::EPOK_EDGE && !erasedAdjacency.empty()) prepareDirectory.template operator()<AdjacencySet>(0, {}, erasedAdjacency, true);
     }
     // Prepare derived scalar keys from this fenced source and final cells.
     // Old selected values live for one owner only; unchanged/new values are
     // borrowed, so large owning payloads are not cloned into a second root.
-    if ((hasCatalog && !request.owner_deletions.empty()) || !constraintDefinitions.empty() || std::ranges::any_of(schemaDefinitions, [](const auto &definition) {
-            return definition.kind == IndexDefinitionKind::IDK_PROPERTY || definition.kind == IndexDefinitionKind::IDK_COMPOSITE;
-        })) {
+    // The sealed logical graph writer already prepares all new-owner derived
+    // transitions. Re-reading an absent source Entity here would be invalid;
+    // this branch must not prepare competing scalar/constraint/count roots.
+    if (!hybridTopology && request.pending_owner_additions.empty() && ((hasCatalog && !request.owner_deletions.empty()) || !constraintDefinitions.empty() || std::ranges::any_of(schemaDefinitions, [](const auto &definition) {
+            return definition.kind == IndexDefinitionKind::IDK_PROPERTY || definition.kind == IndexDefinitionKind::IDK_COMPOSITE ||
+                definition.kind == IndexDefinitionKind::IDK_VECTOR;
+        }))) {
         SystemCatalog schema(sourceTrees, *this);
         for (const auto &definition : schemaDefinitions)
             if (definition.kind == IndexDefinitionKind::IDK_PROPERTY || definition.kind == IndexDefinitionKind::IDK_COMPOSITE ||
                 (!request.owner_deletions.empty() && definition.kind == IndexDefinitionKind::IDK_LABEL))
                 require(bool(findIndexRootOptional(source, definition.index_id)), "native field schema has a scalar definition without an active root");
+        // Vector mappings and manifests form one publication even for an
+        // unrelated field write. Never preserve a partially published index.
+        for (const auto &definition : schemaDefinitions) if (definition.kind == IndexDefinitionKind::IDK_VECTOR) {
+            require(definition.vector_dimensions <= RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS,
+                "native field publication requires bounded Vector dimensions");
+            require(bool(findIndexRootOptional(source, definition.index_id)) ==
+                bool(findVectorManifestOptional(source, definition.index_id)),
+                "native field publication found an incomplete Vector mapping/Manifest pair");
+        }
         NativeScalarIndexMutationPlanner scalar(*this, sourceTrees, std::move(schemaDefinitions),
             [&](const MetadataSnapshotPin &pin, std::string_view name) { return schema.findPropertyToken(pin, name); });
         struct ScalarChange {
@@ -626,6 +776,56 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
                     return replacements[i].erase ? nullptr : &replacements[i].propertyValue(scratch[i]);
                 return oldValue(token);
             };
+            // Property-only writes keep labels fixed. Prove that every scoped
+            // Vector field is unchanged before preserving its mapping/manifest.
+            // A real embedding delta still requires the atomic Vector writer.
+            for (const auto &definition : scalar.definitions()) {
+                check(); if (definition.kind != IndexDefinitionKind::IDK_VECTOR) continue;
+                const auto token = schema.findPropertyToken(source, definition.property_names.front());
+                require(bool(token), "native Vector definition has no indexed Property-key Token");
+                if (owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE && deleted(owner) &&
+                    findIndexRootOptional(source, definition.index_id)) {
+                    // Membership can be stale even when the authoritative field
+                    // or label is absent. Do not orphan a persisted mapping by
+                    // treating the missing property as an empty Vector index.
+                    utils::OwnedHeapReservation keyCredit(request.memory, 1024U);
+                    const auto mapped = BTreeIndex(definition.index_id, sourceTrees, *this).find(source,
+                        VectorSemanticCodec::nodeMappingKey(owner.entity_id));
+                    const bool removing = hybridVectors && std::ranges::any_of(hybridVectors->semantics_, [&](const auto &v) {
+                        return v.index_id == definition.index_id && v.node_id == owner.entity_id && v.kind == NativeVectorMutationKind::NVMK_ERASE;
+                    });
+                    require(!mapped || removing, "native owner deletion requires coordinated removal of its Vector mapping");
+                }
+                if (owner.owner_kind != EntityPropertyOwnerKind::EPOK_NODE ||
+                    std::ranges::find(labels, definition.label_token_id) == labels.end()) continue;
+                const bool changed = deleted(owner) || std::ranges::any_of(replacements, [&](const auto &cell) {
+                    return cell.owner == owner && cell.token == *token;
+                });
+                if (!changed) continue;
+                const auto *previous = oldValue(*token);
+                const auto *final = newValue(*token);
+                if ((!previous && !final) || (previous && final && *previous == *final)) continue;
+                // Reuse ordinary-write BFloat16/metric semantics without owning
+                // Property roots. Different logical values can encode the same
+                // embedding and safely preserve all Vector state.
+                utils::OwnedHeapReservation vectorCredit(request.memory,
+                    16384U + size_t(definition.vector_dimensions) * 4U);
+                NativeVectorMutationPlanner vector({definition},
+                    [&](const MetadataSnapshotPin &pin, std::string_view name) { return schema.findPropertyToken(pin, name); },
+                    {1, 2});
+                const auto semantics = vector.planNodeValues(source, owner.entity_id, labels, oldValue,
+                    deleted(owner) ? std::span<const uint64_t>{} : std::span<const uint64_t>(labels), newValue);
+                if (!hybridVectors) require(semantics.empty(), "native embedding changes require atomic Vector delta coordination");
+                else {
+                    size_t matched = 0;
+                    for (const auto &expected : hybridVectors->semantics_) if (expected.index_id == definition.index_id && expected.node_id == owner.entity_id) {
+                        require(matched < semantics.size() && expected == semantics[matched], "native Vector bytes disagree with the final authoritative fields");
+                        ++matched;
+                    }
+                    require(matched == semantics.size(), "native Vector proof omits an authoritative field transition");
+                    verifiedVectorSemantics += matched;
+                }
+            }
             for (const auto &definition : constraintDefinitions) {
                 check(); if (deleted(owner)) continue;
                 const bool node = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE;
@@ -853,8 +1053,9 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     }
     debug::PerfTrace::addValue("native_graph.hybrid.private_map_images", int64_t(indexImages.size()));
     check();
+    require(!hybridVectors || verifiedVectorSemantics == hybridVectors->semantics_.size(),
+        "native Vector proof has an unrelated or unverified semantic transition");
     utils::OwnedVector<CatalogEntry> newPools{utils::OwnedPmrAllocator<CatalogEntry>(request.memory)};
-    HybridPropertyPoolPlacement placement(*this, batch, writer, source, request.first_slot, request.last_slot, request.memory, check);
     const auto addSourceCandidate = [&](PageId id, SegmentKind kind, uint64_t owner, bool native) {
         const auto route = locations_.findPageOptional(current, id);
         if (route) placement.candidate(route->segment_id, kind, owner, native);
@@ -871,7 +1072,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     const NativeGraphHybridPropertyConversion largeConversion{sourceGroup->owner_kind, sourceGroup->group_id,
         request.memory, request.cancellation, request.first_slot, request.last_slot, request.field_pool_owner_id};
     HybridPropertyImmutablePreparation immutableImages(batch, sourceValues, largeFields, request.memory, allocatePool, check);
-    HybridPropertyContentIndexPreparation content(batch, source, largeConversion, *this, sourceTrees, sourceValues, largeFields, allocatePool, check);
+    HybridPropertyContentIndexPreparation content(batch, source, largeConversion, *this, sourceTrees, sourceValues, largeFields, allocatePool, check, jointValues);
     if (content.root_) changedRoots.push_back(*content.root_);
     erasedPages.insert(erasedPages.end(), content.erased_.begin(), content.erased_.end());
     debug::PerfTrace::addValue("native_graph.hybrid.private_new_field_values", int64_t(largeFields.size()));
@@ -1052,7 +1253,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     std::sort(retirements.begin(), retirements.end(), [](const auto &a, const auto &b) { return a.physical_slot < b.physical_slot; });
     if (!oldPools.empty()) { catalog_.prepareUpsert(batch, oldPools); retirement_.prepareQueueInsertions(batch, retirements); }
     descriptor.semantic_generation = batch.generation(); pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
-    batch.hybrid_property_publication_ = true; check(); publishBatch(batch, writer, options); placement.remember(); return batch.candidate();
+    batch.hybrid_property_publication_ = true; check(); return true;
 }
 
 Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const NativeHybridPropertyPoolRelocation &request,

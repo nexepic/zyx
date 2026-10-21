@@ -22,17 +22,18 @@ class HybridPropertyContentIndexPreparation final {
         const NativeGraphHybridPropertyConversion &conversion, RelocatableMetadataStore &metadata,
         BTreePageStore &trees, LargeValueStore &values,
         std::span<const HybridPropertyLargeFieldPreparation> largeFields,
-        AllocatePool &&allocatePool, Checkpoint &&checkpoint)
+        AllocatePool &&allocatePool, Checkpoint &&checkpoint,
+        std::span<const NativeGraphLargeValueMutation> jointValues = {})
         : images_(utils::OwnedPmrAllocator<Image>(conversion.memory)),
           superseded_(utils::OwnedPmrAllocator<uint64_t>(conversion.memory)),
           erased_(utils::OwnedPmrAllocator<uint64_t>(conversion.memory)) {
         const auto &current = batch.current();
         hybrid_property_detail::require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && conversion.memory &&
             metadata.ownsSnapshot(source) && source.superblock() == current && trees.usesMetadataStore(metadata) &&
-            values.usesMetadataStore(metadata) && largeFields.size() <= 4096U,
+            values.usesMetadataStore(metadata) && largeFields.size() <= 4096U && jointValues.size() <= 64U,
             "native content preparation requires one metadata-owned source and bounded proposals");
         utils::OwnedAllocationScope scope(conversion.memory);
-        size_t newLargeValues = 0;
+        size_t newLargeValues = jointValues.size();
         for (const auto &value : largeFields) {
             checkpoint();
             hybrid_property_detail::require(value.databaseId() == current.database_id && value.sourceGeneration() == current.generation,
@@ -66,6 +67,10 @@ class HybridPropertyContentIndexPreparation final {
                 for (const auto &value : largeFields) if (!value.reused()) {
                     checkpoint(); operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT,
                         conversionLargeValues->contentIndexKey(value.reference()), value.reference().value_id.value()});
+                }
+                for (const auto &value : jointValues) {
+                    checkpoint(); operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT,
+                        conversionLargeValues->contentIndexKey(value.reference), value.reference.value_id.value()});
                 }
                 std::sort(operations.begin(), operations.end(), [](const auto &a, const auto &b) { return a.key < b.key; });
                 const auto existing = metadata.findIndexRootOptional(source, RSS_LARGE_VALUE_CONTENT_INDEX_ID);

@@ -1,0 +1,12 @@
+{
+  "candidate-verified-build.log": "8d2917dd1931f67cf9714de67e9df068d3d44f3b12e1b082be3dfbfca41eee39",
+  "default-verified-build.log": "ffd7f39a2b5f6ed499ef014c6641ce3133eccca4817318553edf1ac79f14c6bc",
+  "summary.json": "9c1f8f3178dd2dcb617fd0183b81398f5c501d7234abfc117aa0d93749047f12",
+  "candidate-tests.log": "c73afac344b5dac8e9e9a4b22acf77f74747f440ef17139b481f299d294beb56",
+  "candidate-tests.json": "1905d9b92b1a106bfb86991c3c99d54febd28396f5573f3ae6326b184985e548",
+  "default-tests.json": "55e2c4e3f9962424d765c0881567ad851468fdb02a698cf293f917c32e2d1187",
+  "default-tests.log": "6f1eb80b448b8d1ef6b17a8a7011eb1e0a5d2fc35c37f544eb5719731b34a39d",
+  "snapshot/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp": "4b6ce3ef9397b7610ccff83851936e0388d266737b928e133bb295e97d740870",
+  "snapshot/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp": "d42fd53eda11e3d2fd8c3a132b304b0a6da4f931e71fea5ec1b19478ece466da",
+  "snapshot/tests/include/storage/relocatable/property/HybridPropertyQueryParityTestFixture.hpp": "3b554865e5725ca377b09b300148a1e2216a1050a79872cc7839bc7533f4f51c"
+}

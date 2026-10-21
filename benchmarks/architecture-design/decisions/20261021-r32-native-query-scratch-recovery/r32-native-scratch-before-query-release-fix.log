@@ -1,0 +1,20 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyQueryParity.cpp:1069: Failure
+Expected: backend.open() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native hybrid candidate rejects unadapted writes and pool reconciliation".
+
+[  FAILED  ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields (816 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (816 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (817 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields
+
+ 1 FAILED TEST
