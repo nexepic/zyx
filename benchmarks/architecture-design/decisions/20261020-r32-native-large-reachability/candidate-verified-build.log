@@ -1,0 +1,26 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValueStore.cpp.o
+[2/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:34:86: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   34 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:98:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   98 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:147:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  147 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:183:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  183 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:220:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  220 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:236:87: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  236 |             update, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp:223:16: warning: unused variable 'descriptor' [-Wunused-variable]
+  223 |     const auto descriptor = current.superblock().hybrid_property_descriptor_root;
+      |                ^~~~~~~~~~
+7 warnings generated.
+[3/4] Linking CXX static library libzyx_core.a

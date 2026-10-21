@@ -1,0 +1,93 @@
+{
+  "scope": [
+    "R3.2",
+    "R4.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Optional isolated forward conversion measures the complete privately prepared future allocation before A/B publication; unknown, insufficient saving or admission thresholds keep the original ROW authority. This includes private IO and is not an allocation-free predictor.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 528,
+      "passed": 528,
+      "skipped": 0,
+      "binary_sha256": "5833275d925757b293e64dfc1642a559d5b886720139620f46fdc1ee8fe64ad5",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 788,
+      "passed": 787,
+      "skipped": 1,
+      "binary_sha256": "16ec2c5a3017e6a9eb8a7b4af3a32670615acd03d3fdc20e57928cf69a30447a",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Format32 explicit prototype only; default format31 does not adopt the layout.",
+    "Fixed10percent byte threshold; full source/private candidate footprints originate only from the metadata coordinator. Admission thresholds do not override existing WRITE accounting or StorageIO hard file limits.",
+    "Private preparation, cache flush and rollback/recovery can perform IO before declining the optimization; no query input is replayed and no candidate root is published on refusal.",
+    "Only the forward layout conversion has this gate; explicit inverse ROW conversion remains independent.",
+    "Schema/statistics/query-index/unknown-State/general-topology and full map transaction coordination, same-executor query comparison, production admission, R5 and R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Final metadata/routes must be prepared exactly once before candidate accounting; no extra allocation may occur between measured preparation and A/B publication.",
+    "A privately prepared candidate is readable only through a writer- and batch-bound internal census; public callers cannot supply admission evidence.",
+    "A declined ROW conversion can append to an existing ROW content-index pool. Recover before the next ordinary or metadata-only publication, including writable reopen without a hybrid descriptor.",
+    "Dirty private Buffer Pool pages are flushed before stable-epoch observation.",
+    "Preserve existing FERR_INVALID_STATE for cross-directory physical-state corruption during startup recovery.",
+    "Identical recovered source files produce equal private prepublication candidate/peak charges and actual ungated publication charges."
+  ],
+  "admission": {
+    "fixed_minimum_saving_percent": 10,
+    "private_io_possible": true,
+    "pure_pre_io_predictor": false,
+    "production_adopted": false,
+    "metadata_owned_evidence_only": true
+  }
+}

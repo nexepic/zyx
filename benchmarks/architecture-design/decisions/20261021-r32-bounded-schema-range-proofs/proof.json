@@ -1,0 +1,92 @@
+{
+  "scope": [
+    "R2.2",
+    "R3.2"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Authenticated ordered schema range proofs skip unrelated token dictionaries/configurations/current counts while retaining definition/alias/constraint/unknown-control safeguards. A4097additional-token fixture proves field mutation has no4096-record dictionary lifetime cap.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyShapeCosts",
+    "property/test_HybridPropertyLogicalIds",
+    "entity/test_NativeGraphWritePlanner_LeaseRecovery",
+    "metadata/test_RelocatableMetadataStoreGraphMutation",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "adjacency/test_CoveredAdjacencyCandidate",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 586,
+      "passed": 586,
+      "skipped": 0,
+      "binary_sha256": "4aa4fef08e95be26fc2bea1820e6f867730734cd6f5dd6d61c79d40f3b59d4b3"
+    },
+    "candidate": {
+      "registered": 877,
+      "passed": 876,
+      "skipped": 1,
+      "binary_sha256": "728925977fa913df4ee9f73122746eb2dc96db916b8c0cc500a197a86df95a56"
+    }
+  },
+  "limits": [
+    "Field-only, property-independent SC subset; property/composite/vector indexes, constraints and owner deletion remain guarded.",
+    "Definition/control processing retains its4096definition bound and original1MiBaccount; tokens/configurations/currentcounts are preserved without full dictionary scans.",
+    "These are point/range compatibility proofs, not a claim of full semantic integrity for every untouched SC record.",
+    "Prior mature32768member allocation/lifecycle proof remains separately archived and is not rerun for SC-only changes.",
+    "No production admission, timing benchmark, full repository suite, non-Linux platform or RSS claim."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Range seeks use the same writer-fenced pin and authenticated BTree root with per-cursor cancellation.",
+    "Property-derived definitions and constraint ranges refuse; canonical index alias directions must resolve to validated label/type definitions.",
+    "Unknown count controls from13/7 and unknown future namespaces14..255 refuse; bootstrap/sequence shapes remain bounded and validated.",
+    "4097additional unrelated propertytokens produce more than8194name/reverse records without blocking native field update or changing query correctness.",
+    "All8same-executor parity/refusal cases pass, preserving old pins, SCroot and graph counts."
+  ],
+  "final_filter": "*-HybridPropertyMatureShapeCostsTest.*;44relatedmodules; mature allocation case remains separately frozen and unaffected",
+  "prior_broad_evidence": "benchmarks/architecture-design/decisions/20261021-r32-property-independent-catalog"
+}

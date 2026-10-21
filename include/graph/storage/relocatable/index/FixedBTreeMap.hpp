@@ -23,13 +23,14 @@ namespace graph::storage {
 // to one replacement per prefix per transaction; repeated unmerged replacements
 // from the same snapshot could otherwise introduce two suffixes.
 //
+// A zero-byte suffix is the corresponding authenticated key-only set.
 // Ordered prefixes must be order preserving (e.g. unsigned big endian). Value
 // bytes may use their own canonical little-endian codec. On-disk keys include
 // every suffix byte in existing packed framing/compression and space costs.
 // No new file/page kind or graph semantic fence is defined by this component.
 template<size_t KeyBytes, size_t ValueBytes>
 class FixedBTreeMap final {
-    static_assert(KeyBytes > 0 && ValueBytes > 0 && KeyBytes <= 4096 && ValueBytes <= 4096 - KeyBytes);
+    static_assert(KeyBytes > 0 && KeyBytes <= 4096 && ValueBytes <= 4096 - KeyBytes);
 public:
     using Key = std::array<std::byte, KeyBytes>;
     using Value = std::array<std::byte, ValueBytes>;
@@ -100,13 +101,34 @@ public:
             throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed map scan requires a bound and visitor");
         return visitRange(snapshot, {}, maximumEntries, visitor, boundaryAdmission, cancellation);
     }
+    // Inclusive logical-key seek inside one prefix. Resumable users advance
+    // their ordered key before calling; no prefix-sized skip/rescan is needed.
+    [[nodiscard]] bool visitPrefixFrom(const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix,
+        const Key &first, size_t maximumEntries, const std::function<bool(const Entry &)> &visitor,
+        const std::function<void(size_t)> &boundaryAdmission = {},
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        if (prefix.empty() || prefix.size() > KeyBytes || !maximumEntries || !visitor ||
+            !std::equal(prefix.begin(), prefix.end(), first.begin()))
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed map seek must remain within its bounded prefix");
+        return visitRange(snapshot, prefix, maximumEntries, visitor, boundaryAdmission, cancellation, first);
+    }
+    // Inclusive seek across the complete logical-key namespace. Cursor owners
+    // retain the last completed logical identity, never a physical leaf/slot.
+    [[nodiscard]] bool visitFrom(const MetadataSnapshotPin &snapshot, const Key &first, size_t maximumEntries,
+        const std::function<bool(const Entry &)> &visitor, const std::function<void(size_t)> &boundaryAdmission = {},
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        if (!maximumEntries || !visitor)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed map seek requires a bound and visitor");
+        return visitRange(snapshot, {}, maximumEntries, visitor, boundaryAdmission, cancellation, first);
+    }
 private:
     [[nodiscard]] bool visitRange(const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix,
         size_t maximumEntries, const std::function<bool(const Entry &)> &visitor,
-        const std::function<void(size_t)> &boundaryAdmission, const CancellationCheckpoint *cancellation) const {
+        const std::function<void(size_t)> &boundaryAdmission, const CancellationCheckpoint *cancellation,
+        std::span<const std::byte> firstKey = {}) const {
         if (maximumEntries == (std::numeric_limits<size_t>::max)())
             throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "fixed map prefix lookahead bound overflowed");
-        auto cursor = index_.openRangeCursor(snapshot, prefix, maximumEntries + 1U,
+        auto cursor = index_.openRangeCursor(snapshot, firstKey.empty() ? prefix : firstKey, maximumEntries + 1U,
             BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
         const auto matches = [prefix](const Entry &entry) {
             return std::equal(prefix.begin(), prefix.end(), entry.key.begin());

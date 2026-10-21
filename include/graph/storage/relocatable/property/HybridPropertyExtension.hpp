@@ -4,10 +4,13 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include <array>
 #include <functional>
+#include <limits>
 #include <memory_resource>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
@@ -128,6 +131,58 @@ public:
         return shape;
     }
 
+    // The caller first authenticates the complete immutable content hash, then
+    // supplies reads under that same pin. Inspect the existing directory and
+    // canonical value without allocating a body- or map-key-sized buffer.
+    [[nodiscard]] CanonicalPropertyValueCodec::DecodeShape inspectLargePayloadRange(
+        const CanonicalPropertyValueCodec::RangeReader &read,
+        const SelectedPropertyReadAdmission &slotsAdmission,
+        const std::function<void()> &checkpoint = {}) const {
+        const auto [begin, length] = checkedLargeValueRange(read, slotsAdmission, checkpoint);
+        const auto readValue = [&](size_t offset, std::span<std::byte> bytes) { read(begin + offset, bytes); };
+        return CanonicalPropertyValueCodec::inspectRange(length, std::ref(readValue), checkpoint);
+    }
+
+    [[nodiscard]] bool largePayloadRangeIsNull(const CanonicalPropertyValueCodec::RangeReader &read,
+        const SelectedPropertyReadAdmission &slotsAdmission,
+        const std::function<void()> &checkpoint = {}) const {
+        const auto [begin, length] = checkedLargeValueRange(read, slotsAdmission, checkpoint);
+        std::array<std::byte, CanonicalPropertyValueCodec::HEADER_BYTES> header;
+        if (checkpoint) checkpoint();
+        read(begin, header);
+        return CanonicalPropertyValueCodec::isNullHeader(header, length);
+    }
+
+private:
+    [[nodiscard]] std::pair<size_t, size_t> checkedLargeValueRange(
+        const CanonicalPropertyValueCodec::RangeReader &read,
+        const SelectedPropertyReadAdmission &slotsAdmission,
+        const std::function<void()> &checkpoint) const {
+        using namespace hybrid_property_detail;
+        require(mode_ == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE && reference_ &&
+            bool(read) && bool(slotsAdmission), "hybrid range inspection lacks identity or admission");
+        if (reference_->logical_bytes > (std::numeric_limits<size_t>::max)())
+            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "hybrid field exceeds addressable range");
+        constexpr size_t prefixBytes = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + 8U;
+        std::array<std::byte, prefixBytes> prefix;
+        if (checkpoint) checkpoint();
+        read(0, prefix);
+        require(LittleEndianCodec::readU32(prefix, 8) == 1 &&
+            reference_->logical_bytes - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES ==
+                LittleEndianCodec::readU32(prefix, 12),
+            "hybrid LargeValue must contain exactly one complete field");
+        const auto locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(prefix, &slotsAdmission);
+        require(locations.size() == 1 && locations[0].key_token == token_ &&
+            locations[0].length >= 4U + CanonicalPropertyValueCodec::HEADER_BYTES,
+            "hybrid LargeValue token does not match its extension");
+        const auto begin = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + size_t(locations[0].offset);
+        std::array<std::byte, 4> token;
+        read(begin, token);
+        require(LittleEndianCodec::readU32(token, 0) == token_, "hybrid LargeValue entry token mismatch");
+        return {begin + 4U, locations[0].length - 4U};
+    }
+
+public:
     // Membership/presence consumers inspect the authenticated single-field
     // canonical header without allocating a PropertyValue tree.
     [[nodiscard]] bool largePayloadIsNull(std::span<const std::byte> authenticatedPayload,

@@ -164,6 +164,7 @@ TEST_F(GlobalAdjacencyIndexTest, StreamsOneLogicalRangeAndResumesWithoutPhysical
 	EXPECT_EQ(first.edge_ids, (std::vector<uint64_t>{3U, 9U}));
 	ASSERT_TRUE(first.continuation.has_value());
 	EXPECT_EQ(first.continuation->generation, snapshot.superblock().generation);
+	EXPECT_EQ(first.continuation->database_id, snapshot.superblock().database_id);
 	EXPECT_EQ(first.continuation->last_edge_id, 9U);
 	const GlobalAdjacencyRange second =
 			index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 2U, first.continuation);
@@ -172,6 +173,16 @@ TEST_F(GlobalAdjacencyIndexTest, StreamsOneLogicalRangeAndResumesWithoutPhysical
 	EXPECT_EQ(index.scan(snapshot, GlobalAdjacencyDirection::GAD_IN, 7U, 8U).edge_ids,
 			  (std::vector<uint64_t>{4U}));
 	EXPECT_TRUE(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 99U, 8U).edge_ids.empty());
+
+    auto foreign = *first.continuation;
+    foreign.database_id = DatabaseId(snapshot.superblock().database_id.value() + 1U);
+    expectFormatError([&] {
+        static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 2U, foreign));
+    }, FormatError::FERR_INVALID_STATE);
+    foreign.database_id = {};
+    expectFormatError([&] {
+        static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 2U, foreign));
+    }, FormatError::FERR_INVALID_STATE);
 	expectFormatError(
 			[&] {
 				static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_IN, 7U, 2U, first.continuation));
@@ -537,7 +548,7 @@ TEST_F(GlobalAdjacencyIndexTest, BoundsAndValidatesLogicalRangeCursorsBeforeRead
 
 	const GlobalAdjacencyContinuation exhausted{snapshot.superblock().generation,
 											 GlobalAdjacencyDirection::GAD_OUT, 7U,
-											 std::numeric_limits<uint64_t>::max()};
+											 std::numeric_limits<uint64_t>::max(), snapshot.superblock().database_id};
 	EXPECT_TRUE(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 1U, exhausted).edge_ids.empty());
 	const GlobalAdjacencyContinuation zeroEdge{snapshot.superblock().generation,
 											 GlobalAdjacencyDirection::GAD_OUT, 7U, 0U};

@@ -1,0 +1,37 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:201: Failure
+Expected: erase(deletion(owners, memory)) throws an exception of type FormatException.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:201: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 478
+  epoch
+    Which is: 334
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp:201: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 00-00 00-00 BB-55 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 17-7C 09-64 BB-55 00-00 06-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 0E-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 0C-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 0A-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+unknown file: Failure
+C++ exception with description "relocatable location lookup requires an ID and published directory root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite (26 ms)
+[----------] 1 test from HybridPropertyOwnerDeletionTest (26 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (26 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOwnerDeletionTest.LabeledOwnersRequireTheLabelLifecycleBeforeAnyWrite
+
+ 1 FAILED TEST

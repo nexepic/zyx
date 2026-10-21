@@ -1,0 +1,190 @@
+[0/2] Re-checking globbed directories...
+-- GLOB mismatch!
+-- GLOB mismatch!
+-- GLOB mismatch!
+[1/2] Re-running CMake...
+-- Configuring done (0.7s)
+CMake Warning at CMakeLists.txt:126 (add_library):
+  Cannot generate a safe runtime search path for target zyx because files in
+  some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:147 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_cli because files
+  in some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:151 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:156 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_compare_bench
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:163 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_workload_contract_worker because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:167 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_vector_calibrate
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:174 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_vector_build_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:181 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_large_value_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:188 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_bulk_edge_calibrate because files in some directories may conflict with
+  libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:217 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_query_scratch_crash_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:221 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_transaction_resource_fault_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:224 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_test_suite
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at benchmarks/leiden/CMakeLists.txt:5 (add_executable):
+  Cannot generate a safe runtime search path for target leiden_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/zyx/buildDir
+[0/4] Re-checking globbed directories...
+[1/11] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o
+[2/11] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[3/11] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:22:16: warning: unused variable 'NODE' [-Wunused-const-variable]
+   22 | constexpr auto NODE = EntityPropertyOwnerKind::EPOK_NODE;
+      |                ^~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:23:16: warning: unused variable 'EDGE' [-Wunused-const-variable]
+   23 | constexpr auto EDGE = EntityPropertyOwnerKind::EPOK_EDGE;
+      |                ^~~~
+2 warnings generated.
+[4/11] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore.cpp.o
+[5/11] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_ContentIndexValidation.cpp.o
+[6/11] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:45:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:522:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  522 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:625:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  625 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[7/11] Linking CXX static library libzyx_core.a
+[8/11] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_Maintenance.cpp.o

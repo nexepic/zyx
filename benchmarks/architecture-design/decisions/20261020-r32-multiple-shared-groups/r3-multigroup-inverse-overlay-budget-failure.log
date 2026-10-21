@@ -1,0 +1,31 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMultipleGroupsTest.*:HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+[==========] Running 5 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:894: Failure
+Expected: run(conversion) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB (12233 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (12233 ms total)
+
+[----------] 4 tests from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (2 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots
+[       OK ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots (1359 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories
+[       OK ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories (836 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently
+[       OK ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently (131 ms)
+[----------] 4 tests from HybridPropertyMultipleGroupsTest (2330 ms total)
+
+[----------] Global test environment tear-down
+[==========] 5 tests from 2 test suites ran. (14563 ms total)
+[  PASSED  ] 4 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+
+ 1 FAILED TEST

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <optional>
+#include <functional>
 
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
@@ -29,6 +30,11 @@ namespace graph::storage {
 		AllocatorDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator);
 
 		[[nodiscard]] bool isAllocated(const Superblock &superblock, PhysicalSlotId slot) const;
+        // Explicit read-only allocation census. Returns false on visitor/page
+        // limits; partial output never proves that all allocated slots were seen.
+        [[nodiscard]] bool visitAllocatedSlotsUntil(const Superblock &superblock, size_t maximumMetadataPages,
+            const std::function<bool(PhysicalSlotId)> &visitor, size_t *visitedMetadataPages = nullptr) const;
+
 		// Reads allocator state from a candidate batch, including its unpublished
 		// logical metadata routes.
 		[[nodiscard]] bool isAllocatedForMutation(const MetadataWriteBatch &batch, PhysicalSlotId slot) const;

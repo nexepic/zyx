@@ -57,6 +57,7 @@ namespace graph::storage {
 		MetadataWriteGuard() = default;
 		MetadataWriteGuard(const MetadataWriteGuard &) = delete;
 		MetadataWriteGuard &operator=(const MetadataWriteGuard &) = delete;
+		~MetadataWriteGuard() { release(); }
 		MetadataWriteGuard(MetadataWriteGuard &&) = delete;
 		MetadataWriteGuard &operator=(MetadataWriteGuard &&) = delete;
 
@@ -65,8 +66,11 @@ namespace graph::storage {
 
 	private:
 		friend class MetadataSnapshotRegistry;
+        friend class RelocatableMetadataStore;
+        std::function<void()> release_observer_;
 		MetadataWriteGuard(std::shared_ptr<MetadataSnapshotRegistryState> state,
-						   std::unique_lock<std::shared_mutex> lock);
+						   std::unique_lock<std::shared_mutex> lock,
+                           const std::function<void(MetadataWriteGuard &)> &initialize = {});
 
 		std::shared_ptr<MetadataSnapshotRegistryState> state_;
 		std::unique_lock<std::shared_mutex> lock_;
@@ -114,6 +118,10 @@ namespace graph::storage {
 		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
 
 	private:
+        friend class RelocatableMetadataStore;
+        [[nodiscard]] MetadataWriteGuard beginWriteWithAdmission(
+            const std::function<void(const Superblock &)> &admission,
+            const std::function<void(MetadataWriteGuard &)> &initialize = {});
 		friend class RelocatableMetadataStore;
 		[[nodiscard]] bool owns(const MetadataSnapshotPin &snapshot) const;
 

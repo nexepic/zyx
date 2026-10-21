@@ -1,0 +1,135 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/tests/include -I/workspace/zyx/lib/inputxx/tests -I/workspace/zyx/apps/benchmark -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx/buildDir -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIE -Wall -Wextra -Wno-unused-parameter -fprofile-instr-generate -fcoverage-mapping -DGTEST_HAS_PTHREAD=1 -MD -MT CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o -MF CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o.d -o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp.o -c /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:53:59: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   53 |         for (uint64_t i = 1; i <= live_owner_count_; ++i) transaction.createNodeWithReservedId(i, {});
+      |                                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:55:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   55 |             transaction.createNodeWithReservedId(65, {});
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:209:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  209 |     EXPECT_THROW(reader.visitOwner({EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, [](auto, auto) { return true; }), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:221:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  221 |     transaction.createNodeWithReservedId(1, {}); ASSERT_TRUE(transaction.commit().committed());
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:223:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  223 |     EXPECT_THROW(reader.visitOwner({EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, [](auto, auto) { return true; }), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:254:25: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  254 |     } else EXPECT_THROW(HybridPropertyColumnDelta::planExistingColumn(context, pin,
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1425:5: error: unknown type name 'DemotionNoPhysicalAllocator'
+ 1425 |     DemotionNoPhysicalAllocator allocator;
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1434:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+ 1434 |         EXPECT_THROW(prepared.erasedColumn(), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2111:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2111 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2152:14: note: in instantiation of function template specialization 'std::__find_if<__gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>, __gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>>' requested here
+ 2152 |       return __find_if(__first, __last, __pred,
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algo.h:3876:19: note: in instantiation of function template specialization 'std::__find_if<__gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>, __gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>>' requested here
+ 3876 |       return std::__find_if(__first, __last,
+      |                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1459:36: note: in instantiation of function template specialization 'std::find_if<__gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>, (lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>' requested here
+ 1459 |             const auto page = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+      |                                    ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2115:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2115 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2119:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2119 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2127:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2127 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2132:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2132 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1:
+In file included from /workspace/zyx-sysroot/usr/include/gtest/gtest.h:55:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/memory:69:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_uninitialized.h:63:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_algobase.h:2137:8: error: no matching function for call to object of type '__gnu_cxx::__ops::_Iter_pred<(lambda at /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp:1460:17)>'
+ 2137 |           if (__pred(__first))
+      |               ^~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/predefined_ops.h:317:2: note: candidate template ignored: substitution failure [with _Iterator = __gnu_cxx::__normal_iterator<const graph::storage::HybridPropertyPageImage *, std::span<const graph::storage::HybridPropertyPageImage>>]
+  317 |         operator()(_Iterator __it)
+      |         ^
+7 warnings and 7 errors generated.
+ninja: build stopped: subcommand failed.

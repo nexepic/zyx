@@ -17,6 +17,9 @@
 #include <utility>
 
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::storage {
 
@@ -41,6 +44,22 @@ namespace graph::storage {
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
 			std::shared_ptr<std::pmr::memory_resource> memory) :
 			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory), utils::OwnedAllocationScope::owner()) {}
+
+        void enableCoveredControl(uint64_t indexId, size_t maximumEdges, size_t maximumMetadataPages,
+            std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
+            if (covered_ || !memory || !backend_.isReadOnly())
+                throw std::invalid_argument("covered candidate control requires a read-only backend and private account");
+            utils::OwnedAllocationScope scope(memory);
+            utils::OwnedHeapReservation frontier(memory, 65536U), boundary(memory);
+            const auto report = CoveredAdjacencyCandidate::verifyIntegrity(*backend_.btree_pages_, *backend_.native_entities_,
+                *backend_.metadata_, snapshot_.metadataSnapshot(), indexId, maximumEdges, maximumMetadataPages,
+                [&](size_t bytes) { boundary.set(bytes); }, cancellation);
+            const bool empty = !backend_.metadata_->findIndexRootOptional(snapshot_.metadataSnapshot(), indexId);
+            if (empty && report.edges)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "covered candidate control has no complete source tree");
+            covered_.emplace(CoveredControl{indexId, empty, std::move(memory)});
+            debug::PerfTrace::addValue("logical_graph.covered_candidate.setup_edges", int64_t(report.edges));
+        }
 
 		[[nodiscard]] bool queryScratchEnabled() const override {return backend_.nativeQueryScratchEnabled();}
 		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {
@@ -367,6 +386,10 @@ namespace graph::storage {
 			scanAdjacentEdgeTopologiesWithBufferAdmission(uint64_t nodeId, LogicalGraphReadDirection direction,
 				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
 				const std::function<void(size_t)> &admission) const override {
+                if (covered_) {
+                    if (!admission) throw std::invalid_argument("covered topology admission callback is empty");
+                    return coveredTopologies(nodeId, direction, continuation, maximumRecords, admission);
+                }
 				return native_reads_.scanAdjacentEdgeTopologies(snapshot_.metadataSnapshot(), nodeId, direction,
 					std::move(continuation), maximumRecords, &read_session_, admission);
 			}
@@ -375,6 +398,7 @@ namespace graph::storage {
 				scanAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction,
 											std::optional<LogicalGraphAdjacencyContinuation> continuation,
 											size_t maximumRecords) const override {
+                if (covered_) return coveredTopologies(nodeId, direction, continuation, maximumRecords, {});
 				return native_reads_.scanAdjacentEdgeTopologies(snapshot_.metadataSnapshot(), nodeId, direction,
 																	 std::move(continuation), maximumRecords, &read_session_);
 			}
@@ -383,6 +407,7 @@ namespace graph::storage {
 			scanAdjacentEdgeRefs(uint64_t nodeId, LogicalGraphReadDirection direction,
 						 std::optional<LogicalGraphAdjacencyContinuation> continuation,
 						 size_t maximumRecords) const override {
+                if (covered_) return coveredReferences(nodeId, direction, continuation, maximumRecords, {});
 				return native_reads_.scanAdjacentEdgeRefs(snapshot_.metadataSnapshot(), nodeId, direction,
 																	 std::move(continuation), maximumRecords, &read_session_);
 			}
@@ -392,6 +417,10 @@ namespace graph::storage {
 			scanAdjacentEdgeRefsWithBufferAdmission(uint64_t nodeId, LogicalGraphReadDirection direction,
 				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
 				const std::function<void(size_t)> &admission) const override {
+                if (covered_) {
+                    if (!admission) throw std::invalid_argument("covered reference admission callback is empty");
+                    return coveredReferences(nodeId, direction, continuation, maximumRecords, admission);
+                }
 				return native_reads_.scanAdjacentEdgeRefs(snapshot_.metadataSnapshot(), nodeId, direction,
 					std::move(continuation), maximumRecords, &read_session_, admission);
 			}
@@ -485,6 +514,7 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_HEADER,
 										  "logical graph batch adjacency reference scan requires a visitor");
 				}
+                if (covered_) { visitCoveredReferences(nodeIds, direction, maximumEdges, visitor, {}); return; }
 				static_cast<void>(native_reads_.visitAdjacentEdgeRefsForNodesUntil(snapshot_.metadataSnapshot(), nodeIds,
 																		 direction, maximumEdges, visitor, &read_session_));
 			}
@@ -494,6 +524,10 @@ namespace graph::storage {
 				LogicalGraphReadDirection direction, size_t maximumEdges,
 				const std::function<bool(const EntityRef &)> &visitor,
 				const std::function<void(size_t)> &admission) const override {
+                if (covered_) {
+                    if (!admission) throw std::invalid_argument("covered batch admission callback is empty");
+                    visitCoveredReferences(nodeIds, direction, maximumEdges, visitor, admission); return;
+                }
 				static_cast<void>(native_reads_.visitAdjacentEdgeRefsForNodesUntil(snapshot_.metadataSnapshot(), nodeIds,
 					direction, maximumEdges, visitor, &read_session_, admission));
 			}
@@ -541,6 +575,130 @@ namespace graph::storage {
 			}
 
 	private:
+        struct CoveredControl { uint64_t index; bool empty; std::shared_ptr<std::pmr::memory_resource> memory; };
+        std::optional<CoveredControl> covered_;
+        [[nodiscard]] LogicalGraphAdjacencyTopologyPage coveredTopologies(uint64_t node,
+            LogicalGraphReadDirection direction, std::optional<LogicalGraphAdjacencyContinuation> continuation,
+            size_t maximumRecords, const std::function<void(size_t)> &admission) const {
+            size_t referenceBytes = 0, typeBytes = 0;
+            auto references = coveredReferences(node, direction, continuation, maximumRecords,
+                [&](size_t bytes) { referenceBytes = bytes; if (admission) admission(bytes); });
+            const auto multiply = [](size_t count, size_t width) {
+                if (count > (std::numeric_limits<size_t>::max)() / width)
+                    throw std::overflow_error("covered topology buffer size overflow");
+                return count * width;
+            };
+            const auto add = [](size_t a, size_t b) { return utils::detail::addStandardHeapBytes(a, b); };
+            const auto admit = [&](size_t bytes) { if (admission) admission(bytes); };
+            LogicalGraphAdjacencyTopologyPage result;
+            admit(add(referenceBytes, multiply(references.edges.size(), sizeof(LogicalGraphEdgeTopology))));
+            result.edges.reserve(references.edges.size());
+            const auto vectors = add(referenceBytes, multiply(result.edges.capacity(), sizeof(LogicalGraphEdgeTopology)));
+            admit(vectors);
+            const auto &pin = snapshot_.metadataSnapshot(); read_session_.bind(pin);
+            for (const auto &edge : references.edges) {
+                std::string type;
+                if (edge.type_token) {
+                    const auto nameAdmission = [&](size_t bytes) { admit(add(add(vectors, typeBytes), bytes)); };
+                    const auto kind = NativeReadSession::TokenNameKind::TNK_RELATIONSHIP_TYPE;
+                    bool remember = false;
+                    if (auto cached = read_session_.tokenName(kind, edge.type_token, nameAdmission)) type = std::move(*cached);
+                    else {
+                        type = backend_.resolveRelationshipTypeTokenWithNameAdmission(pin, edge.type_token, nameAdmission);
+                        remember = true;
+                    }
+                    if (type.empty()) throw FormatException(FormatError::FERR_INVALID_STATE, "covered topology has an unresolved relationship type");
+                    if (remember) read_session_.putTokenName(kind, edge.type_token, type);
+                }
+                typeBytes = add(typeBytes, type.capacity()); admit(add(vectors, typeBytes));
+                result.edges.push_back({edge.entity_id, edge.source_node_id, edge.target_node_id, std::move(type)});
+            }
+            result.continuation = references.continuation;
+            std::vector<EntityRef>().swap(references.edges);
+            admit(add(multiply(result.edges.capacity(), sizeof(LogicalGraphEdgeTopology)), typeBytes));
+            debug::PerfTrace::addValue("logical_graph.covered_candidate.topology_pages", 1);
+            return result;
+        }
+        void visitCoveredReferences(std::span<const uint64_t> nodes, LogicalGraphReadDirection direction,
+            size_t maximum, const std::function<bool(const EntityRef &)> &visitor,
+            const std::function<void(size_t)> &admission) const {
+            if (nodes.empty() || !nodes.front() || !maximum || maximum == (std::numeric_limits<size_t>::max)() || !visitor ||
+                !std::ranges::is_sorted(nodes) || std::ranges::adjacent_find(nodes) != nodes.end())
+                throw FormatException(FormatError::FERR_INVALID_HEADER, "covered batch requires sorted unique Nodes, a finite bound and a visitor");
+            size_t visited = 0;
+            for (const auto node : nodes) {
+                std::optional<LogicalGraphAdjacencyContinuation> continuation;
+                do {
+                    auto page = coveredReferences(node, direction, continuation,
+                        (std::max)(size_t{1}, (std::min)(maximum - visited, size_t{64})), admission);
+                    for (const auto &edge : page.edges) {
+                        if (visited == maximum)
+                            throw FormatException(FormatError::FERR_INVALID_STATE, "covered batch exceeds its total Edge bound");
+                        ++visited;
+                        if (!visitor(edge)) {
+                            page = {}; if (admission) admission(0); return;
+                        }
+                    }
+                    continuation = page.continuation; page = {};
+                    if (admission) admission(0);
+                } while (continuation);
+            }
+        }
+        [[nodiscard]] LogicalGraphAdjacencyReferencePage coveredReferences(uint64_t node,
+            LogicalGraphReadDirection direction, std::optional<LogicalGraphAdjacencyContinuation> continuation,
+            size_t maximumRecords, const std::function<void(size_t)> &admission) const {
+            const auto &control = *covered_;
+            utils::OwnedAllocationScope scope(control.memory);
+            utils::OwnedHeapReservation frontier(control.memory, 32768U), boundary(control.memory);
+            const auto &pin = snapshot_.metadataSnapshot();
+            if (!node || !maximumRecords || (direction != LogicalGraphReadDirection::LGRD_OUTGOING &&
+                direction != LogicalGraphReadDirection::LGRD_INCOMING))
+                throw std::invalid_argument("covered candidate reference scan requires a Node, direction and bound");
+            if (continuation && (!continuation->previous_edge_id || continuation->next_edge_id <= continuation->previous_edge_id))
+                throw std::invalid_argument("covered candidate continuation has an invalid Edge order");
+            const auto diskDirection = direction == LogicalGraphReadDirection::LGRD_OUTGOING ?
+                GlobalAdjacencyDirection::GAD_OUT : GlobalAdjacencyDirection::GAD_IN;
+            const auto admitBoundary = [&](size_t bytes) { boundary.set(bytes); };
+            if (control.empty) {
+                static_cast<void>(backend_.native_entities_->readNode(pin, node));
+                if (continuation) throw std::invalid_argument("empty covered candidate cannot resume adjacency");
+                if (admission) admission(0);
+                debug::PerfTrace::addValue("logical_graph.covered_candidate.reference_pages", 1);
+                return {};
+            }
+            const auto identity = [&](uint64_t after, uint64_t first) {
+                return AdjacencyTopologyIdentity{pin.superblock().database_id.value(), pin.superblock().generation.value(),
+                    node, after, direction, first};
+            };
+            if (continuation) {
+                // The logical continuation has no storage provenance. Prove its
+                // previous member and exact next member against this pin, too.
+                const auto prior = CoveredAdjacencyCandidate::scan(*backend_.btree_pages_, *backend_.native_entities_,
+                    *backend_.metadata_, pin, control.index, diskDirection, node, 1,
+                    continuation->previous_edge_id == 1U ? std::nullopt :
+                        std::optional(identity(continuation->previous_edge_id - 1U, continuation->previous_edge_id)), admitBoundary);
+                if (prior.topology.entries().empty() || prior.topology.entries().front().entity_id != continuation->previous_edge_id ||
+                    !prior.continuation || prior.continuation->expected_first_edge_id != continuation->next_edge_id)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "covered candidate did not resume an exact logical adjacency pair");
+                debug::PerfTrace::addValue("logical_graph.covered_candidate.continuation_records", int64_t(prior.candidate_records));
+            }
+            const auto page = CoveredAdjacencyCandidate::scan(*backend_.btree_pages_, *backend_.native_entities_,
+                *backend_.metadata_, pin, control.index, diskDirection, node, (std::min)(maximumRecords, size_t{64}),
+                continuation ? std::optional(identity(continuation->previous_edge_id, continuation->next_edge_id)) : std::nullopt,
+                admitBoundary);
+            const auto entries = page.topology.entries();
+            LogicalGraphAdjacencyReferencePage result;
+            if (admission) admission(entries.size() * sizeof(EntityRef));
+            result.edges.reserve(entries.size());
+            if (admission) admission(result.edges.capacity() * sizeof(EntityRef));
+            result.edges.insert(result.edges.end(), entries.begin(), entries.end());
+            if (page.continuation) result.continuation = LogicalGraphAdjacencyContinuation{
+                page.continuation->after_edge_id, page.continuation->expected_first_edge_id};
+            debug::PerfTrace::addValue("logical_graph.covered_candidate.reference_pages", 1);
+            debug::PerfTrace::addValue("logical_graph.covered_candidate.candidate_records", int64_t(page.candidate_records));
+            return result;
+        }
+
 		const RelocatableStorageBackend &backend_;
 		const PageBackedLogicalGraphReadAdapter &native_reads_;
 			RelocatableReadSnapshot snapshot_;
@@ -558,6 +716,19 @@ namespace graph::storage {
 			new (utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : native_cache_memory_)
                 RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
 	}
+
+    std::unique_ptr<LogicalGraphReadSnapshot> RelocatableStorageBackend::openCoveredAdjacencyCandidateReadSnapshot(
+        uint64_t indexId, size_t maximumEdges, size_t maximumEdgeMetadataPages,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) const {
+        requireOpen();
+        if (!isReadOnly() || !memory || !native_logical_graph_reads_ || !btree_pages_ || !native_entities_)
+            throw std::invalid_argument("covered candidate read control requires physical read-only native storage and an account");
+        utils::OwnedAllocationScope scope(memory);
+        auto snapshot = std::unique_ptr<RelocatableLogicalGraphReadSnapshot>(new (memory)
+            RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
+        snapshot->enableCoveredControl(indexId, maximumEdges, maximumEdgeMetadataPages, std::move(memory), cancellation);
+        return snapshot;
+    }
 
 	std::unique_ptr<LogicalGraphVectorSearchSnapshot>
 	RelocatableStorageBackend::openLogicalGraphVectorSearchSnapshot() const {

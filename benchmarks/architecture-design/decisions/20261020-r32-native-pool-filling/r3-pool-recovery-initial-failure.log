@@ -1,0 +1,62 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyNativeJournalTest.*:NativeJournalEvidenceBudgetTest.*
+[==========] Running 15 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 14 tests from HybridPropertyNativeJournalTest
+[ RUN      ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract
+[       OK ] HybridPropertyNativeJournalTest.RowJournalKeepsItsExistingStateWireAndOldSnapshotContract (10 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity
+[       OK ] HybridPropertyNativeJournalTest.GenericStateWriterCannotCreateTheReservedNativeEvidenceIdentity (5 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity (123 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalRefusesAnExistingForeignStateRecordBeforeAnyWrite (20 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable
+[       OK ] HybridPropertyNativeJournalTest.StateCOWReusesUnpinnedFramesBeyondOnePoolAndKeepsTheOldJournalReadable (585 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame
+[       OK ] HybridPropertyNativeJournalTest.NativeJournalABRecoverySelectsOneWholeStateAndPreservesItsOldFrame (237 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:33: Failure
+Expected: convert(memory) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native recovery found a mismatched current page identity".
+
+unknown file: Failure
+C++ exception with description "relocatable location lookup requires an ID and published directory root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan (20 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner
+[       OK ] HybridPropertyNativeJournalTest.OwnerDeletionInvalidatesOnlyCanonicalJournalEvidenceAndRetainsTheOtherOwner (131 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence
+[       OK ] HybridPropertyNativeJournalTest.ForgedPlainPhaseAndModifiedTypedAdvancementNeverPublishEvidence (15 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity
+[       OK ] HybridPropertyNativeJournalTest.LegacyRowEvidenceIsIgnoredAndResetToTheProtectedNativeIdentity (127 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain
+[       OK ] HybridPropertyNativeJournalTest.ExhaustingPinnedJournalFramesMovesThePoolAndReleasesItOnlyAfterPinsDrain (994 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyNativeJournal.cpp:33: Failure
+Expected: convert(memory) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native recovery found a mismatched current page identity".
+
+unknown file: Failure
+C++ exception with description "native recovery found a mismatched current page identity" thrown in the test body.
+
+[  FAILED  ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose (21 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication
+[       OK ] HybridPropertyNativeJournalTest.InterruptedJournalAppendIsRecoveredBeforeAnUnrelatedNativePublication (135 ms)
+[ RUN      ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner
+[       OK ] HybridPropertyNativeJournalTest.WritableReopenRecoversInterruptedAppendBeforeWritingAnotherOwner (136 ms)
+[----------] 14 tests from HybridPropertyNativeJournalTest (2565 ms total)
+
+[----------] 1 test from NativeJournalEvidenceBudgetTest
+[ RUN      ] NativeJournalEvidenceBudgetTest.DecodedIdsRetainAdmissionAcrossScopeAndRefundAfterTheirOwnerDies
+[       OK ] NativeJournalEvidenceBudgetTest.DecodedIdsRetainAdmissionAcrossScopeAndRefundAfterTheirOwnerDies (0 ms)
+[----------] 1 test from NativeJournalEvidenceBudgetTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 15 tests from 2 test suites ran. (2565 ms total)
+[  PASSED  ] 13 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyNativeJournalTest.IncrementalNativeGCResumesAcrossWindowsAndRetiresOnlyTheOrphan
+[  FAILED  ] HybridPropertyNativeJournalTest.PersistedNativeOwnerProgressResumesAfterAllOriginalStoresClose
+
+ 2 FAILED TESTS

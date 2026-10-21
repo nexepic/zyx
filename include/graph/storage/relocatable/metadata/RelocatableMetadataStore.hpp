@@ -9,6 +9,8 @@
 #pragma once
 
 #include <array>
+#include "graph/core/OwnedPropertyValue.hpp"
+#include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -20,6 +22,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include <variant>
 #include "graph/utils/OwnedStdVector.hpp"
 
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
@@ -42,7 +45,23 @@
 
 namespace graph::storage {
 
+    class LargeValueReachabilityReclaimer;
+    // Issued only after a complete ownership scan; the borrowed ID list lives
+    // through the synchronous publication and is checked under the writer.
+    class NativeLargeValueReclamationEvidence final {
+        friend class LargeValueReachabilityReclaimer;
+        friend class RelocatableMetadataStore;
+        Superblock source_;
+        std::span<const LargeValueId> erased_;
+        NativeLargeValueReclamationEvidence(const Superblock &source, std::span<const LargeValueId> erased)
+            : source_(source), erased_(erased) {}
+    public:
+        NativeLargeValueReclamationEvidence(const NativeLargeValueReclamationEvidence &) = default;
+        NativeLargeValueReclamationEvidence(NativeLargeValueReclamationEvidence &&) = default;
+    };
 	class BTreePageStore;
+    class EntityPageStore;
+    class SlottedPagePool;
     class CancellationCheckpoint;
 	class SystemCatalog;
 	class DerivedObjectReachabilityReclaimer;
@@ -50,6 +69,10 @@ namespace graph::storage {
 	class VectorAdjacencyPageStore;
 	class VectorPageStore;
 	class LargeValueStore;
+    class LargeValueMaintenanceJournalStore;
+    class NativeJournalProgressEvidence;
+    struct LargeValueMaintenanceJournal;
+    struct LargeValueMaintenanceJournalStoreOptions;
 	class RelocatableIntegrityScanner;
 	class NativeStreamedGraphDeferredPublication;
 	struct NativeStreamedGraphFinalPublicationRequest;
@@ -999,8 +1022,20 @@ namespace graph::storage {
     // One explicit ROW-group conversion. Metadata reads and authenticates the
     // source itself under its writer fence; callers supply no source payloads,
     // logical IDs, selected physical slots or planning callbacks. Placement is a
-    // permitted reservation range, never a caller-assigned frame. Current early stage
-    // still refuses before physical field publication is installed.
+    // permitted reservation range, never a caller-assigned frame. Publication
+    // remains explicit in isolated format32; preparation-only probes stop before I/O.
+    enum class NativeHybridPropertyConversionDirection : uint8_t {
+        NHPCD_ROW_TO_HYBRID = 1, NHPCD_HYBRID_TO_ROW = 2
+    };
+    // Optional isolated-prototype gate. Physical/private COW preparation is
+    // allowed, but no candidate root becomes visible unless complete whole-pool
+    // evidence satisfies the fixed10percent byte gate and both peak limits.
+    // These are publication eligibility thresholds. Existing WRITE accounting
+    // and StorageIO hard file limits still apply throughout private preparation.
+    struct NativeHybridPropertyAllocationAdmission {
+        NativeStorageAllocationCensusOptions census;
+        uint64_t maximum_admitted_peak_bytes = 0, maximum_admitted_file_bytes = 0;
+    };
     struct NativeGraphHybridPropertyConversion {
         EntityPropertyOwnerKind owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
         uint64_t group_id = 0;
@@ -1008,6 +1043,55 @@ namespace graph::storage {
         const CancellationCheckpoint *cancellation = nullptr;
         PhysicalSlotId first_slot{}, last_slot{};
         uint64_t field_pool_owner_id = 0;
+        // Explicit isolated-format durability prototype. Default retains the
+        // existing no-write preparation probe; this is not production adoption.
+        bool publish_candidate = false;
+        NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID;
+        std::optional<NativeHybridPropertyAllocationAdmission> allocation_admission;
+    };
+    // Isolated format: scalar/NULL or immutable admitted inline values. Default mode replaces compatible
+    // existing columns; explicit lifecycle mode also inserts/removes fields
+    // and updates inline extensions. LargeValue mutation remains guarded.
+    // The coordinator authenticates and owns every physical COW location.
+    struct NativeHybridPropertyColumnReplacement {
+        EntityPropertyKey owner;
+        uint32_t token = 0;
+        std::variant<std::monostate, int64_t, double, bool, OwnedPropertyValue> value;
+        bool erase = false;
+        // Complex cells borrow their stable immutable admitted payload. Scalar
+        // scratch is caller-owned and never retained by extension plans.
+        [[nodiscard]] const PropertyValue &propertyValue(PropertyValue &scratch) const {
+            return std::visit([&](const auto &cell) -> const PropertyValue & {
+                using Cell = std::decay_t<decltype(cell)>;
+                if constexpr (std::is_same_v<Cell, OwnedPropertyValue>) return cell.get();
+                else {
+                    if constexpr (std::is_same_v<Cell, std::monostate>) scratch = PropertyValue();
+                    else scratch = PropertyValue(cell);
+                    return scratch;
+                }
+            }, value);
+        }
+    };
+    struct NativeHybridPropertyColumnWrite {
+        DatabaseId expected_database_id{};
+        Generation expected_generation{};
+        PhysicalPageRef expected_descriptor{};
+        std::span<const NativeHybridPropertyColumnReplacement> replacements;
+        std::shared_ptr<std::pmr::memory_resource> memory;
+        PhysicalSlotId first_slot{}, last_slot{};
+        uint64_t field_pool_owner_id = 0;
+        const CancellationCheckpoint *cancellation = nullptr;
+        bool field_lifecycle = false;
+        std::span<const EntityPropertyKey> owner_deletions;
+    };
+    struct NativeHybridPropertyPoolRelocation {
+        DatabaseId expected_database_id{};
+        Generation expected_generation{};
+        PhysicalPageRef expected_descriptor{};
+        SegmentId source_segment{};
+        PhysicalSlotId first_slot{}, last_slot{};
+        std::shared_ptr<std::pmr::memory_resource> memory;
+        const CancellationCheckpoint *cancellation = nullptr;
     };
     // Typed late-root request, not a graph callback with metadata authority.
     // IDs name the final Node owner/column/extension/group trees, then Edge.
@@ -1061,7 +1145,9 @@ namespace graph::storage {
 		friend class OfflineVectorBaseRebuild;
 		friend class OfflineVectorPqRebuild;
 		friend class LargeValueStore;
+        friend class LargeValueMaintenanceJournalStore;
 		friend class RelocatableIntegrityScanner;
+        friend class NativeStorageAllocationCensus;
 		friend class RelocatableMetadataStoreVectorTestAccess;
         friend class HybridPropertyDescriptorStoreTestAccess;
 		friend class RelocatableStorageBackend;
@@ -1337,7 +1423,22 @@ namespace graph::storage {
 				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
 				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
 				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {},
-                const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation = std::nullopt);
+                const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation = std::nullopt,
+                const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence = std::nullopt);
+        [[nodiscard]] Superblock mutateHybridPropertyColumns(const NativeHybridPropertyColumnWrite &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
+        // Physical-only native field maintenance: at most31 current source
+        // frames move together; the old pool retires behind snapshot pins.
+        [[nodiscard]] Superblock relocateHybridPropertyFieldPool(const NativeHybridPropertyPoolRelocation &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
+        // Native directories additionally rebind the descriptor/Index Root if
+        // the root moves. Child physical epochs remain Page Directory-owned.
+        [[nodiscard]] Superblock relocateHybridPropertyIndexPool(const NativeHybridPropertyPoolRelocation &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
+        // Repack current fixed Entity/LabelSet frames without changing stable
+        // Entity Map or overflow-label references.
+        [[nodiscard]] Superblock relocateHybridPropertyEntityPool(const NativeHybridPropertyPoolRelocation &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
 		// Retires one fixed Entity page and removes matching Node or Edge Entity Map
 		// entries in the same publication. Prior snapshots retain the old directory
 		// roots and may continue reading the retired physical frame.
@@ -1606,6 +1707,9 @@ namespace graph::storage {
 													   size_t maximumMetadataPages,
 													   const std::function<bool(const EntityPageLocation &)> &visitor,
 													   size_t *visitedMetadataPages = nullptr) const;
+        [[nodiscard]] bool visitEdgePageLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterEdgeId,
+            size_t maximumMetadataPages, const std::function<bool(const EntityPageLocation &)> &visitor,
+            size_t *visitedMetadataPages = nullptr) const;
 		[[nodiscard]] bool visitPageLocationsUntil(const MetadataSnapshotPin &snapshot,
 												   const std::function<bool(const PageLocation &)> &visitor) const;
 		void visitEntityPropertyLocations(const MetadataSnapshotPin &snapshot,
@@ -1690,6 +1794,11 @@ namespace graph::storage {
 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
 
 	private:
+        // Only the canonical durable maintenance journal may use this native
+        // State COW path. Ordinary State publication remains protected.
+        [[nodiscard]] std::optional<StateLocation> upsertNativeMaintenanceJournal(
+            const LargeValueMaintenanceJournal &journal, const LargeValueMaintenanceJournalStoreOptions &placement,
+            const MetadataPublishOptions &options, const NativeJournalProgressEvidence *evidence = nullptr);
 		// The public backend creation path uses this stronger one-shot protocol.
 		// Standalone migration remains available for format fixtures and recovery
 		// tests, while new files converge ownership and routes before exposure.
@@ -1698,6 +1807,7 @@ namespace graph::storage {
 		// Completes the typed metadata route branch before the single A/B switch,
 		// then performs pool ownership publication and snapshot reclamation.
 		void prepareBootstrapRoutes(MetadataWriteBatch &batch);
+        void prepareBatchPublication(MetadataWriteBatch &batch);
 		void publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
 						  const MetadataPublishOptions &options);
 		[[nodiscard]] std::optional<CatalogSlotReservations> reserveFirstFreeAndUpsertCatalogImpl(
@@ -1811,7 +1921,12 @@ namespace graph::storage {
 									const std::optional<LargeValueManifestLocation> &replacementLargeValueManifest,
 									LogSequenceNumber checkpointLsn, const CrossPoolPageEvacuationPreparer &preparer,
 									const MetadataPublishOptions &options);
-		[[nodiscard]] MetadataWriteGuard beginWrite();
+        [[nodiscard]] Superblock publishHybridPropertyRows(MetadataWriteBatch &batch,
+            const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
+            const NativeGraphHybridPropertyConversion &conversion, EntityPageStore &entities,
+            SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &largeValues,
+            const MetadataPublishOptions &options);
+		[[nodiscard]] MetadataWriteGuard beginWrite(bool allowHybridMutation = false);
 		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly,
                                  std::shared_ptr<std::pmr::memory_resource> memoryOwner,
                                  std::shared_ptr<std::pmr::memory_resource> controlOwner,
@@ -1838,6 +1953,13 @@ namespace graph::storage {
         std::pmr::map<uint64_t, uint64_t> outstanding_node_id_leases_;
 		std::pmr::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
 		bool read_only_ = false;
+        // Writer-protected physical recovery state; never a permission for generic writes.
+        friend class HybridPropertyPoolPlacement;
+        std::array<CatalogEntry, 12> native_pool_placement_hints_{};
+        size_t native_pool_hint_cursor_ = 0;
+        bool native_pool_recovery_required_ = false;
+        uint64_t native_safe_io_epoch_ = 0;
+        void recoverNativePoolFrames(const MetadataWriteGuard &writer, const Superblock &current);
 	};
 
 } // namespace graph::storage

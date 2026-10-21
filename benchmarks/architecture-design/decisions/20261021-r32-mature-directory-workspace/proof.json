@@ -1,0 +1,92 @@
+{
+  "scope": [
+    "R3.2",
+    "R4.3",
+    "R5.1"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Full4096-member group conversion remains bounded after the first group: cache authenticated selected old values, count exact operations, stream them through the same dirty-path overlay, account node maps exactly and use an explicit per-node plan-record envelope instead of64KiB/page. Eight groups verify32768totalmembers without a lifetime4096cap.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyShapeCosts",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "adjacency/test_CoveredAdjacencyCandidate",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 553,
+      "passed": 553,
+      "skipped": 0,
+      "binary_sha256": "df0575f19cb69dbd8604aa7397fd76e8c02bfede93db1fd424b05eb91d1cca2b"
+    },
+    "candidate": {
+      "registered": 834,
+      "passed": 833,
+      "skipped": 1,
+      "binary_sha256": "e08521305809cfea4cb46397be69cd4a310420488c71ee28a6e1ebd9157cfeee"
+    }
+  },
+  "limits": [
+    "No default backend route, no production admission or performance claim.",
+    "Explicit existing candidate root and supplied schema planner/catalog only; no automatic schema discovery.",
+    "Optional scalar planner maintains Edge type indexes only; other scalar/property indexes remain caller-staged.",
+    "At most64changedEdges and1MiBplanning account, retaining original WRITE publication accounting.",
+    "Space matrix is a mechanism/unit measurement, not a timing benchmark or complete workload matrix.",
+    "R3 schema/index/general topology lifecycle, R5 overlay/backend/plan integration and R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "One transaction maintains both covered directions, master Edge, type-index entries and pinned known statistics.",
+    "Complete relationship-type namespace updates exact old counts and preserves unknown namespaces.",
+    "Underflow/overflow, schema index alias and foreign metadata domains refuse; failed coordination fences main-only commit.",
+    "A/B partial publication retains old derived state; complete inactive Superblock recovers all derived state together.",
+    "Old pins, writable/read-only reopen, self-loops and multiedges remain covered.",
+    "Eight bounded64-owner/4096-member operations build32768members total, checking every owner under old/current/read-only reopened snapshots and global integrity.",
+    "All observed native planning remains within the original1MiB account and refunds after every group; no physical/publication/authentication guard was relaxed."
+  ],
+  "final_filter": "All tests in the 41 listed related modules; not the complete repository suite."
+}

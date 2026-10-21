@@ -1,0 +1,345 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*:CoveredAdjacencyCandidateTest.*:RelocatableStorageBackendTest.*
+[==========] Running 164 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 127 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.GraphBatchTraversalKeepsPinnedGenerationsAndAtomicOverlayMemberships
+[       OK ] RelocatableStorageBackendTest.GraphBatchTraversalKeepsPinnedGenerationsAndAtomicOverlayMemberships (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled
+[       OK ] RelocatableStorageBackendTest.ResumesAdjacentScansAfterCursorCacheEvictionAndWhenSnapshotCursorCachingIsDisabled (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot
+[       OK ] RelocatableStorageBackendTest.ResumesAnAdjacentScanFromAnotherSnapshot (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks
+[       OK ] RelocatableStorageBackendTest.LogicalReadSnapshotValidatesAllVisitorCallbacks (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceProbeAvoidsValueMaterialization (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget
+[       OK ] RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues
+[       OK ] RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties
+[       OK ] RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties (123 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedNodeCountUsesMergedReferencesWithoutFullPropertyDecode (68 ms)
+[ RUN      ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode
+[       OK ] RelocatableStorageBackendTest.StagedEdgeCountUsesMergedReferencesWithoutFullPropertyDecode (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties
+[       OK ] RelocatableStorageBackendTest.ScopedPatternReadsAvoidUnrequestedLargeEntityProperties (182 ms)
+[ RUN      ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput
+[       OK ] RelocatableStorageBackendTest.VariableLengthPredicatesSkipUnrequestedPropertiesAndPreserveFullOutput (139 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode
+[       OK ] RelocatableStorageBackendTest.ShortestPathScalarConsumersAvoidCompletePropertyDecode (189 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen
+[       OK ] RelocatableStorageBackendTest.PropertyPresenceIsSnapshotBoundAcrossReplacementAndReopen (193 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled
+[       OK ] RelocatableStorageBackendTest.LogicalEdgeMaterializationRecordsTraceWhenEnabled (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPageRecordsTraceWithoutPropertyDecode (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen (147 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyVisitorHonorsEarlyTermination (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedGlobalAdjacencyPage (103 ms)
+[ RUN      ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage
+[       OK ] RelocatableStorageBackendTest.AdjacencyTopologyReadRejectsCorruptedEdgeEntityPage (103 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation
+[       OK ] RelocatableStorageBackendTest.NativeSnapshotAdmissionAndPrefetchPreserveRetryOrderAndCancellation (106 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication
+[       OK ] RelocatableStorageBackendTest.OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication (94 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayFilteredCountUseSourceAdmissionAndSplitColumns (96 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns
+[       OK ] RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns (76 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom
+[       OK ] RelocatableStorageBackendTest.ExactCandidateProducerRejectsKnownPayloadBeforeValidationAndRuntimeLeavesRowHeadroom (88 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns
+[       OK ] RelocatableStorageBackendTest.ScalarRangeSourceRejectsBeforeDecodeAndRetriesColdAndCachedColumns (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation
+[       OK ] RelocatableStorageBackendTest.CompositeRangeSourcePreservesFieldAndRowOrderAcrossAdmissionRetryAndCancellation (106 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges
+[       OK ] RelocatableStorageBackendTest.ShapedPropertySourceAdmissionRejectsAndRetriesNativeNodesAndEdges (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay
+[       OK ] RelocatableStorageBackendTest.TopologyBufferAdmissionForwardsThroughNativeSnapshotAndUnchangedOverlay (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation
+[       OK ] RelocatableStorageBackendTest.ModifiedOverlayTopologyAdmitsMergeLookaheadAndRetriesContinuation (100 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages
+[       OK ] RelocatableStorageBackendTest.NativeShortestPathRetriesSourceBufferAdmissionAcrossTopologyPages (168 ms)
+[ RUN      ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown
+[       OK ] RelocatableStorageBackendTest.NamedPropertyColumnsValidateIdsEvenWhenAllKeysAreUnknown (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions
+[       OK ] RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty
+[       OK ] RelocatableStorageBackendTest.ScalarRangeBoundsLargeValueBuffersWithSmallSelectedProperty (87 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose
+[       OK ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose (73 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting
+[       OK ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge
+[       OK ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge (41 ms)
+[ RUN      ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains
+[       OK ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains (33 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain (36 ms)
+[ RUN      ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback
+[       OK ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback (42 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases
+[       OK ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases (49 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners
+[       OK ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners (613 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry
+[       OK ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+[       OK ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose (107 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions
+[       OK ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions (31 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge
+[       OK ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge (36 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge
+[       OK ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge (36 ms)
+[ RUN      ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement
+[       OK ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement (53 ms)
+[ RUN      ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction
+[       OK ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction (36 ms)
+[ RUN      ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry
+[       OK ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry (41 ms)
+[ RUN      ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner
+[       OK ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner (41 ms)
+[ RUN      ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession
+[       OK ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext
+[       OK ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext (102 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit
+[       OK ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit (93 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes
+[       OK ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback (40 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement (68 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry (62 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases (46 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry (46 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant (30 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot (83 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit (232 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection (51 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease
+[       OK ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease (961 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites
+[       OK ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites (51 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication (46 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication (122 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund
+[       OK ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund (110 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain (37 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile
+[       OK ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed
+[       OK ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed (37 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult
+[       OK ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult (38 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope
+[       OK ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope (51 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose
+[       OK ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace
+[       OK ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace (49 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames
+[       OK ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames (50 ms)
+[ RUN      ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry
+[       OK ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry (1677 ms)
+[ RUN      ] RelocatableStorageBackendTest.GdsProjectionsAndLazyCsrKeepCacheOwnershipWithoutRetainingTheirCreatingQuery
+[       OK ] RelocatableStorageBackendTest.GdsProjectionsAndLazyCsrKeepCacheOwnershipWithoutRetainingTheirCreatingQuery (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.ProcedureResultKeepsItsQueryCreditAfterBackendCloseAndRefundsOnDestruction
+[       OK ] RelocatableStorageBackendTest.ProcedureResultKeepsItsQueryCreditAfterBackendCloseAndRefundsOnDestruction (38 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCommitDoesNotBorrowExhaustedCacheCreditForPrivateBtreeValidation
+[       OK ] RelocatableStorageBackendTest.NativeCommitDoesNotBorrowExhaustedCacheCreditForPrivateBtreeValidation (76 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCowWriteAdmissionRejectsBeforePublicationAndRefundsForRetry
+[       OK ] RelocatableStorageBackendTest.NativeCowWriteAdmissionRejectsBeforePublicationAndRefundsForRetry (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEdgeOverlayResolvesAnUnseenTypeUnderExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeEdgeOverlayResolvesAnUnseenTypeUnderExhaustedCacheCredit (84 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit
+[       OK ] RelocatableStorageBackendTest.NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.ConcurrentNativeWritesDoNotReserveCreditWhileWaitingForAnotherPublication
+[       OK ] RelocatableStorageBackendTest.ConcurrentNativeWritesDoNotReserveCreditWhileWaitingForAnotherPublication (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayEndpointValidationDoesNotBorrowExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.OverlayEndpointValidationDoesNotBorrowExhaustedCacheCredit (56 ms)
+[ RUN      ] RelocatableStorageBackendTest.BoundPropertyTokenResolutionDoesNotBorrowExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.BoundPropertyTokenResolutionDoesNotBorrowExhaustedCacheCredit (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullNativeReadKeepsPrivateSnapshotAndMetadataOutOfExhaustedCache
+[       OK ] RelocatableStorageBackendTest.FullNativeReadKeepsPrivateSnapshotAndMetadataOutOfExhaustedCache (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache
+[       OK ] RelocatableStorageBackendTest.WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache (114 ms)
+[ RUN      ] RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills
+[       OK ] RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills (3918 ms)
+[ RUN      ] RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills
+[       OK ] RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills (3710 ms)
+[ RUN      ] RelocatableStorageBackendTest.LiteralDeleteUsesIdentitiesAndRetainsOnlyItsBoundedScalarResult
+[       OK ] RelocatableStorageBackendTest.LiteralDeleteUsesIdentitiesAndRetainsOnlyItsBoundedScalarResult (1849 ms)
+[ RUN      ] RelocatableStorageBackendTest.OversizedDeleteBeforeImageIsRejectedWithoutPublishingAnyDeletes
+[       OK ] RelocatableStorageBackendTest.OversizedDeleteBeforeImageIsRejectedWithoutPublishingAnyDeletes (523 ms)
+[ RUN      ] RelocatableStorageBackendTest.LiteralDeletePrivateReaderDoesNotBorrowExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.LiteralDeletePrivateReaderDoesNotBorrowExhaustedCacheCredit (92 ms)
+[ RUN      ] RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace
+[       OK ] RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace (13274 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReadSnapshotRetainsItsPinAcrossMovesAndBecomesInvalidOnRelease
+[       OK ] RelocatableStorageBackendTest.ReadSnapshotRetainsItsPinAcrossMovesAndBecomesInvalidOnRelease (35 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalPlanRuntimeExecutesRelocatableNodeAndAdjacencyPagesOnOneSnapshot
+[       OK ] RelocatableStorageBackendTest.LogicalPlanRuntimeExecutesRelocatableNodeAndAdjacencyPagesOnOneSnapshot (93 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalPlanRuntimeUsesNativeScalarAndCompositeRangeIndexes
+[       OK ] RelocatableStorageBackendTest.LogicalPlanRuntimeUsesNativeScalarAndCompositeRangeIndexes (114 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectBackendReadPagesRetainThePinnedLogicalSnapshot
+[       OK ] RelocatableStorageBackendTest.DirectBackendReadPagesRetainThePinnedLogicalSnapshot (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectTraversalContractsRejectMissingVisitorsAndZeroBounds
+[       OK ] RelocatableStorageBackendTest.DirectTraversalContractsRejectMissingVisitorsAndZeroBounds (100 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectSchemaTokenLookupRejectsAmbiguousNamesAcrossDomains
+[       OK ] RelocatableStorageBackendTest.DirectSchemaTokenLookupRejectsAmbiguousNamesAcrossDomains (76 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectNativeIndexLookupContractsRejectInvalidBoundsAndPredicateShapes
+[       OK ] RelocatableStorageBackendTest.DirectNativeIndexLookupContractsRejectInvalidBoundsAndPredicateShapes (88 ms)
+[ RUN      ] RelocatableStorageBackendTest.CloseRejectsPinnedSnapshotUntilItIsReleased
+[       OK ] RelocatableStorageBackendTest.CloseRejectsPinnedSnapshotUntilItIsReleased (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectReadRejectsSnapshotOwnedByAnotherDatabase
+[       OK ] RelocatableStorageBackendTest.DirectReadRejectsSnapshotOwnedByAnotherDatabase (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectExactLookupAndSchemaDropUseTheCanonicalNativeCatalog
+[       OK ] RelocatableStorageBackendTest.DirectExactLookupAndSchemaDropUseTheCanonicalNativeCatalog (201 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityVerificationChecksNodeAndRelationshipUniqueSupportTrees
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityVerificationChecksNodeAndRelationshipUniqueSupportTrees (246 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectRangeLookupsUseTheCanonicalNativeIndexes
+[       OK ] RelocatableStorageBackendTest.DirectRangeLookupsUseTheCanonicalNativeIndexes (131 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder
+[       OK ] RelocatableStorageBackendTest.ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder (205 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedEdgeBatchReadsLargeValuePropertyColumn
+[       OK ] RelocatableStorageBackendTest.ShapedEdgeBatchReadsLargeValuePropertyColumn (119 ms)
+[ RUN      ] RelocatableStorageBackendTest.ShapedEdgeBatchPreservesOldSnapshotAcrossPropertyReplacement
+[       OK ] RelocatableStorageBackendTest.ShapedEdgeBatchPreservesOldSnapshotAcrossPropertyReplacement (142 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectNativeIndexesPreserveExactAndOpenRangeSemantics
+[       OK ] RelocatableStorageBackendTest.DirectNativeIndexesPreserveExactAndOpenRangeSemantics (146 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectNativeIndexesSupportBooleanAndFiniteDoubleKeys
+[       OK ] RelocatableStorageBackendTest.DirectNativeIndexesSupportBooleanAndFiniteDoubleKeys (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectNativeIndexLookupsHonorDegenerateAndBoundedRequests
+[       OK ] RelocatableStorageBackendTest.DirectNativeIndexLookupsHonorDegenerateAndBoundedRequests (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectNativeIndexReadFailuresPreserveThePinnedSnapshot
+[       OK ] RelocatableStorageBackendTest.DirectNativeIndexReadFailuresPreserveThePinnedSnapshot (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalTransactionRejectsForgedEntityReferenceKindsBeforePublication
+[       OK ] RelocatableStorageBackendTest.LogicalTransactionRejectsForgedEntityReferenceKindsBeforePublication (49 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalTransactionRejectsInvalidCreatedEntityFinalStateBeforePublication
+[       OK ] RelocatableStorageBackendTest.LogicalTransactionRejectsInvalidCreatedEntityFinalStateBeforePublication (53 ms)
+[ RUN      ] RelocatableStorageBackendTest.MixedSelectedColumnsPreserveInlineLargeValueAndReopenedResults
+[       OK ] RelocatableStorageBackendTest.MixedSelectedColumnsPreserveInlineLargeValueAndReopenedResults (107 ms)
+[ RUN      ] RelocatableStorageBackendTest.GrowingPropertyRootCanRelocateFromAFullPinnedPool
+[       OK ] RelocatableStorageBackendTest.GrowingPropertyRootCanRelocateFromAFullPinnedPool (123 ms)
+[ RUN      ] RelocatableStorageBackendTest.LifecycleBoundariesRejectOperationsOutsideAnOpenBackend
+[       OK ] RelocatableStorageBackendTest.LifecycleBoundariesRejectOperationsOutsideAnOpenBackend (31 ms)
+[ RUN      ] RelocatableStorageBackendTest.LifecycleOperationsAreIdempotentAcrossWritableAndReadOnlyHandles
+[       OK ] RelocatableStorageBackendTest.LifecycleOperationsAreIdempotentAcrossWritableAndReadOnlyHandles (32 ms)
+[ RUN      ] RelocatableStorageBackendTest.EnforcesLifecycleAndReadOnlyNativeWriteGuards
+[       OK ] RelocatableStorageBackendTest.EnforcesLifecycleAndReadOnlyNativeWriteGuards (33 ms)
+[----------] 127 tests from RelocatableStorageBackendTest (36888 ms total)
+
+[----------] 13 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+[       OK ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (295 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (229 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (165 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+[       OK ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers (223 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks
+[       OK ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks (219 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts
+[       OK ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts (167 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend
+[       OK ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend (167 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation
+[       OK ] HybridPropertyQueryParityTest.CoveredSupernodeUsesBoundedPagesAndExactLogicalContinuation (257 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode
+[       OK ] HybridPropertyQueryParityTest.CoveredEmptyGraphControlProvesAbsentTreeAndStillAuthenticatesTheNode (63 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation
+COVERED_CONTROL_COST edges=90 key_only=1703936 candidate=1835008 retired=0 allocated_peak=1835008 file=5373952
+[       OK ] HybridPropertyQueryParityTest.CoveredPrototypeCountsBothCanonicalAndCandidatePoolsInWholeAllocation (152 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges
+[       OK ] HybridPropertyQueryParityTest.CoveredReferenceControlPreservesRealOverlayDeletesCreatesAndPropertyChanges (301 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime
+[       OK ] HybridPropertyQueryParityTest.CoveredTopologyAdapterPreservesUntypedNamesAndAdmittedBufferLifetime (197 ms)
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (249 ms)
+[----------] 13 tests from HybridPropertyQueryParityTest (2692 ms total)
+
+[----------] 24 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (106 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (20 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (18 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (79 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (252 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (10 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (143 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (23 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (15 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (499 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (155 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (124 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (26 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (126 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (360 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (148 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (147 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (130 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (122 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (264 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (132 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (122 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen (158 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication (123 ms)
+[----------] 24 tests from CoveredAdjacencyCandidateTest (3315 ms total)
+
+[----------] Global test environment tear-down
+[==========] 164 tests from 3 test suites ran. (42895 ms total)
+[  PASSED  ] 164 tests.

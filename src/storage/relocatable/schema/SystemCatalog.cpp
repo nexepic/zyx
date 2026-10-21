@@ -1442,6 +1442,85 @@ namespace graph::storage {
 		return definition;
 	}
 
+    SystemCatalog::FieldMutationSchema SystemCatalog::readFieldMutationSchema(const MetadataSnapshotPin &snapshot,
+        size_t maximumRecords, const CancellationCheckpoint *cancellation) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !maximumRecords || maximumRecords > (SIZE_MAX - 2U) / 2U)
+            fail(FormatError::FERR_INVALID_HEADER, "native field schema proof requires its pin and finite control bound");
+        utils::OwnedAllocationScope allocation(schemaAllocationOwner(snapshot));
+        const auto check = [&] { if (cancellation) cancellation->check(); };
+        check();
+        auto definitions = readIndexDefinitions(snapshot, maximumRecords);
+        for (const auto &definition : definitions) {
+            check(); if (definition.kind != IndexDefinitionKind::IDK_LABEL &&
+                definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE)
+                fail(FormatError::FERR_UNSUPPORTED_VERSION, "native field publication requires complete property-derived index coordination");
+        }
+        verifyBootstrap(*this, snapshot);
+        utils::OwnedHeapReservation frontier(utils::OwnedAllocationScope::owner(), 16384U);
+        utils::OwnedHeapReservation boundary(utils::OwnedAllocationScope::owner());
+        const auto admit = [&](size_t bytes) { boundary.set(bytes); };
+        const BTreeIndex tree(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
+        // Prove dependency/control ranges with authenticated seeks. Unchanged
+        // token dictionaries, configurations and token counts are independent
+        // of field values and must not become a database-size write limit.
+        const auto scan = [&](uint8_t first, uint8_t last, size_t bound, const auto &visit) {
+            const std::array<std::byte, 1> lower{std::byte(first)};
+            const auto begin = first == 0U ? std::optional<std::span<const std::byte>>{} :
+                std::optional<std::span<const std::byte>>(std::span<const std::byte>(lower));
+            auto cursor = tree.openRangeCursor(snapshot, begin, bound + 1U,
+                BufferPoolReadHint::BPRH_SEQUENTIAL, false, cancellation);
+            size_t count = 0;
+            while (auto record = cursor.next(admit)) {
+                check();
+                if (record->key.empty()) fail(FormatError::FERR_INVALID_HEADER, "native field schema proof found an empty key");
+                const auto kind = std::to_integer<uint8_t>(record->key.front());
+                if (kind > last) break;
+                if (++count > bound) fail(FormatError::FERR_INVALID_STATE, "native field schema control range exceeds its operation bound");
+                visit(*record);
+            }
+        };
+        scan(0, 0, 1, [&](const BTreePageEntry &record) {
+            if (record.key != bootstrapKey() || record.value_or_child != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+                fail(FormatError::FERR_INVALID_HEADER, "native field schema proof found an unknown bootstrap record");
+        });
+        scan(5, 5, 4, [&](const BTreePageEntry &record) {
+            if (record.key.size() != 2U || std::to_integer<uint8_t>(record.key[1]) < 1U || std::to_integer<uint8_t>(record.key[1]) > 4U)
+                fail(FormatError::FERR_UNSUPPORTED_VERSION, "native field schema proof found an unknown sequence namespace");
+        });
+        scan(7, 8, maximumRecords * 2U, [&](const BTreePageEntry &record) {
+            const auto found = std::ranges::lower_bound(definitions, record.value_or_child, {}, &IndexDefinition::index_id);
+            if (found == definitions.end() || found->index_id != record.value_or_child)
+                fail(FormatError::FERR_INVALID_STATE, "native field schema proof found an orphan index direction");
+            const auto canonical = record.key.front() == std::byte{7U} ?
+                namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, found->name) : indexSemanticKey(*found);
+            if (!std::ranges::equal(record.key, canonical))
+                fail(FormatError::FERR_INVALID_STATE, "native field schema proof found a noncanonical index direction");
+        });
+        auto constraints = readConstraintDefinitions(snapshot, maximumRecords);
+        scan(10, 11, maximumRecords * 2U, [&](const BTreePageEntry &record) {
+            const auto found = std::ranges::find(constraints, record.value_or_child, &ConstraintDefinition::constraint_id);
+            if (found == constraints.end())
+                fail(FormatError::FERR_INVALID_STATE, "native field schema proof found an orphan constraint direction");
+            const auto canonical = record.key.front() == std::byte{10U} ?
+                namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, found->name) : constraintSemanticKey(*found);
+            if (!std::ranges::equal(record.key, canonical))
+                fail(FormatError::FERR_INVALID_STATE, "native field schema proof found a noncanonical constraint direction");
+        });
+        {
+            // Current graph/token count subtypes1..6 are field-independent.
+            // A future count subtype may depend on properties: refuse it.
+            const std::array<std::byte, 2> lower{std::byte{13U}, std::byte{7U}};
+            auto cursor = tree.openRangeCursor(snapshot, std::span<const std::byte>(lower), 1,
+                BufferPoolReadHint::BPRH_SEQUENTIAL, false, cancellation);
+            if (auto record = cursor.next(admit); record && !record->key.empty() && record->key.front() == std::byte{13U})
+                fail(FormatError::FERR_UNSUPPORTED_VERSION, "native field schema proof found an unknown count namespace");
+        }
+        scan(14, 255, 1, [&](const BTreePageEntry &) {
+            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native field schema proof found an unknown control namespace");
+        });
+        check(); return {std::move(definitions), std::move(constraints)};
+    }
+
 	utils::OwnedStdVector<IndexDefinition> SystemCatalog::readIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																	 size_t maximumDefinitions) const {
         utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));

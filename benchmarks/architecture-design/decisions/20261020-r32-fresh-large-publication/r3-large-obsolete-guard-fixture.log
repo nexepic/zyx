@@ -1,0 +1,26 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOrdinaryConversionTest.*Large*
+[==========] Running 4 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 4 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing (16 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal
+[       OK ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal (28 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldButRejectsFreshUnindexedValues
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:547: Failure
+Failed
+fresh LargeValue published without its content-index lifecycle
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldButRejectsFreshUnindexedValues (18 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue (82 ms)
+[----------] 4 tests from HybridPropertyOrdinaryConversionTest (145 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test suite ran. (145 ms total)
+[  PASSED  ] 3 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldButRejectsFreshUnindexedValues
+
+ 1 FAILED TEST

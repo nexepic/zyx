@@ -1,0 +1,11 @@
+### 2026-10-20 R3.2: atomic Edge, native-field and bidirectional adjacency deletion
+
+Evidence: `benchmarks/architecture-design/decisions/20261020-r32-durable-edge-deletion/`.
+
+- The explicit owned owner-deletion route now handles Edges. Read the main Edge and both endpoint Entities, authenticate canonical OUT/IN keys derived from the master, then atomically coordinate fixed Edge pages, Edge Map, field/group liveness, reserved maps, ordinary global adjacency and retirement. Main Edge remains topology authority; no covered-read adoption is implied.
+- Fixed maps accept a zero-byte suffix for key-only sets, reusing the existing17-byte global adjacency key. Ordinary adjacency-set reads pass in both formats. Metadata-private dirty images additionally admit only this exact namespace/key width, retaining no source-pool writes, whole-tree rebuild or unrelated-namespace admission.
+- Edge deletion still rejects SystemCatalog/State roots and LargeValue references; production type-index/statistics/constraint coordination remains. Node deletion remains restricted to logically edgeless databases and unlabeled targets. A bounded first-entry probe accepts a physically present but logically empty Edge Map and rejects orphan adjacency.
+- Last-group deletion may erase the global adjacency root while retaining endpoints and allowing ordinary ROW Edge creation without ID reuse. Self-loop directions, parallel edges, type0 master records and old pins retain their semantics.
+- Seventeen affected modules: default305 passed; candidate486 passed/1 conditional skip. Checks include the above, inverse conversion, owned staging,64-Edge/4096-field deletion in the original1 MiB, A/B/cancellation and pre-write rejection/retry for a valid-checksum missing reverse key with unchanged free-byte geometry. No full unit suite or performance window ran.
+
+The initial corruption fixture passed a nonzero entry_count to the bulk page factory; it now follows the existing empty-header contract, with failure evidence retained. Schema/label/statistics/type-index/value lifecycles, multiple groups, fragmented Entity-pool relocation, production adoption and final full costs/same-executor ROW control remain. **No new acceptance:13/24(54.2%); no commit/push.**

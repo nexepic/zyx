@@ -6,6 +6,11 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
+#include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
+#include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 
 #include <algorithm>
@@ -19,6 +24,9 @@
 #include <type_traits>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
+#include "graph/storage/relocatable/property/LargeValue.hpp"
+#include "graph/storage/CancellationCheckpoint.hpp"
 
 #include "graph/storage/relocatable/index/InitialBTreeBuilder.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -355,7 +363,8 @@ namespace graph::storage {
 	};
 
 	struct OverlayInternalEntry {
-		std::vector<std::byte> key;
+        using OwnedHeapElement = void;
+		utils::OwnedStdVector<std::byte> key;
 		OverlayPageReference right_child;
 	};
 
@@ -366,7 +375,7 @@ namespace graph::storage {
 		std::optional<OverlayPageReference> leftmost_child;
 		utils::OwnedStdVector<BTreePageEntry> leaf_entries;
         utils::OwnedStdVector<std::byte> packed_leaf_entries;
-		std::vector<OverlayInternalEntry> internal_entries;
+		utils::OwnedStdVector<OverlayInternalEntry> internal_entries;
 		bool dirty = false;
 		bool retired = false;
 	};
@@ -384,13 +393,17 @@ namespace graph::storage {
 	public:
 		TransactionBTreeOverlay(const BTreePageStore &store, RelocatableMetadataStore &metadata,
 								const MetadataSnapshotPin &snapshot, uint64_t indexId, bool rebuildOnFrameExhaustion,
-								bool forceFreshRebuild, BTreeLeafValueLayout leafValueLayout) :
+								bool forceFreshRebuild, BTreeLeafValueLayout leafValueLayout,
+            std::function<void(BTreePage)> nativeSink = {}, std::shared_ptr<std::pmr::memory_resource> nativeMemory = {},
+            const CancellationCheckpoint *nativeCancellation = nullptr, bool nativeSchemaKeys = false) :
 			store_(store), metadata_(metadata), snapshot_(snapshot), index_id_(indexId),
 			leaf_value_layout_(leafValueLayout), rebuild_on_frame_exhaustion_(rebuildOnFrameExhaustion),
 			force_fresh_rebuild_(forceFreshRebuild),
-			root_(loadRoot()) {}
+            native_credit_(std::move(nativeMemory), nativeSink ? 128U * 1024U : 0U),
+            native_sink_(std::move(nativeSink)), native_cancellation_(nativeCancellation), native_schema_keys_(nativeSchemaKeys), root_(loadRoot()) {}
 
 		void apply(const BTreeScalarIndexOperation &operation) {
+            checkNative();
 			if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
 				if (leaf_value_layout_ == BTreeLeafValueLayout::BLVL_EMPTY && operation.value != 0U) {
 					throw FormatException(FormatError::FERR_INVALID_HEADER,
@@ -432,7 +445,7 @@ namespace graph::storage {
 			}
 			const size_t rebuildThreshold = static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT) * 4U;
 			bool rebuiltDenseTree = false;
-			if (liveVirtuals.size() > rebuildThreshold) {
+			if (!native_sink_ && liveVirtuals.size() > rebuildThreshold) {
 				rebuiltDenseTree = rebuildDenseTree(true);
 				if (rebuiltDenseTree) {
 					liveVirtuals.clear();
@@ -453,7 +466,7 @@ namespace graph::storage {
 				}
 			}
 
-			std::map<uint64_t, size_t> requestOrdinals;
+			utils::OwnedMap<uint64_t, size_t> requestOrdinals;
 			std::vector<IndexTreeMutationPoolRequest> requests;
 			const auto ensureRequest = [&](SegmentId segmentId) {
 				const auto [iterator, inserted] = requestOrdinals.emplace(segmentId.value(), requests.size());
@@ -496,7 +509,7 @@ namespace graph::storage {
 			// Reserve destination capacity deterministically so several source pools do
 			// not overcommit the same target under one pinned planning snapshot.
 			std::vector<PageLocation> reservedDestinationFrames;
-			if (!force_fresh_rebuild_ && !replacements.empty()) {
+			if (!native_sink_ && !force_fresh_rebuild_ && !replacements.empty()) {
 				for (IndexTreeMutationPoolRequest &request: requests) {
 					if (request.expected_replacements.empty()) {
 						continue;
@@ -581,7 +594,7 @@ namespace graph::storage {
 					firstUnplaced = candidate;
 					return true;
 				};
-				if (!fresh_rebuild_applied_ && rebuiltDenseTree) {
+				if (!native_sink_ && !fresh_rebuild_applied_ && rebuiltDenseTree) {
 					const size_t maximumCurrentPoolAppend =
 							std::min(liveVirtuals.size(), static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT));
 					for (size_t candidate = maximumCurrentPoolAppend; candidate != 0U; --candidate) {
@@ -589,7 +602,7 @@ namespace graph::storage {
 							break;
 						}
 					}
-				} else if (!fresh_rebuild_applied_ &&
+				} else if (!native_sink_ && !fresh_rebuild_applied_ &&
 						   liveVirtuals.size() <= static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT)) {
 					// A single structural publication can safely use any current typed
 					// Index pool selected under the same metadata snapshot.
@@ -697,6 +710,24 @@ namespace graph::storage {
 								FormatError::FERR_INVALID_STATE,
 								"relocatable transaction-local B+Tree overlay append count changed before preparation");
 					}
+                    if (self->native_sink_) {
+                        // Source identities and virtual IDs are fenced above.
+                        // Emit unplaced images; metadata assigns fresh physical
+                        // owners and commits all field/map routes together.
+                        for (const auto &location : batch.expected_replacements) {
+                            self->checkNative(); const auto &existing = self->existingFor(location.page_id);
+                            self->native_sink_(self->materialize(existing.node, location.page_id,
+                                existing.node.header.generation, checkpointLsn, virtualIdsByOrdinal));
+                        }
+                        for (const size_t ordinal : liveVirtuals) {
+                            const auto placement = virtualPlacements[ordinal];
+                            if (placement.pool_ordinal != poolOrdinal) continue;
+                            self->checkNative();
+                            self->native_sink_(self->materialize(self->nodeFor(OverlayPageReference::virtualPage(ordinal)),
+                                batch.appended_page_ids.at(placement.appended_ordinal), Generation(1), checkpointLsn, virtualIdsByOrdinal));
+                        }
+                        continue;
+                    }
 					const CatalogEntry &replacementPool = batch.replacement_pool.segment_id.isValid()
 														? batch.replacement_pool
 														: batch.pool;
@@ -998,6 +1029,7 @@ namespace graph::storage {
 				}
 				return existing->second.node;
 			}
+            admitNativeNode(); checkNative();
 			BTreePage page = store_.read(snapshot_, pageId);
 			const BTreePageHeader header = page.header();
 			const PageLocation location = metadata_.findPageLocation(snapshot_, pageId);
@@ -1028,9 +1060,20 @@ namespace graph::storage {
 					node.right_sibling = OverlayPageReference::existing(header.right_sibling);
 				}
 				node.leaf_entries = page.entries();
+                if (native_sink_)
+                    for (const auto &entry : node.leaf_entries)
+                        if (native_schema_keys_ ?
+                            (entry.key.size() > RSS_INDEX_KEY_MAX_BYTES ||
+                                (isSystemCatalogConstraintDefinitionId(index_id_) && entry.key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES) ||
+                                (index_id_ != RSS_SYSTEM_CATALOG_INDEX_ID && IndexKeyCodec::decodeEntryEntityId(entry.key) != entry.value_or_child)) :
+                            index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID ?
+                            (entry.key.size() < 53U || entry.key.size() > nativeKeyWidth()) : entry.key.size() != nativeKeyWidth())
+                            throw FormatException(FormatError::FERR_INVALID_HEADER, "native map image source has a wrong fixed-key width");
 			} else {
 				node.leftmost_child = OverlayPageReference::existing(header.leftmost_child);
 				for (const BTreePageEntry &entry: page.entries()) {
+                    if (native_sink_ && entry.key.size() > nativeKeyWidth())
+                        throw FormatException(FormatError::FERR_INVALID_HEADER, "native map separator exceeds its fixed-key width");
 					node.internal_entries.push_back(
 							{entry.key, OverlayPageReference::existing(PageId(entry.value_or_child))});
 				}
@@ -1063,10 +1106,17 @@ namespace graph::storage {
                 }
 				return node;
 			}
-			return loadExisting(reference.existing_page_id, expected_root_.root_generation.value(), expectedLevel);
+            // Native map dirty paths may share untouched children from older
+            // physical pools. The descriptor binds the root; every child is
+            // independently authenticated through its pinned Page Directory.
+            const auto generation = (native_sink_ || index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID) &&
+                reference.existing_page_id != expected_root_.root_page_id ?
+                metadata_.findPageLocation(snapshot_, reference.existing_page_id).generation : expected_root_.root_generation;
+            return loadExisting(reference.existing_page_id, generation.value(), expectedLevel);
 		}
 
 		[[nodiscard]] OverlayPageReference createVirtual(BTreePageHeader header) {
+            admitNativeNode(); checkNative();
 			header.page_id = PageId(1U);
 			header.generation = expected_root_.root_generation;
 			header.entry_count = 0U;
@@ -1301,7 +1351,7 @@ namespace graph::storage {
 		}
 
 		void insertPromoted(std::vector<OverlayPageReference> &path, size_t childPathIndex,
-							std::vector<std::byte> separator, OverlayPageReference rightChild) {
+							utils::OwnedStdVector<std::byte> separator, OverlayPageReference rightChild) {
 			if (childPathIndex == 0U) {
 				OverlayMutationNode &oldRoot = nodeFor(path.front());
 				BTreePageHeader rootHeader;
@@ -1333,7 +1383,7 @@ namespace graph::storage {
 		void splitInternal(std::vector<OverlayPageReference> &path, size_t pathIndex) {
 			const OverlayPageReference leftRef = path[pathIndex];
 			OverlayMutationNode &left = nodeFor(leftRef);
-			std::vector<OverlayInternalEntry> combined = left.internal_entries;
+			utils::OwnedStdVector<OverlayInternalEntry> combined = left.internal_entries;
 			std::optional<size_t> selected;
 			uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
 			// Variable-length keys can make an endpoint separator the only split
@@ -1577,7 +1627,7 @@ namespace graph::storage {
 							   OverlayMutationNode &right, size_t) {
 			OverlayInternalEntry bridge = parent.internal_entries[leftOrdinal];
 			bridge.right_child = *right.leftmost_child;
-			std::vector<OverlayInternalEntry> combined = left.internal_entries;
+			utils::OwnedStdVector<OverlayInternalEntry> combined = left.internal_entries;
 			combined.push_back(bridge);
 			combined.insert(combined.end(), right.internal_entries.begin(), right.internal_entries.end());
 			std::optional<size_t> redistribution;
@@ -1663,9 +1713,36 @@ namespace graph::storage {
 		bool force_fresh_rebuild_ = false;
 		bool fresh_rebuild_applied_ = false;
 		IndexRootLocation expected_root_;
+        // Declared before the governed std maps, vectors and callback so all
+        // retained storage dies before its conservative credit is returned.
+        utils::OwnedHeapReservation native_credit_;
+        std::function<void(BTreePage)> native_sink_;
+        const CancellationCheckpoint *native_cancellation_ = nullptr;
+        bool native_schema_keys_ = false;
+        void checkNative() const { if (native_cancellation_) native_cancellation_->check(); }
+        [[nodiscard]] size_t nativeKeyWidth() const {
+            if (native_schema_keys_) return RSS_INDEX_KEY_MAX_BYTES;
+            if (index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID) return RSS_GLOBAL_ADJACENCY_KEY_BYTES;
+            if (index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID) return 53U + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES;
+            const auto role = (index_id_ - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST) % 4U;
+            return role == 0 ? 16U : role == 3 ? 24U : 28U;
+        }
+        void admitNativeNode() {
+            if (!native_sink_) return;
+            // Decoded keys, leaf/internal vectors, the virtual deque and
+            // existing-node map own exact admissions. This remaining envelope
+            // covers standard API plan/request/frontier vectors: no phase has
+            // more than sixteen simultaneously retained/growing copies of any
+            // listed per-node record. The fixed credit covers path and callback
+            // frontiers; page images retain their independent owned admissions.
+            constexpr size_t planRecordEnvelope = 16U * (sizeof(IndexTreeMutationPoolRequest) +
+                sizeof(IndexTreePageRetirement) + sizeof(PageLocation) +
+                sizeof(BTreeNewIndexTreePoolMutation) + sizeof(OverlayPageReference) + sizeof(size_t));
+            native_credit_.set(utils::detail::addStandardHeapBytes(native_credit_.bytes(), planRecordEnvelope));
+        }
 		// loadRoot() runs while root_ is initialized and immediately populates
 		// this map, so it must be constructed before root_.
-		std::map<uint64_t, ExistingOverlayMutationNode> existing_nodes_;
+		utils::OwnedMap<uint64_t, ExistingOverlayMutationNode> existing_nodes_;
 		OverlayPageReference root_;
 		struct LeafAppendSize {
 			OverlayPageReference page;
@@ -2974,18 +3051,114 @@ namespace graph::storage {
 		return overlay->buildPlan();
 	}
 
+    BTreeStructuralMutationPlan BTreePageStore::planHybridMapImages(const MetadataSnapshotPin &snapshot,
+        uint64_t indexId, std::span<const BTreeScalarIndexOperation> operations,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+        const CancellationCheckpoint *cancellation) const {
+        return planHybridMapImagesFromSource(snapshot, indexId, operations.size(),
+            [operations](const auto &emit) { for (const auto &operation : operations) emit(operation); },
+            std::move(memory), std::move(sink), cancellation);
+    }
+
+    BTreeStructuralMutationPlan BTreePageStore::planHybridMapImagesFromSource(const MetadataSnapshotPin &snapshot,
+        uint64_t indexId, size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+        const CancellationCheckpoint *cancellation) const {
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || (!isHybridPropertyIndexId(indexId) && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
+            indexId != RSS_LARGE_VALUE_CONTENT_INDEX_ID) || !snapshot.isValid() ||
+            !metadata_.ownsSnapshot(snapshot) || !memory || !sink || !source || !operationCount || operationCount > 8192U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "native map image planning requires bounded metadata-owned inputs");
+        utils::OwnedAllocationScope scope(memory);
+        auto overlay = utils::makeSharedOwned<TransactionBTreeOverlay>(*this, metadata_, snapshot, indexId,
+            false, false, indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID ? BTreeLeafValueLayout::BLVL_U64 :
+                BTreeLeafValueLayout::BLVL_EMPTY, std::move(sink), memory, cancellation);
+        size_t emitted = 0;
+        source([&](const BTreeScalarIndexOperation &operation) {
+            if (cancellation) cancellation->check();
+            if (emitted == operationCount)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "native map operation source exceeds its bound");
+            ++emitted; overlay->apply(operation);
+        });
+        if (emitted != operationCount)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native map operation source is incomplete");
+        return overlay->buildPlan();
+    }
+
+    BTreeStructuralMutationPlan BTreePageStore::planNativeScalarIndexImages(const MetadataSnapshotPin &snapshot,
+        const IndexDefinition &definition, size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+        const CancellationCheckpoint *cancellation) const {
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+            !isSystemCatalogIndexDefinitionId(definition.index_id) ||
+            (definition.kind != IndexDefinitionKind::IDK_LABEL && definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE) ||
+            !source || !memory || !sink || !operationCount || operationCount > 8192U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "native scalar image preparation requires its authenticated schema and operation bounds");
+        return planNativeDerivedIndexImages(snapshot, definition.index_id, operationCount, source, std::move(memory), std::move(sink), cancellation);
+    }
+
+    BTreeStructuralMutationPlan BTreePageStore::planNativeConstraintImages(const MetadataSnapshotPin &snapshot,
+        const ConstraintDefinition &definition, size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+        const CancellationCheckpoint *cancellation) const {
+        ConstraintDefinitionCodec::validate(definition);
+        if (definition.kind != ConstraintDefinitionKind::CDK_UNIQUE && definition.kind != ConstraintDefinitionKind::CDK_NODE_KEY)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "native support images require a uniqueness constraint");
+        return planNativeDerivedIndexImages(snapshot, definition.constraint_id, operationCount, source, std::move(memory), std::move(sink), cancellation);
+    }
+
+    BTreeStructuralMutationPlan BTreePageStore::planNativeDerivedIndexImages(const MetadataSnapshotPin &snapshot,
+        uint64_t indexId, size_t operationCount,
+        const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+        std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+        const CancellationCheckpoint *cancellation) const {
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+            (!isSystemCatalogIndexDefinitionId(indexId) && !isSystemCatalogConstraintDefinitionId(indexId) && indexId != RSS_SYSTEM_CATALOG_INDEX_ID) ||
+            !source || !memory || !sink || !operationCount || operationCount > 8192U)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "native derived images require an owned pin and bounded operation source");
+        utils::OwnedAllocationScope scope(memory);
+        auto overlay = utils::makeSharedOwned<TransactionBTreeOverlay>(*this, metadata_, snapshot, indexId,
+            false, false, BTreeLeafValueLayout::BLVL_U64, std::move(sink), memory, cancellation, true);
+        size_t emitted = 0;
+        source([&](const BTreeScalarIndexOperation &operation) {
+            if (cancellation) cancellation->check();
+            if (emitted == operationCount || operation.key.size() > RSS_INDEX_KEY_MAX_BYTES ||
+                (isSystemCatalogConstraintDefinitionId(indexId) && operation.key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES) ||
+                (indexId != RSS_SYSTEM_CATALOG_INDEX_ID && operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+                    IndexKeyCodec::decodeEntryEntityId(operation.key) != operation.value))
+                throw FormatException(FormatError::FERR_INVALID_STATE, "native scalar operation source violates its exact bound or owner");
+            if (indexId == RSS_SYSTEM_CATALOG_INDEX_ID) {
+                const auto key = std::span<const std::byte>(operation.key);
+                if (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT || key.size() < 2U || key[0] != std::byte{13U} ||
+                    (key[1] != std::byte{1U} && key[1] != std::byte{2U} && key[1] != std::byte{3U} && key[1] != std::byte{4U}) ||
+                    key.size() != (key[1] <= std::byte{2U} ? 2U : 10U) ||
+                    (key[1] == std::byte{3U} && std::ranges::all_of(key.subspan(2), [](auto value) { return value == std::byte{0}; })))
+                    throw FormatException(FormatError::FERR_INVALID_HEADER, "native catalog preparation permits only canonical count upserts");
+                static_cast<void>(SystemCatalogGraphCardinalityCodec::decodeCount(operation.value));
+            }
+            ++emitted; overlay->apply(operation);
+        });
+        if (emitted != operationCount)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native scalar operation source is incomplete");
+        return overlay->buildPlan();
+    }
+
 	BTreeTreeRetirementPlan BTreePageStore::planTreeRetirement(const MetadataSnapshotPin &snapshot, uint64_t indexId,
-															   size_t maximumPages) const {
+															   size_t maximumPages, const CancellationCheckpoint *cancellation) const {
 		if (!snapshot.isValid() || indexId == 0U || maximumPages == 0U) {
 			throw FormatException(
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable B+Tree retirement plan requires a live snapshot, Index ID, and page bound");
 		}
+        if (cancellation) cancellation->check();
 		const IndexRootLocation root = metadata_.findIndexRoot(snapshot, indexId);
 		std::vector<PageId> pending{root.root_page_id};
 		std::set<PageId> visited;
 		std::map<uint64_t, IndexTreeMutationPoolRequest> requests;
 		while (!pending.empty()) {
+            if (cancellation) cancellation->check();
 			const PageId pageId = pending.back();
 			pending.pop_back();
 			if (visited.size() == maximumPages || !visited.insert(pageId).second) {
@@ -3076,6 +3249,7 @@ namespace graph::storage {
 											prepared);
 			}
 		};
+        if (cancellation) cancellation->check();
 		return result;
 	}
 

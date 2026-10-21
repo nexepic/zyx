@@ -1,0 +1,91 @@
+{
+  "scope": [
+    "R3.2"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Native field-only writes authenticate a bounded complete schema-control census and may preserve token/configuration/count/label-type state without rewriting it; property-derived indexes, constraints, owner deletion and unknown controls remain guarded.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyShapeCosts",
+    "property/test_HybridPropertyLogicalIds",
+    "entity/test_NativeGraphWritePlanner_LeaseRecovery",
+    "metadata/test_RelocatableMetadataStoreGraphMutation",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "adjacency/test_CoveredAdjacencyCandidate",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 586,
+      "passed": 586,
+      "skipped": 0,
+      "binary_sha256": "9fe9a2641d75588d9c462f491cbc5315e46f78af31c9f01abd2e7152db87c6b4"
+    },
+    "candidate": {
+      "registered": 876,
+      "passed": 875,
+      "skipped": 1,
+      "binary_sha256": "d308d07322e18d85de8218cf31cb36ee85c9d54c8dad7e5f304acff2b7b600a1"
+    }
+  },
+  "limits": [
+    "No general topology/property-index/constraint coordinator or production admission.",
+    "The explicit schema-control census is bounded to4096records and the original1MiBaccount; incomplete/unknown refuses.",
+    "Property/composite/vector definitions, constraint namespaces and any catalog-backed owner deletion still refuse.",
+    "Prior mature32768member allocation/lifecycle proof remains separately archived; not rerun for this schema-only change.",
+    "No timing benchmark, full repository suite, non-Linux platform or RSS/admission claim."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "Field-only changes preserve owner counts, labels, relationship types and their indexes.",
+    "Complete bounded schema classification authenticates known namespaces, index directions, configurations and count controls; unknown controls refuse.",
+    "Same LogicalPlanReadRuntime checks filtering, aggregates, NULL/string reads, OPTIONAL, multiedges and TopK after write and restoration.",
+    "SC root/graph counts/old field pin remain unchanged; property-index/constraint/owner-deletion/unknown-key refusals preserve roots and perform no private mutation IO after startup recovery.",
+    "Writable-open pool recovery is explicitly completed by a typed metadata-only lease before refusal no-IO assertions, rather than weakening recovery protections."
+  ],
+  "final_filter": "*-HybridPropertyMatureShapeCostsTest.*;44relatedmodules; mature allocation case remains separately frozen and unaffected",
+  "prior_broad_evidence": "benchmarks/architecture-design/decisions/20261021-r32-native-logical-id-leases"
+}

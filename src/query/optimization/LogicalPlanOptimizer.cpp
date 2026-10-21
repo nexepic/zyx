@@ -6,6 +6,7 @@
  **/
 
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/optimization/ReadTraversalAnchorEnvelope.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -298,7 +299,7 @@ namespace graph::query::optimization {
 
 	std::unique_ptr<logical::LogicalOperator>
 	LogicalPlanOptimizer::rewrite(std::unique_ptr<logical::LogicalOperator> root, const size_t depth,
-								  RewriteState &state) const {
+									  RewriteState &state, const bool allowAnchorReordering) const {
 		if (!root) {
 			throw std::logic_error("logical optimizer received a null operator");
 		}
@@ -316,12 +317,13 @@ namespace graph::query::optimization {
 			state.changed = true;
 		}
 
+        const bool transparentAnchor = allowAnchorReordering && detail::readTraversalAnchorEnvelope(*root);
 		for (size_t index = 0U; index < children.size(); ++index) {
 			if (children[index] == nullptr) {
 				throw std::logic_error("logical optimizer received an operator with a null child");
 			}
 			auto child = root->detachChild(index);
-			root->setChild(index, rewrite(std::move(child), depth + 1U, state));
+			root->setChild(index, rewrite(std::move(child), depth + 1U, state, transparentAnchor));
 		}
 
 		if (root->getType() == logical::LogicalOpType::LOP_FILTER) {
@@ -337,7 +339,7 @@ namespace graph::query::optimization {
 			return root;
 		}
 
-		if (options_.allow_read_traversal_anchor && state.statistics) {
+		if (options_.allow_read_traversal_anchor && state.statistics && transparentAnchor) {
 			// An explicit projection preserves the public column order when the
 			// internal traversal bindings are produced from the opposite endpoint.
 			auto *project = dynamic_cast<logical::LogicalProject *>(root.get());

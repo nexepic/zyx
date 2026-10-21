@@ -341,7 +341,7 @@ namespace graph::storage {
 	void SharedPagePoolAllocator::prepareAppendPagesUnderWrite(
 			StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
 			std::span<const SharedPagePoolPreparedAppend> pages, std::span<PageLocation> locations,
-			LogSequenceNumber checkpointLsn) {
+			LogSequenceNumber checkpointLsn, bool nativeHybridFields) {
 		// ZYX_COV_EXCL_START: BTreePageStore invokes this private helper only after validating a nonempty,
 		// cardinality-matched batch and a valid publication LSN.
 		if (pages.empty() || pages.size() != locations.size() || !checkpointLsn.isValid()) {
@@ -371,7 +371,7 @@ namespace graph::storage {
 									static_cast<uint8_t>(prepared.owner.committed_lsn != checkpointLsn) |
 									static_cast<uint8_t>(prepared.owner.payload_bytes != prepared.payload.size()) |
 									static_cast<uint8_t>(prepared.free_bytes > prepared.owner.payload_bytes) |
-									static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, prepared.owner.kind));
+									static_cast<uint8_t>(!(nativeHybridFields ? pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL && prepared.owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY : matchesPoolAndOwnerKind(pool.kind, prepared.owner.kind)));
 			// ZYX_COV_EXCL_START: the typed B+Tree plan assigns each owner from one unique, validated Page ID.
 			if (invalid != 0U || !pageIds.insert(prepared.owner.page_id).second) {
 				throwSharedPagePoolAllocatorError(
@@ -427,7 +427,7 @@ namespace graph::storage {
 																std::span<const SharedPagePoolPreparedAppend> pages,
 																std::span<PageLocation> locations,
 																LogSequenceNumber checkpointLsn,
-																size_t preparedPrefixCount) {
+																size_t preparedPrefixCount, bool nativeHybridFields) {
 		debug::PerfTrace::addValue("native_graph.write.new_pool_prepare_calls", 1);
 		debug::PerfTrace::addValue("native_graph.write.new_pool_prepare_pages", static_cast<int64_t>(pages.size()));
 		debug::PerfTrace::addValue("native_graph.write.new_pool_prepared_prefix_pages", static_cast<int64_t>(preparedPrefixCount));
@@ -480,7 +480,10 @@ namespace graph::storage {
 									static_cast<uint8_t>(prepared.owner.committed_lsn != checkpointLsn) |
 									static_cast<uint8_t>(prepared.owner.payload_bytes != prepared.payload.size()) |
 									static_cast<uint8_t>(prepared.free_bytes > prepared.owner.payload_bytes) |
-									static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, prepared.owner.kind));
+									static_cast<uint8_t>(nativeHybridFields
+                                    ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                                        prepared.owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
+                                    : !matchesPoolAndOwnerKind(pool.kind, prepared.owner.kind));
 			// ZYX_COV_EXCL_START: the enclosing Metadata batch allocates unique logical Page IDs and their owners
 			// together.
 			if (invalid != 0U || !pageIds.insert(prepared.owner.page_id).second) {
@@ -1677,7 +1680,7 @@ namespace graph::storage {
 	bool SharedPagePoolAllocator::reconcilePoolFrames(
 			const CatalogEntry &entry, const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
 			const std::function<CatalogEntry(SegmentId)> &findCatalog,
-			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot) const {
+			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot, bool nativeHybridFields) const {
 		// ZYX_COV_EXCL_START: both reconciliation entry points filter Catalog kinds before invoking this helper.
 		if (!isSharedPoolKind(entry.kind)) {
 			throwSharedPagePoolAllocatorError(
@@ -1709,11 +1712,15 @@ namespace graph::storage {
 			const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
 			frames.push_back({frameIndex, owner, findPageLocation(owner.page_id)});
 		}
-		const auto isCompatibleLocation = [&entry](const PageLocation &location, const PageOwnerHeader &owner) {
+		const auto compatibleKind = [nativeHybridFields](SegmentKind pool, PageOwnerKind owner) {
+            return matchesPoolAndOwnerKind(pool, owner) || (nativeHybridFields &&
+                pool == SegmentKind::SGK_PROPERTY_PAGE_POOL && owner == PageOwnerKind::POK_HYBRID_PROPERTY);
+        };
+		const auto isCompatibleLocation = [&entry, &compatibleKind](const PageLocation &location, const PageOwnerHeader &owner) {
 			const uint8_t invalid = static_cast<uint8_t>(location.segment_id != entry.segment_id) |
 									static_cast<uint8_t>(location.generation != entry.generation) |
 									static_cast<uint8_t>(owner.generation != entry.generation) |
-									static_cast<uint8_t>(!matchesPoolAndOwnerKind(entry.kind, owner.kind));
+									static_cast<uint8_t>(!compatibleKind(entry.kind, owner.kind));
 			return invalid == 0U;
 		};
 		const auto currentFrameIsCompatibleReplacement =
@@ -1747,7 +1754,7 @@ namespace graph::storage {
 						static_cast<uint8_t>(!isSharedPoolKind(remotePool.kind)) |
 						static_cast<uint8_t>(remotePool.kind != entry.kind) |
 						static_cast<uint8_t>(remotePool.generation != frame.location->generation) |
-						static_cast<uint8_t>(!matchesPoolAndOwnerKind(remotePool.kind, frame.owner.kind));
+						static_cast<uint8_t>(!compatibleKind(remotePool.kind, frame.owner.kind));
 				if (invalidRemote != 0U) {
 					throwSharedPagePoolAllocatorError(
 							FormatError::FERR_INVALID_STATE,

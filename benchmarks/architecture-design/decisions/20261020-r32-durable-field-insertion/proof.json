@@ -1,0 +1,57 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "allocation/test_SharedPagePoolAllocator",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 302,
+      "passed": 302,
+      "skipped": 0,
+      "binary_sha256": "06d155680e83f269f27479ce2015f9f6bebd29b81c928d15c80183e091a100f6",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 448,
+      "passed": 447,
+      "skipped": 1,
+      "binary_sha256": "dab116c99fc1b2e56e9b953ca819e67823c1555222a7258a847059cb39075748",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Isolated format32 only; production format31 unchanged.",
+    "Explicit lifecycle handles existing-column removal/type changes and existing inline-extension scalar updates/deletion in one group; missing scalar fields can join live groups/existing columns; promotion/owner deletion remain unsupported.",
+    "SystemCatalog root conservatively rejected; no derived-index/constraint adoption.",
+    "Multiple-group incremental maps, general LargeValue/ref-GC and full costs remain.",
+    "Only at-most64 detached Property/Index pools may release while native is active; generic frame reconciliation and relocation remain guarded."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted_before": 13,
+  "accepted_after": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "commit_push": false,
+  "full_unit_suite": false,
+  "new_performance_windows": 0,
+  "platform": "Linux x86_64",
+  "tests": {
+    "default": {
+      "tests": 200,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "binary_sha256": "4373f5d548ea5459cbd5272feb14b44eb347ceab92ab86f9ddf593786d3402d1"
+    },
+    "candidate": {
+      "tests": 261,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "binary_sha256": "670aaf317e3248c30b65e68ac6b775e91a081981119a56efad4ca27879d74f56"
+    }
+  },
+  "starting_observation": "benchmarks/architecture-design/results/20261020-work-resume/start",
+  "candidate_adopted": false,
+  "production_properties": "ROW",
+  "nonempty_hybrid_publication_guard": true,
+  "main_edge_authentication": true,
+  "corrected_build_failures": [
+    "Inverse preparation header lacked its direct MaterializedByteBudget include; made it self-contained.",
+    "New query API test was unclassified; registered it in the native test source allowlist.",
+    "Native candidate used the logical type_token spelling for EdgeEntityRecord; corrected to its authoritative type_id field."
+  ]
+}

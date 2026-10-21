@@ -1,0 +1,12 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*:HybridPropertyIndexedLifecycleTest.*:FixedShapes/HybridPropertyShapeCostsTest.*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow
+[       OK ] HybridPropertyQueryParityTest.DefaultProfileRemainsRow (258 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (258 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (258 ms total)
+[  PASSED  ] 1 test.

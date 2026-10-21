@@ -1,0 +1,228 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = CoveredAdjacencyCandidateTest.*:NativeScalarIndexMutationPlannerTest.*:SystemCatalogTest.*
+[==========] Running 106 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 68 tests from SystemCatalogTest
+[ RUN      ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists
+[       OK ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists (1 ms)
+[ RUN      ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue
+[       OK ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue (13 ms)
+[ RUN      ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions
+[       OK ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions (4 ms)
+[ RUN      ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen
+[       OK ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen (10 ms)
+[ RUN      ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord
+[       OK ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord (4 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial
+[       OK ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts
+[       OK ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts (0 ms)
+[ RUN      ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue
+[       OK ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue (4 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog
+[       OK ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication
+[       OK ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed (8 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration
+[       OK ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound (7 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues (12 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated (9 ms)
+[ RUN      ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords
+[       OK ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords (10 ms)
+[ RUN      ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration
+[       OK ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration (7 ms)
+[ RUN      ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains
+[       OK ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains (4 ms)
+[ RUN      ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences
+[       OK ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences (13 ms)
+[ RUN      ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication
+[       OK ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests
+[       OK ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds
+[       OK ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds (6 ms)
+[ RUN      ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction
+[       OK ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction (4 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange (4 ms)
+[ RUN      ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion
+[       OK ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion (7 ms)
+[ RUN      ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds
+[       OK ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds (7 ms)
+[ RUN      ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts
+[       OK ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts (7 ms)
+[ RUN      ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings
+[       OK ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings (4 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication
+[       OK ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication (17 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock
+[       OK ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock (4 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock
+[       OK ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock (9 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord
+[       OK ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord (3 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping (4 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics
+[       OK ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics (3 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous (3 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue (4 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping (4 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth (3 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments
+[       OK ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent
+[       OK ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent (5 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds (4 ms)
+[ RUN      ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey
+[       OK ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey (4 ms)
+[ RUN      ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot
+[       OK ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot (10 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds
+[       OK ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds (5 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId (9 ms)
+[ RUN      ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections
+[       OK ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections (12 ms)
+[ RUN      ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes
+[       OK ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes (5 ms)
+[ RUN      ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots
+[       OK ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots (27 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions (9 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId (7 ms)
+[ RUN      ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid
+[       OK ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid (26 ms)
+[ RUN      ] SystemCatalogTest.TokenCardinalityRequiresCompletenessAndPreservesSnapshots
+[       OK ] SystemCatalogTest.TokenCardinalityRequiresCompletenessAndPreservesSnapshots (10 ms)
+[ RUN      ] SystemCatalogTest.TokenCardinalityRejectsInvalidCompletenessAndInactiveSessions
+[       OK ] SystemCatalogTest.TokenCardinalityRejectsInvalidCompletenessAndInactiveSessions (7 ms)
+[ RUN      ] SystemCatalogTest.CombinedPlanningEstimateRequiresCompleteCountsAndTotalsInItsSnapshot
+[       OK ] SystemCatalogTest.CombinedPlanningEstimateRequiresCompleteCountsAndTotalsInItsSnapshot (16 ms)
+[ RUN      ] SystemCatalogTest.BatchedGraphCountsStillRejectMissingAndInvalidBootstrap
+[       OK ] SystemCatalogTest.BatchedGraphCountsStillRejectMissingAndInvalidBootstrap (13 ms)
+[ RUN      ] SystemCatalogTest.BatchedTokenCountsDecodeOnlyWhenStatisticsAreComplete
+[       OK ] SystemCatalogTest.BatchedTokenCountsDecodeOnlyWhenStatisticsAreComplete (12 ms)
+[ RUN      ] SystemCatalogTest.TokenCountBatchRequiresSortedInputsAndRetainsCompletenessAndOldSnapshot
+[       OK ] SystemCatalogTest.TokenCountBatchRequiresSortedInputsAndRetainsCompletenessAndOldSnapshot (4 ms)
+[ RUN      ] SystemCatalogTest.SchemaNameBatchRetainsInputOrderKindBoundariesAndOldSnapshot
+[       OK ] SystemCatalogTest.SchemaNameBatchRetainsInputOrderKindBoundariesAndOldSnapshot (15 ms)
+[ RUN      ] SystemCatalogTest.CombinedPlanningEstimateSharesOneLeafAcrossAuthenticatedStatistics
+[       OK ] SystemCatalogTest.CombinedPlanningEstimateSharesOneLeafAcrossAuthenticatedStatistics (4 ms)
+[----------] 68 tests from SystemCatalogTest (526 ms total)
+
+[----------] 14 tests from NativeScalarIndexMutationPlannerTest
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RejectsMalformedDefinitionSetsAndResolverContracts
+[       OK ] NativeScalarIndexMutationPlannerTest.RejectsMalformedDefinitionSetsAndResolverContracts (2 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RejectsInvalidMutationInputsBeforeStagingAnyIndexOperation
+[       OK ] NativeScalarIndexMutationPlannerTest.RejectsInvalidMutationInputsBeforeStagingAnyIndexOperation (1 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.AppliesActiveIndexValidationOnlyWhenThePublishedDefinitionNeedsAnIndexKey
+[       OK ] NativeScalarIndexMutationPlannerTest.AppliesActiveIndexValidationOnlyWhenThePublishedDefinitionNeedsAnIndexKey (7 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RefreshesPublishedRootCacheAfterSnapshotGenerationChanges
+[       OK ] NativeScalarIndexMutationPlannerTest.RefreshesPublishedRootCacheAfterSnapshotGenerationChanges (7 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.SkipsActivePropertyIndexEntriesWhenTheResolvedValueCannotProduceACanonicalKey
+[       OK ] NativeScalarIndexMutationPlannerTest.SkipsActivePropertyIndexEntriesWhenTheResolvedValueCannotProduceACanonicalKey (4 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PropertyDeltaSkipsUnchangedCanonicalKeysAndRejectsInvalidOwners
+[       OK ] NativeScalarIndexMutationPlannerTest.PropertyDeltaSkipsUnchangedCanonicalKeysAndRejectsInvalidOwners (4 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PropertyDeltaMaintainsPartialMembershipAndPinnedOldIndex
+[       OK ] NativeScalarIndexMutationPlannerTest.PropertyDeltaMaintainsPartialMembershipAndPinnedOldIndex (13 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.ExecutorPreservesUnchangedPropertyAndLabelIndexRoots
+[       OK ] NativeScalarIndexMutationPlannerTest.ExecutorPreservesUnchangedPropertyAndLabelIndexRoots (17 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.NodeCompositeDeltaHandlesTypeChangesAndMissingFields
+[       OK ] NativeScalarIndexMutationPlannerTest.NodeCompositeDeltaHandlesTypeChangesAndMissingFields (12 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.EdgePropertyDeltaRemovesAnIndexedField
+[       OK ] NativeScalarIndexMutationPlannerTest.EdgePropertyDeltaRemovesAnIndexedField (9 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedPropertyDeltaVisitorSharesScalarAndCompositeKeyRulesWithoutWriting
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedPropertyDeltaVisitorSharesScalarAndCompositeKeyRulesWithoutWriting (8 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorPropagatesPreparationFailureWithoutPublication
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorPropagatesPreparationFailureWithoutPublication (5 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorRequiresDomainAndCallbackEvenWithoutDefinitions
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorRequiresDomainAndCallbackEvenWithoutDefinitions (2 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PublishedRootCacheRetainsItsAllocationOwnerOutsideTheConstructionScope
+[       OK ] NativeScalarIndexMutationPlannerTest.PublishedRootCacheRetainsItsAllocationOwnerOutsideTheConstructionScope (4 ms)
+[----------] 14 tests from NativeScalarIndexMutationPlannerTest (101 ms total)
+
+[----------] 24 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (101 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (19 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (18 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (80 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (251 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (11 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (143 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (23 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (15 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (518 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (159 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (126 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (28 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (125 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (366 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (152 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (152 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (131 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (127 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (318 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (135 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (123 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen (161 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteUntypedCountUnderflowRefusesMainOnlyPublication (128 ms)
+[----------] 24 tests from CoveredAdjacencyCandidateTest (3422 ms total)
+
+[----------] Global test environment tear-down
+[==========] 106 tests from 3 test suites ran. (4050 ms total)
+[  PASSED  ] 106 tests.

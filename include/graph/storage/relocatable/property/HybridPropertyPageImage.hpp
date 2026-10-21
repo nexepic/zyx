@@ -50,6 +50,7 @@ public:
         return HybridPropertyPageImage(page_.clone(), visibleGeneration, std::move(memory));
     }
     [[nodiscard]] PageId pageId() const { return page_.pageId(); }
+    [[nodiscard]] uint16_t liveSlotCount() const { return page_.stats().live_slot_count; }
     [[nodiscard]] Generation physicalPoolGeneration() const { return page_.pageGeneration(); }
     [[nodiscard]] SlottedPageStats stats() const { return page_.stats(); }
     [[nodiscard]] utils::OwnedVector<std::byte> serialize() const { return page_.serializeOwned(memory_); }

@@ -1,0 +1,23 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+/workspace/zyx/tests/src/storage/relocatable/adjacency/test_CoveredAdjacencyCandidate.cpp:610: Failure
+Expected equality of these values:
+  catalog.readTokenCardinality(erased, kind, 0)
+    Which is: (30)
+  std::optional<uint64_t>(29)
+    Which is: (29)
+
+[  FAILED  ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen (173 ms)
+[----------] 1 test from CoveredAdjacencyCandidateTest (173 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (173 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsCompleteUntypedCountsAcrossDeleteCreateAndReopen
+
+ 1 FAILED TEST

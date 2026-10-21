@@ -1,0 +1,214 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeScalarIndexMutationPlannerTest.*:NativeGraphWritePlannerTest.*:NativeGraphWritePlannerLeaseRecoveryTest.*:CoveredAdjacencyCandidateTest.*:RelocatableIndexKeyCodecTest.*
+[==========] Running 96 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease (4 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration (3 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption (10 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication (6 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication (6 ms)
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest (49 ms total)
+
+[----------] 14 tests from NativeScalarIndexMutationPlannerTest
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RejectsMalformedDefinitionSetsAndResolverContracts
+[       OK ] NativeScalarIndexMutationPlannerTest.RejectsMalformedDefinitionSetsAndResolverContracts (3 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RejectsInvalidMutationInputsBeforeStagingAnyIndexOperation
+[       OK ] NativeScalarIndexMutationPlannerTest.RejectsInvalidMutationInputsBeforeStagingAnyIndexOperation (2 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.AppliesActiveIndexValidationOnlyWhenThePublishedDefinitionNeedsAnIndexKey
+[       OK ] NativeScalarIndexMutationPlannerTest.AppliesActiveIndexValidationOnlyWhenThePublishedDefinitionNeedsAnIndexKey (9 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.RefreshesPublishedRootCacheAfterSnapshotGenerationChanges
+[       OK ] NativeScalarIndexMutationPlannerTest.RefreshesPublishedRootCacheAfterSnapshotGenerationChanges (8 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.SkipsActivePropertyIndexEntriesWhenTheResolvedValueCannotProduceACanonicalKey
+[       OK ] NativeScalarIndexMutationPlannerTest.SkipsActivePropertyIndexEntriesWhenTheResolvedValueCannotProduceACanonicalKey (5 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PropertyDeltaSkipsUnchangedCanonicalKeysAndRejectsInvalidOwners
+[       OK ] NativeScalarIndexMutationPlannerTest.PropertyDeltaSkipsUnchangedCanonicalKeysAndRejectsInvalidOwners (5 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PropertyDeltaMaintainsPartialMembershipAndPinnedOldIndex
+[       OK ] NativeScalarIndexMutationPlannerTest.PropertyDeltaMaintainsPartialMembershipAndPinnedOldIndex (15 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.ExecutorPreservesUnchangedPropertyAndLabelIndexRoots
+[       OK ] NativeScalarIndexMutationPlannerTest.ExecutorPreservesUnchangedPropertyAndLabelIndexRoots (18 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.NodeCompositeDeltaHandlesTypeChangesAndMissingFields
+[       OK ] NativeScalarIndexMutationPlannerTest.NodeCompositeDeltaHandlesTypeChangesAndMissingFields (14 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.EdgePropertyDeltaRemovesAnIndexedField
+[       OK ] NativeScalarIndexMutationPlannerTest.EdgePropertyDeltaRemovesAnIndexedField (11 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedPropertyDeltaVisitorSharesScalarAndCompositeKeyRulesWithoutWriting
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedPropertyDeltaVisitorSharesScalarAndCompositeKeyRulesWithoutWriting (9 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorPropagatesPreparationFailureWithoutPublication
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorPropagatesPreparationFailureWithoutPublication (5 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorRequiresDomainAndCallbackEvenWithoutDefinitions
+[       OK ] NativeScalarIndexMutationPlannerTest.BorrowedDeltaVisitorRequiresDomainAndCallbackEvenWithoutDefinitions (2 ms)
+[ RUN      ] NativeScalarIndexMutationPlannerTest.PublishedRootCacheRetainsItsAllocationOwnerOutsideTheConstructionScope
+[       OK ] NativeScalarIndexMutationPlannerTest.PublishedRootCacheRetainsItsAllocationOwnerOutsideTheConstructionScope (5 ms)
+[----------] 14 tests from NativeScalarIndexMutationPlannerTest (118 ms total)
+
+[----------] 6 tests from RelocatableIndexKeyCodecTest
+[ RUN      ] RelocatableIndexKeyCodecTest.PreservesScalarOrderingForAllSupportedTypes
+[       OK ] RelocatableIndexKeyCodecTest.PreservesScalarOrderingForAllSupportedTypes (0 ms)
+[ RUN      ] RelocatableIndexKeyCodecTest.EncodesCompositeValuesAndStableEntityIdSuffixes
+[       OK ] RelocatableIndexKeyCodecTest.EncodesCompositeValuesAndStableEntityIdSuffixes (0 ms)
+[ RUN      ] RelocatableIndexKeyCodecTest.RejectsUnsupportedOrNonCanonicalInputs
+[       OK ] RelocatableIndexKeyCodecTest.RejectsUnsupportedOrNonCanonicalInputs (0 ms)
+[ RUN      ] RelocatableIndexKeyCodecTest.DecodesOnlyCanonicalIntegerEntryValues
+[       OK ] RelocatableIndexKeyCodecTest.DecodesOnlyCanonicalIntegerEntryValues (0 ms)
+[ RUN      ] RelocatableIndexKeyCodecTest.BorrowedComponentsPreserveCanonicalCompositeBytesAndZeroNormalization
+[       OK ] RelocatableIndexKeyCodecTest.BorrowedComponentsPreserveCanonicalCompositeBytesAndZeroNormalization (0 ms)
+[ RUN      ] RelocatableIndexKeyCodecTest.BorrowedComponentsOmitOnlyOversizedKeysAndPropagateOtherCodecErrors
+[       OK ] RelocatableIndexKeyCodecTest.BorrowedComponentsOmitOnlyOversizedKeysAndPropagateOtherCodecErrors (0 ms)
+[----------] 6 tests from RelocatableIndexKeyCodecTest (0 ms total)
+
+[----------] 45 tests from NativeGraphWritePlannerTest
+[ RUN      ] NativeGraphWritePlannerTest.PublishesTopologyLabelsAndPropertiesInOneNativeGeneration
+[       OK ] NativeGraphWritePlannerTest.PublishesTopologyLabelsAndPropertiesInOneNativeGeneration (11 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ReopensTheGlobalAdjacencyTreeWithoutNodeRootFields
+[       OK ] NativeGraphWritePlannerTest.ReopensTheGlobalAdjacencyTreeWithoutNodeRootFields (25 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ExecutesLogicalBatchThroughNativePagesWithoutLegacyPropertyIds
+[       OK ] NativeGraphWritePlannerTest.ExecutesLogicalBatchThroughNativePagesWithoutLegacyPropertyIds (11 ms)
+[ RUN      ] NativeGraphWritePlannerTest.AppliesSparseCreatedEdgePropertyReplacementWithoutAResolvedEdgeBatch
+[       OK ] NativeGraphWritePlannerTest.AppliesSparseCreatedEdgePropertyReplacementWithoutAResolvedEdgeBatch (9 ms)
+[ RUN      ] NativeGraphWritePlannerTest.AllocatesSystemCatalogTokensWithTheNativeGraphPublication
+[       OK ] NativeGraphWritePlannerTest.AllocatesSystemCatalogTokensWithTheNativeGraphPublication (13 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ExecutesNativeFinalStateReplacementAndBoundedDetachDeletion
+[       OK ] NativeGraphWritePlannerTest.ExecutesNativeFinalStateReplacementAndBoundedDetachDeletion (19 ms)
+[ RUN      ] NativeGraphWritePlannerTest.MaintainsNativeScalarAndUniqueConstraintSupportTrees
+[       OK ] NativeGraphWritePlannerTest.MaintainsNativeScalarAndUniqueConstraintSupportTrees (30 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PreservesCancelledCreationReservationsAndRejectsStaleNativeFences
+[       OK ] NativeGraphWritePlannerTest.PreservesCancelledCreationReservationsAndRejectsStaleNativeFences (5 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ErasesGlobalAdjacencyAndOwnerKeyedPropertiesWithDeletion
+[       OK ] NativeGraphWritePlannerTest.ErasesGlobalAdjacencyAndOwnerKeyedPropertiesWithDeletion (14 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ReusesFreeSlotsInCurrentEntityPagesBeforeAppendingAnotherPage
+[       OK ] NativeGraphWritePlannerTest.ReusesFreeSlotsInCurrentEntityPagesBeforeAppendingAnotherPage (9 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesPropertyOnlyChangesWithoutRewritingTheNodePage
+[       OK ] NativeGraphWritePlannerTest.PublishesPropertyOnlyChangesWithoutRewritingTheNodePage (8 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RebasesDisjointLeasedNodeCreationsWithoutDuplicatingIds
+[       OK ] NativeGraphWritePlannerTest.RebasesDisjointLeasedNodeCreationsWithoutDuplicatingIds (8 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PersistsCancelledLogicalIdReservationsWithoutPlaceholderEntities
+[       OK ] NativeGraphWritePlannerTest.PersistsCancelledLogicalIdReservationsWithoutPlaceholderEntities (9 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RejectsAnOversizedLogicalIdReservationBeforeLeasingAnyIds
+[       OK ] NativeGraphWritePlannerTest.RejectsAnOversizedLogicalIdReservationBeforeLeasingAnyIds (2 ms)
+[ RUN      ] NativeGraphWritePlannerTest.KeepsConcurrentCancelledLeasesDurableAndNonReusable
+[       OK ] NativeGraphWritePlannerTest.KeepsConcurrentCancelledLeasesDurableAndNonReusable (7 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesLeadingAndTrailingReservedIdsAroundCreatedEntity
+[       OK ] NativeGraphWritePlannerTest.PublishesLeadingAndTrailingReservedIdsAroundCreatedEntity (6 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RecoversOldReservationGenerationWhenPublicationStopsBeforeWrite
+[       OK ] NativeGraphWritePlannerTest.RecoversOldReservationGenerationWhenPublicationStopsBeforeWrite (5 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RecoversNewReservationGenerationWhenPublicationStopsAfterWrite
+[       OK ] NativeGraphWritePlannerTest.RecoversNewReservationGenerationWhenPublicationStopsAfterWrite (5 ms)
+[ RUN      ] NativeGraphWritePlannerTest.EnumeratesTransactionLocalIncidentEdgesAfterAdjacencyRepair
+[       OK ] NativeGraphWritePlannerTest.EnumeratesTransactionLocalIncidentEdgesAfterAdjacencyRepair (14 ms)
+[ RUN      ] NativeGraphWritePlannerTest.BoundsTheCombinedIncomingAndOutgoingIncidentEdges
+[       OK ] NativeGraphWritePlannerTest.BoundsTheCombinedIncomingAndOutgoingIncidentEdges (9 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ReturnsLogicalContinuationWhenGlobalAdjacencyRangeIsBounded
+[       OK ] NativeGraphWritePlannerTest.ReturnsLogicalContinuationWhenGlobalAdjacencyRangeIsBounded (10 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PlacesInitialOverflowAndNodePageInOneFreshEntityPool
+[       OK ] NativeGraphWritePlannerTest.PlacesInitialOverflowAndNodePageInOneFreshEntityPool (5 ms)
+[ RUN      ] NativeGraphWritePlannerTest.GrowsExistingInlineLabelsWithoutConsumingSpeculativeIdentifiers
+[       OK ] NativeGraphWritePlannerTest.GrowsExistingInlineLabelsWithoutConsumingSpeculativeIdentifiers (8 ms)
+[ RUN      ] NativeGraphWritePlannerTest.MovesAnExpandedOverflowIntoAnotherLabelPageWithoutLosingPeers
+[       OK ] NativeGraphWritePlannerTest.MovesAnExpandedOverflowIntoAnotherLabelPageWithoutLosingPeers (13 ms)
+[ RUN      ] NativeGraphWritePlannerTest.BatchesInitialOverflowLabelsWithoutConflictingPageReplacements
+[       OK ] NativeGraphWritePlannerTest.BatchesInitialOverflowLabelsWithoutConflictingPageReplacements (10 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ErasesExactGlobalKeysWithoutRewritingPeerEdgesAcrossGenerations
+[       OK ] NativeGraphWritePlannerTest.ErasesExactGlobalKeysWithoutRewritingPeerEdgesAcrossGenerations (31 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesNativeDerivedIndexFramesWithOneSnapshotSafeGeneration
+[       OK ] NativeGraphWritePlannerTest.PublishesNativeDerivedIndexFramesWithOneSnapshotSafeGeneration (8 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesFreshDerivedIndexPoolAndRootPromotionAtomically
+[       OK ] NativeGraphWritePlannerTest.PublishesFreshDerivedIndexPoolAndRootPromotionAtomically (8 ms)
+[ RUN      ] NativeGraphWritePlannerTest.CreatesAbsentDerivedIndexRootInTheNativeGraphGeneration
+[       OK ] NativeGraphWritePlannerTest.CreatesAbsentDerivedIndexRootInTheNativeGraphGeneration (4 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesEntityAndDerivedIndexInOneSnapshotGeneration
+[       OK ] NativeGraphWritePlannerTest.PublishesEntityAndDerivedIndexInOneSnapshotGeneration (9 ms)
+[ RUN      ] NativeGraphWritePlannerTest.CreatesScalarIndexRootWithNativeGraphStateInOneGeneration
+[       OK ] NativeGraphWritePlannerTest.CreatesScalarIndexRootWithNativeGraphStateInOneGeneration (6 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesStreamingBulkScalarIndexPlanThroughNativeTransaction
+[       OK ] NativeGraphWritePlannerTest.PublishesStreamingBulkScalarIndexPlanThroughNativeTransaction (6 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RejectsAChangedStreamingBulkSourceBeforePublishingItsIndexRoot
+[       OK ] NativeGraphWritePlannerTest.RejectsAChangedStreamingBulkSourceBeforePublishingItsIndexRoot (3 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RejectsOtherStreamingBulkSecondPassMismatchesBeforePublication
+[       OK ] NativeGraphWritePlannerTest.RejectsOtherStreamingBulkSecondPassMismatchesBeforePublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RejectsANonMonotonicNativeBulkSecondPassAfterTheFirstLeafBoundary
+[       OK ] NativeGraphWritePlannerTest.RejectsANonMonotonicNativeBulkSecondPassAfterTheFirstLeafBoundary (3 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RecoversOldGenerationWhenInitialScalarIndexPublicationStopsBeforeSuperblock
+[       OK ] NativeGraphWritePlannerTest.RecoversOldGenerationWhenInitialScalarIndexPublicationStopsBeforeSuperblock (6 ms)
+[ RUN      ] NativeGraphWritePlannerTest.RecoversNewGenerationWhenInitialScalarIndexPublicationStopsAfterSuperblock
+[       OK ] NativeGraphWritePlannerTest.RecoversNewGenerationWhenInitialScalarIndexPublicationStopsAfterSuperblock (11 ms)
+[ RUN      ] NativeGraphWritePlannerTest.StagesScalarIndexMutationsWithNativeGraphWrites
+[       OK ] NativeGraphWritePlannerTest.StagesScalarIndexMutationsWithNativeGraphWrites (13 ms)
+[ RUN      ] NativeGraphWritePlannerTest.MaintainsNativeLabelTypeAndPropertyIndexesAcrossGraphLifecycle
+[       OK ] NativeGraphWritePlannerTest.MaintainsNativeLabelTypeAndPropertyIndexesAcrossGraphLifecycle (56 ms)
+[ RUN      ] NativeGraphWritePlannerTest.NativeScalarIndexPlannerRejectsMalformedInputAndDefersBuildPendingIndexes
+[       OK ] NativeGraphWritePlannerTest.NativeScalarIndexPlannerRejectsMalformedInputAndDefersBuildPendingIndexes (5 ms)
+[ RUN      ] NativeGraphWritePlannerTest.StagesNativeConstraintSupportTreeMutationsWithTheGraphGeneration
+[       OK ] NativeGraphWritePlannerTest.StagesNativeConstraintSupportTreeMutationsWithTheGraphGeneration (14 ms)
+[ RUN      ] NativeGraphWritePlannerTest.AdaptsOwnerKeyedNativePagesForSharedConstraintValidation
+[       OK ] NativeGraphWritePlannerTest.AdaptsOwnerKeyedNativePagesForSharedConstraintValidation (13 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesScalarIndexesIntoDistinctFramesOfOneSharedCurrentPool
+[       OK ] NativeGraphWritePlannerTest.PublishesScalarIndexesIntoDistinctFramesOfOneSharedCurrentPool (12 ms)
+[ RUN      ] NativeGraphWritePlannerTest.ReclaimsFramesBeforeSharingAConstrainedCurrentPool
+[       OK ] NativeGraphWritePlannerTest.ReclaimsFramesBeforeSharingAConstrainedCurrentPool (90 ms)
+[ RUN      ] NativeGraphWritePlannerTest.PublishesStructuralScalarIndexSplitThroughNativeTransaction
+[       OK ] NativeGraphWritePlannerTest.PublishesStructuralScalarIndexSplitThroughNativeTransaction (40 ms)
+[----------] 45 tests from NativeGraphWritePlannerTest (630 ms total)
+
+[----------] 22 tests from CoveredAdjacencyCandidateTest
+[ RUN      ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens
+[       OK ] CoveredAdjacencyCandidateTest.NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens (103 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans
+[       OK ] CoveredAdjacencyCandidateTest.ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans (21 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification
+[       OK ] CoveredAdjacencyCandidateTest.ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification (18 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections
+[       OK ] CoveredAdjacencyCandidateTest.InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections (84 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport (246 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound
+[       OK ] CoveredAdjacencyCandidateTest.AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound (11 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract (138 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums (24 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes
+[       OK ] CoveredAdjacencyCandidateTest.GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes (19 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot
+[       OK ] CoveredAdjacencyCandidateTest.TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot (542 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove
+[       OK ] CoveredAdjacencyCandidateTest.FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove (156 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry (126 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption (29 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing (124 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication
+[       OK ] CoveredAdjacencyCandidateTest.TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication (407 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics
+[       OK ] CoveredAdjacencyCandidateTest.PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics (154 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether
+[       OK ] CoveredAdjacencyCandidateTest.CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether (159 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount (132 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters (130 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle
+[       OK ] CoveredAdjacencyCandidateTest.CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle (269 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot
+[       OK ] CoveredAdjacencyCandidateTest.BalancedTypeChangesPreserveTheUnchangedCatalogRoot (134 ms)
+[ RUN      ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication
+[       OK ] CoveredAdjacencyCandidateTest.CompleteTypeCounterOverflowRefusesMainOnlyPublication (126 ms)
+[----------] 22 tests from CoveredAdjacencyCandidateTest (3165 ms total)
+
+[----------] Global test environment tear-down
+[==========] 96 tests from 5 test suites ran. (3964 ms total)
+[  PASSED  ] 96 tests.

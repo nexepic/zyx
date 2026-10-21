@@ -1,0 +1,23 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOrdinaryConversionTest.RemovingEveryColumn*:HybridPropertyOrdinaryConversionTest.FieldDemotionAB*:HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuota*
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow
+unknown file: Failure
+C++ exception with description "Entity Property read requires a present Property root" thrown in the test body.
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow (76 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration (744 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry (621 ms)
+[----------] 3 tests from HybridPropertyOrdinaryConversionTest (1442 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (1442 ms total)
+[  PASSED  ] 2 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow
+
+ 1 FAILED TEST

@@ -1,0 +1,39 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLogicalIdsTest.*
+[==========] Running 5 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 5 tests from HybridPropertyLogicalIdsTest
+[ RUN      ] HybridPropertyLogicalIdsTest.DefaultFormatRetainsOrdinaryLeaseContract
+[       OK ] HybridPropertyLogicalIdsTest.DefaultFormatRetainsOrdinaryLeaseContract (2 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.DurableLeasePreservesNativeFieldsGraphRootsAndOldPins
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLogicalIdsTest.DurableLeasePreservesNativeFieldsGraphRootsAndOldPins (31 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.CachedRangesAreSingleUseAndReopenSkipsUnissuedTails
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLogicalIdsTest.CachedRangesAreSingleUseAndReopenSkipsUnissuedTails (28 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLogicalIds.cpp:67: Failure
+Expected: (void)metadata_->reserveNativeGraphLogicalIds(2, 3, options) throws an exception of type BootstrapPublishInterrupted.
+  Actual: it throws graph::storage::FormatException with description "native hybrid candidate rejects unadapted writes and pool reconciliation".
+
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLogicalIdsTest.BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots (29 ms)
+[ RUN      ] HybridPropertyLogicalIdsTest.ReadOnlyLeaseRefusalAndGeneralWriterGuardRemain
+[       OK ] HybridPropertyLogicalIdsTest.ReadOnlyLeaseRefusalAndGeneralWriterGuardRemain (27 ms)
+[----------] 5 tests from HybridPropertyLogicalIdsTest (121 ms total)
+
+[----------] Global test environment tear-down
+[==========] 5 tests from 1 test suite ran. (121 ms total)
+[  PASSED  ] 2 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyLogicalIdsTest.DurableLeasePreservesNativeFieldsGraphRootsAndOldPins
+[  FAILED  ] HybridPropertyLogicalIdsTest.CachedRangesAreSingleUseAndReopenSkipsUnissuedTails
+[  FAILED  ] HybridPropertyLogicalIdsTest.BootstrapInterruptionCannotExposeDuplicateLeasesOrChangeNativeRoots
+
+ 3 FAILED TESTS

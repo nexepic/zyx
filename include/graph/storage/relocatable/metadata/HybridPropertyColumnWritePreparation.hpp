@@ -22,6 +22,7 @@ class HybridPropertyColumnWritePreparation final {
     struct Column {
         SlottedSlotReference reference, group_reference;
         HybridPropertyColumnRecord source, replacement;
+        uint64_t requested_slots = 0;
     };
     utils::OwnedVector<HybridPropertyPageImage> pages_;
     Generation source_generation_{}, next_generation_{};
@@ -44,7 +45,7 @@ public:
         ordered.reserve(changes.size());
         for (const auto *change : changes) {
             checkpoint();
-            require(change && change->databaseId() == snapshot.superblock().database_id &&
+            require(change && change->isValid() && change->databaseId() == snapshot.superblock().database_id &&
                 change->sourceGeneration() == source_generation_ && change->nextGeneration() == next_generation_,
                 "native column COW plan has a foreign or stale source fence");
             if (change->action() == HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD)
@@ -101,12 +102,16 @@ public:
             } else require(columns.back().source == change->sourceColumn() &&
                 columns.back().group_reference == change->groupReference(), "native column plans disagree about source bytes");
             auto &target = columns.back().replacement;
-            const auto slot = hybridPropertySlotFor(change->owner()); const auto bit = UINT64_C(1) << slot;
+            require(!(columns.back().requested_slots & change->requestedSlots()),
+                "native column plans overlap an owner/token");
+            columns.back().requested_slots |= change->requestedSlots();
+            const auto mask = change->changedSlots();
             const auto &replacement = change->replacementColumn();
             require(target.presence == replacement.presence && target.live == replacement.live,
                 "compatible native column change modifies membership or liveness");
-            target.nulls = (target.nulls & ~bit) | (replacement.nulls & bit);
-            target.words[slot] = replacement.words[slot];
+            target.nulls = (target.nulls & ~mask) | (replacement.nulls & mask);
+            for (unsigned slot = 0; slot < RSS_HYBRID_GROUP_CAPACITY; ++slot)
+                if (mask & (UINT64_C(1) << slot)) target.words[slot] = replacement.words[slot];
         }
         const auto groupFor = [&](const SlottedSlotReference &reference) -> const Group & {
             const auto found = std::lower_bound(groups.begin(), groups.end(), reference,

@@ -1,0 +1,47 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMultipleGroupsTest.*:HybridPropertyOrdinaryConversionTest.*Inverse*:HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+[==========] Running 13 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools (247 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout (226 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry (117 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator
+[       OK ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator (60 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue (62 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout (196 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCreatesANewOversizedRowCarrierAfterItsFieldsChange
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCreatesANewOversizedRowCarrierAfterItsFieldsChange (68 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:894: Failure
+Expected: run(conversion) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB (11937 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation
+[       OK ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation (358 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth (780 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse (365 ms)
+[----------] 11 tests from HybridPropertyOrdinaryConversionTest (14422 ms total)
+
+[----------] 2 tests from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (1 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots
+[       OK ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots (513 ms)
+[----------] 2 tests from HybridPropertyMultipleGroupsTest (515 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 2 test suites ran. (14937 ms total)
+[  PASSED  ] 12 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+
+ 1 FAILED TEST

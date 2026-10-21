@@ -1,0 +1,36 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyQueryParityTest.*Covered*:HybridPropertyQueryParityTest.Covered*:HybridPropertyIndexedLifecycleTest.Covered*
+[==========] Running 8 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults
+[       OK ] HybridPropertyQueryParityTest.ExplicitReadOnlyCoveredControlUsesSameExecutorAndPreservesDuplicateGatherResults (323 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesIncompleteCandidateInsteadOfFallingBack (249 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget
+[       OK ] HybridPropertyQueryParityTest.CoveredControlRefusesCrcValidWrongEndpointAndReturnsItsBudget (185 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+unknown file: Failure
+C++ exception with description "covered candidate continuation has foreign or invalid identity" thrown in the test body.
+
+[  FAILED  ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers (236 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks
+[       OK ] HybridPropertyQueryParityTest.CoveredBatchKeepsOrderTotalBoundAndVisitorStopWithoutSourceBufferLeaks (238 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts
+[       OK ] HybridPropertyQueryParityTest.CoveredControlSetupCancellationQuotaAndGraphBoundsRefundTheirAccounts (190 ms)
+[ RUN      ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend
+[       OK ] HybridPropertyQueryParityTest.CoveredReadControlDoesNotGrantAuthorityToAWritableBackend (212 ms)
+[----------] 7 tests from HybridPropertyQueryParityTest (1635 ms total)
+
+[----------] 1 test from HybridPropertyIndexedLifecycleTest
+[ RUN      ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot
+[       OK ] HybridPropertyIndexedLifecycleTest.CoveredReferenceControlAndHybridPropertiesShareTheSameExecutorSnapshot (1549 ms)
+[----------] 1 test from HybridPropertyIndexedLifecycleTest (1549 ms total)
+
+[----------] Global test environment tear-down
+[==========] 8 tests from 2 test suites ran. (3185 ms total)
+[  PASSED  ] 7 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyQueryParityTest.CoveredControlAuthenticatesExactContinuationsAndReturnsAdmittedBuffers
+
+ 1 FAILED TEST

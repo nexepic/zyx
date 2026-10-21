@@ -135,3 +135,25 @@ TEST(RelocatableIndexKeyCodecTest, DecodesOnlyCanonicalIntegerEntryValues) {
  EXPECT_THROW(static_cast<void>(IndexKeyCodec::decodeIntegerEntryValue(IndexKeyCodec::encodeValue(PropertyValue(int64_t(42))))), FormatException);
  EXPECT_THROW(static_cast<void>(IndexKeyCodec::decodeIntegerEntryValue(IndexKeyCodec::encodeEntryKey(PropertyValue(42.0), 7U))), FormatException);
 }
+
+TEST(RelocatableIndexKeyCodecTest, BorrowedComponentsPreserveCanonicalCompositeBytesAndZeroNormalization) {
+    const std::array values{PropertyValue(true), PropertyValue(int64_t(-7)), PropertyValue(-0.0), PropertyValue(std::string("a\0b", 3))};
+    const std::array<const PropertyValue *, 4> refs{&values[0], &values[1], &values[2], &values[3]};
+    EXPECT_EQ(IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(refs, 99), IndexKeyCodec::tryEncodeCompositeEntryKey(values, 99));
+    auto positive = values; positive[2] = PropertyValue(0.0);
+    EXPECT_EQ(IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(refs, 99), IndexKeyCodec::tryEncodeCompositeEntryKey(positive, 99));
+}
+TEST(RelocatableIndexKeyCodecTest, BorrowedComponentsOmitOnlyOversizedKeysAndPropagateOtherCodecErrors) {
+    const PropertyValue oversized(std::string(RSS_INDEX_KEY_MAX_BYTES + 1, 'x'));
+    const std::array<const PropertyValue *, 1> big{&oversized};
+    EXPECT_FALSE(IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(big, 1));
+    const PropertyValue invalid(std::numeric_limits<double>::quiet_NaN());
+    const std::array<const PropertyValue *, 1> nonfinite{&invalid};
+    EXPECT_THROW((void)IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(nonfinite, 1), FormatException);
+    const std::array<const PropertyValue *, 1> missing{nullptr};
+    EXPECT_THROW((void)IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(missing, 1), FormatException);
+    EXPECT_THROW((void)IndexKeyCodec::tryEncodeCompositeEntryKeyReferences({}, 1), FormatException);
+    const PropertyValue scalar(1);
+    const std::array<const PropertyValue *, 1> valid{&scalar};
+    EXPECT_THROW((void)IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(valid, 0), FormatException);
+}

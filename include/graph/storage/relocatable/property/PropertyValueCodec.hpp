@@ -51,6 +51,13 @@ namespace graph::storage {
             const std::function<void()> &checkpoint = {});
         [[nodiscard]] static DecodeShape inspectNext(std::span<const std::byte> bytes, size_t &offset,
             const std::function<void()> &checkpoint = {});
+        // Inspect exactly one immutable, authenticated range without retaining
+        // its complete bytes. The reader must fill the requested range or throw;
+        // it owns authentication, temporary-buffer admission and cancellation.
+        // Map ordering is compared in bounded blocks, without copying keys.
+        using RangeReader = std::function<void(size_t, std::span<std::byte>)>;
+        [[nodiscard]] static DecodeShape inspectRange(size_t encodedBytes, const RangeReader &read,
+            const std::function<void()> &checkpoint = {});
         // The caller owns its admission lifetime through the decoded value.
         // Input must remain stable and immutable across the callback.
         [[nodiscard]] static PropertyValue decodeNextWithAdmission(std::span<const std::byte> bytes,

@@ -12,6 +12,7 @@
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #include <algorithm>
+#include "graph/utils/OwnedHeapReservation.hpp"
 #include <bit>
 #include <functional>
 #include <limits>
@@ -572,6 +573,45 @@ namespace graph::storage {
 			throw;
 		}
 	}
+
+    bool AllocatorDirectory::visitAllocatedSlotsUntil(const Superblock &superblock, size_t maximumMetadataPages,
+        const std::function<bool(PhysicalSlotId)> &visitor, size_t *visitedMetadataPages) const {
+        size_t visited = 0;
+        if (visitedMetadataPages) *visitedMetadataPages = 0;
+        if (!visitor || !maximumMetadataPages) return false;
+        const auto chargePage = [&] {
+            if (visited == maximumMetadataPages) return false;
+            ++visited; if (visitedMetadataPages) *visitedMetadataPages = visited; return true;
+        };
+        const auto reference = allocatorRootReference(pages_, superblock);
+        if (!reference.isValid()) return true;
+        if (!chargePage()) return false;
+        const auto root = pages_.readMetadataRadix(reference, superblock);
+        validateRadix(root, true, root.level, superblock);
+        std::optional<utils::OwnedHeapReservation> frontier;
+        if (const auto memory = utils::OwnedAllocationScope::owner())
+            frontier.emplace(memory, (size_t(root.level) + 1U) * (sizeof(MetadataRadixPage) + 2U * RSS_PAGE_SIZE));
+        const auto walk = [&](auto &&self, const MetadataRadixPage &node, uint64_t base) -> bool {
+            const auto span = saturatedRadixPower(node.level);
+            for (size_t index = 0; index < node.children.size(); ++index) {
+                const auto child = node.children[index]; if (!child.isValid()) continue;
+                const auto ordinal = saturatedAdd(base, saturatedMultiply(index, span));
+                if (!chargePage()) return false;
+                if (node.level) {
+                    const auto next = pages_.readMetadataRadix(child, superblock);
+                    validateRadix(next, false, uint16_t(node.level - 1U), superblock);
+                    if (!self(self, next, ordinal)) return false;
+                } else {
+                    const auto leaf = pages_.readAllocatorLeaf(child); validateLeafRoute(leaf, ordinal, superblock);
+                    for (uint32_t offset = 0; offset < leaf.slot_count; ++offset)
+                        if ((std::to_integer<uint8_t>(leaf.allocated_slots[offset / 8U]) & (1U << (offset % 8U))) &&
+                            !visitor(PhysicalSlotId(leaf.first_slot.value() + offset))) return false;
+                }
+            }
+            return true;
+        };
+        return walk(walk, root, 0);
+    }
 
 	bool AllocatorDirectory::isAllocated(const Superblock &superblock, PhysicalSlotId slot) const {
 		SuperblockCodec::validate(superblock);

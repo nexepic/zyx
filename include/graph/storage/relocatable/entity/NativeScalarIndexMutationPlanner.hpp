@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
+#include "graph/core/PropertyTypes.hpp"
 
 namespace graph::storage {
 
@@ -63,6 +64,15 @@ namespace graph::storage {
 		void stagePropertyDelta(NativeGraphWriteTransaction &transaction, IndexDefinitionEntityKind ownerKind,
 			uint64_t ownerId, std::span<const uint64_t> oldLabels, const PropertyCollectionRoot &oldRoot,
 			std::span<const uint64_t> newLabels, const PropertyCollectionRoot &newRoot) const;
+        // Read-only preparation for metadata-owned atomic coordinators. Keys
+        // borrow temporary canonical buffers only during each callback. This
+        // grants no publication authority and never stages transaction state.
+        using PropertyDeltaVisitor = std::function<void(uint64_t indexId, std::span<const std::byte> key,
+            uint64_t ownerId, bool erase)>;
+        void visitPropertyDelta(const MetadataSnapshotPin &snapshot, IndexDefinitionEntityKind ownerKind,
+            uint64_t ownerId, std::span<const uint64_t> oldLabels, const PropertyCollectionRoot &oldRoot,
+            std::span<const uint64_t> newLabels, const PropertyCollectionRoot &newRoot,
+            const PropertyDeltaVisitor &visitor) const;
 		// UNIQUE and NODE KEY validation supplies canonical Property bytes rather
 		// than a lossy hash. The support-tree codec adds its bounded digest and
 		// EntityId suffix while preserving collision verification at read time.
@@ -71,9 +81,21 @@ namespace graph::storage {
 		void stageConstraintSupportErase(NativeGraphWriteTransaction &transaction, uint64_t constraintId,
 										 std::span<const std::byte> canonicalKey, uint64_t entityId) const;
 
+		[[nodiscard]] bool usesMetadataStore(const RelocatableMetadataStore &metadata) const noexcept { return &metadata_ == &metadata; }
+
 		[[nodiscard]] const std::vector<IndexDefinition> &definitions() const { return definitions_; }
 
 	private:
+        friend class RelocatableMetadataStore;
+        using PropertyValueLookup = std::function<const PropertyValue *(uint32_t)>;
+        void visitPropertyDeltaValues(const MetadataSnapshotPin &snapshot, IndexDefinitionEntityKind ownerKind,
+            uint64_t ownerId, std::span<const uint64_t> oldLabels, const PropertyValueLookup &oldValues,
+            std::span<const uint64_t> newLabels, const PropertyValueLookup &newValues,
+            const PropertyDeltaVisitor &visitor) const;
+        [[nodiscard]] std::optional<std::vector<std::byte>> propertyEntryKeyValues(const MetadataSnapshotPin &snapshot,
+            const IndexDefinition &definition, uint64_t ownerId, std::span<const uint64_t> nodeLabels,
+            const PropertyValueLookup &values) const;
+
 		[[nodiscard]] bool hasPublishedRoot(const MetadataSnapshotPin &snapshot, uint64_t indexId) const;
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																 std::string_view name) const;
@@ -89,7 +111,8 @@ namespace graph::storage {
 		// Index-root presence is immutable for a pinned metadata generation. The
 		// planner may stage thousands of entities against one snapshot, so retain
 		// the result of each root lookup and invalidate it on generation changes.
-		mutable std::unordered_map<uint64_t, bool> published_root_cache_;
+		mutable std::unordered_map<uint64_t, bool, std::hash<uint64_t>, std::equal_to<uint64_t>,
+            utils::OwnedPmrAllocator<std::pair<const uint64_t, bool>>> published_root_cache_;
 		mutable uint64_t published_root_cache_database_id_ = 0U;
 		mutable uint64_t published_root_cache_generation_ = 0U;
 	};

@@ -1,0 +1,90 @@
+{
+  "scope": [
+    "R3.2"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Explicit owned MERGE/REPLACE map staging schedules actual changes only; authenticated same-size extension COW overwrite preserves slot locators and avoids redundant directory publication.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 530,
+      "passed": 530,
+      "skipped": 0,
+      "binary_sha256": "850c0bae91ac6cfc228a0fb8e465439df031a46978585a0f1a2ebf951a820d09",
+      "build_directory": "/workspace/zyx/buildDir"
+    },
+    "candidate": {
+      "registered": 800,
+      "passed": 799,
+      "skipped": 1,
+      "binary_sha256": "28eab86426131108aa5c2b385eb4124ddb9222e6ac9c7b40e6794583ce0e0b4a",
+      "build_directory": "/workspace/zyx-build-work-candidate"
+    }
+  },
+  "limits": [
+    "Isolated format32 explicit prototype, production guards retained.",
+    "One64-ID group,64owners,4096input fields,64actual changed cells,1MiBaccount.",
+    "Schema/statistics/query-index/unknown-State/general-topology coordination, same-executor controls, R5/R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "ROW equality including signed zero and nested NaN; stored NULL versus missing.",
+    "Owned staged values, no-IO stage refusal, cancellation/retry, move/rollback and conservative conflicts.",
+    "Unchanged large content retains identity and local removal does not infer global retirement.",
+    "Preserve authenticated locator on bounded same-slot overwrite; growth can relocate; old pin and integrity remain valid.",
+    "48homogeneous extension members never auto promote."
+  ],
+  "admission": {
+    "fixed_minimum_saving_percent": 10,
+    "private_io_possible": true,
+    "pure_pre_io_predictor": false,
+    "production_adopted": false,
+    "metadata_owned_evidence_only": true
+  }
+}

@@ -1,0 +1,7 @@
+### 2026-10-21 R5.1: protocol / complete-lifecycle prototype acceptance
+
+The acceptance contract, explicit detection phases and resource/performance boundaries are in `benchmarks/architecture-design/decisions/20261021-r5-lifecycle-protocol/protocol-en.md`. Node-only create/relabel/delete coordinates counts without rewriting the candidate tree, while authenticating its existing root/first leaf and rejecting ordinary scalar roots or excessive changed entities. Last-Edge empty-root/recreation, four deterministic skewed insert/delete cycles with every Node/direction/type count, and same-executor multi-hop parallel-path multiplicity are covered. The initial Node-only refusal is retained.
+
+Final 56 related modules exclude only the independently frozen unaffected mature multi-group space case:897 default passes;1223 candidate passes / 1 conditional skip. Master records, both directions, type indexes/statistics, old pins, reopen, retirement/relocation, consistency detection and same-executor/overlay controls have evidence. R5.1 is accepted. **Total 14/24 (58.3%), one newly accepted item; commit and push to remote work under the user's progress rule.**
+
+This is not production admission. R3.2/R3.3 and R5.2/R5.3 remain, including ordinary writer hooks/persistent selection, final covering/shared-segment choice, complete resources/steady-state/costs/planning and final R7 performance/Kuzu comparison. No intermediate timing benchmark or full repository suite; candidate rejection does not shrink the denominator.

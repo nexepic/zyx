@@ -1,0 +1,6 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyInlineMutation.cpp:18:97: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   18 |             cells, std::move(memory), PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                                 ^
+1 warning generated.

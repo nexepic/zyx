@@ -835,4 +835,21 @@ namespace graph::storage {
 					 FormatException);
 	}
 
+
+    TEST(ConstraintMutationValidatorTest, BorrowedLocalValuesPreserveDraftDefinitionAndTypeSemantics) {
+        auto definition = nodeConstraint(0, ConstraintDefinitionKind::CDK_NOT_NULL, "draft", {"value"});
+        const PropertyValue integer(int64_t(1)), floating(1.0), nullValue;
+        const std::array<const PropertyValue *, 1> present{&integer}, missing{nullptr}, explicitNull{&nullValue}, wrong{&floating};
+        EXPECT_NO_THROW(ConstraintMutationValidator::validatePropertyValues(definition, present));
+        EXPECT_THROW(ConstraintMutationValidator::validatePropertyValues(definition, missing), std::runtime_error);
+        EXPECT_THROW(ConstraintMutationValidator::validatePropertyValues(definition, explicitNull), std::runtime_error);
+        EXPECT_THROW(ConstraintMutationValidator::validatePropertyValues(definition, {}), std::invalid_argument);
+        definition.kind = ConstraintDefinitionKind::CDK_PROPERTY_TYPE;
+        definition.property_type = ConstraintDefinitionPropertyType::CDPT_INTEGER;
+        EXPECT_NO_THROW(ConstraintMutationValidator::validatePropertyValues(definition, present));
+        EXPECT_NO_THROW(ConstraintMutationValidator::validatePropertyValues(definition, missing));
+        EXPECT_NO_THROW(ConstraintMutationValidator::validatePropertyValues(definition, explicitNull));
+        EXPECT_THROW(ConstraintMutationValidator::validatePropertyValues(definition, wrong), std::runtime_error);
+    }
+
 } // namespace graph::storage

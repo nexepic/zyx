@@ -176,6 +176,7 @@ namespace graph::storage {
 
 	private:
 		friend class BTreePageStore;
+        friend class HybridPropertyReadContext;
 		friend class TransactionBTreeOverlay;
 		friend class PropertyCollectionRootStore;
 		friend class StateRecordStore;

@@ -1,0 +1,371 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/tests/include -I/workspace/zyx/lib/inputxx/tests -I/workspace/zyx/apps/benchmark -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-work-candidate -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIE -Wall -Wextra -Wno-unused-parameter -DGTEST_HAS_PTHREAD=1 -MD -MT CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o -MF CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o.d -o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o -c /workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:42:86: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   42 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:97:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+   97 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:148:114: warning: missing field 'media_type' initializer [-Wmissing-field-initializers]
+  148 |     LargeValueWriteOptions options{PhysicalSlotId(40), PhysicalSlotId(80), PhysicalSlotId(40), PhysicalSlotId(80)};
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:45: error: redefinition of label 'gtest_label_testnothrow_260'
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:20:1: note: expanded from here
+   20 | gtest_label_testnothrow_260
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:5: note: previous definition is here
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:11:1: note: expanded from here
+   11 | gtest_label_testnothrow_260
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:45: error: cannot jump from this goto statement to its label
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1420:7: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1420 |       goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__);      \
+      |       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:5: note: jump bypasses variable initialization
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:45: error: cannot jump from this goto statement to its label
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1417:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1417 |     GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_()                           \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1402:5: note: expanded from macro 'GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_'
+ 1402 |     goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__); \
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:260:5: note: jump bypasses variable initialization
+  260 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:45: error: redefinition of label 'gtest_label_testnothrow_278'
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:48:1: note: expanded from here
+   48 | gtest_label_testnothrow_278
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:5: note: previous definition is here
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:39:1: note: expanded from here
+   39 | gtest_label_testnothrow_278
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:45: error: cannot jump from this goto statement to its label
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1420:7: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1420 |       goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__);      \
+      |       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:5: note: jump bypasses variable initialization
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:45: error: cannot jump from this goto statement to its label
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1417:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1417 |     GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_()                           \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1402:5: note: expanded from macro 'GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_'
+ 1402 |     goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__); \
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:278:5: note: jump bypasses variable initialization
+  278 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:45: error: redefinition of label 'gtest_label_testnothrow_303'
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:39:1: note: expanded from here
+   39 | gtest_label_testnothrow_303
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:5: note: previous definition is here
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1423:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1423 |     GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__)              \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:30:1: note: expanded from here
+   30 | gtest_label_testnothrow_303
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:45: error: cannot jump from this goto statement to its label
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1420:7: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1420 |       goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__);      \
+      |       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:5: note: jump bypasses variable initialization
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:45: error: cannot jump from this goto statement to its label
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |                                             ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1417:5: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1417 |     GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_()                           \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1402:5: note: expanded from macro 'GTEST_TEST_NO_THROW_CATCH_STD_EXCEPTION_'
+ 1402 |     goto GTEST_CONCAT_TOKEN_(gtest_label_testnothrow_, __LINE__); \
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp:303:5: note: jump bypasses variable initialization
+  303 |     ASSERT_NO_THROW(convert(NODE, memory)); ASSERT_NO_THROW(changeBothScalars(NODE, 999, memory));
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1800:3: note: expanded from macro 'ASSERT_NO_THROW'
+ 1800 |   GTEST_TEST_NO_THROW_(statement, GTEST_FATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1413:43: note: expanded from macro 'GTEST_TEST_NO_THROW_'
+ 1413 |   if (::testing::internal::TrueWithString gtest_msg{}) {                 \
+      |                                           ^
+3 warnings and 9 errors generated.
+[2/3] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:130:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  130 |     EXPECT_THROW(tx.commit(), std::runtime_error);
+      |                  ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:137:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  137 |     EXPECT_THROW(tx.commit(), FormatException);
+      |                  ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:566:86: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  566 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:840:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  840 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:969:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  969 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:997:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  997 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1018:66: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1018 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1052:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1052 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1087:71: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1087 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1221:71: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1221 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1314:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1314 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1333:85: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1333 |         removals, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1388:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1388 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1410:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1410 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1438:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1438 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1467:81: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1467 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1511:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1511 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1538:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1538 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1558:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1558 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1580:83: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1580 |         demote, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1602:106: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1602 |         std::span(duplicate).first(1), memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                                          ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1618:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1618 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1635:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1635 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1666:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1666 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1689:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1689 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1723:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1723 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1743:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1743 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1759:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1759 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1781:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1781 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1807:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1807 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1833:83: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1833 |         demote, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1856:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1856 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1879:85: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1879 |         demotion, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                     ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1886:81: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1886 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1928:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1928 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:22:16: warning: unused variable 'NODE' [-Wunused-const-variable]
+   22 | constexpr auto NODE = EntityPropertyOwnerKind::EPOK_NODE;
+      |                ^~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:23:16: warning: unused variable 'EDGE' [-Wunused-const-variable]
+   23 | constexpr auto EDGE = EntityPropertyOwnerKind::EPOK_EDGE;
+      |                ^~~~
+37 warnings generated.
+ninja: build stopped: subcommand failed.

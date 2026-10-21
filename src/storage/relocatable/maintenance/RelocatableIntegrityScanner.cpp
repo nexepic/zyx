@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
@@ -400,6 +401,19 @@ namespace graph::storage {
 		PhysicalSegmentAllocator extents(io_, metadata_);
 		LargeValueStore largeValues(io_, metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 		VectorCodebookStore codebooks(extents, metadata_);
+        std::optional<SlottedPagePool> hybridPages;
+        std::optional<HybridPropertyReadContext> hybrid;
+        std::shared_ptr<std::pmr::memory_resource> hybridMemory;
+        if (superblock.hybrid_property_descriptor_root.isValid()) {
+            hybridMemory = workspace_owner_ ? workspace_owner_ : utils::OwnedAllocationScope::owner();
+            // Preserve the scanner's existing legacy unbounded convention;
+            // explicit/scoped protected workspaces are retained verbatim.
+            if (!hybridMemory) hybridMemory = std::shared_ptr<std::pmr::memory_resource>(
+                std::pmr::get_default_resource(), [](auto *) {});
+            hybridPages.emplace(io_, metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+            hybrid.emplace(io_, *hybridPages, metadata_, snapshot);
+            static_cast<void>(HybridPropertyDirectoryIntegrity::verify(*hybrid, snapshot, hybridMemory, &largeValues));
+        }
 		ScanMap<uint64_t, ScannedPage> scannedPages;
 		ScanMap<uint64_t, VectorManifestLocation> scannedManifests;
 		ScanMap<uint64_t, VectorCodebookHeader> scannedCodebooks;
@@ -426,6 +440,17 @@ namespace graph::storage {
 				throwIntegrityError(
 						"relocatable integrity scan found a Page Directory target outside its current shared pool");
 			}
+            if (RSS_HYBRID_PROPERTY_FORMAT_ENABLED && catalogEntry->second.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                location.page_index >= RSS_PAGE_POOL_FIRST_DATA_FRAME && location.page_index <= RSS_PAGE_POOL_DATA_FRAME_COUNT &&
+                pages.readPageOwner(catalogEntry->second, uint8_t(location.page_index)).kind == PageOwnerKind::POK_HYBRID_PROPERTY) {
+                const auto owner = pages.readPageOwner(catalogEntry->second, uint8_t(location.page_index));
+                requireIntegrity(hybrid.has_value() && owner.flags == 0 && owner.page_id == location.page_id,
+                    "relocatable integrity scan found an unowned or retired hybrid field frame");
+                static_cast<void>(HybridPropertyDirectoryIntegrity::verifyPageOwnership(*hybrid, snapshot,
+                    location.page_id, hybridMemory, &largeValues));
+                ++report.page_locations;
+                return; // Native records have their own exact reverse ownership audit.
+            }
 			const SharedPagePoolContents contents = pages.read(snapshot, location.page_id);
 			const uint8_t invalidFrame =
 					static_cast<uint8_t>(contents.location != location) |

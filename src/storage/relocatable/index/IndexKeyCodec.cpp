@@ -140,17 +140,17 @@ namespace graph::storage {
 			return bytes;
 		}
 
-		[[nodiscard]] std::vector<std::byte> buildComposite(std::span<const PropertyValue> values) {
-			if (values.empty() || values.size() > RSS_INDEX_KEY_MAX_COMPONENTS) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable composite index key requires a bounded nonempty component sequence");
-			}
-			std::vector<std::byte> bytes;
-			for (const PropertyValue &value: values) {
-				appendValue(bytes, value);
-			}
-			return bytes;
-		}
+        template<class ValueAt>
+        [[nodiscard]] std::vector<std::byte> buildComposite(size_t count, ValueAt &&valueAt) {
+            if (!count || count > RSS_INDEX_KEY_MAX_COMPONENTS)
+                fail(FormatError::FERR_INVALID_HEADER, "relocatable composite index key requires a bounded nonempty component sequence");
+            std::vector<std::byte> bytes;
+            for (size_t i = 0; i < count; ++i) appendValue(bytes, valueAt(i));
+            return bytes;
+        }
+        [[nodiscard]] std::vector<std::byte> buildComposite(std::span<const PropertyValue> values) {
+            return buildComposite(values.size(), [&](size_t i) -> const PropertyValue & { return values[i]; });
+        }
 
 	} // namespace
 
@@ -184,6 +184,15 @@ namespace graph::storage {
 	IndexKeyCodec::tryEncodeCompositeEntryKey(std::span<const PropertyValue> values, uint64_t entityId) {
 		return tryBuildIndexKey([&] { return appendEntityId(buildComposite(values), entityId); });
 	}
+
+    std::optional<std::vector<std::byte>> IndexKeyCodec::tryEncodeCompositeEntryKeyReferences(
+        std::span<const PropertyValue *const> values, uint64_t entityId) {
+        for (const auto value : values)
+            if (!value) fail(FormatError::FERR_INVALID_HEADER, "relocatable composite index key has a null component reference");
+        return tryBuildIndexKey([&] {
+            return appendEntityId(buildComposite(values.size(), [&](size_t i) -> const PropertyValue & { return *values[i]; }), entityId);
+        });
+    }
 
 	std::vector<std::byte> IndexKeyCodec::lowerBound(const PropertyValue &value) {
 		return requireRepresentableIndexKey([&] { return appendEntityId(buildValue(value), 1U); });

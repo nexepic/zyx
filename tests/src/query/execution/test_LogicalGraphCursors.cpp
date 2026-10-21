@@ -261,6 +261,7 @@ namespace graph::query::execution {
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{9U, 11U}});
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 0U}});
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 10U}});
+		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 9U}});
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 11U}}, {1U, 1U});
 
 		CursorScript discontinuousScript;
@@ -293,5 +294,22 @@ namespace graph::query::execution {
 		emptyTerminal.open();
 		EXPECT_FALSE(emptyTerminal.next().has_value());
 	}
+
+    TEST(LogicalGraphAdjacencyCursorTest, InvalidContinuationDoesNotConsumeBudgetOrAdvanceTheCursor) {
+        CursorScript script;
+        script.adjacency_pages = {{{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 11U}},
+            {{edge(11U)}, storage::LogicalGraphAdjacencyContinuation{9U, 12U}},
+            {{edge(11U)}, storage::LogicalGraphAdjacencyContinuation{11U, 12U}},
+            {{edge(12U)}, std::nullopt}};
+        ScriptedCursorBackend backend(std::move(script));
+        LogicalGraphAdjacencyCursor cursor(backend, 1U, storage::LogicalGraphReadDirection::LGRD_OUTGOING, {1U, 3U});
+        cursor.open();
+        ASSERT_EQ(cursor.next()->edges.front().edge_id, 10U);
+        EXPECT_THROW(static_cast<void>(cursor.next()), std::runtime_error);
+        ASSERT_EQ(cursor.next()->edges.front().edge_id, 11U);
+        ASSERT_EQ(cursor.next()->edges.front().edge_id, 12U);
+        EXPECT_FALSE(cursor.next());
+        EXPECT_EQ(backend.snapshotOpens(), 1U);
+    }
 
 } // namespace graph::query::execution

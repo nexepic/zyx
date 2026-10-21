@@ -1,0 +1,48 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLargePublicationTest.*:EntityPropertyLargeValuePayloadCodecTest.Pmr*:HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+[==========] Running 12 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:846: Failure
+Failed
+unsupported ROW carrier published
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource (79 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (79 ms total)
+
+[----------] 8 tests from HybridPropertyLargePublicationTest
+[ RUN      ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex (148 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates
+[       OK ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates (176 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex (169 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable
+[       OK ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable (151 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia
+[       OK ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia (711 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.DetachedContentIndexPoolRetiresBehindPinsAndCanBeReleased
+[       OK ] HybridPropertyLargePublicationTest.DetachedContentIndexPoolRetiresBehindPinsAndCanBeReleased (145 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts (274 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries (154 ms)
+[----------] 8 tests from HybridPropertyLargePublicationTest (1932 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes (0 ms)
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 12 tests from 3 test suites ran. (2012 ms total)
+[  PASSED  ] 11 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+
+ 1 FAILED TEST

@@ -1,0 +1,242 @@
+{
+  "tests": 22,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-20T23:42:35Z",
+  "time": "3.247s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "CoveredAdjacencyCandidateTest",
+      "tests": 22,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-20T23:42:35Z",
+      "time": "3.247s",
+      "testsuite": [
+        {
+          "name": "NativeDoubleDirectionCreateDeleteRetainsOldPinsAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 69,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:35Z",
+          "time": "0.111s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "ContinuationsBindTheNativePinAndSeekHubRangesWithoutPrefixRescans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:35Z",
+          "time": "0.021s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "ValidChecksumsCannotHideAWrongLookaheadFromMainEdgeVerification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:35Z",
+          "time": "0.019s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "InterruptedNativePublicationRecoversMatchingMainAndBothCandidateDirections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:35Z",
+          "time": "0.086s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRequiresCompleteBoundedScansAndPublishesNoPartialReport",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 153,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.259s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "AuthoritativeEdgeCursorResumesAfterLogicalIdsUnderAnIndependentMetadataBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.012s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationFindsAMissingReverseEntryBeyondThePointReadContract",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 191,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.146s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRejectsAnOrphanWithValidNativeTreeChecksums",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 207,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.025s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "GlobalReconciliationRejectsDuplicateLogicalKeysWithDifferentSuffixes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 220,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.017s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "TypedRelocationRetainsOldPinsAndSafelyReusesTheReleasedSourceSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 233,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:36Z",
+          "time": "0.517s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "FinalStateCoordinatorMaintainsBothDirectionsAndSealsFurtherStagingAcrossMove",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 295,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.161s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorBoundQuotaAndCancellationRefuseBeforeStagingAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 316,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.129s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorRefusesAValidChecksumWrongOldDirectionWithoutMaskingCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 334,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.027s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorUsesFinalEdgeStateAndRefusesManualCandidateDeltaMixing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 353,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.129s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "TypeIndexAndCatalogStatisticsShareCoveredTopologyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.374s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "PartialBootstrapRetainsOldCoveredTypeIndexAndStatistics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 456,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:37Z",
+          "time": "0.156s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CompleteBootstrapRecoversCoveredTypeIndexAndStatisticsTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 459,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.16s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorPreservesUnknownTypeStatisticsAndUpdatesKnownGraphCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 462,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.207s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorRefusesCombinedEntityBoundAndInvalidCompleteCounters",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 481,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.13s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CoordinatorMaintainsNodeAndLabelCountsAcrossMixedTopologyLifecycle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 507,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.281s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "BalancedTypeChangesPreserveTheUnchangedCatalogRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.141s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        },
+        {
+          "name": "CompleteTypeCounterOverflowRefusesMainOnlyPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/adjacency\/test_CoveredAdjacencyCandidate.cpp",
+          "line": 567,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-20T23:42:38Z",
+          "time": "0.129s",
+          "classname": "CoveredAdjacencyCandidateTest"
+        }
+      ]
+    }
+  ]
+}

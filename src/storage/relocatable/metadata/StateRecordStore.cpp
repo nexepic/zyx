@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/metadata/StateRecordStore.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueMaintenanceJournal.hpp"
 
 #include <stdexcept>
 	#include <array>
@@ -77,8 +78,11 @@ namespace graph::storage {
 		return record;
 	}
 
-	StateLocation StateRecordStore::upsert(const StateRecord &record, const StateRecordStoreOptions &options) {
+	StateLocation StateRecordStore::upsert(const StateRecord &record, const StateRecordStoreOptions &options,
+            const MetadataPublishOptions &publishOptions) {
 		validateOptions(options);
+        if (record.key == RSS_NATIVE_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY)
+            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native maintenance evidence requires its private coordinator");
 		const std::vector<std::byte> encoded = StateRecordCodec::encode(record);
 		const uint32_t requiredBytes = minimumInsertBytes(encoded.size());
 		std::vector<SegmentId> pools;
@@ -128,7 +132,7 @@ namespace graph::storage {
 							pages_.prepareMutationPages(pool, expectedPages, replacements, noAppends, replacementPages,
 									noAppendPages, checkpointLsn);
 							replacement = replacementPages.front();
-						}));
+						}, publishOptions));
 				pages_.invalidateFreeSpaceIndex(expectedPage.segment_id);
 				return *existingLocation;
 			}
@@ -169,7 +173,7 @@ namespace graph::storage {
 							pages_.prepareMutationPages(pool, expectedPages, replacements, noAppends, replacementPages,
 																	 noAppendPages, checkpointLsn);
 							replacement = replacementPages.front();
-						}));
+						}, publishOptions));
 				pages_.invalidateFreeSpaceIndex(expectedPage.segment_id);
 				return location;
 			}
@@ -195,7 +199,7 @@ namespace graph::storage {
 										page.stats().contiguous_free_bytes};
 					stateLocation = {stateLocation.state_id, pageId, slot.slot_id, slot.generation};
 					pages_.prepareNewPoolPages(pool, prepared, std::span(&pageLocation, 1U), allocationLsn);
-				});
+				}, publishOptions);
 		if (!materialized.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable State record store has no free physical destination slot");

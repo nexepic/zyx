@@ -1,0 +1,31 @@
+{
+  "scope": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "accepted_before": 13,
+  "accepted_after": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "commit_push": false,
+  "tests": {
+    "default": {
+      "tests": 121,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "candidate": {
+      "tests": 135,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    }
+  },
+  "platform": "Linux x86_64",
+  "performance_runs_after_initial": 0,
+  "full_unit_suite": false
+}

@@ -1,0 +1,1028 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 453 tests from 19 test suites.
+[----------] Global test environment set-up.
+[----------] 72 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication
+[       OK ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication (14 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeTransactionStagesConversionWithoutEnablingItsUninstalledPublication
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeTransactionStagesConversionWithoutEnablingItsUninstalledPublication (7 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionMoveRollbackAndConcurrentPublicationRespectOwnership
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionMoveRollbackAndConcurrentPublicationRespectOwnership (16 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionRejectsInvalidAccountsAndMixedStagingBeforePublication
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionRejectsInvalidAccountsAndMixedStagingBeforePublication (7 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionEarlyCancellationRetainsAnUnpublishedActiveSourceForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionEarlyCancellationRetainsAnUnpublishedActiveSourceForRetry (13 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners
+[       OK ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners (93 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads
+[       OK ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads (4 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile
+[       OK ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile (11 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.PhysicalDestinationExhaustionRefundsAfterPartialPrivateBindingAndCanRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.PhysicalDestinationExhaustionRefundsAfterPartialPrivateBindingAndCanRetry (14 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CancellationAfterFinalRootPreparationRefundsEveryPrivateImageAndCanRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.CancellationAfterFinalRootPreparationRefundsEveryPrivateImageAndCanRetry (10 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount
+[       OK ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount (65 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource
+[       OK ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource (25 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource
+[       OK ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource (60 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RowConversionRejectsAnExistingDirectoryEvenWhenItsNewDirectoryWouldBeAbsent
+[       OK ] HybridPropertyOrdinaryConversionTest.RowConversionRejectsAnExistingDirectoryEvenWhenItsNewDirectoryWouldBeAbsent (25 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit
+[       OK ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit (10 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing (14 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal
+[       OK ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal (28 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExplicitCandidateCommitPublishesRealFieldsAndRowAuthorityAtomically
+[       OK ] HybridPropertyOrdinaryConversionTest.ExplicitCandidateCommitPublishesRealFieldsAndRowAuthorityAtomically (229 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExplicitSparseCandidateInstallsExtensionRoutesAndPreservesOldPins
+[       OK ] HybridPropertyOrdinaryConversionTest.ExplicitSparseCandidateInstallsExtensionRoutesAndPreservesOldPins (169 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateABRecoverySelectsMatchingDescriptorMapsAndRowAuthority
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateABRecoverySelectsMatchingDescriptorMapsAndRowAuthority (19 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CancellationAfterWritingOneCandidatePoolKeepsRowAuthorityAndRetries
+[       OK ] HybridPropertyOrdinaryConversionTest.CancellationAfterWritingOneCandidatePoolKeepsRowAuthorityAndRetries (26 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldButRejectsFreshUnindexedValues
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldButRejectsFreshUnindexedValues (186 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateRowPageCowPreservesAnUnconvertedOwnerInTheSameSourcePage
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateRowPageCowPreservesAnUnconvertedOwnerInTheSameSourcePage (203 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateCanPublishAPropertylessLiveGroupWithoutEmptyFieldTrees
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateCanPublishAPropertylessLiveGroupWithoutEmptyFieldTrees (69 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.GlobalAuditRejectsChecksummedCandidateNamespaceSubstitutionAndRefunds
+[       OK ] HybridPropertyOrdinaryConversionTest.GlobalAuditRejectsChecksummedCandidateNamespaceSubstitutionAndRefunds (123 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools (240 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout (260 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry (164 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator
+[       OK ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator (76 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue (75 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.PropertylessGroupCanReturnToRowAndCommitOrdinaryWrites
+[       OK ] HybridPropertyOrdinaryConversionTest.PropertylessGroupCanReturnToRowAndCommitOrdinaryWrites (41 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout (228 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseRefusesUnsupportedOversizedRowCarriersBeforeMutatingItsSource (164 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableRowHybridRowRoundTripPreservesNullSignedZeroAndNaNPayload
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableRowHybridRowRoundTripPreservesNullSignedZeroAndNaNPayload (179 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+[       OK ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB (8897 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ForwardDropsEmptyRowMappingsAndQueuesTheDetachedPoolWithoutTouchingOldPins
+[       OK ] HybridPropertyOrdinaryConversionTest.ForwardDropsEmptyRowMappingsAndQueuesTheDetachedPoolWithoutTouchingOldPins (349 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ForwardCannotRetireASourcePoolContainingAnUntouchedCurrentPage
+[       OK ] HybridPropertyOrdinaryConversionTest.ForwardCannotRetireASourcePoolContainingAnUntouchedCurrentPage (753 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableColumnChangesKeepDirectoryRootsAndOldSnapshotsWithoutRebuildingOtherFields
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableColumnChangesKeepDirectoryRootsAndOldSnapshotsWithoutRebuildingOtherFields (179 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnNoopAndInvalidOrOverlappingWritesLeaveTheSourceUnchanged
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnNoopAndInvalidOrOverlappingWritesLeaveTheSourceUnchanged (32 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnQuotaAndPostFrameCancellationRefundAndRetryWithoutHalfPublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnQuotaAndPostFrameCancellationRefundAndRetryWithoutHalfPublishing (309 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnABRecoverySelectsCompleteNewCellsOrTheCompleteSource
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnABRecoverySelectsCompleteNewCellsOrTheCompleteSource (318 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RepeatedConversionAndColumnWritesRetireAndReusePoolsAfterSnapshotDrain
+[       OK ] HybridPropertyOrdinaryConversionTest.RepeatedConversionAndColumnWritesRetireAndReusePoolsAfterSnapshotDrain (649 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnTransactionOwnsMovedCellsAndConflictsWithoutLeakingTheAccount
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnTransactionOwnsMovedCellsAndConflictsWithoutLeakingTheAccount (171 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnStagingFailureRollbackAndEarlyCancellationRetainTheirContracts
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnStagingFailureRollbackAndEarlyCancellationRetainTheirContracts (32 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation
+[       OK ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation (362 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth (770 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseABRecoveryPreservesCellsAndOneCompleteAllocatorQueueState
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseABRecoveryPreservesCellsAndOneCompleteAllocatorQueueState (307 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseRejectsStaleDuplicateAndDamagedSourceIdentitiesBeforePublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseRejectsStaleDuplicateAndDamagedSourceIdentitiesBeforePublishing (168 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableFieldRemovalPublishesDemotionDirectoriesAndMixedColumnWritesTogether
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableFieldRemovalPublishesDemotionDirectoriesAndMixedColumnWritesTogether (379 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.TwoOwnerRemovalsMergeBeforeThresholdAndOnlyLaterDemoteTheColumn
+[       OK ] HybridPropertyOrdinaryConversionTest.TwoOwnerRemovalsMergeBeforeThresholdAndOnlyLaterDemoteTheColumn (434 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse (365 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldRemovalChangesOnlyItsActualFieldPagesAndDirectoryPath
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldRemovalChangesOnlyItsActualFieldPagesAndDirectoryPath (1271 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow
+[       OK ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow (196 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration (731 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry (619 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableDemotionPreservesNullSignedZeroAndTheExactNanPayload
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableDemotionPreservesNullSignedZeroAndTheExactNanPayload (339 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.EdgeFieldDemotionPreservesTheMainEdgeAndGlobalAdjacencyAuthority
+[       OK ] HybridPropertyOrdinaryConversionTest.EdgeFieldDemotionPreservesTheMainEdgeAndGlobalAdjacencyAuthority (403 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExistingInlineExtensionsUpdateAndDeleteWithoutChangingOwnerLiveness
+[       OK ] HybridPropertyOrdinaryConversionTest.ExistingInlineExtensionsUpdateAndDeleteWithoutChangingOwnerLiveness (207 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineAndColumnEditsShareOneAtomicFinalGroupAfterDemotion
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineAndColumnEditsShareOneAtomicFinalGroupAfterDemotion (572 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineNoopDuplicateAndDeadOwnerRequestsNeverWriteData
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineNoopDuplicateAndDeadOwnerRequestsNeverWriteData (17 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RemovingEveryInlineFieldLeavesLiveOwnersAndErasesBothFieldMaps
+[       OK ] HybridPropertyOrdinaryConversionTest.RemovingEveryInlineFieldLeavesLiveOwnersAndErasesBothFieldMaps (97 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineMutationABRecoveryKeepsCompleteFieldAndLocatorGenerations
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineMutationABRecoveryKeepsCompleteFieldAndLocatorGenerations (244 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineGrowthRebindsLocatorsAndPreservesOldNullFields
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineGrowthRebindsLocatorsAndPreservesOldNullFields (512 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineMutationCancellationRefundsAndNativeTransactionRetries
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineMutationCancellationRefundsAndNativeTransactionRetries (137 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MissingColumnInsertionAndRemovalMergeBeforeTheFinalThreshold
+[       OK ] HybridPropertyOrdinaryConversionTest.MissingColumnInsertionAndRemovalMergeBeforeTheFinalThreshold (473 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MissingIncompatibleColumnMemberDemotesAllFinalMembers
+[       OK ] HybridPropertyOrdinaryConversionTest.MissingIncompatibleColumnMemberDemotesAllFinalMembers (411 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.EmptyLiveGroupCreatesItsFirstFieldMapsAndMissingEraseIsNoop
+[       OK ] HybridPropertyOrdinaryConversionTest.EmptyLiveGroupCreatesItsFirstFieldMapsAndMissingEraseIsNoop (137 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NewDenseFieldPromotionABRecoveryPreservesExactDoubleBits
+[       OK ] HybridPropertyOrdinaryConversionTest.NewDenseFieldPromotionABRecoveryPreservesExactDoubleBits (356 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.SparseFieldPromotesAt48AndSupportsInverseConversion
+[       OK ] HybridPropertyOrdinaryConversionTest.SparseFieldPromotesAt48AndSupportsInverseConversion (370 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.TwoTokensPromoteTogetherAfterFixingTheOnlyIncompatibleExtension
+[       OK ] HybridPropertyOrdinaryConversionTest.TwoTokensPromoteTogetherAfterFixingTheOnlyIncompatibleExtension (539 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.AllNullExtensionsWaitForAnInferredScalarTypeBeforePromotion
+[       OK ] HybridPropertyOrdinaryConversionTest.AllNullExtensionsWaitForAnInferredScalarTypeBeforePromotion (323 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.PromotionQuotaAndCancellationLeaveAnAtomicRetryableSource
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1933: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type graph::query::execution::MaterializedByteLimitExceeded.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1934: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 337
+  epoch
+    Which is: 187
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1943: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1945: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1945: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 15-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 06-00 00-00 00-00 00-00 0A-00 00-00 00-00 00-00 31-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 04-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 31-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1943: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1945: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1945: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 15-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 ... 06-00 00-00 00-00 00-00 0A-00 00-00 00-00 00-00 31-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 10-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 04-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 31-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1947: Failure
+Expected: (io_->dataMutationEpoch()) > (epoch), actual: 337 vs 337
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1950: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.PromotionQuotaAndCancellationLeaveAnAtomicRetryableSource (64 ms)
+[----------] 72 tests from HybridPropertyOrdinaryConversionTest (25393 ms total)
+
+[----------] 12 tests from HybridPropertyDescriptorStoreTest
+[ RUN      ] HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp:87: Skipped
+checked by the default format build
+
+[  SKIPPED ] HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots (1 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged
+[       OK ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged (1 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected
+[       OK ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected (1 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting
+[       OK ] HybridPropertyDescriptorStoreTest.NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting (7 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity
+[       OK ] HybridPropertyDescriptorStoreTest.DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity (9 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot
+[       OK ] HybridPropertyDescriptorStoreTest.ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot (7 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration
+[       OK ] HybridPropertyDescriptorStoreTest.EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration (14 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NonemptyUninstalledRootsRejectBeforeFrameAllocation
+[       OK ] HybridPropertyDescriptorStoreTest.NonemptyUninstalledRootsRejectBeforeFrameAllocation (2 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance
+[       OK ] HybridPropertyDescriptorStoreTest.DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance (3 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen
+[       OK ] HybridPropertyDescriptorStoreTest.ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen (3 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry
+[       OK ] HybridPropertyDescriptorStoreTest.SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry (2 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState
+[       OK ] HybridPropertyDescriptorStoreTest.NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState (19 ms)
+[----------] 12 tests from HybridPropertyDescriptorStoreTest (76 ms total)
+
+[----------] 15 tests from HybridPropertyGraphPublicationTest
+[ RUN      ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication
+[       OK ] HybridPropertyGraphPublicationTest.FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication (3 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation
+[       OK ] HybridPropertyGraphPublicationTest.InvalidRequestsRejectBeforeAnyDerivedPagePreparation (3 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.OrdinaryScalarStagingCannotClaimAnyReservedFieldNamespace
+[       OK ] HybridPropertyGraphPublicationTest.OrdinaryScalarStagingCannotClaimAnyReservedFieldNamespace (2 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility
+[       OK ] HybridPropertyGraphPublicationTest.TreePoolEpochAuthenticatesExactlyAndIsIndependentOfMetadataVisibility (6 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.DescriptorNamespaceCannotBindAnotherRoleOrAnOrdinaryIndexBeforePreparation
+[       OK ] HybridPropertyGraphPublicationTest.DescriptorNamespaceCannotBindAnotherRoleOrAnOrdinaryIndexBeforePreparation (4 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.OrdinaryIndexDataAndDescriptorPublishInOneGenerationAndOldPinSurvives
+[       OK ] HybridPropertyGraphPublicationTest.OrdinaryIndexDataAndDescriptorPublishInOneGenerationAndOldPinSurvives (8 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.ClearSharesThePublicationAndOldDescriptorRemainsReadable
+[       OK ] HybridPropertyGraphPublicationTest.ClearSharesThePublicationAndOldDescriptorRemainsReadable (9 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.WrongDatabaseOrStaleRootFencesBeforePreparingGraphData
+[       OK ] HybridPropertyGraphPublicationTest.WrongDatabaseOrStaleRootFencesBeforePreparingGraphData (3 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.UninstalledNonemptyRootsAbortAlreadyPreparedDataWithoutPublishingIt
+[       OK ] HybridPropertyGraphPublicationTest.UninstalledNonemptyRootsAbortAlreadyPreparedDataWithoutPublishingIt (7 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.MissingRetainedTreeFailsClosedWithoutManufacturingDescriptorReferences
+[       OK ] HybridPropertyGraphPublicationTest.MissingRetainedTreeFailsClosedWithoutManufacturingDescriptorReferences (2 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.RetainedRootResolvesButNonemptyRoutingStillCannotBePublished
+[       OK ] HybridPropertyGraphPublicationTest.RetainedRootResolvesButNonemptyRoutingStillCannotBePublished (5 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.DescriptorCannotBindATreeRetiredByTheSameCandidate
+[       OK ] HybridPropertyGraphPublicationTest.DescriptorCannotBindATreeRetiredByTheSameCandidate (10 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.WriterAuthenticatesTheExpectedOldRootBeforePreparingUnrelatedData
+[       OK ] HybridPropertyGraphPublicationTest.WriterAuthenticatesTheExpectedOldRootBeforePreparingUnrelatedData (5 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.EachBootstrapInterruptionRecoversACompleteDataAndDescriptorPair
+[       OK ] HybridPropertyGraphPublicationTest.EachBootstrapInterruptionRecoversACompleteDataAndDescriptorPair (13 ms)
+[ RUN      ] HybridPropertyGraphPublicationTest.EmptyDescriptorKeepsActualRowBatchAndCursorContracts
+[       OK ] HybridPropertyGraphPublicationTest.EmptyDescriptorKeepsActualRowBatchAndCursorContracts (7 ms)
+[----------] 15 tests from HybridPropertyGraphPublicationTest (95 ms total)
+
+[----------] 8 tests from HybridPropertyPageBindingTest
+[ RUN      ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat
+[       OK ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal
+[       OK ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.MixedNodeAndEdgeFieldsBindAsOneTypedFrameAndRetainSemanticVisibility
+[       OK ] HybridPropertyPageBindingTest.MixedNodeAndEdgeFieldsBindAsOneTypedFrameAndRetainSemanticVisibility (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.BorrowedFieldReadsNeedNoAdditionalQuotaAndPreserveExactScalarBits
+[       OK ] HybridPropertyPageBindingTest.BorrowedFieldReadsNeedNoAdditionalQuotaAndPreserveExactScalarBits (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.BadPoolOwnerGenerationLsnAndRoleRejectBeforeChangingThePrivateImage
+[       OK ] HybridPropertyPageBindingTest.BadPoolOwnerGenerationLsnAndRoleRejectBeforeChangingThePrivateImage (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.ValidSlottedCrcDoesNotAuthorizeUnknownOrFutureRecordPayloads
+[       OK ] HybridPropertyPageBindingTest.ValidSlottedCrcDoesNotAuthorizeUnknownOrFutureRecordPayloads (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.BindingQuotaRefusalRefundsItsEnumerationAndPreservesRetry
+[       OK ] HybridPropertyPageBindingTest.BindingQuotaRefusalRefundsItsEnumerationAndPreservesRetry (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.LargeReferenceBindingRequiresRetainedAdmissionAndRefundsBeforeRetry
+[       OK ] HybridPropertyPageBindingTest.LargeReferenceBindingRequiresRetainedAdmissionAndRefundsBeforeRetry (0 ms)
+[----------] 8 tests from HybridPropertyPageBindingTest (1 ms total)
+
+[----------] 1 test from HybridPropertyPublicationGuardTest
+[ RUN      ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation
+[       OK ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation (2 ms)
+[----------] 1 test from HybridPropertyPublicationGuardTest (2 ms total)
+
+[----------] 4 tests from HybridPropertyPhysicalReaderTest
+[ RUN      ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit
+[       OK ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit (3 ms)
+[ RUN      ] HybridPropertyPhysicalReaderTest.ActualDirectoryAndPoolRouteSupportsOwnedFallbackPinAndMove
+[       OK ] HybridPropertyPhysicalReaderTest.ActualDirectoryAndPoolRouteSupportsOwnedFallbackPinAndMove (3 ms)
+[ RUN      ] HybridPropertyPhysicalReaderTest.OwnedFallbackRetainsItsAllocationAndRefusalAllowsRetry
+[       OK ] HybridPropertyPhysicalReaderTest.OwnedFallbackRetainsItsAllocationAndRefusalAllowsRetry (3 ms)
+[ RUN      ] HybridPropertyPhysicalReaderTest.ValidChecksumsDoNotAuthorizeForeignOwnerPageEpochOrFutureLsn
+[       OK ] HybridPropertyPhysicalReaderTest.ValidChecksumsDoNotAuthorizeForeignOwnerPageEpochOrFutureLsn (6 ms)
+[----------] 4 tests from HybridPropertyPhysicalReaderTest (17 ms total)
+
+[----------] 56 tests from HybridPropertyReadContextTest
+[ RUN      ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime
+[       OK ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime (1 ms)
+[ RUN      ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext
+[       OK ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext (4 ms)
+[ RUN      ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot
+[       OK ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot (2 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource (1 ms)
+[ RUN      ] HybridPropertyReadContextTest.CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions
+[       OK ] HybridPropertyReadContextTest.CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions (23 ms)
+[ RUN      ] HybridPropertyReadContextTest.OwningCompatibilityDecodeRetainsCallerOutputCreditAndRefundsTemporaries
+[       OK ] HybridPropertyReadContextTest.OwningCompatibilityDecodeRetainsCallerOutputCreditAndRefundsTemporaries (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.IndependentLargeFieldAuthenticatesContentAndRetainsOnlyOutputCredit
+[       OK ] HybridPropertyReadContextTest.IndependentLargeFieldAuthenticatesContentAndRetainsOnlyOutputCredit (28 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeRowLargeCarrierWithValidManifestAndHashStillFailsSingleFieldDecode
+[       OK ] HybridPropertyReadContextTest.WholeRowLargeCarrierWithValidManifestAndHashStillFailsSingleFieldDecode (27 ms)
+[ RUN      ] HybridPropertyReadContextTest.MembershipCountsTokensAndPresenceDoNotDecodePropertyValues
+[       OK ] HybridPropertyReadContextTest.MembershipCountsTokensAndPresenceDoNotDecodePropertyValues (25 ms)
+[ RUN      ] HybridPropertyReadContextTest.LargeNonNullProjectionAuthenticatesWithoutMaterializingTheValueTree
+[       OK ] HybridPropertyReadContextTest.LargeNonNullProjectionAuthenticatesWithoutMaterializingTheValueTree (28 ms)
+[ RUN      ] HybridPropertyReadContextTest.MissingSourceAndCompetingRowFailClosed
+[       OK ] HybridPropertyReadContextTest.MissingSourceAndCompetingRowFailClosed (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage
+[       OK ] HybridPropertyReadContextTest.FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage (25 ms)
+[ RUN      ] HybridPropertyReadContextTest.FullCollectionLargeAdmissionDoesNotAllocateDecodedValues
+[       OK ] HybridPropertyReadContextTest.FullCollectionLargeAdmissionDoesNotAllocateDecodedValues (28 ms)
+[ RUN      ] HybridPropertyReadContextTest.SelectedBatchPreservesRowPositionsCountsNullsAndSinkOrdinals
+[       OK ] HybridPropertyReadContextTest.SelectedBatchPreservesRowPositionsCountsNullsAndSinkOrdinals (35 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeScalarBatchBypassesOwningValuesAndRefundsOnRefusalAndRetry
+[       OK ] HybridPropertyReadContextTest.NativeScalarBatchBypassesOwningValuesAndRefundsOnRefusalAndRetry (23 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawBoolColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawBoolColumnPreservesAuthenticatedBitsWithoutOwningValues (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawDoubleNaNColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawDoubleNaNColumnPreservesAuthenticatedBitsWithoutOwningValues (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawDoubleNegativeZeroColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawDoubleNegativeZeroColumnPreservesAuthenticatedBitsWithoutOwningValues (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.SelectedOnlyBatchDoesNotEnumerateUnrequestedFieldMemberships
+[       OK ] HybridPropertyReadContextTest.SelectedOnlyBatchDoesNotEnumerateUnrequestedFieldMemberships (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaUsesActualNativeSourceAndRetainsOnlyItsBoundedPlan
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaUsesActualNativeSourceAndRetainsOnlyItsBoundedPlan (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaDemotesOnlyTheChangedFieldAndReportsGroupEffects
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaDemotesOnlyTheChangedFieldAndReportsGroupEffects (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaKeepsRowDoubleNoopRulesAndExactReplacementBits
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaKeepsRowDoubleNoopRulesAndExactReplacementBits (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.EqualNanColumnBitsStillRequireAChange
+[       OK ] HybridPropertyReadContextTest.EqualNanColumnBitsStillRequireAChange (20 ms)
+[ RUN      ] HybridPropertyReadContextTest.CompatibleColumnWritesCoalesceOwnersAndGroupIntoOneActualPrivateFrame
+[       OK ] HybridPropertyReadContextTest.CompatibleColumnWritesCoalesceOwnersAndGroupIntoOneActualPrivateFrame (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeColumnCowQuotaAndLateCancellationRefundImagesForRetry
+[       OK ] HybridPropertyReadContextTest.NativeColumnCowQuotaAndLateCancellationRefundImagesForRetry (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityStreamsActualOwnershipWithoutDecodingValues
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityStreamsActualOwnershipWithoutDecodingValues (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsValidlyEncodedWrongGroupCounts
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsValidlyEncodedWrongGroupCounts (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsSelectorWithoutBodyEvenWhenHeaderCountMatches
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsSelectorWithoutBodyEvenWhenHeaderCountMatches (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsColumnDirectoryOutsideRegisteredGroups
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsColumnDirectoryOutsideRegisteredGroups (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityAuthenticatesSingleLargeBodyWithoutOwningValueDecode
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityAuthenticatesSingleLargeBodyWithoutOwningValueDecode (96 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsAuthenticatedWholeRowLargeCarrier
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsAuthenticatedWholeRowLargeCarrier (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody (143 ms)
+[ RUN      ] HybridPropertyReadContextTest.LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry
+[       OK ] HybridPropertyReadContextTest.LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry (133 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess (59 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateGroupSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateGroupSlot (59 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateColumnSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateColumnSlot (59 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateExtensionSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateExtensionSlot (59 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsStaleFreeHintWithoutHidingItAsLogicalCorruption
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsStaleFreeHintWithoutHidingItAsLogicalCorruption (58 ms)
+[ RUN      ] HybridPropertyReadContextTest.EmptyNativePageMayRemainReusableWithoutADescriptor
+[       OK ] HybridPropertyReadContextTest.EmptyNativePageMayRemainReusableWithoutADescriptor (20 ms)
+[ RUN      ] HybridPropertyReadContextTest.LiveNativePageCannotClaimOwnershipWithoutADescriptor
+[       OK ] HybridPropertyReadContextTest.LiveNativePageCannotClaimOwnershipWithoutADescriptor (20 ms)
+[ RUN      ] HybridPropertyReadContextTest.SharedLargeReferenceWalkAuthenticatesMetadataWithinBudgetWithoutReadingBodies
+[       OK ] HybridPropertyReadContextTest.SharedLargeReferenceWalkAuthenticatesMetadataWithinBudgetWithoutReadingBodies (36 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeReferenceWalkRejectsWrongManifestIdentityBeforeEmission
+[       OK ] HybridPropertyReadContextTest.NativeReferenceWalkRejectsWrongManifestIdentityBeforeEmission (27 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes
+[       OK ] HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes (23 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation
+[       OK ] HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement
+[       OK ] HybridPropertyReadContextTest.FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement (28 ms)
+[ RUN      ] HybridPropertyReadContextTest.MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes
+[       OK ] HybridPropertyReadContextTest.MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes (22 ms)
+[ RUN      ] HybridPropertyReadContextTest.MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking
+[       OK ] HybridPropertyReadContextTest.MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting
+[       OK ] HybridPropertyReadContextTest.InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting (111 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode
+[       OK ] HybridPropertyReadContextTest.InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode (21 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently
+[       OK ] HybridPropertyReadContextTest.InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently (110 ms)
+[ RUN      ] HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges
+[       OK ] HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges (49 ms)
+[ RUN      ] HybridPropertyReadContextTest.MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion
+[       OK ] HybridPropertyReadContextTest.MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion (30 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce (38 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup (114 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures (39 ms)
+[ RUN      ] HybridPropertyReadContextTest.ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns
+[       OK ] HybridPropertyReadContextTest.ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns (29 ms)
+[----------] 56 tests from HybridPropertyReadContextTest (2253 ms total)
+
+[----------] 1 test from MetadataSnapshotHandleContractTest
+[ RUN      ] MetadataSnapshotHandleContractTest.DefaultHandlesAreInvalidAndReleaseIsIdempotent
+[       OK ] MetadataSnapshotHandleContractTest.DefaultHandlesAreInvalidAndReleaseIsIdempotent (0 ms)
+[----------] 1 test from MetadataSnapshotHandleContractTest (0 ms total)
+
+[----------] 12 tests from RelocatableMetadataSnapshotRegistryTest
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.PinsDurableRootAndDefersOnlineReclamationUntilRelease
+[       OK ] RelocatableMetadataSnapshotRegistryTest.PinsDurableRootAndDefersOnlineReclamationUntilRelease (2 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.PinsSupportMoveAssignmentAndCountEveryActiveReader
+[       OK ] RelocatableMetadataSnapshotRegistryTest.PinsSupportMoveAssignmentAndCountEveryActiveReader (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.RejectsAnInvalidOrExhaustedPinLimit
+[       OK ] RelocatableMetadataSnapshotRegistryTest.RejectsAnInvalidOrExhaustedPinLimit (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.PinsTheCurrentDurableRootOnlyUnderItsOwningWriter
+[       OK ] RelocatableMetadataSnapshotRegistryTest.PinsTheCurrentDurableRootOnlyUnderItsOwningWriter (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.WriterBarrierPreventsSnapshotRegistrationUntilPublicationCompletes
+[       OK ] RelocatableMetadataSnapshotRegistryTest.WriterBarrierPreventsSnapshotRegistrationUntilPublicationCompletes (20 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.ReclamationRequiresThisRegistrysActiveWriterAndCurrentRoot
+[       OK ] RelocatableMetadataSnapshotRegistryTest.ReclamationRequiresThisRegistrysActiveWriterAndCurrentRoot (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.InspectsPinnedSnapshotsOnlyUnderItsOwningWriter
+[       OK ] RelocatableMetadataSnapshotRegistryTest.InspectsPinnedSnapshotsOnlyUnderItsOwningWriter (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.DecodedContextFollowsPinMovesAndIsReleasedWithThePin
+[       OK ] RelocatableMetadataSnapshotRegistryTest.DecodedContextFollowsPinMovesAndIsReleasedWithThePin (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.EscapedPinOwnsItsRegistryAndReadContextAllocationDomain
+[       OK ] RelocatableMetadataSnapshotRegistryTest.EscapedPinOwnsItsRegistryAndReadContextAllocationDomain (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.DeniedReadContextsNeverRegisterAPinAndCanRetryUnderTheWriter
+[       OK ] RelocatableMetadataSnapshotRegistryTest.DeniedReadContextsNeverRegisterAPinAndCanRetryUnderTheWriter (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.FullPayloadArenaCannotBlockSeparateSnapshotControls
+[       OK ] RelocatableMetadataSnapshotRegistryTest.FullPayloadArenaCannotBlockSeparateSnapshotControls (0 ms)
+[ RUN      ] RelocatableMetadataSnapshotRegistryTest.PressureSampleExcludesOneObserverAndTracksOldestUntilRelease
+[       OK ] RelocatableMetadataSnapshotRegistryTest.PressureSampleExcludesOneObserverAndTracksOldestUntilRelease (0 ms)
+[----------] 12 tests from RelocatableMetadataSnapshotRegistryTest (26 ms total)
+
+[----------] 54 tests from RelocatableSharedPagePoolAllocatorTest
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AtomicallyCreatesReadsAndReopensTheFirstSharedPage
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AtomicallyCreatesReadsAndReopensTheFirstSharedPage (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsUnknownDemandReadHintsBeforeRouteLookup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsUnknownDemandReadHintsBeforeRouteLookup (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys
+[       OK ] RelocatableSharedPagePoolAllocatorTest.KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidTypedPrefetchContractsBeforeRouteLookup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidTypedPrefetchContractsBeforeRouteLookup (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AuthenticatesBoundedPreparedPublicationFrames
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AuthenticatesBoundedPreparedPublicationFrames (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CoalescesAdjacentPreparedPublicationValidationReads
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CoalescesAdjacentPreparedPublicationValidationReads (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesPrivateAppendAndMutationPlansBeforePublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesPrivateAppendAndMutationPlansBeforePublication (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesAppendUnderAnExistingWriterFence
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesAppendUnderAnExistingWriterFence (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrCapacityInvalidCrossPoolBatchState
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrCapacityInvalidCrossPoolBatchState (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.MaterializesCrossPoolAndSamePoolPreparedReplacements
+[       OK ] RelocatableSharedPagePoolAllocatorTest.MaterializesCrossPoolAndSamePoolPreparedReplacements (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.EvacuatesIndexPageWithoutAnIndexRootBinding
+[       OK ] RelocatableSharedPagePoolAllocatorTest.EvacuatesIndexPageWithoutAnIndexRootBinding (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsAnUnpairedIndexRootBindingBeforeEvacuation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsAnUnpairedIndexRootBindingBeforeEvacuation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.OwnsPayloadBeforeMetadataPublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.OwnsPayloadBeforeMetadataPublication (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot
+[       OK ] RelocatableSharedPagePoolAllocatorTest.AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.PreservesEveryDeclaredSharedPoolAndOwnerKindPair
+[       OK ] RelocatableSharedPagePoolAllocatorTest.PreservesEveryDeclaredSharedPoolAndOwnerKindPair (36 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame
+[       OK ] RelocatableSharedPagePoolAllocatorTest.EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame (8 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrUnplaceableCrossPoolEvacuationRequests
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrUnplaceableCrossPoolEvacuationRequests (78 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch (7 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain (11 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsRetirementOfAPoolWithCurrentPages
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsRetirementOfAPoolWithCurrentPages (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold (91 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementDuringStartup
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementDuringStartup (5 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsUnallocatedCurrentFrameDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsUnallocatedCurrentFrameDuringStartupRecovery (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsMismatchedCurrentOwnerDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsMismatchedCurrentOwnerDuringStartupRecovery (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicatePageIdsWithoutChangingThePoolBitmap
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsDuplicatePageIdsWithoutChangingThePoolBitmap (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendWhenTheAllocatorOpens
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendWhenTheAllocatorOpens (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendAndReusesItsFrame
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendAndReusesItsFrame (7 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ManuallyReconcilesAFrameWrittenBeforeFailedPublication
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ManuallyReconcilesAFrameWrittenBeforeFailedPublication (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidAppendsAndAFullSharedPool
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsInvalidAppendsAndAFullSharedPool (79 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReconciliationFailsClosedForCorruptOrMismatchedFrames
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReconciliationFailsClosedForCorruptOrMismatchedFrames (6 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock
+[       OK ] RelocatableSharedPagePoolAllocatorTest.LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload (3 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RequiresTheMetadataDataStorageHandle
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RequiresTheMetadataDataStorageHandle (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.SupportsOnlyDeclaredOpenModes
+[       OK ] RelocatableSharedPagePoolAllocatorTest.SupportsOnlyDeclaredOpenModes (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CountsOnlyCurrentSealedSharedPools
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CountsOnlyCurrentSealedSharedPools (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot
+[       OK ] RelocatableSharedPagePoolAllocatorTest.ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead (4 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsValidButInconsistentPoolAndOwnerHeaders
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsValidButInconsistentPoolAndOwnerHeaders (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges (2 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch
+[       OK ] RelocatableSharedPagePoolAllocatorTest.RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch (0 ms)
+[ RUN      ] RelocatableSharedPagePoolAllocatorTest.CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces
+[       OK ] RelocatableSharedPagePoolAllocatorTest.CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces (3 ms)
+[----------] 54 tests from RelocatableSharedPagePoolAllocatorTest (470 ms total)
+
+[----------] 2 tests from PoolPreparationRunPrototypeTest
+[ RUN      ] PoolPreparationRunPrototypeTest.CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments
+[       OK ] PoolPreparationRunPrototypeTest.CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments (0 ms)
+[ RUN      ] PoolPreparationRunPrototypeTest.RejectsEveryChangedCatalogIdentityWithoutAdvancing
+[       OK ] PoolPreparationRunPrototypeTest.RejectsEveryChangedCatalogIdentityWithoutAdvancing (0 ms)
+[----------] 2 tests from PoolPreparationRunPrototypeTest (0 ms total)
+
+[----------] 35 tests from RelocatableMetadataStoreValidationTest
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsAllocatorRadixSummaryThatDisagreesWithItsBitmapLeaf
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsAllocatorRadixSummaryThatDisagreesWithItsBitmapLeaf (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInvalidAndReadOnlyLogicalIdLeaseRequestsBeforePublication
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInvalidAndReadOnlyLogicalIdLeaseRequestsBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.ServesFullyCachedLogicalIdLeasesWithoutPublishingAnotherMetadataGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.ServesFullyCachedLogicalIdLeasesWithoutPublishingAnotherMetadataGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.CombinesCachedAndFreshLogicalIdRangesWithoutReorderingNamespaces
+[       OK ] RelocatableMetadataStoreValidationTest.CombinesCachedAndFreshLogicalIdRangesWithoutReorderingNamespaces (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.DistinguishesIdentityOnlyBootstrapAdvancesFromDirectoryMutations
+[       OK ] RelocatableMetadataStoreValidationTest.DistinguishesIdentityOnlyBootstrapAdvancesFromDirectoryMutations (3 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.ReadOnlyStoreRejectsMetadataMutationAndMaintenanceEntrypoints
+[       OK ] RelocatableMetadataStoreValidationTest.ReadOnlyStoreRejectsMetadataMutationAndMaintenanceEntrypoints (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInactiveSnapshotPinsAcrossDirectoryReadSurfaces
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInactiveSnapshotPinsAcrossDirectoryReadSurfaces (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsEmptyDirectoryMutationsAndInvalidStateReplacementInput
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsEmptyDirectoryMutationsAndInvalidStateReplacementInput (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInvalidEntityPageMutationPreconditions
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInvalidEntityPageMutationPreconditions (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInvalidExistingEntityPoolMutationsBeforePublishingMetadata
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInvalidExistingEntityPoolMutationsBeforePublishingMetadata (4 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInvalidCompleteInitializationCheckpoints
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInvalidCompleteInitializationCheckpoints (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsEmptyEntityPoolReservationPlan
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsEmptyEntityPoolReservationPlan (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.ValidatesLogicalIdLeaseCapabilitiesAcrossNodeAndEdgeNamespaces
+[       OK ] RelocatableMetadataStoreValidationTest.ValidatesLogicalIdLeaseCapabilitiesAcrossNodeAndEdgeNamespaces (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.AbandoningLogicalIdCapabilitiesRequiresTheirExactIssuedRanges
+[       OK ] RelocatableMetadataStoreValidationTest.AbandoningLogicalIdCapabilitiesRequiresTheirExactIssuedRanges (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.PreservesLogicalIdHighWaterMarksWhenDirectLeasePublicationFails
+[       OK ] RelocatableMetadataStoreValidationTest.PreservesLogicalIdHighWaterMarksWhenDirectLeasePublicationFails (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.DirectLogicalIdLeaseFinalSyncFailureReopensOnlyACompleteGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.DirectLogicalIdLeaseFinalSyncFailureReopensOnlyACompleteGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.CachedLogicalIdLeaseFinalSyncFailureDoesNotExposeAnUndurableCachedRange
+[       OK ] RelocatableMetadataStoreValidationTest.CachedLogicalIdLeaseFinalSyncFailureDoesNotExposeAnUndurableCachedRange (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsExhaustedLogicalIdNamespacesBeforeStartingPublication
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsExhaustedLogicalIdNamespacesBeforeStartingPublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.BoundsLogicalIdLeasesAtTheFinalRepresentableIdentity
+[       OK ] RelocatableMetadataStoreValidationTest.BoundsLogicalIdLeasesAtTheFinalRepresentableIdentity (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsLogicalIdLeasesWhenTheCheckpointNamespaceIsExhausted
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsLogicalIdLeasesWhenTheCheckpointNamespaceIsExhausted (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.PublishesAnAlreadyLeasedLogicalIdCapabilityWithoutManufacturingDirectoryMutations
+[       OK ] RelocatableMetadataStoreValidationTest.PublishesAnAlreadyLeasedLogicalIdCapabilityWithoutManufacturingDirectoryMutations (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsMalformedCompoundGraphPublicationPlansWithoutCallingMaterializersOrPublishing
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsMalformedCompoundGraphPublicationPlansWithoutCallingMaterializersOrPublishing (3 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsMalformedDerivedTreeShapesBeforeAcquiringOrPublishingGraphPages
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsMalformedDerivedTreeShapesBeforeAcquiringOrPublishingGraphPages (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsMalformedReusedLargeValueAndVectorBootstrapPlansBeforeStartingPublication
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsMalformedReusedLargeValueAndVectorBootstrapPlansBeforeStartingPublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsAReusedLargeValueWithoutAReachableManifestBeforePublication
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsAReusedLargeValueWithoutAReachableManifestBeforePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsAReusedLargeValueWhoseImmutableReferenceDoesNotMatchTheCurrentManifest
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsAReusedLargeValueWhoseImmutableReferenceDoesNotMatchTheCurrentManifest (8 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RevalidatesAReachableReusedLargeValueBeforePublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RevalidatesAReachableReusedLargeValueBeforePublishingTheGraphGeneration (9 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsTypedEntityMaterializerFrameCollisionsWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsTypedEntityMaterializerFrameCollisionsWithoutPublishingTheGraphGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedEntityFramesWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedEntityFramesWithoutPublishingTheGraphGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedIndexFramesWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedIndexFramesWithoutPublishingTheGraphGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsVectorBootstrapPreparerIdentityChangesWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsVectorBootstrapPreparerIdentityChangesWithoutPublishingTheGraphGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedVectorFramesWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedVectorFramesWithoutPublishingTheGraphGeneration (2 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedVectorDeltaFramesWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsUnmaterializedVectorDeltaFramesWithoutPublishingTheGraphGeneration (6 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsInvalidVectorBootstrapFramesAndLocationsWithoutPublishingTheGraphGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsInvalidVectorBootstrapFramesAndLocationsWithoutPublishingTheGraphGeneration (4 ms)
+[ RUN      ] RelocatableMetadataStoreValidationTest.RejectsVectorDeltaPreparerIdentityChangesWithoutPublishingOverTheCompleteBootstrapGeneration
+[       OK ] RelocatableMetadataStoreValidationTest.RejectsVectorDeltaPreparerIdentityChangesWithoutPublishingOverTheCompleteBootstrapGeneration (13 ms)
+[----------] 35 tests from RelocatableMetadataStoreValidationTest (88 ms total)
+
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure (12 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity (1 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication (11 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection
+[       OK ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease (5 ms)
+[----------] 29 tests from NativeGraphWritePlannerPublicContractsTest (149 ms total)
+
+[----------] 1 test from NativeGraphWritePlannerOptionsTest
+[ RUN      ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections
+[       OK ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections (0 ms)
+[----------] 1 test from NativeGraphWritePlannerOptionsTest (0 ms total)
+
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest
+[ RUN      ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations
+[       OK ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations (0 ms)
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest (0 ms total)
+
+[----------] 32 tests from RelocatableIntegrityScannerTest
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsNullOrForeignDataStorage
+[       OK ] RelocatableIntegrityScannerTest.RejectsNullOrForeignDataStorage (0 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansEveryPageOfAMultiLevelLargeValueManifestTree
+[       OK ] RelocatableIntegrityScannerTest.ScansEveryPageOfAMultiLevelLargeValueManifestTree (234 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueContentIndexValueThatDisagreesWithItsManifest
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueContentIndexValueThatDisagreesWithItsManifest (239 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsIncompleteOrOrphanLargeValueContentIndex
+[       OK ] RelocatableIntegrityScannerTest.RejectsIncompleteOrOrphanLargeValueContentIndex (548 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestCycle
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestCycle (238 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestChildWithMismatchedSubtreeRange
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestChildWithMismatchedSubtreeRange (242 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueRootManifestThatDisagreesWithItsDirectoryRoute
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueRootManifestThatDisagreesWithItsDirectoryRoute (235 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsOrphanLargeValueManifestPage
+[       OK ] RelocatableIntegrityScannerTest.RejectsOrphanLargeValueManifestPage (310 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsOrphanLargeValueDataPage
+[       OK ] RelocatableIntegrityScannerTest.RejectsOrphanLargeValueDataPage (299 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestDirectoryRelationshipCorruption
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueManifestDirectoryRelationshipCorruption (652 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsStaleLargeValuePageFreeSpaceMetadata
+[       OK ] RelocatableIntegrityScannerTest.RejectsStaleLargeValuePageFreeSpaceMetadata (325 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsLargeValueTreeAndDataRelationshipCorruption
+[       OK ] RelocatableIntegrityScannerTest.RejectsLargeValueTreeAndDataRelationshipCorruption (1401 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsPageDirectoryEntriesWithoutACatalogSegment
+[       OK ] RelocatableIntegrityScannerTest.RejectsPageDirectoryEntriesWithoutACatalogSegment (2 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsPageDirectoryEntriesOutsideSharedPools
+[       OK ] RelocatableIntegrityScannerTest.RejectsPageDirectoryEntriesOutsideSharedPools (3 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsMalformedOrUnsupportedExtentDirectoryEntries
+[       OK ] RelocatableIntegrityScannerTest.RejectsMalformedOrUnsupportedExtentDirectoryEntries (5 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansStateDirectoryRecordsAndRejectsStaleLocations
+[       OK ] RelocatableIntegrityScannerTest.ScansStateDirectoryRecordsAndRejectsStaleLocations (5 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsStateDirectoryIdsWithoutMatchingRecords
+[       OK ] RelocatableIntegrityScannerTest.RejectsStateDirectoryIdsWithoutMatchingRecords (4 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsStatePagesWithStaleFreeSpaceOrRecordsWithoutDirectoryEntries
+[       OK ] RelocatableIntegrityScannerTest.RejectsStatePagesWithStaleFreeSpaceOrRecordsWithoutDirectoryEntries (7 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsStateReferencesToMissingLargeValueManifests
+[       OK ] RelocatableIntegrityScannerTest.RejectsStateReferencesToMissingLargeValueManifests (3 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansStateReferencesToExistingLargeValueManifests
+[       OK ] RelocatableIntegrityScannerTest.ScansStateReferencesToExistingLargeValueManifests (9 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsStateReferencesToLargeValuesWithAnotherOwnerMediaType
+[       OK ] RelocatableIntegrityScannerTest.RejectsStateReferencesToLargeValuesWithAnotherOwnerMediaType (9 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsEntityPropertyRootsWithoutTheirNativeEntityOwner
+[       OK ] RelocatableIntegrityScannerTest.RejectsEntityPropertyRootsWithoutTheirNativeEntityOwner (4 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansAndValidatesNodeToVectorMappingRoots
+[       OK ] RelocatableIntegrityScannerTest.ScansAndValidatesNodeToVectorMappingRoots (44 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansMultiLevelBidirectionalVectorMappingTrees
+[       OK ] RelocatableIntegrityScannerTest.ScansMultiLevelBidirectionalVectorMappingTrees (696 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.ScansIndexPqVectorAndCodebookLayouts
+[       OK ] RelocatableIntegrityScannerTest.ScansIndexPqVectorAndCodebookLayouts (67 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsManifestPagesMissingFromTheManifestDirectory
+[       OK ] RelocatableIntegrityScannerTest.RejectsManifestPagesMissingFromTheManifestDirectory (3 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsDuplicateManifestIndexOwnershipAcrossPages
+[       OK ] RelocatableIntegrityScannerTest.RejectsDuplicateManifestIndexOwnershipAcrossPages (5 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsManifestReferencesToAbsentVectorPages
+[       OK ] RelocatableIntegrityScannerTest.RejectsManifestReferencesToAbsentVectorPages (3 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsNoncanonicalPropertyPayload
+[       OK ] RelocatableIntegrityScannerTest.RejectsNoncanonicalPropertyPayload (10 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsDuplicateStateRecordsAcrossStatePages
+[       OK ] RelocatableIntegrityScannerTest.RejectsDuplicateStateRecordsAcrossStatePages (5 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.RejectsDerivedAdjacencyMappingAndRecordCorruption
+[       OK ] RelocatableIntegrityScannerTest.RejectsDerivedAdjacencyMappingAndRecordCorruption (93 ms)
+[ RUN      ] RelocatableIntegrityScannerTest.WorkspaceQuotaDenialPreservesFileAndReleasesEveryAdmittedNode
+[       OK ] RelocatableIntegrityScannerTest.WorkspaceQuotaDenialPreservesFileAndReleasesEveryAdmittedNode (334 ms)
+[----------] 32 tests from RelocatableIntegrityScannerTest (6049 ms total)
+
+[----------] 36 tests from RelocatableIntegrityScannerTestFixture
+[ RUN      ] RelocatableIntegrityScannerTestFixture.ScansNativeEntityMapsLabelSetsAndOwnerKeyedProperties
+[       OK ] RelocatableIntegrityScannerTestFixture.ScansNativeEntityMapsLabelSetsAndOwnerKeyedProperties (13 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsLiveEdgesWithoutTheReservedGlobalAdjacencyRoot
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsLiveEdgesWithoutTheReservedGlobalAdjacencyRoot (18 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsMissingOrMismatchedGlobalAdjacencyKeys
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsMissingOrMismatchedGlobalAdjacencyKeys (33 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsMalformedGlobalAdjacencyKey
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsMalformedGlobalAdjacencyKey (18 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyLeafWithAValueLayout
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyLeafWithAValueLayout (18 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootDirectoryGenerationMismatch
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootDirectoryGenerationMismatch (15 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootMappedToANonRootPage
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootMappedToANonRootPage (112 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeCycle
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeCycle (113 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeWithMismatchedChildLevel
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeWithMismatchedChildLevel (114 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeChildOutsideTheIndex
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyTreeChildOutsideTheIndex (114 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyChildWithForeignOwner
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyChildWithForeignOwner (85 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyNonRootSiblingCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyNonRootSiblingCorruption (551 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyNonRootLeftSiblingCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyNonRootLeftSiblingCorruption (224 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRestartCountMismatch
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRestartCountMismatch (17 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRestartOffsetCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRestartOffsetCorruption (18 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootWithForeignOwner
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootWithForeignOwner (16 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootWithSiblingLinks
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsGlobalAdjacencyRootWithSiblingLinks (18 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsInternalGlobalAdjacencyRootWithSiblingLinks
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsInternalGlobalAdjacencyRootWithSiblingLinks (116 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsDeepGlobalAdjacencySeparatorRangeCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsDeepGlobalAdjacencySeparatorRangeCorruption (163 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.ScansRelocatedAndRetiredCatalogQueueEntries
+[       OK ] RelocatableIntegrityScannerTestFixture.ScansRelocatedAndRetiredCatalogQueueEntries (5 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsStaleNativeEntityPageFreeSpaceMetadata
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsStaleNativeEntityPageFreeSpaceMetadata (10 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsEntityPageWithNonEntityOwnerKind
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsEntityPageWithNonEntityOwnerKind (8 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsStaleOrForeignLabelSetPageMetadata
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsStaleOrForeignLabelSetPageMetadata (13 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsShortEntityPropertyPayload
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsShortEntityPropertyPayload (14 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsInconsistentNativeVectorDeltaSemantics
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsInconsistentNativeVectorDeltaSemantics (118 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsNativeEntityAndLabelSetOrphans
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsNativeEntityAndLabelSetOrphans (13 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsPageLocalEntityIdThatDisagreesWithTheEntityMap
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsPageLocalEntityIdThatDisagreesWithTheEntityMap (13 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsOwnerKeyedPropertyRootWithoutDirectoryEntry
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsOwnerKeyedPropertyRootWithoutDirectoryEntry (15 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsNativeEntityMapRelationshipCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsNativeEntityMapRelationshipCorruption (59 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsEntityPropertyDirectoryRelationshipCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsEntityPropertyDirectoryRelationshipCorruption (26 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsAdjacencyPageWithForeignOwnerIdentity
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsAdjacencyPageWithForeignOwnerIdentity (6 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsStateReferenceToTextLargeValue
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsStateReferenceToTextLargeValue (8 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsDerivedAdjacencyTreeAndOwnershipCorruption
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsDerivedAdjacencyTreeAndOwnershipCorruption (72 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsCodebookManifestHeaderGenerationMismatch
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsCodebookManifestHeaderGenerationMismatch (3 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsOrphanedCodebookDataExtent
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsOrphanedCodebookDataExtent (7 ms)
+[ RUN      ] RelocatableIntegrityScannerTestFixture.RejectsNoncanonicalBidirectionalVectorMappings
+[       OK ] RelocatableIntegrityScannerTestFixture.RejectsNoncanonicalBidirectionalVectorMappings (140 ms)
+[----------] 36 tests from RelocatableIntegrityScannerTestFixture (2324 ms total)
+
+[----------] 63 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay (13 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull
+[       OK ] RelocatableBTreePageStoreTest.ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull (87 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.CollapsesATransactionLocalSplitBackToOneEmptyStableRoot
+[       OK ] RelocatableBTreePageStoreTest.CollapsesATransactionLocalSplitBackToOneEmptyStableRoot (13 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsASiblingLinkedLeafAsTheOverlayRoot
+[       OK ] RelocatableBTreePageStoreTest.RejectsASiblingLinkedLeafAsTheOverlayRoot (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACyclicTreeWithAnInconsistentRevisitedLevel
+[       OK ] RelocatableBTreePageStoreTest.RejectsACyclicTreeWithAnInconsistentRevisitedLevel (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayKeyThatCannotFitInAnyLeafPage
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayKeyThatCannotFitInAnyLeafPage (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment
+[       OK ] RelocatableBTreePageStoreTest.DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment (74 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools (1214 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement
+[       OK ] RelocatableBTreePageStoreTest.PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnEmptySplitOverlayIntoOneFreshRootPage
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnEmptySplitOverlayIntoOneFreshRootPage (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsASharedChildDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsASharedChildDuringForcedOverlayRebuild (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAZeroLeafPayloadDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsAZeroLeafPayloadDuringForcedOverlayRebuild (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists
+[       OK ] RelocatableBTreePageStoreTest.RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyRightLeafThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyRightLeafThroughTheTransactionOverlay (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf
+[       OK ] RelocatableBTreePageStoreTest.RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase
+[       OK ] RelocatableBTreePageStoreTest.CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink
+[       OK ] RelocatableBTreePageStoreTest.RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase
+[       OK ] RelocatableBTreePageStoreTest.RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState
+[       OK ] RelocatableBTreePageStoreTest.RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAndPreparesAStableRootLeafReplacementForAnExistingKey
+[       OK ] RelocatableBTreePageStoreTest.PlansAndPreparesAStableRootLeafReplacementForAnExistingKey (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans
+[       OK ] RelocatableBTreePageStoreTest.ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayEraseForAnAbsentScalarKey
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayEraseForAnAbsentScalarKey (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool
+[       OK ] RelocatableBTreePageStoreTest.RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates
+[       OK ] RelocatableBTreePageStoreTest.RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates (88 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction
+[       OK ] RelocatableBTreePageStoreTest.RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction (13 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction
+[       OK ] RelocatableBTreePageStoreTest.UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull
+[       OK ] RelocatableBTreePageStoreTest.PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull (82 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AtomicallyMaterializesNewTreePagesAndSwitchesTheIndexRoot
+[       OK ] RelocatableBTreePageStoreTest.AtomicallyMaterializesNewTreePagesAndSwitchesTheIndexRoot (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DoesNotPublishAnIncompleteTreeFactoryBatch
+[       OK ] RelocatableBTreePageStoreTest.DoesNotPublishAnIncompleteTreeFactoryBatch (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidTreeRequestsAndFactoryPageIdentities
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidTreeRequestsAndFactoryPageIdentities (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsOversizedBatchesAndNonIndexPoolsBeforeMaterialization
+[       OK ] RelocatableBTreePageStoreTest.RejectsOversizedBatchesAndNonIndexPoolsBeforeMaterialization (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAtomicTreeBatchWhenThePoolLacksEnoughFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsAtomicTreeBatchWhenThePoolLacksEnoughFrames (73 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversAnInterruptedAtomicTreePublicationFromTheWal
+[       OK ] RelocatableBTreePageStoreTest.RecoversAnInterruptedAtomicTreePublicationFromTheWal (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DiscardsTreeFramesWhenTheWalPublicationHeaderWasNotDurable
+[       OK ] RelocatableBTreePageStoreTest.DiscardsTreeFramesWhenTheWalPublicationHeaderWasNotDurable (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BindsInitialLeafValuesAfterTheMetadataBatchAssignsPageIds
+[       OK ] RelocatableBTreePageStoreTest.BindsInitialLeafValuesAfterTheMetadataBatchAssignsPageIds (2 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesAndReplacesKeyOnlyFreshTreesThroughTheNativeTransaction
+[       OK ] RelocatableBTreePageStoreTest.PublishesAndReplacesKeyOnlyFreshTreesThroughTheNativeTransaction (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation
+[       OK ] RelocatableBTreePageStoreTest.RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames (0 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames (0 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages
+[       OK ] RelocatableBTreePageStoreTest.RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages (0 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidRetirementAndFreshTreePlanningContracts
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidRetirementAndFreshTreePlanningContracts (0 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages
+[       OK ] RelocatableBTreePageStoreTest.InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsRootLeafWithPersistedSiblingLinkBeforeErasing
+[       OK ] RelocatableBTreePageStoreTest.RejectsRootLeafWithPersistedSiblingLinkBeforeErasing (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansRootLeafRetirementAndRejectsTamperedPreparationBatches
+[       OK ] RelocatableBTreePageStoreTest.PlansRootLeafRetirementAndRejectsTamperedPreparationBatches (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.TraversesEveryInternalTreePageWhenPlanningRetirement
+[       OK ] RelocatableBTreePageStoreTest.TraversesEveryInternalTreePageWhenPlanningRetirement (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnUnroutedInternalChildDuringTreeRetirementPlanning
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnUnroutedInternalChildDuringTreeRetirementPlanning (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACyclicInternalTreeDuringRetirementPlanning
+[       OK ] RelocatableBTreePageStoreTest.RejectsACyclicInternalTreeDuringRetirementPlanning (4 ms)
+[----------] 63 tests from RelocatableBTreePageStoreTest (2016 ms total)
+
+[----------] 19 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool (2 ms)
+[----------] 19 tests from RelocatableMetadataStoreTest (50 ms total)
+
+[----------] Global test environment tear-down
+[==========] 453 tests from 19 test suites ran. (39016 ms total)
+[  PASSED  ] 451 tests.
+[  SKIPPED ] 1 test, listed below:
+[  SKIPPED ] HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.PromotionQuotaAndCancellationLeaveAnAtomicRetryableSource
+
+ 1 FAILED TEST

@@ -1,0 +1,20 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyMatureShapeCostsTest.*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyMatureShapeCostsTest
+[ RUN      ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp:134: Failure
+Expected: run(conversion) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+
+[  FAILED  ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact (2645 ms)
+[----------] 1 test from HybridPropertyMatureShapeCostsTest (2645 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (2645 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+
+ 1 FAILED TEST

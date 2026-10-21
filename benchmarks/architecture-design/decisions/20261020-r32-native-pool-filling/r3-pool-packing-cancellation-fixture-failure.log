@@ -1,0 +1,345 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOrdinaryConversionTest.*:HybridPropertyFieldRelocationTest.*:HybridPropertyMultipleGroupsTest.*:HybridPropertyLargePublicationTest.*:HybridPropertyLargeOwnershipTest.*:HybridPropertyOwnerDeletionTest.*
+[==========] Running 143 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 73 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication
+[       OK ] HybridPropertyOrdinaryConversionTest.FormatFlagControlsTheTypedOrdinaryRequestBeforeAnyPublication (9 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeTransactionStagesConversionWithoutEnablingItsUninstalledPublication
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeTransactionStagesConversionWithoutEnablingItsUninstalledPublication (8 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionMoveRollbackAndConcurrentPublicationRespectOwnership
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionMoveRollbackAndConcurrentPublicationRespectOwnership (10 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionRejectsInvalidAccountsAndMixedStagingBeforePublication
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionRejectsInvalidAccountsAndMixedStagingBeforePublication (6 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeConversionEarlyCancellationRetainsAnUnpublishedActiveSourceForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeConversionEarlyCancellationRetainsAnUnpublishedActiveSourceForRetry (8 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners
+[       OK ] HybridPropertyOrdinaryConversionTest.WriterAuthenticatesNodeAndEdgeRowsIncludingPropertylessLiveOwners (71 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads
+[       OK ] HybridPropertyOrdinaryConversionTest.InvalidGroupAccountModeOrFenceRejectsBeforeSourceReads (4 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile
+[       OK ] HybridPropertyOrdinaryConversionTest.QuotaCancellationStaleFenceAndEmptyGroupRefundWithoutChangingTheFile (11 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.PhysicalDestinationExhaustionRefundsAfterPartialPrivateBindingAndCanRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.PhysicalDestinationExhaustionRefundsAfterPartialPrivateBindingAndCanRetry (15 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CancellationAfterFinalRootPreparationRefundsEveryPrivateImageAndCanRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.CancellationAfterFinalRootPreparationRefundsEveryPrivateImageAndCanRetry (12 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount
+[       OK ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount (65 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource
+[       OK ] HybridPropertyOrdinaryConversionTest.MembershipPreflightRejectsBeforeDecodingAnOverBoundSource (26 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource
+[       OK ] HybridPropertyOrdinaryConversionTest.ChecksummedForeignRowOwnerCannotBecomeAConversionSource (46 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RowConversionRejectsAnExistingDirectoryEvenWhenItsNewDirectoryWouldBeAbsent
+[       OK ] HybridPropertyOrdinaryConversionTest.RowConversionRejectsAnExistingDirectoryEvenWhenItsNewDirectoryWouldBeAbsent (24 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit
+[       OK ] HybridPropertyOrdinaryConversionTest.ConversionWorkspaceObeysTheExistingParentAccountAndRefundsItsCredit (10 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.LargeBackedRowReusesAuthenticatedSingleFieldValueWithoutPublishing (15 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal
+[       OK ] HybridPropertyOrdinaryConversionTest.WholeRowLargeCarrierBecomesOneSharedPrivateFieldProposal (30 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExplicitCandidateCommitPublishesRealFieldsAndRowAuthorityAtomically
+[       OK ] HybridPropertyOrdinaryConversionTest.ExplicitCandidateCommitPublishesRealFieldsAndRowAuthorityAtomically (257 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExplicitSparseCandidateInstallsExtensionRoutesAndPreservesOldPins
+[       OK ] HybridPropertyOrdinaryConversionTest.ExplicitSparseCandidateInstallsExtensionRoutesAndPreservesOldPins (186 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateABRecoverySelectsMatchingDescriptorMapsAndRowAuthority
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateABRecoverySelectsMatchingDescriptorMapsAndRowAuthority (22 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CancellationAfterWritingOneCandidatePoolKeepsRowAuthorityAndRetries
+[       OK ] HybridPropertyOrdinaryConversionTest.CancellationAfterWritingOneCandidatePoolKeepsRowAuthorityAndRetries (18 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesIndependentLargeFieldAndExplicitlyReplacesAndRemovesItsReference
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateReusesIndependentLargeFieldAndExplicitlyReplacesAndRemovesItsReference (143 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateRowPageCowPreservesAnUnconvertedOwnerInTheSameSourcePage
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateRowPageCowPreservesAnUnconvertedOwnerInTheSameSourcePage (220 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateCanPublishAPropertylessLiveGroupWithoutEmptyFieldTrees
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateCanPublishAPropertylessLiveGroupWithoutEmptyFieldTrees (71 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.GlobalAuditRejectsChecksummedCandidateNamespaceSubstitutionAndRefunds
+[       OK ] HybridPropertyOrdinaryConversionTest.GlobalAuditRejectsChecksummedCandidateNamespaceSubstitutionAndRefunds (135 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableInverseRestoresRowWritesAndRetiresOnlyTheCandidatePools (230 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeInverseStageAndRecoveryKeepOneCompleteLayout (248 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAndQuotaRefundKeepTheDurableHybridSourceForRetry (122 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator
+[       OK ] HybridPropertyOrdinaryConversionTest.InversePoolReleaseAndReuseCannotAliasAnOldNativeLocator (64 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseReusesTheIndependentLargeFieldCarrierWithoutCreatingAValue (62 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.PropertylessGroupCanReturnToRowAndCommitOrdinaryWrites
+[       OK ] HybridPropertyOrdinaryConversionTest.PropertylessGroupCanReturnToRowAndCommitOrdinaryWrites (32 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCancellationAfterPhysicalWritesNeverPublishesHalfARowLayout (214 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InverseCreatesANewOversizedRowCarrierAfterItsFieldsChange
+[       OK ] HybridPropertyOrdinaryConversionTest.InverseCreatesANewOversizedRowCarrierAfterItsFieldsChange (74 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableRowHybridRowRoundTripPreservesNullSignedZeroAndNaNPayload
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableRowHybridRowRoundTripPreservesNullSignedZeroAndNaNPayload (171 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB
+[       OK ] HybridPropertyOrdinaryConversionTest.MaximumBoundedGroupCommitsBothDirectionsWithinOneMiB (9548 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ForwardDropsEmptyRowMappingsAndQueuesTheDetachedPoolWithoutTouchingOldPins
+[       OK ] HybridPropertyOrdinaryConversionTest.ForwardDropsEmptyRowMappingsAndQueuesTheDetachedPoolWithoutTouchingOldPins (359 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ForwardCannotRetireASourcePoolContainingAnUntouchedCurrentPage
+[       OK ] HybridPropertyOrdinaryConversionTest.ForwardCannotRetireASourcePoolContainingAnUntouchedCurrentPage (837 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableColumnChangesKeepDirectoryRootsAndOldSnapshotsWithoutRebuildingOtherFields
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableColumnChangesKeepDirectoryRootsAndOldSnapshotsWithoutRebuildingOtherFields (205 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnNoopAndInvalidOrOverlappingWritesLeaveTheSourceUnchanged
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnNoopAndInvalidOrOverlappingWritesLeaveTheSourceUnchanged (39 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnQuotaAndPostFrameCancellationRefundAndRetryWithoutHalfPublishing
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1031: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1033: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1034: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0A-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 12-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 08-00 00-00 00-00 00-00 0A-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1038: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.NativeColumnQuotaAndPostFrameCancellationRefundAndRetryWithoutHalfPublishing (197 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnABRecoverySelectsCompleteNewCellsOrTheCompleteSource
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnABRecoverySelectsCompleteNewCellsOrTheCompleteSource (368 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RepeatedConversionAndColumnWritesRetireAndReusePoolsAfterSnapshotDrain
+[       OK ] HybridPropertyOrdinaryConversionTest.RepeatedConversionAndColumnWritesRetireAndReusePoolsAfterSnapshotDrain (616 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnTransactionOwnsMovedCellsAndConflictsWithoutLeakingTheAccount
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnTransactionOwnsMovedCellsAndConflictsWithoutLeakingTheAccount (196 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeColumnStagingFailureRollbackAndEarlyCancellationRetainTheirContracts
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeColumnStagingFailureRollbackAndEarlyCancellationRetainTheirContracts (35 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation
+[       OK ] HybridPropertyOrdinaryConversionTest.ReopenedWritableMetadataContinuesControlledColumnsAndInverseWithoutUnadaptedReconciliation (373 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1223: Failure
+Value of: retired.empty()
+  Actual: true
+Expected: false
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth (38 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseABRecoveryPreservesCellsAndOneCompleteAllocatorQueueState
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseABRecoveryPreservesCellsAndOneCompleteAllocatorQueueState (357 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseRejectsStaleDuplicateAndDamagedSourceIdentitiesBeforePublishing
+[       OK ] HybridPropertyOrdinaryConversionTest.ActiveNativePoolReleaseRejectsStaleDuplicateAndDamagedSourceIdentitiesBeforePublishing (192 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableFieldRemovalPublishesDemotionDirectoriesAndMixedColumnWritesTogether
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableFieldRemovalPublishesDemotionDirectoriesAndMixedColumnWritesTogether (463 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.TwoOwnerRemovalsMergeBeforeThresholdAndOnlyLaterDemoteTheColumn
+[       OK ] HybridPropertyOrdinaryConversionTest.TwoOwnerRemovalsMergeBeforeThresholdAndOnlyLaterDemoteTheColumn (494 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse
+[       OK ] HybridPropertyOrdinaryConversionTest.NativeTransactionTypeChangeDemotesTheColumnAndSurvivesInverse (365 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldRemovalChangesOnlyItsActualFieldPagesAndDirectoryPath
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldRemovalChangesOnlyItsActualFieldPagesAndDirectoryPath (1432 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow
+[       OK ] HybridPropertyOrdinaryConversionTest.RemovingEveryColumnMemberLeavesOnlyTheLiveGroupAndCanReturnToRow (203 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldDemotionABRecoverySelectsOneCompleteMapAndFieldGeneration (835 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+[       OK ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry (714 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DurableDemotionPreservesNullSignedZeroAndTheExactNanPayload
+[       OK ] HybridPropertyOrdinaryConversionTest.DurableDemotionPreservesNullSignedZeroAndTheExactNanPayload (389 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.EdgeFieldDemotionPreservesTheMainEdgeAndGlobalAdjacencyAuthority
+[       OK ] HybridPropertyOrdinaryConversionTest.EdgeFieldDemotionPreservesTheMainEdgeAndGlobalAdjacencyAuthority (512 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExistingInlineExtensionsUpdateAndDeleteWithoutChangingOwnerLiveness
+[       OK ] HybridPropertyOrdinaryConversionTest.ExistingInlineExtensionsUpdateAndDeleteWithoutChangingOwnerLiveness (216 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineAndColumnEditsShareOneAtomicFinalGroupAfterDemotion
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineAndColumnEditsShareOneAtomicFinalGroupAfterDemotion (599 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineNoopDuplicateAndDeadOwnerRequestsNeverWriteData
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineNoopDuplicateAndDeadOwnerRequestsNeverWriteData (21 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.RemovingEveryInlineFieldLeavesLiveOwnersAndErasesBothFieldMaps
+[       OK ] HybridPropertyOrdinaryConversionTest.RemovingEveryInlineFieldLeavesLiveOwnersAndErasesBothFieldMaps (115 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineMutationABRecoveryKeepsCompleteFieldAndLocatorGenerations
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineMutationABRecoveryKeepsCompleteFieldAndLocatorGenerations (339 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineGrowthRebindsLocatorsAndPreservesOldNullFields
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineGrowthRebindsLocatorsAndPreservesOldNullFields (593 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.InlineMutationCancellationRefundsAndNativeTransactionRetries
+[       OK ] HybridPropertyOrdinaryConversionTest.InlineMutationCancellationRefundsAndNativeTransactionRetries (164 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MissingColumnInsertionAndRemovalMergeBeforeTheFinalThreshold
+[       OK ] HybridPropertyOrdinaryConversionTest.MissingColumnInsertionAndRemovalMergeBeforeTheFinalThreshold (508 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.MissingIncompatibleColumnMemberDemotesAllFinalMembers
+[       OK ] HybridPropertyOrdinaryConversionTest.MissingIncompatibleColumnMemberDemotesAllFinalMembers (470 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.EmptyLiveGroupCreatesItsFirstFieldMapsAndMissingEraseIsNoop
+[       OK ] HybridPropertyOrdinaryConversionTest.EmptyLiveGroupCreatesItsFirstFieldMapsAndMissingEraseIsNoop (161 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.DenseFieldInsertionABRecoveryKeepsExtensionsAndExactDoubleBits
+[       OK ] HybridPropertyOrdinaryConversionTest.DenseFieldInsertionABRecoveryKeepsExtensionsAndExactDoubleBits (587 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.SparseFieldDoesNotRepromoteAt48WithoutExplicitConversion
+[       OK ] HybridPropertyOrdinaryConversionTest.SparseFieldDoesNotRepromoteAt48WithoutExplicitConversion (578 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.HomogeneousExtensionsAndNewDenseFieldsDoNotAutomaticallyPromote
+[       OK ] HybridPropertyOrdinaryConversionTest.HomogeneousExtensionsAndNewDenseFieldsDoNotAutomaticallyPromote (836 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.AllNullExtensionsRemainExtensionsAfterAScalarTypeAppears
+[       OK ] HybridPropertyOrdinaryConversionTest.AllNullExtensionsRemainExtensionsAfterAScalarTypeAppears (452 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExtensionBatchQuotaAndCancellationPreserveTheSourceWithoutPromotion
+[       OK ] HybridPropertyOrdinaryConversionTest.ExtensionBatchQuotaAndCancellationPreserveTheSourceWithoutPromotion (806 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.ExtensionNoopUsesRowEqualityForSignedZeroAndNan
+[       OK ] HybridPropertyOrdinaryConversionTest.ExtensionNoopUsesRowEqualityForSignedZeroAndNan (30 ms)
+[----------] 73 tests from HybridPropertyOrdinaryConversionTest (27918 ms total)
+
+[----------] 18 tests from HybridPropertyFieldRelocationTest
+[ RUN      ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite
+[       OK ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite (6 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+[       OK ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins (3948 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+[       OK ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool (1574 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+[       OK ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration (395 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse (200 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry (1551 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+[       OK ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration (187 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse (3981 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether (402 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs (199 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry (1562 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame
+[       OK ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame (1530 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking
+[       OK ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking (3083 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames
+[       OK ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames (546 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute (381 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse (196 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels
+[       OK ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels (239 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute
+[       OK ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute (245 ms)
+[----------] 18 tests from HybridPropertyFieldRelocationTest (20235 ms total)
+
+[----------] 22 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (7 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats
+[       OK ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats (9 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether
+[       OK ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether (877 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+[       OK ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse (176 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+[       OK ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount (5905 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable
+[       OK ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable (491 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys
+[       OK ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys (201 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration
+[       OK ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration (866 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner
+[       OK ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner (597 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin (158 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether (241 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate
+[       OK ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate (2831 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes
+[       OK ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes (25 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin (46 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges
+[       OK ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges (260 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster
+[       OK ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster (174 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections (769 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly (627 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry
+[       OK ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry (169 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsEdgesButAcceptsTheirLogicallyEmptyMapAfterCompleteEdgeRemoval
+[       OK ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsEdgesButAcceptsTheirLogicallyEmptyMapAfterCompleteEdgeRemoval (104 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology
+[       OK ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology (537 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB
+[       OK ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB (6001 ms)
+[----------] 22 tests from HybridPropertyOwnerDeletionTest (21082 ms total)
+
+[----------] 12 tests from HybridPropertyLargePublicationTest
+[ RUN      ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex (133 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates
+[       OK ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates (188 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex (178 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable
+[       OK ] HybridPropertyLargePublicationTest.FreshContentQuotaAndCancellationLeaveIdsRootsAndSourceBytesRetryable (162 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia
+[       OK ] HybridPropertyLargePublicationTest.ExistingMultiLevelContentIndexKeepsUntouchedRoutesAndOtherMedia (722 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ContentIndexReusesItsPoolAndCannotReleaseItsCurrentDestination
+unknown file: Failure
+C++ exception with description "relocatable retired slot release requires one allocated retired non-Catalog generation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLargePublicationTest.ContentIndexReusesItsPoolAndCannotReleaseItsCurrentDestination (26 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseABRecoveryPreservesIdsAndBothPinnedLayouts (261 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries
+[       OK ] HybridPropertyLargePublicationTest.ExistingWholeRowCarrierInverseCancellationRefundsAndRetries (116 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshInverseCarriersDeduplicateAcrossOwnersAndPreserveNodeAndEdgeAuthority
+[       OK ] HybridPropertyLargePublicationTest.FreshInverseCarriersDeduplicateAcrossOwnersAndPreserveNodeAndEdgeAuthority (208 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshInverseCarrierABRecoverySelectsCompleteIdentityAndContentIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshInverseCarrierABRecoverySelectsCompleteIdentityAndContentIndex (276 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshInverseQuotaAndPreparedCancellationRefundCountersAndAllowRetry
+[       OK ] HybridPropertyLargePublicationTest.FreshInverseQuotaAndPreparedCancellationRefundCountersAndAllowRetry (172 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.RowReachabilityAfterFreshInverseKeepsSharedCarrierAndOldNativePin
+[       OK ] HybridPropertyLargePublicationTest.RowReachabilityAfterFreshInverseKeepsSharedCarrierAndOldNativePin (127 ms)
+[----------] 12 tests from HybridPropertyLargePublicationTest (2575 ms total)
+
+[----------] 8 tests from HybridPropertyLargeOwnershipTest
+[ RUN      ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats
+[       OK ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats (7 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.MixedNativeAndRowOwnersAreScannedInOneStableLogicalOrder
+[       OK ] HybridPropertyLargeOwnershipTest.MixedNativeAndRowOwnersAreScannedInOneStableLogicalOrder (57 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.OwnerAndDirectoryBudgetsNeverClaimAnIncompleteNativeScanIsExhausted
+[       OK ] HybridPropertyLargeOwnershipTest.OwnerAndDirectoryBudgetsNeverClaimAnIncompleteNativeScanIsExhausted (86 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.LogicalOwnerCursorCanResumeOnlyAfterAllMembershipsOfOneOwner
+[       OK ] HybridPropertyLargeOwnershipTest.LogicalOwnerCursorCanResumeOnlyAfterAllMembershipsOfOneOwner (60 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.CompleteNativeOwnershipProofRetiresOnlyOrphansAndPreservesPinnedValues
+[       OK ] HybridPropertyLargeOwnershipTest.CompleteNativeOwnershipProofRetiresOnlyOrphansAndPreservesPinnedValues (448 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.NativeReclamationRecoverySelectsCompleteOldOrNewRoutes
+[       OK ] HybridPropertyLargeOwnershipTest.NativeReclamationRecoverySelectsCompleteOldOrNewRoutes (410 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.RemovingAllNativeLargeFieldsReleasesOnlyUnpinnedImmutablePools
+[       OK ] HybridPropertyLargeOwnershipTest.RemovingAllNativeLargeFieldsReleasesOnlyUnpinnedImmutablePools (259 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.ConcurrentNativePublicationInvalidatesTheWholeOwnershipProof
+[       OK ] HybridPropertyLargeOwnershipTest.ConcurrentNativePublicationInvalidatesTheWholeOwnershipProof (248 ms)
+[----------] 8 tests from HybridPropertyLargeOwnershipTest (1579 ms total)
+
+[----------] 10 tests from HybridPropertyMultipleGroupsTest
+[ RUN      ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting
+[       OK ] HybridPropertyMultipleGroupsTest.DisabledFormatStillRejectsBeforeWriting (2 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots
+[       OK ] HybridPropertyMultipleGroupsTest.ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots (1402 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories
+[       OK ] HybridPropertyMultipleGroupsTest.WholeGroupOwnerDeletionKeepsOtherGroupsAndTheirSharedDirectories (846 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently
+[       OK ] HybridPropertyMultipleGroupsTest.NodeAndEdgeNamespacesCanConvertAndReturnIndependently (133 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupQuotaAndPrivateCancellationLeaveEveryPublishedRouteUnchanged (658 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory
+[       OK ] HybridPropertyMultipleGroupsTest.SecondGroupABRecoveryNeverDropsTheFirstGroupOrPublishesHalfADirectory (874 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup
+[       OK ] HybridPropertyMultipleGroupsTest.IndependentFieldWritesAndGlobalGCRecognizeReferencesInAnotherGroup (1000 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable
+[       OK ] HybridPropertyMultipleGroupsTest.AdjacentGroupsShareRealPropertyAndDirectoryPoolsWhileOldPinsRemainReadable (1154 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup
+[       OK ] HybridPropertyMultipleGroupsTest.FailedSharedPoolAppendCanBeRetriedWithoutPublishingOrLosingTheFirstGroup (674 ms)
+[ RUN      ] HybridPropertyMultipleGroupsTest.ReopenedConversionFindsNeighbourCapacityWithoutDependingOnAnInMemoryHint
+[       OK ] HybridPropertyMultipleGroupsTest.ReopenedConversionFindsNeighbourCapacityWithoutDependingOnAnInMemoryHint (395 ms)
+[----------] 10 tests from HybridPropertyMultipleGroupsTest (7142 ms total)
+
+[----------] Global test environment tear-down
+[==========] 143 tests from 6 test suites ran. (80534 ms total)
+[  PASSED  ] 140 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.NativeColumnQuotaAndPostFrameCancellationRefundAndRetryWithoutHalfPublishing
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.ActiveNativeColumnsReleaseDetachedPoolsAndReuseSlotsWithoutInverseOrCatalogHistoryGrowth
+[  FAILED  ] HybridPropertyLargePublicationTest.ContentIndexReusesItsPoolAndCannotReleaseItsCurrentDestination
+
+ 3 FAILED TESTS

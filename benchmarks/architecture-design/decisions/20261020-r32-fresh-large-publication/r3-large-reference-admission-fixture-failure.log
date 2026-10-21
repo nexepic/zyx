@@ -1,0 +1,32 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLargePublicationTest.*:HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations
+[==========] Running 4 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations
+[       OK ] HybridPropertyOrdinaryConversionTest.CandidateReusesAnIndependentLargeFieldAndGuardsReferenceMutations (177 ms)
+[----------] 1 test from HybridPropertyOrdinaryConversionTest (177 ms total)
+
+[----------] 3 tests from HybridPropertyLargePublicationTest
+[ RUN      ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+unknown file: Failure
+C++ exception with description "hybrid large reference requires retained-buffer admission" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex (26 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates
+unknown file: Failure
+C++ exception with description "hybrid large reference requires retained-buffer admission" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates (30 ms)
+[ RUN      ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex
+[       OK ] HybridPropertyLargePublicationTest.FreshContentABRecoverySelectsCompleteFieldsManifestsAndIndex (162 ms)
+[----------] 3 tests from HybridPropertyLargePublicationTest (218 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 2 test suites ran. (396 ms total)
+[  PASSED  ] 2 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyLargePublicationTest.FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex
+[  FAILED  ] HybridPropertyLargePublicationTest.EdgeFreshContentKeepsMainTopologyAndIndependentInlineUpdates
+
+ 2 FAILED TESTS

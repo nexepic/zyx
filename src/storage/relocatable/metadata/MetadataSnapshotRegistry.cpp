@@ -107,11 +107,13 @@ namespace graph::storage {
 	}
 
 	MetadataWriteGuard::MetadataWriteGuard(std::shared_ptr<MetadataSnapshotRegistryState> state,
-										   std::unique_lock<std::shared_mutex> lock) :
-		state_(std::move(state)), lock_(std::move(lock)) {}
+										   std::unique_lock<std::shared_mutex> lock,
+        const std::function<void(MetadataWriteGuard &)> &initialize) :
+		state_(std::move(state)), lock_(std::move(lock)) { if (initialize) initialize(*this); }
 
 	void MetadataWriteGuard::release() {
 		if (lock_.owns_lock()) {
+            if (release_observer_) { release_observer_(); release_observer_ = {}; }
 			lock_.unlock();
 		}
 		state_.reset();
@@ -153,6 +155,14 @@ namespace graph::storage {
 	MetadataWriteGuard MetadataSnapshotRegistry::beginWrite() {
 		return MetadataWriteGuard(state_, std::unique_lock(state_->publication_mutex));
 	}
+
+    MetadataWriteGuard MetadataSnapshotRegistry::beginWriteWithAdmission(
+        const std::function<void(const Superblock &)> &admission,
+        const std::function<void(MetadataWriteGuard &)> &initialize) {
+        std::unique_lock lock(state_->publication_mutex);
+        if (admission) admission(state_->bootstrap->recover());
+        return MetadataWriteGuard(state_, std::move(lock), initialize);
+    }
 
 	MetadataSnapshotPin MetadataSnapshotRegistry::pinCurrentUnderWrite(const MetadataWriteGuard &guard,
 																	   const Superblock &current) const {

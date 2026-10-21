@@ -31,6 +31,7 @@
 namespace graph::storage {
 
 	class BTreePageStore;
+    class CancellationCheckpoint;
 	class MetadataSnapshotPin;
 	class NativeGraphWriteTransaction;
 	class RelocatableMetadataStore;
@@ -318,6 +319,13 @@ namespace graph::storage {
 		[[nodiscard]] RelocatableMetadataStore &metadataStore() const { return metadata_; }
 
 	private:
+        friend class RelocatableMetadataStore;
+        struct FieldMutationSchema {
+            utils::OwnedStdVector<IndexDefinition> indexes;
+            utils::OwnedStdVector<ConstraintDefinition> constraints;
+        };
+        [[nodiscard]] FieldMutationSchema readFieldMutationSchema(const MetadataSnapshotPin &snapshot,
+            size_t maximumRecords, const CancellationCheckpoint *cancellation) const;
 		friend class SystemCatalogWriteSession;
 
 		BTreePageStore &pages_;

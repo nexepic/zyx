@@ -22,6 +22,8 @@
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 
 namespace graph::storage {
+    struct IndexDefinition;
+    struct ConstraintDefinition;
 
 	class DerivedObjectReachabilityReclaimer;
 	class ScalarIndexTreeReachabilityReclaimer;
@@ -231,7 +233,7 @@ namespace graph::storage {
 		// typed page-retirement callback required by a compound metadata commit.
 		// It never publishes a root deletion on its own.
 		[[nodiscard]] BTreeTreeRetirementPlan planTreeRetirement(const MetadataSnapshotPin &snapshot, uint64_t indexId,
-																 size_t maximumPages) const;
+																 size_t maximumPages, const CancellationCheckpoint *cancellation = nullptr) const;
 		// Plans first publication of one bounded, already ordered tree. The
 		// metadata writer rechecks root absence immediately before publication,
 		// so planning never makes an IndexId visible on its own. When provided,
@@ -334,6 +336,37 @@ namespace graph::storage {
 		friend class DerivedObjectReachabilityReclaimer;
 		friend class ScalarIndexTreeReachabilityReclaimer;
 		friend class TransactionBTreeOverlay;
+        friend class RelocatableMetadataStore;
+        friend class HybridPropertyContentIndexPreparation;
+        friend class HybridPropertyDirectoryPreparation;
+        // Private metadata-owned path: dirty images only, with no physical
+        // allocation, source reconciliation, densification or tree rebuild.
+        [[nodiscard]] BTreeStructuralMutationPlan planHybridMapImages(const MetadataSnapshotPin &snapshot,
+            uint64_t indexId, std::span<const BTreeScalarIndexOperation> operations,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+            const CancellationCheckpoint *cancellation) const;
+        // Called only with a definition authenticated by the metadata-owned
+        // field coordinator under this same source/writer.
+        [[nodiscard]] BTreeStructuralMutationPlan planNativeScalarIndexImages(const MetadataSnapshotPin &snapshot,
+            const IndexDefinition &definition, size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+            const CancellationCheckpoint *cancellation) const;
+        [[nodiscard]] BTreeStructuralMutationPlan planNativeConstraintImages(const MetadataSnapshotPin &snapshot,
+            const ConstraintDefinition &definition, size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+            const CancellationCheckpoint *cancellation) const;
+        [[nodiscard]] BTreeStructuralMutationPlan planNativeDerivedIndexImages(const MetadataSnapshotPin &snapshot,
+            uint64_t indexId, size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+            const CancellationCheckpoint *cancellation) const;
+        [[nodiscard]] BTreeStructuralMutationPlan planHybridMapImagesFromSource(const MetadataSnapshotPin &snapshot,
+            uint64_t indexId, size_t operationCount,
+            const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
+            std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
+            const CancellationCheckpoint *cancellation) const;
 		[[nodiscard]] Superblock retireIndexTreePages(Generation expectedMetadataGeneration,
 													  std::span<const IndexRootLocation> erasedRoots,
 													  std::span<const RetiredIndexTreePage> pages,

@@ -46,6 +46,7 @@ namespace graph::storage {
 	// pages and root publication occurs exactly once.
 	class BulkBTreeBuilder final {
         friend class RelocatableMetadataStore;
+        friend class HybridPropertyContentIndexPreparation;
         // Metadata-owned image preparation before any data write/cost admission.
         // Ordinary callers retain the existing write-through native preparer.
         using NativeImageSink = utils::OwnedFunction<void(const CatalogEntry &, std::span<BTreePage>,

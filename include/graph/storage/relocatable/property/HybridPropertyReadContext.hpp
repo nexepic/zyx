@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include <algorithm>
 #include <limits>
 #include <vector>
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
@@ -29,6 +30,11 @@ public:
         RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
         const CancellationCheckpoint *cancellation = nullptr)
         : HybridPropertyReadContext(io, pages, metadata, snapshot, load(io, metadata, snapshot), cancellation) {}
+    // Typed maintenance can borrow the already authenticated page store's file
+    // without acquiring raw I/O authority or constructing a second allocator.
+    HybridPropertyReadContext(SlottedPagePool &pages, RelocatableMetadataStore &metadata,
+        const MetadataSnapshotPin &snapshot, const CancellationCheckpoint *cancellation = nullptr)
+        : HybridPropertyReadContext(pages.pool_.io_, pages, metadata, snapshot, cancellation) {}
     HybridPropertyReadContext(const HybridPropertyReadContext &) = delete;
     HybridPropertyReadContext &operator=(const HybridPropertyReadContext &) = delete;
     HybridPropertyReadContext(HybridPropertyReadContext &&) noexcept = default;
@@ -37,6 +43,38 @@ public:
         return &snapshot == &snapshot_ && metadata_.ownsSnapshot(snapshot) && snapshot.superblock().generation == generation_;
     }
     void checkpoint() const { check(); }
+    [[nodiscard]] bool hasNativeGroups() const {
+        check(); return hasRoot(EntityPropertyOwnerKind::EPOK_NODE, 3) || hasRoot(EntityPropertyOwnerKind::EPOK_EDGE, 3);
+    }
+    // Fixed-size authenticated source for bounded inverse conversion. This
+    // grants no write authority; the caller must retain/fence the same pin.
+    [[nodiscard]] std::optional<HybridPropertyGroupRecord> groupRecord(EntityPropertyKey owner,
+        const std::function<void(size_t)> &boundaryAdmission = {}) const {
+        return findGroup(owner, boundaryAdmission);
+    }
+    // First actual membership owner beyond a stable logical cursor. Fieldless
+    // live owners have no LargeValue references and need no maintenance visit.
+    [[nodiscard]] std::optional<EntityPropertyKey> nextOwnerAfter(EntityPropertyOwnerKind kind, uint64_t afterOwnerId,
+        const std::function<void(size_t)> &boundaryAdmission = {}) const {
+        check(); require(hybrid_property_detail::validKind(kind) && afterOwnerId <= RSS_HYBRID_MAX_ENTITY_ID,
+            "hybrid owner seek has an invalid namespace or cursor");
+        if (!hasRoot(kind, 0)) return {};
+        HybridPropertyOwnerMap::Key first{};
+        if (afterOwnerId == RSS_HYBRID_MAX_ENTITY_ID) first[0] = std::byte{0x80};
+        else if (afterOwnerId) {
+            first = HybridPropertyDirectoryCodec::ownerKey({kind, afterOwnerId + 1U}, 1);
+            std::fill(first.begin() + 8, first.end(), std::byte{0});
+        }
+        std::optional<EntityPropertyKey> result;
+        const auto map = ownerMap(kind);
+        static_cast<void>(map.visitFrom(snapshot_, first, 1, [&](const auto &entry) {
+            const auto field = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, kind);
+            static_cast<void>(HybridPropertyDirectoryCodec::decodeSource(entry.value));
+            require(field.owner.entity_id > afterOwnerId, "hybrid owner seek did not advance");
+            result = field.owner; return false;
+        }, boundaryAdmission, cancellation_));
+        return result;
+    }
     [[nodiscard]] Enumeration visitOwner(EntityPropertyKey owner, size_t maximumEntries,
         const std::function<bool(uint32_t, HybridPropertySource)> &visitor,
         const std::function<void(size_t)> &boundaryAdmission = {}) const {
@@ -141,6 +179,8 @@ public:
 private:
     friend class HybridPropertyReadContextTestAccess;
     friend class HybridPropertyDirectoryIntegrity;
+    friend class HybridPropertyDemotionPreparation;
+    friend class HybridPropertyColumnDelta;
     HybridPropertyReadContext(std::shared_ptr<StorageIO> io, SlottedPagePool &pages,
         RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
         std::optional<HybridPropertyDescriptor> descriptor, const CancellationCheckpoint *cancellation)

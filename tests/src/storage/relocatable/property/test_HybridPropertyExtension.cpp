@@ -129,6 +129,42 @@ TEST(HybridPropertyExtensionTest, WholeRowsWrongTokensTrailingDataAndWrongLargeM
         EXPECT_THROW(encodedReference(ref, memory), FormatException) << bad;
     }
 }
+TEST(HybridPropertyExtensionTest, RangeInspectionValidatesSingleFieldFramingAndCanonicalBodyBeforeReturningShape) {
+    MaterializedByteBudget memory(65536);
+    PropertyValue::MapType map{{std::string(1024, 'a') + "a", PropertyValue(std::string(128 * 1024, 'x'))},
+        {std::string(1024, 'a') + "b", PropertyValue(std::vector<PropertyValue>{PropertyValue{}, PropertyValue(true)})}};
+    const std::vector<PropertyCollectionRootEntry> entries{{TOKEN, PropertyValue(std::move(map))}};
+    const auto original = EntityPropertyLargeValuePayloadCodec::encode(entries);
+    auto bytes = encodedReference(reference(original.size()), memory); const auto view = open(bytes, [](size_t) {});
+    const auto expected = view.inspectLargePayload(original, [](size_t) {});
+    size_t largest = 0;
+    const auto inspect = [&](const std::vector<std::byte> &payload) {
+        const auto read = [&](size_t offset, std::span<std::byte> target) {
+            ASSERT_LE(offset, payload.size()); ASSERT_LE(target.size(), payload.size() - offset);
+            largest = (std::max)(largest, target.size());
+            std::copy_n(payload.begin() + offset, target.size(), target.begin());
+        };
+        return view.inspectLargePayloadRange(std::ref(read), [](size_t) {});
+    };
+    const auto actual = inspect(original);
+    EXPECT_EQ(actual.encoded_bytes, expected.encoded_bytes); EXPECT_EQ(actual.value_count, expected.value_count);
+    EXPECT_EQ(actual.map_key_bytes, expected.map_key_bytes); EXPECT_EQ(actual.string_bytes, expected.string_bytes);
+    EXPECT_LE(largest, 256U);
+    // Version, count, declared width, directory token/offset, body token and
+    // canonical kind errors all fail even when a caller authenticated the bytes.
+    for (size_t offset : {size_t(4), size_t(8), size_t(12), size_t(16), size_t(20), size_t(24), size_t(28)}) {
+        auto payload = original; payload[offset] ^= std::byte{0x80};
+        EXPECT_THROW(static_cast<void>(inspect(payload)), FormatException) << offset;
+    }
+    for (auto payload : {largePayload(TOKEN, 2), largePayload(TOKEN + 1, 1)}) {
+        auto encoded = encodedReference(reference(payload.size()), memory); const auto wrong = open(encoded, [](size_t) {});
+        const auto read = [&](size_t offset, std::span<std::byte> target) {
+            ASSERT_LE(offset, payload.size()); ASSERT_LE(target.size(), payload.size() - offset);
+            std::copy_n(payload.begin() + offset, target.size(), target.begin());
+        };
+        EXPECT_THROW(static_cast<void>(wrong.inspectLargePayloadRange(std::ref(read), [](size_t) {})), FormatException);
+    }
+}
 TEST(HybridPropertyExtensionTest, RealDecodeAccountsRefundReferenceDirectoryAndValueRefusalBeforeRetry) {
     using graph::query::execution::MaterializedByteReservation;
     MaterializedByteBudget output(65536), refused(4096), accepted(65536);

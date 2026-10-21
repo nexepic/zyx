@@ -4,7 +4,10 @@
 #include "graph/storage/relocatable/property/HybridPropertyColumnDelta.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp"
 #include "graph/storage/relocatable/metadata/HybridPropertyColumnWritePreparation.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyDemotionPreparation.hpp"
+#include "graph/storage/relocatable/metadata/HybridPropertyRowPreparation.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyValueReader.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyLargeFieldPreparation.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyPageImage.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
@@ -35,6 +38,7 @@ protected:
     HybridPropertyScalarKind scalar_kind_ = HybridPropertyScalarKind::HPSK_INT64;
     uint64_t scalar_word_ = 100;
     uint32_t group_memberships_ = 49;
+    unsigned live_owner_count_ = 48, extra_columns_ = 0, extra_column_missing_owner_ = 0, column_missing_owner_ = 0;
     bool orphan_owner_member_ = false, orphan_column_entry_ = false;
     unsigned orphan_physical_record_ = 0;
     bool empty_physical_page_ = false, stale_free_hint_ = false;
@@ -45,8 +49,8 @@ protected:
         options.entity_pool_owner_id = 901; options.logical_id_lease_block_size = 1;
         options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
         NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
-        auto transaction = planner.beginTransaction(); transaction.reserveNodeIds(extraRow ? 65 : 48);
-        for (uint64_t i = 1; i <= 48; ++i) transaction.createNodeWithReservedId(i, {});
+        auto transaction = planner.beginTransaction(); transaction.reserveNodeIds(extraRow ? 65 : live_owner_count_);
+        for (uint64_t i = 1; i <= live_owner_count_; ++i) transaction.createNodeWithReservedId(i, {});
         if (extraRow) {
             transaction.createNodeWithReservedId(65, {});
             transaction.replaceNodeProperty({65, graph::Node::typeId, {{2, graph::PropertyValue("row-field")}}});
@@ -69,19 +73,30 @@ protected:
         }
         auto current = metadata_->openSnapshot().superblock();
         const auto lsn = LogSequenceNumber(current.checkpoint_lsn.value() + 1);
-        PageOwnerHeader owner{PageId(41), 902, PageOwnerKind::POK_PROPERTY, 0,
+        // Large source values can consume the old fixture's fixed PageIds.
+        // Choose unused logical IDs while retaining the historical small case.
+        const auto firstPage = (std::max)(UINT64_C(41), current.next_logical_page_id);
+        PageOwnerHeader owner{PageId(firstPage), 902, PageOwnerKind::POK_PROPERTY, 0,
             RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(99), lsn};
         auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
-        auto image = HybridPropertyPageImage::create(PageId(41), Generation(99), metadata_->openSnapshot().superblock().generation, memory);
+        auto image = HybridPropertyPageImage::create(owner.page_id, Generation(99), metadata_->openSnapshot().superblock().generation, memory);
         HybridPropertyGroupRecord group{EntityPropertyOwnerKind::EPOK_NODE, HybridPropertyGroupMode::HPGM_HYBRID,
-            1, Generation(1), (UINT64_C(1) << 48) - 1, group_memberships_, 1};
+            1, Generation(1), (live_owner_count_ == 64 ? UINT64_MAX : (UINT64_C(1) << live_owner_count_) - 1), group_memberships_, 1};
         if (largeReference) group.semantic_generation = metadata_->openSnapshot().superblock().generation;
+        group.memberships -= unsigned(bool(column_missing_owner_));
+        group.columns += extra_columns_;
+        group.memberships += extra_columns_ * (live_owner_count_ - unsigned(bool(extra_column_missing_owner_)));
         const auto groupSlot = image.appendGroup(group);
         HybridPropertyColumnRecord column;
         column.identity = {group.owner_kind, scalar_kind_, 1, 1, Generation(1)};
         column.live = column.presence = group.live; column.nulls = UINT64_C(1) << 2;
-        for (unsigned i = 0; i < 48; ++i) column.words[i] = i == 2 ? 0 :
+        for (unsigned i = 0; i < live_owner_count_; ++i) column.words[i] = i == 2 ? 0 :
             (scalar_kind_ == HybridPropertyScalarKind::HPSK_INT64 ? i + 100 : scalar_word_);
+        if (column_missing_owner_) {
+            const auto slot = column_missing_owner_ - 1U;
+            const auto bit = UINT64_C(1) << slot;
+            column.presence &= ~bit; column.nulls &= ~bit; column.words[slot] = 0;
+        }
         const auto columnSlot = image.appendColumn(column, group, group.semantic_generation);
         graph::utils::OwnedHeapReservation referenceCredit(memory);
         const auto admitReference = [&](size_t bytes) { referenceCredit.set(bytes); };
@@ -94,6 +109,16 @@ protected:
             graph::PropertyValue(textLength == 5 ? std::string("field") : std::string(textLength, 'x')), 3952, *memory);
         const auto extensionSlot = image.appendExtension(extension, {group.owner_kind, 1}, 2, group,
             group.semantic_generation, std::ref(admitReference));
+        std::vector<SlottedSlotReference> extraColumns;
+        for (unsigned i = 0; i < extra_columns_; ++i) {
+            auto extra = column; extra.identity.token = i + 3;
+            if (extra_column_missing_owner_) {
+                const auto slot = extra_column_missing_owner_ - 1U;
+                const auto bit = UINT64_C(1) << slot;
+                extra.presence &= ~bit; extra.nulls &= ~bit; extra.words[slot] = 0;
+            }
+            extraColumns.push_back(image.appendColumn(extra, group, group.semantic_generation));
+        }
         std::optional<SlottedSlotReference> sharedSlot;
         if (shared_large_owner_) {
             ASSERT_TRUE(largeReference);
@@ -113,7 +138,7 @@ protected:
         // native outer owner. No fabricated allocator/Page Directory hints.
         SharedPagePoolAllocationRequest request;
         request.segment_id = SegmentId(31); request.pool_kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
-        request.pool_owner_id = 902; request.generation = Generation(99); request.page_id = PageId(41);
+        request.pool_owner_id = 902; request.generation = Generation(99); request.page_id = owner.page_id;
         request.page_owner_id = 902; request.page_owner_kind = PageOwnerKind::POK_PROPERTY;
         {
             const auto encoded = image.serialize();
@@ -139,9 +164,18 @@ protected:
             entries[role].push_back({std::vector<std::byte>(bytes.begin(), bytes.end()), 0});
         };
         using Codec = HybridPropertyDirectoryCodec;
-        for (uint64_t id = 1; id <= 48; ++id)
-            add.template operator()<HybridPropertyOwnerMap>(0, Codec::ownerKey({group.owner_kind, id}, 1),
-                Codec::sourceValue(HybridPropertySource::HPS_COLUMN));
+        for (uint64_t id = 1; id <= live_owner_count_; ++id)
+            if (id != column_missing_owner_)
+                add.template operator()<HybridPropertyOwnerMap>(0, Codec::ownerKey({group.owner_kind, id}, 1),
+                    Codec::sourceValue(HybridPropertySource::HPS_COLUMN));
+        for (unsigned i = 0; i < extra_columns_; ++i) {
+            for (uint64_t id = 1; id <= live_owner_count_; ++id)
+                if (id != extra_column_missing_owner_)
+                    add.template operator()<HybridPropertyOwnerMap>(0, Codec::ownerKey({group.owner_kind, id}, i + 3),
+                        Codec::sourceValue(HybridPropertySource::HPS_COLUMN));
+            add.template operator()<HybridPropertyFieldDirectoryMap>(1, Codec::columnKey(1, i + 3),
+                Codec::locatorValue(extraColumns[i]));
+        }
         add.template operator()<HybridPropertyOwnerMap>(0, Codec::ownerKey({group.owner_kind, 1}, 2),
             Codec::sourceValue(HybridPropertySource::HPS_EXTENSION));
         if (orphan_owner_member_ || shared_large_owner_)
@@ -158,7 +192,7 @@ protected:
         for (size_t role = 0; role < 4; ++role) {
             const auto id = hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(role));
             const auto next = LogSequenceNumber(metadata_->openSnapshot().superblock().checkpoint_lsn.value() + 1);
-            PageOwnerHeader treeOwner{PageId(101 + role), id, PageOwnerKind::POK_INDEX, 0,
+            PageOwnerHeader treeOwner{PageId(firstPage + 60 + role), id, PageOwnerKind::POK_INDEX, 0,
                 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(99), next};
             BTreePageHeader header; header.index_id = id; header.page_id = treeOwner.page_id;
             header.generation = Generation(99); header.leaf_value_layout = BTreeLeafValueLayout::BLVL_EMPTY;
@@ -880,6 +914,46 @@ TEST_F(HybridPropertyReadContextTest, DirectoryIntegrityRejectsAuthenticatedWhol
     EXPECT_EQ(memory->used(), 0U);
 }
 
+TEST_F(HybridPropertyReadContextTest, DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody) {
+    seed(false, 512 * 1024, true); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(128 * 1024);
+    graph::property_decode::AllocationScope forbid(nullptr, [](void *, size_t) {
+        throw std::logic_error("large integrity cannot decode PropertyValue");
+    });
+    const auto report = HybridPropertyDirectoryIntegrity::verify(context, pin, memory, large_values_.get());
+    EXPECT_EQ(report.groups, 1U); EXPECT_EQ(report.large_values, 1U); EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(HybridPropertyReadContextTest, LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry) {
+    seed(false, 512 * 1024, true); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1);
+    {
+        graph::utils::OwnedAllocationScope owned(tiny);
+        EXPECT_THROW(static_cast<void>(HybridPropertyValueReader::exists(context, pin,
+            {EntityPropertyOwnerKind::EPOK_NODE, 1}, 2, true, large_values_.get())),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(tiny->used(), 0U);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(128 * 1024);
+    {
+        graph::utils::OwnedAllocationScope owned(memory);
+        graph::property_decode::AllocationScope forbid(nullptr, [](void *, size_t) {
+            throw std::logic_error("inspection must not decode the large field");
+        });
+        EXPECT_EQ(HybridPropertyValueReader::exists(context, pin,
+            {EntityPropertyOwnerKind::EPOK_NODE, 1}, 2, true, large_values_.get()), true);
+        size_t encoded = 0;
+        const SelectedPropertyReadAdmission admission = [&](size_t bytes) { encoded += bytes; };
+        const auto field = HybridPropertyValueReader::read(context, pin, {EntityPropertyOwnerKind::EPOK_NODE, 1}, 2,
+            large_values_.get(), &admission, HybridPropertyValueReader::ReadMode::HRM_ADMISSION_ONLY);
+        EXPECT_EQ(field.route, HybridPropertyReadContext::FieldRoute::HFR_FOUND); EXPECT_FALSE(field.value);
+        EXPECT_EQ(encoded, sizeof(uint32_t) + CanonicalPropertyValueCodec::HEADER_BYTES + sizeof(uint32_t) + 512 * 1024);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
 TEST_F(HybridPropertyReadContextTest, DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess) {
     seed(); const auto pin = metadata_->openSnapshot();
     class Toggle final : public CancellationCheckpoint {
@@ -1002,5 +1076,716 @@ TEST_F(HybridPropertyReadContextTest, NativeReferenceWalkRejectsWrongManifestIde
     EXPECT_THROW(HybridPropertyDirectoryIntegrity::verifyPageOwnership(context, pin, PageId(41), memory,
         large_values_.get(), std::ref(observe)), FormatException);
     EXPECT_EQ(emitted, 0U); EXPECT_EQ(memory->used(), 0U);
+}
+namespace {
+class DemotionNoPhysicalAllocator final : public MetadataPageAllocator {
+public:
+    MetadataPageId allocateMetadataPageId() override { throw std::logic_error("unexpected metadata allocation"); }
+    MetadataPageAllocation allocatePage(Generation, LogSequenceNumber, std::span<const PhysicalSlotId>) override {
+        throw std::logic_error("unexpected physical allocation");
+    }
+    void abandonPage(PhysicalPageRef) noexcept override {}
+};
+}
+TEST_F(HybridPropertyReadContextTest, FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes) {
+    seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    for (bool remove : {false, true}) {
+        const graph::PropertyValue replacement(std::string("changed type"));
+        auto change = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+            {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, remove ? nullptr : &replacement);
+        ASSERT_TRUE(change); const auto baseline = memory->used();
+        DemotionNoPhysicalAllocator allocator;
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        {
+            HybridPropertyDemotionPreparation prepared(batch, pin, fields, *change, memory);
+            EXPECT_EQ(prepared.group().columns, 0U);
+            EXPECT_EQ(prepared.group().memberships, change->sourceGroup().memberships - unsigned(remove));
+            EXPECT_EQ(prepared.group().live, change->sourceGroup().live);
+            EXPECT_EQ(prepared.erasedOwners().size(), unsigned(remove));
+            EXPECT_EQ(prepared.owners().size(), 48U - unsigned(remove));
+            EXPECT_EQ(prepared.extensions().size(), prepared.owners().size());
+            EXPECT_EQ(prepared.erasedColumn(), HybridPropertyDirectoryCodec::columnKey(1, 1));
+            ASSERT_GE(prepared.pages().size(), 2U);
+            const auto &sourceImage = prepared.pages()[0];
+            const SlottedSlotReference unrelated{sourceImage.pageId(), 2, 1};
+            auto oldImage = fields.cloneForMutation(pin, sourceImage.pageId(), next, memory);
+            EXPECT_EQ(sourceImage.readRecord(unrelated), oldImage.readRecord(unrelated));
+            EXPECT_THROW(sourceImage.readRecord(change->columnReference()), FormatException);
+            EXPECT_EQ(oldImage.readColumn(change->columnReference(), change->sourceColumn().identity,
+                change->sourceGroup(), next), change->sourceColumn());
+            for (const auto &entry : prepared.extensions()) {
+                const auto key = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, EntityPropertyOwnerKind::EPOK_NODE);
+                const auto locator = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
+                const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+                    [&](const auto &page) { return page.pageId() == locator.page_id; });
+                ASSERT_NE(image, prepared.pages().end());
+                const auto bytes = image->readRecord(locator);
+                const auto extension = HybridPropertyExtensionView::open(bytes, key.owner, key.token, next, next, next);
+                const auto value = extension.decodeInline([](const auto &) {});
+                if (key.owner.entity_id == 1) EXPECT_EQ(value, replacement);
+                else if (key.owner.entity_id == 3) EXPECT_EQ(value, graph::PropertyValue());
+                else EXPECT_EQ(value, graph::PropertyValue(int64_t(key.owner.entity_id + 99)));
+            }
+        }
+        EXPECT_EQ(memory->used(), baseline);
+        EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
+        EXPECT_EQ(batch.current(), pin.superblock());
+        EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+TEST_F(HybridPropertyReadContextTest, FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation) {
+    seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    auto deleted = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr, true);
+    auto change = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr);
+    ASSERT_TRUE(deleted); ASSERT_TRUE(change); const auto baseline = memory->used();
+    const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    DemotionNoPhysicalAllocator allocator;
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *deleted, memory)), FormatException);
+        EXPECT_EQ(batch.candidate().next_logical_page_id, pin.superblock().next_logical_page_id);
+    }
+    {
+        auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024);
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), small);
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *change, small)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(small->used(), 0U);
+    }
+    struct CancelAfterCopy final : CancellationCheckpoint {
+        graph::query::execution::MaterializedByteBudget &memory;
+        size_t before;
+        mutable bool triggered = false;
+        CancelAfterCopy(graph::query::execution::MaterializedByteBudget &m, size_t n) : memory(m), before(n) {}
+        void check() const override {
+            if (memory.used() > before + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+                triggered = true; throw std::runtime_error("cancel after demotion frame copy");
+            }
+        }
+    } cancellation(*memory, baseline);
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *change, memory, &cancellation)), std::runtime_error);
+        EXPECT_TRUE(cancellation.triggered);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    struct CancelAfterPrivateId final : CancellationCheckpoint {
+        const MetadataWriteBatch &batch;
+        uint64_t source_next;
+        mutable bool triggered = false;
+        explicit CancelAfterPrivateId(const MetadataWriteBatch &b)
+            : batch(b), source_next(b.current().next_logical_page_id) {}
+        void check() const override {
+            if (batch.candidate().next_logical_page_id > source_next) {
+                triggered = true; throw std::runtime_error("cancel after private demotion ID allocation");
+            }
+        }
+    };
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        CancelAfterPrivateId late(batch);
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *change, memory, &late)), std::runtime_error);
+        EXPECT_TRUE(late.triggered);
+        EXPECT_GT(batch.candidate().next_logical_page_id, pin.superblock().next_logical_page_id);
+        EXPECT_EQ(batch.current(), pin.superblock());
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        HybridPropertyDemotionPreparation retry(batch, pin, fields, *change, memory);
+        EXPECT_EQ(retry.extensions().size(), 47U);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
+}
+TEST_F(HybridPropertyReadContextTest, FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement) {
+    seed(false, 8192, true); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024 * 1024);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const graph::PropertyValue replacement(std::string(8192, 'z'));
+    auto change = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, &replacement);
+    ASSERT_TRUE(change); const auto baseline = memory->used();
+    const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    DemotionNoPhysicalAllocator allocator;
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *change, memory)), FormatException);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    static_cast<void>(large_values_->contentIndex());
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        std::optional<HybridPropertyLargeFieldPreparation> proposal;
+        size_t resolved = 0;
+        const auto resolve = [&](EntityPropertyKey owner, uint32_t token, const graph::PropertyValue &value) {
+            ++resolved;
+            proposal = HybridPropertyLargeFieldPreparation::prepare(*metadata_, pin, *large_values_, owner, token,
+                value, LargeValueId(batch.candidate().next_large_value_id), memory);
+            if (!proposal->reused()) EXPECT_EQ(batch.allocateLargeValueId(), proposal->reference().value_id);
+            const auto encoded = LargeValueRefCodec::encode(proposal->reference());
+            return HybridPropertyExtensionView::encodeReference(owner, token, next, encoded,
+                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *memory, [](size_t) {});
+        };
+        HybridPropertyDemotionPreparation prepared(batch, pin, fields, *change, memory, nullptr, resolve);
+        EXPECT_EQ(resolved, 1U); ASSERT_TRUE(proposal); EXPECT_FALSE(proposal->reused());
+        ASSERT_EQ(prepared.extensions().size(), 48U);
+        const auto locator = HybridPropertyDirectoryCodec::decodeLocator(prepared.extensions()[0].value);
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == locator.page_id; });
+        ASSERT_NE(image, prepared.pages().end());
+        const auto bytes = image->readRecord(locator);
+        graph::utils::OwnedHeapReservation referenceCredit(memory);
+        const auto reference = HybridPropertyExtensionView::open(bytes,
+            {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, next, next,
+            [&](size_t bytes) { referenceCredit.set(bytes); });
+        ASSERT_TRUE(reference.reference()); EXPECT_EQ(*reference.reference(), proposal->reference());
+        const SlottedSlotReference unrelated{prepared.pages()[0].pageId(), 2, 1};
+        auto oldImage = fields.cloneForMutation(pin, unrelated.page_id, next, memory);
+        EXPECT_EQ(prepared.pages()[0].readRecord(unrelated), oldImage.readRecord(unrelated));
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
+}
+TEST_F(HybridPropertyReadContextTest, MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes) {
+    live_owner_count_ = 49; group_memberships_ = 50; seed();
+    const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    auto one = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr);
+    auto two = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 2}, 1, next, memory, nullptr);
+    ASSERT_TRUE(one); ASSERT_TRUE(two);
+    ASSERT_EQ(one->action(), HybridPropertyColumnDelta::Action::HCD_REPLACE_COLUMN);
+    ASSERT_EQ(two->action(), HybridPropertyColumnDelta::Action::HCD_REPLACE_COLUMN);
+    const std::array<const HybridPropertyColumnDelta *, 2> changes{&*one, &*two};
+    const auto baseline = memory->used(); const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    {
+        auto merged = HybridPropertyColumnDelta::mergeExistingColumnChanges(changes, memory);
+        EXPECT_EQ(merged.action(), HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD);
+        EXPECT_EQ(merged.changedSlots(), 3U); EXPECT_EQ(merged.requestedSlots(), 3U);
+        EXPECT_EQ(merged.effects().memberships, -2); EXPECT_EQ(merged.effects().columns, -1);
+        EXPECT_EQ(merged.demotedCells()[0].kind, HybridPropertyColumnDelta::CellKind::HCC_MISSING);
+        EXPECT_EQ(merged.demotedCells()[1].kind, HybridPropertyColumnDelta::CellKind::HCC_MISSING);
+        EXPECT_EQ(merged.demotedCells()[2].kind, HybridPropertyColumnDelta::CellKind::HCC_NULL);
+        DemotionNoPhysicalAllocator allocator;
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        HybridPropertyDemotionPreparation prepared(batch, pin, fields, merged, memory);
+        EXPECT_EQ(prepared.group().memberships, 48U); EXPECT_EQ(prepared.group().columns, 0U);
+        ASSERT_EQ(prepared.erasedOwners().size(), 2U); EXPECT_EQ(prepared.extensions().size(), 47U);
+        for (unsigned i = 0; i < 2; ++i)
+            EXPECT_EQ(prepared.erasedOwners()[i], HybridPropertyDirectoryCodec::ownerKey({EntityPropertyOwnerKind::EPOK_NODE, i + 1U}, 1));
+        EXPECT_EQ(prepared.group().live, one->sourceGroup().live);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
+}
+TEST_F(HybridPropertyReadContextTest, MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking) {
+    seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const graph::PropertyValue first(int64_t(300)), second(int64_t(400)), unchanged(int64_t(103));
+    auto one = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, &first);
+    auto two = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 2}, 1, next, memory, &second);
+    auto noop = HybridPropertyColumnDelta::planExistingColumn(context, pin,
+        {EntityPropertyOwnerKind::EPOK_NODE, 4}, 1, next, memory, &unchanged);
+    ASSERT_TRUE(one); ASSERT_TRUE(two); ASSERT_TRUE(noop);
+    const std::array<const HybridPropertyColumnDelta *, 3> changes{&*one, &*two, &*noop};
+    const auto baseline = memory->used();
+    {
+        auto merged = HybridPropertyColumnDelta::mergeExistingColumnChanges(changes, memory);
+        ASSERT_EQ(merged.action(), HybridPropertyColumnDelta::Action::HCD_REPLACE_COLUMN);
+        EXPECT_EQ(merged.changedSlots(), 3U); EXPECT_EQ(merged.requestedSlots(), 11U);
+        EXPECT_EQ(merged.effects().memberships, 0); EXPECT_EQ(merged.effects().columns, 0);
+        EXPECT_EQ(merged.replacementColumn().words[0], 300U); EXPECT_EQ(merged.replacementColumn().words[1], 400U);
+        const std::array<const HybridPropertyColumnDelta *, 1> final{&merged};
+        HybridPropertyColumnWritePreparation prepared(pin, fields, final, memory);
+        ASSERT_EQ(prepared.pages().size(), 1U);
+        const auto group = prepared.pages()[0].readGroup(merged.groupReference(), EntityPropertyOwnerKind::EPOK_NODE, 1, next);
+        auto identity = merged.sourceColumn().identity; identity.semantic_generation = next;
+        const auto column = prepared.pages()[0].readColumn(merged.columnReference(), identity, group, next);
+        EXPECT_EQ(column.words[0], 300U); EXPECT_EQ(column.words[1], 400U); EXPECT_EQ(column.words[3], 103U);
+        const std::array<const HybridPropertyColumnDelta *, 2> overlap{&merged, &*two};
+        const auto held = memory->used();
+        EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(overlap, memory), FormatException);
+        EXPECT_THROW((HybridPropertyColumnWritePreparation(pin, fields, overlap, memory)), FormatException);
+        EXPECT_EQ(memory->used(), held);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    const std::array<const HybridPropertyColumnDelta *, 2> duplicate{&*noop, &*noop};
+    EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(duplicate, memory), FormatException);
+    const std::array<const HybridPropertyColumnDelta *, 1> noChanges{&*noop};
+    {
+        auto merged = HybridPropertyColumnDelta::mergeExistingColumnChanges(noChanges, memory);
+        EXPECT_EQ(merged.action(), HybridPropertyColumnDelta::Action::HCD_NO_CHANGE); EXPECT_EQ(merged.changedSlots(), 0U);
+    }
+    auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024);
+    EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(changes, small),
+        graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(small->used(), 0U);
+    struct Cancel final : CancellationCheckpoint {
+        mutable unsigned calls = 0;
+        void check() const override { if (++calls == 3) throw std::runtime_error("cancel while merging a column"); }
+    } cancellation;
+    EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(changes, memory,
+        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, &cancellation), std::runtime_error);
+    EXPECT_EQ(memory->used(), baseline);
+    auto moved = std::move(*two);
+    const std::array<const HybridPropertyColumnDelta *, 1> movedFrom{&*two}, nullPlan{nullptr};
+    EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(movedFrom, memory), FormatException);
+    EXPECT_THROW(HybridPropertyColumnDelta::mergeExistingColumnChanges(nullPlan, memory), FormatException);
+    EXPECT_EQ(memory->used(), baseline);
+}
+TEST_F(HybridPropertyReadContextTest, InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting) {
+    seed(false, 8192, true); auto pin = metadata_->openSnapshot(); const auto before = pin.superblock();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(128 * 1024);
+    const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    {
+        HybridPropertyRowPreparation prepared(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+            1, memory, large_values_.get());
+        EXPECT_EQ(prepared.databaseId(), before.database_id); EXPECT_EQ(prepared.sourceGeneration(), before.generation);
+        EXPECT_EQ(prepared.sourceGroup().memberships, 49U); ASSERT_EQ(prepared.rows().size(), 48U);
+        EXPECT_GT(memory->used(), 8192U);
+        auto moved = std::move(prepared);
+        pin.release(); // Returned rows own their values and do not borrow the pin.
+        for (size_t i = 0; i < moved.rows().size(); ++i) {
+            const auto &row = moved.rows()[i]; EXPECT_EQ(row.owner_entity_id, i + 1U); EXPECT_EQ(row.owner_entity_type, graph::Node::typeId);
+            ASSERT_EQ(row.entries.size(), i ? 1U : 2U); EXPECT_EQ(row.entries[0].key_token, 1U);
+            EXPECT_EQ(row.entries[0].value, i == 2 ? graph::PropertyValue() : graph::PropertyValue(int64_t(i + 100)));
+        }
+        EXPECT_EQ(moved.rows()[0].entries[1].value, graph::PropertyValue(std::string(8192, 'x')));
+        EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    }
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+}
+TEST_F(HybridPropertyReadContextTest, InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode) {
+    group_memberships_ = 5000; seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    size_t decoded = 0;
+    graph::property_decode::AllocationScope forbid(&decoded, [](void *owner, size_t) {
+        ++*static_cast<size_t *>(owner); throw std::logic_error("preflight must not decode values");
+    });
+    EXPECT_THROW((HybridPropertyRowPreparation(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+        1, memory)), std::length_error);
+    EXPECT_EQ(decoded, 0U); EXPECT_EQ(memory->used(), 0U);
+}
+TEST_F(HybridPropertyReadContextTest, InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently) {
+    seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    const auto size = io_->fileSize(), epoch = io_->dataMutationEpoch();
+    EXPECT_THROW((HybridPropertyRowPreparation(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+        2, memory)), FormatException);
+    EXPECT_THROW((HybridPropertyRowPreparation(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+        1, std::make_shared<graph::query::execution::MaterializedByteBudget>(2 * 1024 * 1024))), FormatException);
+    auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(2048);
+    EXPECT_THROW((HybridPropertyRowPreparation(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+        1, small)), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(small->used(), 0U);
+    struct Cancel final : CancellationCheckpoint {
+        mutable unsigned calls = 0;
+        void check() const override { if (++calls == 20) throw std::runtime_error("cancel inverse source preparation"); }
+    } cancellation;
+    EXPECT_THROW((HybridPropertyRowPreparation(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE,
+        1, memory, nullptr, &cancellation)), std::runtime_error);
+    EXPECT_EQ(memory->used(), 0U);
+    {
+        HybridPropertyRowPreparation retry(context, pin, *metadata_, *entities_, EntityPropertyOwnerKind::EPOK_NODE, 1, memory);
+        EXPECT_EQ(retry.rows().size(), 48U);
+    }
+    EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
+}
+#endif
+
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyReadContextTest, MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges) {
+    extra_columns_ = 2; seed();
+    const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(262144);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    const graph::PropertyValue text("new type"), number(int64_t(789));
+    auto removed = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
+    auto demoted = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 3, next, memory, &text);
+    auto compatible = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 4, next, memory, &number);
+    ASSERT_TRUE(removed && demoted && compatible);
+    const std::array<const HybridPropertyColumnDelta *, 3> changes{&*compatible, &*removed, &*demoted};
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    DemotionNoPhysicalAllocator allocator;
+    MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+    {
+        HybridPropertyDemotionPreparation prepared(batch, pin, fields, changes, memory);
+        EXPECT_EQ(prepared.group().memberships, 144U); EXPECT_EQ(prepared.group().columns, 1U);
+        EXPECT_EQ(prepared.group().live, removed->sourceGroup().live);
+        ASSERT_EQ(prepared.erasedColumns().size(), 2U);
+        EXPECT_EQ(prepared.erasedColumns()[0], HybridPropertyDirectoryCodec::columnKey(1, 1));
+        EXPECT_EQ(prepared.erasedColumns()[1], HybridPropertyDirectoryCodec::columnKey(1, 3));
+        EXPECT_THROW(prepared.erasedColumn(), FormatException);
+        EXPECT_EQ(prepared.erasedOwners().size(), 1U);
+        EXPECT_EQ(prepared.owners().size(), 95U); EXPECT_EQ(prepared.extensions().size(), 95U);
+        EXPECT_TRUE(std::is_sorted(prepared.owners().begin(), prepared.owners().end(),
+            [](const auto &left, const auto &right) { return left.key < right.key; }));
+        EXPECT_TRUE(std::is_sorted(prepared.extensions().begin(), prepared.extensions().end(),
+            [](const auto &left, const auto &right) { return left.key < right.key; }));
+        const auto sourceId = removed->groupReference().page_id;
+        EXPECT_EQ(std::count_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == sourceId; }), 1);
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == sourceId; });
+        ASSERT_NE(image, prepared.pages().end());
+        EXPECT_EQ(image->readGroup(removed->groupReference(), owner.owner_kind, 1, next), prepared.group());
+        EXPECT_THROW(image->readRecord(removed->columnReference()), FormatException);
+        EXPECT_THROW(image->readRecord(demoted->columnReference()), FormatException);
+        const auto finalColumn = image->readColumn(compatible->columnReference(), compatible->replacementColumn().identity,
+            prepared.group(), next);
+        EXPECT_EQ(finalColumn.words[0], 789U); EXPECT_EQ(finalColumn.words[1], 101U);
+        auto original = fields.cloneForMutation(pin, sourceId, next, memory);
+        const SlottedSlotReference unrelated{sourceId, 2, 1};
+        EXPECT_EQ(image->readRecord(unrelated), original.readRecord(unrelated));
+        for (const auto &entry : prepared.extensions()) {
+            const auto key = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, owner.owner_kind);
+            const auto locator = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
+            const auto page = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+                [&](const auto &value) { return value.pageId() == locator.page_id; });
+            ASSERT_NE(page, prepared.pages().end());
+            const auto bytes = page->readRecord(locator);
+            const auto extension = HybridPropertyExtensionView::open(bytes, key.owner, key.token, next, next, next);
+            const auto value = extension.decodeInline([](const auto &) {});
+            if (key.owner.entity_id == 1) { EXPECT_EQ(key.token, 3U); EXPECT_EQ(value, text); }
+            else if (key.owner.entity_id == 3) EXPECT_EQ(value, graph::PropertyValue());
+            else EXPECT_EQ(value, graph::PropertyValue(int64_t(key.owner.entity_id + 99)));
+        }
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    const std::array<const HybridPropertyColumnDelta *, 2> overlap{&*removed, &*removed};
+    EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, overlap, memory)), FormatException);
+    EXPECT_EQ(memory->used(), baseline);
+    struct CountingCheckpoint final : CancellationCheckpoint {
+        mutable size_t calls = 0;
+        size_t stop = 0;
+        void check() const override {
+            if (++calls == stop) throw std::runtime_error("mixed group cancelled");
+        }
+    } count;
+    {
+        HybridPropertyDemotionPreparation counted(batch, pin, fields, changes, memory, &count);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    const auto checkpoints = count.calls;
+    ASSERT_GT(checkpoints, 5U);
+    for (const auto stop : {size_t(1), checkpoints / 2, checkpoints}) {
+        CountingCheckpoint cancellation; cancellation.stop = stop;
+        EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, changes, memory, &cancellation)), std::runtime_error);
+        EXPECT_EQ(memory->used(), baseline);
+    }
+    {
+        HybridPropertyDemotionPreparation retry(batch, pin, fields, changes, memory);
+        EXPECT_EQ(retry.extensions().size(), 95U);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024);
+    EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, changes, small)), std::exception);
+    EXPECT_EQ(small->used(), 0U);
+    EXPECT_EQ(io_->fileSize(), fileSize); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
+}
+
+#endif
+
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyReadContextTest, MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion) {
+    live_owner_count_ = 49; group_memberships_ = 50; extra_columns_ = 1; seed();
+    const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(131072);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    const graph::PropertyValue text("new type");
+    auto removed = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
+    auto demoted = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 3, next, memory, &text);
+    ASSERT_TRUE(removed && demoted);
+    ASSERT_EQ(removed->action(), HybridPropertyColumnDelta::Action::HCD_REPLACE_COLUMN);
+    const std::array<const HybridPropertyColumnDelta *, 2> changes{&*demoted, &*removed};
+    DemotionNoPhysicalAllocator allocator;
+    MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    {
+        HybridPropertyDemotionPreparation prepared(batch, pin, fields, changes, memory);
+        EXPECT_EQ(prepared.group().memberships, 98U); EXPECT_EQ(prepared.group().columns, 1U);
+        EXPECT_EQ(prepared.erasedColumn(), HybridPropertyDirectoryCodec::columnKey(1, 3));
+        ASSERT_EQ(prepared.erasedOwners().size(), 1U);
+        EXPECT_EQ(prepared.erasedOwners()[0], HybridPropertyDirectoryCodec::ownerKey(owner, 1));
+        EXPECT_EQ(prepared.extensions().size(), 49U);
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == removed->columnReference().page_id; });
+        ASSERT_NE(image, prepared.pages().end());
+        const auto column = image->readColumn(removed->columnReference(), removed->replacementColumn().identity,
+            prepared.group(), next);
+        EXPECT_EQ(std::popcount(column.presence), 48); EXPECT_EQ(column.presence & 1U, 0U);
+        EXPECT_EQ(column.live, removed->sourceColumn().live);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(batch.allocatedPageCount(), 0U);
+    const graph::PropertyValue same(int64_t(100));
+    auto noChange = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, &same);
+    ASSERT_TRUE(noChange);
+    const auto nextId = batch.candidate().next_logical_page_id;
+    {
+        HybridPropertyDemotionPreparation prepared(batch, pin, fields, *noChange, memory);
+        EXPECT_TRUE(prepared.pages().empty()); EXPECT_TRUE(prepared.owners().empty());
+        EXPECT_TRUE(prepared.erasedColumns().empty()); EXPECT_EQ(prepared.group(), noChange->sourceGroup());
+    }
+    EXPECT_EQ(batch.candidate().next_logical_page_id, nextId);
+    const std::array<const HybridPropertyColumnDelta *, 1> nullPlan{nullptr};
+    EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, nullPlan, memory)), FormatException);
+    auto moved = std::move(*removed);
+    EXPECT_FALSE(removed->isValid()); EXPECT_TRUE(moved.isValid());
+    const std::array<const HybridPropertyColumnDelta *, 1> movedPlan{&*removed};
+    EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, movedPlan, memory)), FormatException);
+    EXPECT_THROW((HybridPropertyColumnWritePreparation(pin, fields, movedPlan, memory)), FormatException);
+}
+#endif
+
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce) {
+    extra_columns_ = 1; seed(false, 8192, true);
+    const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(524288);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    const std::array owners{owner};
+    const auto source = context.groupRecord(owner);
+    ASSERT_TRUE(source);
+    auto firstColumn = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
+    ASSERT_TRUE(firstColumn);
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    DemotionNoPhysicalAllocator allocator;
+    MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+    {
+        auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
+        EXPECT_EQ(prepared.group().live, source->live & ~UINT64_C(1));
+        EXPECT_EQ(prepared.group().memberships, 94U); EXPECT_EQ(prepared.group().columns, 0U);
+        EXPECT_FALSE(prepared.erasedGroup());
+        ASSERT_EQ(prepared.erasedColumns().size(), 2U);
+        ASSERT_EQ(prepared.erasedExtensions().size(), 1U);
+        EXPECT_EQ(prepared.erasedExtensions()[0], HybridPropertyDirectoryCodec::ownerKey(owner, 2));
+        ASSERT_EQ(prepared.erasedOwners().size(), 3U);
+        for (unsigned i = 0; i < 3; ++i)
+            EXPECT_EQ(prepared.erasedOwners()[i], HybridPropertyDirectoryCodec::ownerKey(owner, i + 1));
+        EXPECT_EQ(prepared.owners().size(), 94U); EXPECT_EQ(prepared.extensions().size(), 94U);
+        const auto sourceId = firstColumn->groupReference().page_id;
+        EXPECT_EQ(std::count_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == sourceId; }), 1);
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == sourceId; });
+        ASSERT_NE(image, prepared.pages().end());
+        const SlottedSlotReference oldExtension{sourceId, 2, 1};
+        EXPECT_THROW((void)image->readRecord(oldExtension), FormatException);
+        auto original = fields.cloneForMutation(pin, sourceId, next, memory);
+        EXPECT_NO_THROW((void)original.readRecord(oldExtension));
+        EXPECT_EQ(image->readGroup(firstColumn->groupReference(), owner.owner_kind, 1, next), prepared.group());
+        for (const auto &entry : prepared.extensions()) {
+            const auto key = HybridPropertyDirectoryCodec::decodeOwnerKey(entry.key, owner.owner_kind);
+            EXPECT_NE(key.owner.entity_id, 1U);
+            const auto locator = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
+            const auto page = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+                [&](const auto &value) { return value.pageId() == locator.page_id; });
+            ASSERT_NE(page, prepared.pages().end());
+            const auto bytes = page->readRecord(locator);
+            const auto extension = HybridPropertyExtensionView::open(bytes, key.owner, key.token, next, next, next);
+            const auto value = extension.decodeInline([](const auto &) {});
+            if (key.owner.entity_id == 3) EXPECT_EQ(value, graph::PropertyValue());
+            else EXPECT_EQ(value, graph::PropertyValue(int64_t(key.owner.entity_id + 99)));
+        }
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    EXPECT_EQ(io_->fileSize(), fileSize); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.current(), pin.superblock());
+    EXPECT_EQ(context.count(owner), 3U); // The caller's original source remains live and unchanged.
+}
+TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup) {
+    live_owner_count_ = 49; group_memberships_ = 50; extra_columns_ = 1; seed();
+    const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(524288);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    auto column = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
+    ASSERT_TRUE(column);
+    DemotionNoPhysicalAllocator allocator;
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        const std::array owners{owner};
+        auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
+        EXPECT_EQ(prepared.group().memberships, 96U); EXPECT_EQ(prepared.group().columns, 2U);
+        EXPECT_EQ(std::popcount(prepared.group().live), 48);
+        EXPECT_TRUE(prepared.erasedColumns().empty()); EXPECT_TRUE(prepared.extensions().empty());
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == column->columnReference().page_id; });
+        ASSERT_NE(image, prepared.pages().end());
+        const auto record = image->readColumn(column->columnReference(), column->replacementColumn().identity,
+            prepared.group(), next);
+        EXPECT_EQ(std::popcount(record.presence), 48); EXPECT_EQ(record.presence & 1U, 0U);
+        EXPECT_EQ(record.live, prepared.group().live);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    {
+        std::array<EntityPropertyKey, 49> owners{};
+        for (unsigned i = 0; i < owners.size(); ++i) owners[i] = {owner.owner_kind, i + 1};
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
+        EXPECT_EQ(prepared.erasedGroup(), HybridPropertyDirectoryCodec::groupKey(1));
+        EXPECT_EQ(prepared.group().live, 0U); EXPECT_EQ(prepared.group().memberships, 0U);
+        EXPECT_EQ(prepared.group().columns, 0U); EXPECT_EQ(prepared.erasedColumns().size(), 2U);
+        EXPECT_EQ(prepared.erasedOwners().size(), 99U); EXPECT_EQ(prepared.erasedExtensions().size(), 1U);
+        EXPECT_TRUE(prepared.owners().empty()); EXPECT_TRUE(prepared.extensions().empty());
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == column->groupReference().page_id; });
+        ASSERT_NE(image, prepared.pages().end());
+        EXPECT_THROW((void)image->readRecord(column->groupReference()), FormatException);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+}
+#endif
+
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures) {
+    live_owner_count_ = 49; group_memberships_ = 50; extra_columns_ = 1; extra_column_missing_owner_ = 1;
+    seed(); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(524288);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    const std::array owners{owner};
+    const graph::PropertyValue same(int64_t(101));
+    auto untouched = HybridPropertyColumnDelta::planExistingColumn(context, pin, {owner.owner_kind, 2}, 3, next, memory, &same);
+    ASSERT_TRUE(untouched);
+    DemotionNoPhysicalAllocator allocator;
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    struct CountingCheckpoint final : CancellationCheckpoint {
+        mutable size_t calls = 0;
+        size_t stop = 0;
+        void check() const override { if (++calls == stop) throw std::runtime_error("owner deletion cancelled"); }
+    } count;
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory, &count);
+        EXPECT_EQ(prepared.group().memberships, 96U); EXPECT_EQ(prepared.group().columns, 2U);
+        EXPECT_EQ(prepared.erasedOwners().size(), 2U);
+        const auto image = std::find_if(prepared.pages().begin(), prepared.pages().end(),
+            [&](const auto &page) { return page.pageId() == untouched->columnReference().page_id; });
+        ASSERT_NE(image, prepared.pages().end());
+        auto source = fields.cloneForMutation(pin, untouched->columnReference().page_id, next, memory);
+        EXPECT_EQ(image->readRecord(untouched->columnReference()), source.readRecord(untouched->columnReference()));
+        // Its older live snapshot is allowed: current group.live is authority.
+        EXPECT_NO_THROW((void)image->readColumn(untouched->columnReference(), untouched->sourceColumn().identity,
+            prepared.group(), next));
+    }
+    EXPECT_EQ(memory->used(), baseline); ASSERT_GT(count.calls, 5U);
+    for (const auto stop : {size_t(1), count.calls / 2, count.calls}) {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        CountingCheckpoint cancellation; cancellation.stop = stop;
+        EXPECT_THROW((void)HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields,
+            owners, memory, &cancellation), std::runtime_error);
+        EXPECT_EQ(batch.current(), pin.superblock());
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    for (const auto &invalid : {std::vector<EntityPropertyKey>{}, std::vector<EntityPropertyKey>{owner, owner},
+            std::vector<EntityPropertyKey>{{owner.owner_kind, 50}}, std::vector<EntityPropertyKey>{owner, {owner.owner_kind, 65}}}) {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        EXPECT_THROW((void)HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields,
+            invalid, memory), FormatException);
+    }
+    auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024);
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), small);
+        EXPECT_THROW((void)HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields,
+            owners, small), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U);
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        auto retry = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
+        EXPECT_EQ(retry.group().memberships, 96U);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(io_->fileSize(), fileSize);
+}
+#endif
+
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyReadContextTest, ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns) {
+    live_owner_count_ = 49; group_memberships_ = 51; column_missing_owner_ = 1; shared_large_owner_ = true;
+    seed(false, 8192, true); const auto pin = metadata_->openSnapshot();
+    auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, pin);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(131072);
+    const auto next = Generation(pin.superblock().generation.value() + 1);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    const std::array owners{owner};
+    EXPECT_EQ(context.count(owner), 1U);
+    const graph::PropertyValue same(int64_t(101));
+    auto column = HybridPropertyColumnDelta::planExistingColumn(context, pin, {owner.owner_kind, 2}, 1, next, memory, &same);
+    ASSERT_TRUE(column);
+    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    DemotionNoPhysicalAllocator allocator;
+    {
+        MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
+        EXPECT_EQ(prepared.group().memberships, 49U); EXPECT_EQ(prepared.group().columns, 1U);
+        EXPECT_EQ(prepared.group().live & 1U, 0U);
+        ASSERT_EQ(prepared.erasedExtensions().size(), 1U); EXPECT_EQ(prepared.erasedOwners().size(), 1U);
+        EXPECT_TRUE(prepared.erasedColumns().empty()); EXPECT_TRUE(prepared.extensions().empty());
+        ASSERT_EQ(prepared.pages().size(), 1U);
+        const auto &image = prepared.pages()[0];
+        auto original = fields.cloneForMutation(pin, image.pageId(), next, memory);
+        EXPECT_EQ(image.readRecord(column->columnReference()), original.readRecord(column->columnReference()));
+        const SlottedSlotReference deleted{image.pageId(), 2, 1}, shared{image.pageId(), 3, 1};
+        EXPECT_THROW((void)image.readRecord(deleted), FormatException);
+        const auto sharedBytes = image.readRecord(shared);
+        EXPECT_EQ(sharedBytes, original.readRecord(shared));
+        graph::utils::OwnedHeapReservation credit(memory);
+        const auto admit = [&](size_t bytes) { credit.set(bytes); };
+        const auto extension = HybridPropertyExtensionView::open(sharedBytes, {owner.owner_kind, 2}, 2,
+            next, next, next, std::ref(admit));
+        ASSERT_TRUE(extension.reference());
+        graph::utils::OwnedHeapReservation manifestCredit(memory);
+        const auto admitManifest = [&](size_t bytes) { manifestCredit.set(bytes); };
+        EXPECT_NO_THROW((void)large_values_->manifest(pin, *extension.reference(), std::ref(admitManifest)));
+        EXPECT_EQ(batch.allocatedPageCount(), 0U);
+    }
+    EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(context.count(owner), 1U); EXPECT_EQ(context.count({owner.owner_kind, 2}), 2U);
 }
 #endif

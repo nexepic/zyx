@@ -154,6 +154,13 @@ namespace graph::storage {
 																   const LargeValueManifest &root) const;
 		[[nodiscard]] std::vector<std::byte> read(const MetadataSnapshotPin &snapshot,
 												  const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission = {}) const;
+        // Authenticate all content with bounded range buffers. The returned
+        // root retains the caller's admission; no payload-sized output escapes.
+        // Ranges/child manifests are charged in addition to the root, and an
+        // exception never returns a partially authenticated result.
+        [[nodiscard]] LargeValueManifest verifyContent(const MetadataSnapshotPin &snapshot,
+            const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission = {},
+            const std::function<void()> &checkpoint = {}) const;
 		// Reads only chunk pages that overlap [offset, offset + length). A zero
 		// length range is valid and still authenticates the manifest reference.
 		[[nodiscard]] std::vector<std::byte> readRange(const MetadataSnapshotPin &snapshot,
@@ -198,7 +205,8 @@ namespace graph::storage {
 														std::span<const PageRetirement> retirements,
 														PhysicalSlotId firstIndexSlot, PhysicalSlotId lastIndexSlot,
 														LogSequenceNumber checkpointLsn,
-														const MetadataPublishOptions &publishOptions = {});
+														const MetadataPublishOptions &publishOptions = {},
+                const std::optional<NativeLargeValueReclamationEvidence> &reclamationEvidence = std::nullopt);
 		// Physical frame reuse is delayed until all snapshots that can resolve a
 		// retired Page Directory root have drained. Pool retirement then releases
 		// the whole single-file slot through the Catalog/Retire Queue protocol.
@@ -268,7 +276,8 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<std::byte> readRangeFromManifestImpl(const MetadataSnapshotPin &snapshot,
 			const LargeValueManifest &manifest, uint64_t offset, uint64_t length,
-			const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache) const;
+			const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache,
+            const std::function<void(std::span<const std::byte>)> &verificationSink = {}) const;
 		SharedPagePoolAllocator allocator_;
 		RelocatableMetadataStore &metadata_;
 		std::unique_ptr<SlottedPagePool> content_index_pages_;

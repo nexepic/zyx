@@ -1,0 +1,31 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyFieldRelocationTest.*
+[==========] Running 7 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 7 tests from HybridPropertyFieldRelocationTest
+[ RUN      ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite
+[       OK ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite (6 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+[       OK ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins (3917 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+[       OK ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool (1541 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+[       OK ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration (456 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+unknown file: Failure
+C++ exception with description "StorageIO::readAt requires one aligned complete native page" thrown in the test body.
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse (40 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry (1445 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+[       OK ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration (170 ms)
+[----------] 7 tests from HybridPropertyFieldRelocationTest (7578 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 1 test suite ran. (7578 ms total)
+[  PASSED  ] 6 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+
+ 1 FAILED TEST

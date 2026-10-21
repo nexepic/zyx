@@ -1,0 +1,4 @@
+{
+  "failures": [],
+  "scope": "complete country/count groups and ordered Top-K IDs; finite unique-ID input dataset"
+}

@@ -1,0 +1,30 @@
+{
+  "base": "9cc2821ce1d5710c3ce2bb3cd6a1ff66e7169c29",
+  "sha256": {
+    "include/graph/query/optimization/LogicalPlanOptimizer.hpp": "1dc0cb0981a1fcaa8320bd8e4ee8d9d2a666581770942a542be06be8fbb93727",
+    "include/graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp": "24c86a2fafe1acc17b06a34e06bc03cc7f5ff721d2c907068c8c517cddf5dc96",
+    "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "3ef30b6a74c2fb2844fe7b0cb523a199a677005b43710723f41ae83b86655e39",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp": "a992e53b94648da9b4acc0f25f5e56c527a80dba1f4bcbd8aa9148909cd0a9b1",
+    "include/graph/storage/relocatable/property/HybridPropertyExtension.hpp": "a178ef821fe9a3cface906971aa87e0e1ec3a105f246f4b6ae4b1e4c090272ff",
+    "include/graph/storage/relocatable/property/HybridPropertyValueReader.hpp": "1d3d7dda9f8b1d3f35de80f7d17c0b9bde757dcab60176a10708c5d46b19d787",
+    "include/graph/storage/relocatable/property/LargeValueStore.hpp": "323427c8f577f4940d2927c5b946cd72fba5949e02bdf102038bd4458273f764",
+    "include/graph/storage/relocatable/property/PropertyValueCodec.hpp": "2e042d46a9b2b2411cc659c067d0d2c3ba02f4521be13f7163a0f03011b1f414",
+    "src/query/optimization/LogicalPlanOptimizer.cpp": "349d2beb850fdefc2307380229fe059a372d34e30e47991293dc5c1b6ac42f2d",
+    "src/storage/relocatable/adjacency/GlobalAdjacencyIndex.cpp": "81faf81892faea5f7a061d8bef406cf426919c38d1b4b5eb1c3b6e5e204ca9e6",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "eb0235b94ee6ad904825f11c3d15c9a9611899d9c6694673f8e538b07f15b7b9",
+    "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": "42f0b07fcb9f3cc46435928a4c0a9156fa44e859fd20779116b86e332914f867",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "2c896c069c6267a8b6689f1bcd00fb12878a69305a994bcdf48d058017ca24c7",
+    "src/storage/relocatable/property/LargeValueStore.cpp": "e92869a214977c4d5a9c374a5bb94cc01b492bb7fdfefdaaa2ad4dd9a11208d5",
+    "src/storage/relocatable/property/PropertyValueCodec.cpp": "2eb03074055faec4d65dbae8f1f8e201aabcff81a3861d31de8241c91fd81860",
+    "tests/src/query/optimization/test_LogicalPlanOptimizer.cpp": "cde070ee299f47136097cd5b632e0f8c5e95e6535d0ae986c183b4ad46301e33",
+    "tests/src/storage/relocatable/adjacency/test_GlobalAdjacencyIndex.cpp": "486e5652d726645157d06a2939b7e02ce55948fb673ce2dfcf9efb11bfa10a7b",
+    "tests/src/storage/relocatable/entity/test_PageBackedGraphReadAdapterBatchReuse.cpp": "aea54db16f498208475ce0d49627a847a71d0b266c5d608ab4fc45d91058d7f9",
+    "tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp": "2273ab9c0b03796e1101ba377d221ae8babca134d09791127fa301575a8b9aec",
+    "tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp": "1a6d6ba56a2449ddedaf0b55854a2503f82eb6e31d93c112b34ed4272153d13c",
+    "tests/src/storage/relocatable/property/test_HybridPropertyReadContext.cpp": "95c596955de254c1899205a64f77ef0008192986f38350ac3bb9151a1c0eb602",
+    "tests/src/storage/relocatable/property/test_PropertyValueCodec_Inspection.cpp": "7c58359a707695598bf16e8d624a6381a42f75e65baf4e13dd38260ecca27644",
+    "include/graph/storage/relocatable/metadata/HybridPropertyImmutablePreparation.hpp": "69a2e34c7ead588826a4f54d06ba5173c0209953057fefaa370c81ac2b744c1c",
+    "include/graph/storage/relocatable/property/HybridPropertyLargeFieldInspection.hpp": "4fe6ac8876235b1f893abf8b8e98dd2d71cded3c733d2c052598da7bc658589c",
+    "tests/src/storage/relocatable/property/test_LargeValueStore_Verification.cpp": "8e68c7dc265a0d54f38a9db9487bbfdf044d5bbd9ac83679235c1849124c3cbb"
+  }
+}

@@ -13,6 +13,7 @@
 #include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <limits>
@@ -66,6 +67,7 @@ namespace graph::storage {
 		}
 
 		struct ByteReader {
+			using Key = std::string_view;
 			std::span<const std::byte> bytes;
 			size_t offset = 0U;
 			[[nodiscard]] size_t remaining() const { return bytes.size() - offset; }
@@ -97,7 +99,60 @@ namespace graph::storage {
 				offset += count;
 				return result;
 			}
+            [[nodiscard]] ByteReader subReader(uint32_t count) { return {readBytes(count)}; }
+            void skip(uint32_t count) { static_cast<void>(readBytes(count)); }
+            [[nodiscard]] Key readKey(uint32_t count) { return readStringView(count); }
+            [[nodiscard]] bool keyLess(Key left, Key right) const { return bytewiseLess(left, right); }
 		};
+
+        // All offsets remain within the caller's immutable value range. Child
+        // readers carry limits, rather than allocating a payload-sized buffer.
+        struct RangeInspectorReader {
+            struct Key { size_t offset = 0, count = 0; };
+            const CanonicalPropertyValueCodec::RangeReader &read;
+            const std::function<void()> &checkpoint;
+            size_t offset = 0, end = 0;
+            [[nodiscard]] size_t remaining() const { return end - offset; }
+            void require(size_t count) const {
+                if (count > remaining()) fail(FormatError::FERR_BUFFER_TOO_SMALL, "Property range is truncated");
+            }
+            template<size_t Count> [[nodiscard]] std::array<std::byte, Count> word() {
+                require(Count);
+                std::array<std::byte, Count> bytes;
+                if (checkpoint) checkpoint();
+                read(offset, bytes); offset += Count;
+                return bytes;
+            }
+            [[nodiscard]] uint8_t readU8() { return std::to_integer<uint8_t>(word<1>()[0]); }
+            [[nodiscard]] uint32_t readU32() { return LittleEndianCodec::readU32(word<4>(), 0); }
+            [[nodiscard]] uint64_t readU64() { return LittleEndianCodec::readU64(word<8>(), 0); }
+            void skip(uint32_t count) { require(count); offset += count; }
+            [[nodiscard]] RangeInspectorReader subReader(uint32_t count) {
+                require(count);
+                const auto begin = offset; offset += count;
+                return {read, checkpoint, begin, offset};
+            }
+            [[nodiscard]] Key readKey(uint32_t count) {
+                require(count);
+                const auto begin = offset; offset += count;
+                return {begin, count};
+            }
+            [[nodiscard]] bool keyLess(Key left, Key right) const {
+                std::array<std::byte, 256> a, b;
+                const auto common = (std::min)(left.count, right.count);
+                for (size_t position = 0; position < common;) {
+                    if (checkpoint) checkpoint();
+                    const auto count = (std::min)(a.size(), common - position);
+                    read(left.offset + position, std::span(a).first(count));
+                    read(right.offset + position, std::span(b).first(count));
+                    for (size_t i = 0; i < count; ++i) {
+                        if (a[i] != b[i]) return std::to_integer<unsigned>(a[i]) < std::to_integer<unsigned>(b[i]);
+                    }
+                    position += count;
+                }
+                return left.count < right.count;
+            }
+        };
 
 		[[nodiscard]] PropertyValueWireKind kindFor(const PropertyValue &value) {
 			return std::visit([]<typename T>(const T &) {
@@ -328,13 +383,13 @@ namespace graph::storage {
         public:
             explicit ShapeInspector(const std::function<void()> &checkpoint) : checkpoint_(checkpoint) {}
             CanonicalPropertyValueCodec::DecodeShape shape;
-            void scan(ByteReader &reader, uint32_t depth) {
+            template<class Reader> void scan(Reader &reader, uint32_t depth) {
                 if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
                 if (--until_checkpoint_ == 0U) { if (checkpoint_) checkpoint_(); until_checkpoint_ = 256U; }
                 add(shape.value_count, 1U); shape.maximum_depth = (std::max)(shape.maximum_depth, size_t{depth});
                 const auto kind = static_cast<PropertyValueWireKind>(reader.readU8());
                 if (reader.readU8() != 0U) fail(FormatError::FERR_RESERVED_BITS, "Property value has nonzero flags");
-                ByteReader payload{reader.readBytes(reader.readU32())};
+                auto payload = reader.subReader(reader.readU32());
                 switch (kind) {
                     case PropertyValueWireKind::PVW_NULL: break;
                     case PropertyValueWireKind::PVW_BOOLEAN:
@@ -348,11 +403,11 @@ namespace graph::storage {
                         for (size_t i = 0U; i < 3U; ++i) static_cast<void>(payload.readU64());
                         break;
                     case PropertyValueWireKind::PVW_STRING: {
-                        const auto text = payload.readStringView(payload.readU32()); add(shape.string_bytes, text.size());
-                        heap(addStandardHeapBytes(constructedStringHeapUpper(text.size()), 2U * standardContainerProxyBytes())); break;
+                        const auto count = payload.readU32(); payload.skip(count); add(shape.string_bytes, count);
+                        heap(addStandardHeapBytes(constructedStringHeapUpper(count), 2U * standardContainerProxyBytes())); break;
                     }
                     case PropertyValueWireKind::PVW_BYTES: {
-                        const auto count = payload.readU32(); static_cast<void>(payload.readBytes(count)); add(shape.binary_bytes, count);
+                        const auto count = payload.readU32(); payload.skip(count); add(shape.binary_bytes, count);
                         heap(decodedVectorHeapUpper<std::byte>(count)); break;
                     }
                     case PropertyValueWireKind::PVW_LIST: {
@@ -365,13 +420,14 @@ namespace graph::storage {
                     case PropertyValueWireKind::PVW_MAP: {
                         const auto count = payload.readU32();
                         if (count > payload.remaining()/10U) fail(FormatError::FERR_INVALID_HEADER, "Property map count exceeds payload");
-                        add(shape.map_entries, count); heap(reservedDecodedMapHeapUpper(count)); std::string_view previous;
+                        add(shape.map_entries, count); heap(reservedDecodedMapHeapUpper(count)); typename Reader::Key previous{};
                         for (uint32_t i = 0U; i < count; ++i) {
-                            const auto key = payload.readStringView(payload.readU32());
-                            if (i != 0U && !bytewiseLess(previous, key))
+                            const auto keyBytes = payload.readU32();
+                            const auto key = payload.readKey(keyBytes);
+                            if (i != 0U && !payload.keyLess(previous, key))
                                 fail(FormatError::FERR_INVALID_HEADER, "Property map keys are not canonical");
-                            add(shape.map_key_bytes, key.size());
-                            heap(addStandardHeapBytes(constructedStringHeapUpper(key.size()), standardContainerProxyBytes()));
+                            add(shape.map_key_bytes, keyBytes);
+                            heap(addStandardHeapBytes(constructedStringHeapUpper(keyBytes), standardContainerProxyBytes()));
                             scan(payload, depth + 1U); previous = key;
                         }
                         break;
@@ -549,6 +605,18 @@ namespace graph::storage {
         if (checkpoint) checkpoint();
         inspector.shape.encoded_bytes = reader.offset;
         offset += reader.offset; return inspector.shape;
+    }
+
+    CanonicalPropertyValueCodec::DecodeShape CanonicalPropertyValueCodec::inspectRange(
+            size_t encodedBytes, const RangeReader &read, const std::function<void()> &checkpoint) {
+        if (!read) throw std::invalid_argument("Property range inspection requires a reader");
+        if (checkpoint) checkpoint();
+        RangeInspectorReader reader{read, checkpoint, 0, encodedBytes};
+        ShapeInspector inspector(checkpoint); inspector.scan(reader, 0U);
+        if (reader.remaining()) fail(FormatError::FERR_INVALID_HEADER, "Property range has trailing bytes");
+        if (checkpoint) checkpoint();
+        inspector.shape.encoded_bytes = encodedBytes;
+        return inspector.shape;
     }
 
     PropertyValue CanonicalPropertyValueCodec::decodeNextWithAdmission(std::span<const std::byte> bytes,

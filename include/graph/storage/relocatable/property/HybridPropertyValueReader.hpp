@@ -11,6 +11,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyReadContext.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyLargeFieldInspection.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 
 namespace graph::storage {
@@ -183,11 +184,8 @@ public:
             }
             if (!largeValues)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid non-NULL read requires its immutable value store");
-            utils::OwnedHeapReservation readCredit(memory), directoryCredit(memory);
-            const auto admitRead = [&](size_t bytes) { readCredit.set(bytes); };
-            const auto payload = largeValues->read(snapshot, *field.reference(), std::ref(admitRead));
-            const auto admitDirectory = [&](size_t bytes) { directoryCredit.set(bytes); };
-            present = !field.largePayloadIsNull(payload, std::ref(admitDirectory));
+            HybridPropertyLargeFieldInspection inspection(context, snapshot, field, *largeValues, memory);
+            present = !inspection.isNull();
         };
         const auto route = context.visitField(owner, token, std::ref(scalar), std::ref(extension),
             std::ref(boundary), std::ref(reference));
@@ -236,6 +234,12 @@ public:
             if (!largeValues)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "hybrid large field requires its immutable value store");
             hybrid_property_detail::require(bool(field.reference()), "hybrid large field has no immutable reference");
+            if (mode == ReadMode::HRM_ADMISSION_ONLY) {
+                HybridPropertyLargeFieldInspection inspection(context, snapshot, field, *largeValues, memory);
+                const auto shape = inspection.inspect();
+                if (admission) (*admission)(sizeof(uint32_t) + shape.encoded_bytes);
+                return;
+            }
             utils::OwnedHeapReservation readCredit(memory), directoryCredit(memory);
             const auto admitRead = [&](size_t bytes) { readCredit.set(bytes); };
             const auto payload = largeValues->read(snapshot, *field.reference(), std::ref(admitRead));
@@ -248,10 +252,7 @@ public:
                 context.checkpoint();
                 if (auto *scope = property_decode::AllocationScope::current()) scope->checkpoint();
             };
-            if (mode == ReadMode::HRM_ADMISSION_ONLY) {
-                const auto shape = field.inspectLargePayload(payload, std::ref(admitDirectory), std::ref(checkpoint));
-                if (admission) (*admission)(sizeof(uint32_t) + shape.encoded_bytes);
-            } else result.value = field.decodeLargePayload(payload, std::ref(admitValue), std::ref(admitDirectory), std::ref(checkpoint));
+            result.value = field.decodeLargePayload(payload, std::ref(admitValue), std::ref(admitDirectory), std::ref(checkpoint));
         };
         result.route = context.visitField(owner, token, std::ref(scalar), std::ref(extension),
             std::ref(boundary), std::ref(reference));

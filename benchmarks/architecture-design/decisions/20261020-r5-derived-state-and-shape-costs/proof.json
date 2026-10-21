@@ -1,0 +1,91 @@
+{
+  "scope": [
+    "R3.2",
+    "R5.1"
+  ],
+  "accepted": 13,
+  "total": 24,
+  "percentage": 54.2,
+  "newly_accepted": [],
+  "commit_push": false,
+  "contract_correction": "Explicit final-Edge coordinator optionally stages type indexes and pinned known graph/complete type statistics. Unknown stays unknown, invalid counts and Node/label changes refuse. Eight fixed property shapes include full allocation and sharing cost correctness.",
+  "benchmarks_run": false,
+  "full_unit_suite": false,
+  "platform": "Linux x86_64",
+  "test_modules": [
+    "property/test_HybridPropertyOrdinaryConversion",
+    "property/test_HybridPropertyFieldRelocation",
+    "property/test_HybridPropertyOwnerDeletion",
+    "property/test_HybridPropertyInlineMutation",
+    "property/test_HybridPropertyLargePublication",
+    "property/test_HybridPropertyLargeMutation",
+    "property/test_HybridPropertyLargeOwnership",
+    "property/test_HybridPropertyMultipleGroups",
+    "property/test_HybridPropertyLabeledDeletion",
+    "property/test_HybridPropertyNativeJournal",
+    "property/test_HybridPropertyAllocationCosts",
+    "property/test_HybridPropertyShapeCosts",
+    "property/test_HybridPropertyAllocationAdmission",
+    "property/test_HybridPropertyMapTransactions",
+    "property/test_HybridPropertyQueryParity",
+    "adjacency/test_CoveredAdjacencyCandidate",
+    "property/test_LargeValueStore",
+    "property/test_LargeValueStore_ContentIndexValidation",
+    "property/test_LargeValueStore_Maintenance",
+    "property/test_PropertyCollectionRoot",
+    "property/test_HybridPropertyDescriptorStore",
+    "property/test_HybridPropertyGraphPublication",
+    "property/test_HybridPropertyPageBinding",
+    "property/test_HybridPropertyReadContext",
+    "metadata/test_MetadataSnapshotRegistry",
+    "metadata/test_StateRecordStore",
+    "allocation/test_SharedPagePoolAllocator",
+    "allocation/test_AllocatorDirectory",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "entity/test_EntityLabelSetStore",
+    "entity/test_EntityLabelSetStore_PublicContracts",
+    "maintenance/test_LargeValueReachabilityReclaimer",
+    "maintenance/test_LargeValueMaintenanceJournal",
+    "maintenance/test_RelocatableMaintenanceService",
+    "maintenance/test_RelocatableIntegrityScanner",
+    "maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "index/test_BTreePageStore_AtomicTree",
+    "metadata/test_CatalogRetireQueueReclaimer",
+    "metadata/test_MetadataRetirement",
+    "index/test_BTreePageStoreTransactionOverlay"
+  ],
+  "tests": {
+    "default": {
+      "registered": 550,
+      "passed": 550,
+      "skipped": 0,
+      "binary_sha256": "e6b3756ba5f34006973594a62ffc3d544decda1647430be984a1167a406d7aca"
+    },
+    "candidate": {
+      "registered": 830,
+      "passed": 829,
+      "skipped": 1,
+      "binary_sha256": "ca860bb8137a3a89eaff007c937b2ea60b0011b71cc955545a0f621d748940e6"
+    }
+  },
+  "limits": [
+    "No default backend route, no production admission or performance claim.",
+    "Explicit existing candidate root and supplied schema planner/catalog only; no automatic schema discovery.",
+    "Statistics coordinator supports unchanged Node/labels only; no complete label statistics support.",
+    "At most64changedEdges and1MiBplanning account, retaining original WRITE publication accounting.",
+    "Space matrix is a mechanism/unit measurement, not a timing benchmark or complete workload matrix.",
+    "R3 schema/index/general topology lifecycle, R5 overlay/backend/plan integration and R7 remain unfinished."
+  ],
+  "environment_restart": "Source/prior archives survived; unarchived /tmp logs/scripts were lost. Current modules rerun from restored persistent runner.",
+  "correctness_reviews": [
+    "One transaction maintains both covered directions, master Edge, type-index entries and pinned known statistics.",
+    "Complete relationship-type namespace updates exact old counts and preserves unknown namespaces.",
+    "Underflow/overflow, schema index alias and foreign metadata domains refuse; failed coordination fences main-only commit.",
+    "A/B partial publication retains old derived state; complete inactive Superblock recovers all derived state together.",
+    "Old pins, writable/read-only reopen, self-loops and multiedges remain covered.",
+    "Eight fixed allocation shapes verify every owner before/after conversion and read-only reopen, full integrity and all allocation categories.",
+    "Shared existing LargeValue source wire buffers release after decode; retained proposals deduplicate only by complete authenticated payload equality."
+  ],
+  "final_filter": "All tests in the 41 listed related modules; not the complete repository suite."
+}

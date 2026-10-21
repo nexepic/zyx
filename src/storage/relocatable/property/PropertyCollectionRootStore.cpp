@@ -749,6 +749,18 @@ namespace graph::storage {
 		return decodeEntityPropertyCount(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes);
 	}
 
+    bool PropertyCollectionRootStore::isHybridPropertyOwner(const MetadataSnapshotPin &snapshot, EntityPropertyKey key,
+        const CancellationCheckpoint *cancellation, const SelectedPropertyReadAdmission *transientAdmission) const {
+        if (!metadata_.ownsSnapshot(snapshot) || !key.isValid())
+            throwRootStoreError(FormatError::FERR_INVALID_HEADER, "hybrid owner probe requires its registered source and valid owner");
+        if (cancellation) cancellation->check();
+        if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return false;
+        if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) return false;
+        HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
+        const auto group = context.groupRecord(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{});
+        return group && (group->live & (UINT64_C(1) << hybridPropertySlotFor(key)));
+    }
+
 	std::vector<uint32_t> PropertyCollectionRootStore::readEntityPropertyTokens(
 		const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 		const SelectedPropertyReadAdmission &tokenAdmission,

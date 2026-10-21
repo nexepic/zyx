@@ -1,0 +1,45 @@
+{
+  "tasks": [
+    "R3.2",
+    "R3.3"
+  ],
+  "newly_accepted_tasks": [],
+  "source_base": "9cc2821ce1d5710c3ce2bb3cd6a1ff66e7169c29",
+  "source_state": "uncommitted working tree; source-manifest.json hashes changed and new C++ files",
+  "platform": "Linux x86_64; default format 31 and isolated candidate format 32",
+  "tests": {
+    "default": {
+      "unique_cases_latest_status": 86,
+      "failed_latest_status": 0,
+      "runs": [
+        "range-default-final-tests.json",
+        "range-default-cache-tests.json"
+      ],
+      "full_suite": false
+    },
+    "candidate": {
+      "unique_cases_latest_status": 124,
+      "failed_latest_status": 0,
+      "runs": [
+        "range-candidate-tests.json",
+        "range-candidate-fixture-tests.json",
+        "range-candidate-hierarchy-tests.json",
+        "range-candidate-cache-tests.json"
+      ],
+      "full_suite": false
+    }
+  },
+  "initial_candidate_failure": "New 512 KiB source consumed fixture fixed logical PageIds; fixture now selects unused logical IDs. Original failure retained; latest affected module passes.",
+  "mechanisms": [
+    "Full-content SHA-256 reuses authenticated chunk traversal without payload-sized output.",
+    "Shared canonical inspector supports immutable range callbacks; map-key ordering uses bounded 256-byte comparisons.",
+    "Native integrity, non-NULL checks and encoded-output admission share pinned inspection; one authenticated chunk cache remains charged.",
+    "Hierarchical manifest verification exceeds 128 KiB workspace without full-body output; 512 KiB native field integrity/admission/non-NULL checks run in 128 KiB."
+  ],
+  "limitations": [
+    "No new physical native-field publication or writer lifecycle.",
+    "Nonempty durable layout guards remain; production stays ROW.",
+    "No final R7 timing, layout adoption or Kuzu-superiority claim.",
+    "Source staged in the working tree only; no commit or push because accepted progress did not grow."
+  ]
+}

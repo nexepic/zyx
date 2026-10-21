@@ -24,6 +24,7 @@
 #include "graph/query/logical/operators/LogicalSkip.hpp"
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
+#include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
 
 namespace graph::query::optimization {
 	namespace {
@@ -1178,6 +1179,50 @@ namespace graph::query::optimization {
 			LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
 			EXPECT_EQ(LogicalPlanOptimizer(options).optimize(std::move(root), &statistics).rewrite_count, 0U);
 		}
+
+        TEST(LogicalPlanOptimizerTest, AnchorCostRuleDoesNotCrossWindowsOptionalOrUnprovenProjectionExpressions) {
+            class Statistics final : public LogicalStatisticsProvider {
+            public:
+                mutable size_t anchor_calls = 0;
+                std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &) const noexcept override {
+                    return std::nullopt;
+                }
+                std::optional<uint64_t> estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+                    ++anchor_calls;
+                    const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+                    return scan ? std::optional<uint64_t>(scan->getVariable() == "a" ? 50 : 2) : std::nullopt;
+                }
+            } statistics;
+            for (unsigned mode = 0; mode < 6; ++mode) {
+                auto traversal = std::make_unique<logical::LogicalTraversal>(
+                    std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Common"}),
+                    "a", "e", "b", "LINK", "out", std::vector<std::string>{"Rare"});
+                std::vector<logical::LogicalProjectItem> items;
+                if (mode == 3) items.emplace_back(std::make_shared<expressions::FunctionCallExpression>(
+                    "rand", utils::OwnedStdVector<std::unique_ptr<expressions::Expression>>{}), "value");
+                else if (mode == 5) items.emplace_back(
+                    std::make_shared<expressions::VariableReferenceExpression>("b", "name"), "value");
+                else items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b"), "b");
+                std::unique_ptr<logical::LogicalOperator> root = std::make_unique<logical::LogicalProject>(
+                    std::move(traversal), std::move(items), mode == 4);
+                if (mode == 0) root = std::make_unique<logical::LogicalLimit>(std::move(root), 1);
+                if (mode == 1) root = std::make_unique<logical::LogicalSkip>(std::move(root), 1);
+                if (mode == 2) root = std::make_unique<logical::LogicalOptionalMatch>(
+                    std::make_unique<logical::LogicalNodeScan>("outer"), std::move(root));
+                statistics.anchor_calls = 0;
+                LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+                const auto result = LogicalPlanOptimizer(options).optimize(std::move(root), &statistics);
+                EXPECT_EQ(statistics.anchor_calls, 0U) << mode;
+                size_t traversals = 0;
+                const auto inspect = [&](const auto &self, const logical::LogicalOperator &node) -> void {
+                    if (const auto *walk = dynamic_cast<const logical::LogicalTraversal *>(&node)) {
+                        ++traversals; EXPECT_EQ(walk->getSourceVar(), "a") << mode;
+                    }
+                    for (const auto *child : node.getChildren()) self(self, *child);
+                };
+                inspect(inspect, *result.root); EXPECT_EQ(traversals, 1U);
+            }
+        }
 
 		TEST(LogicalPlanOptimizerTest, RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor) {
 			class Statistics final : public LogicalStatisticsProvider {
