@@ -1,0 +1,2947 @@
+{
+  "elapsed_seconds": 16.410618543624878,
+  "results": [
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "cohort-read",
+      "round": 1,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 23150592,
+        "user_seconds": 0.660907,
+        "system_seconds": 0.016013,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10457088
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.328242,
+            2.338227,
+            2.312659,
+            2.345838,
+            2.332078,
+            2.297205,
+            2.3205,
+            2.2871,
+            2.295312,
+            2.303225
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.59091,
+            3.61774,
+            3.580415,
+            3.594847,
+            3.582699,
+            3.567506,
+            3.584611,
+            3.580525,
+            3.57733,
+            3.601005
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.991384,
+            2.968269,
+            2.994208,
+            2.989932,
+            2.9822,
+            2.957103,
+            2.996491,
+            2.990532,
+            3.087708,
+            2.985274
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.692898,
+            2.712797,
+            2.718756,
+            2.686368,
+            2.698596,
+            2.702562,
+            2.72159,
+            2.728801,
+            2.707389,
+            2.688511
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.563439,
+            3.529629,
+            3.525553,
+            3.532373,
+            3.515077,
+            3.538131,
+            3.552333,
+            3.535298,
+            3.531743,
+            3.55031
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            24.491359,
+            24.415936,
+            24.725429,
+            24.654663,
+            24.984436,
+            24.708223,
+            24.623276,
+            24.440944,
+            24.581624,
+            24.768303
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.529241,
+            7.472685,
+            7.499566,
+            7.433748,
+            7.513297,
+            7.479667,
+            7.447355,
+            7.454153,
+            7.563518,
+            7.475806
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_set",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 38031360,
+        "user_seconds": 0.139341,
+        "system_seconds": 0.022628,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42610688
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.989767,
+            6.748316,
+            6.692052,
+            6.613674,
+            6.716839,
+            6.711331,
+            6.681246,
+            6.732052,
+            6.705161,
+            6.646654
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_noop",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 38035456,
+        "user_seconds": 0.129848,
+        "system_seconds": 0.007620999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 36642816
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.58113,
+            4.461902,
+            4.5004,
+            4.426178,
+            4.472838,
+            4.446869,
+            4.446348,
+            4.58085,
+            4.47434,
+            4.495602
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_remove",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 38035456,
+        "user_seconds": 0.142399,
+        "system_seconds": 0.020954,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42606592
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.799223,
+            6.725002,
+            6.796798,
+            6.946964,
+            6.836709,
+            6.753133,
+            6.731371,
+            6.624301,
+            6.639934,
+            6.647085
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/row/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "cohort-read",
+      "round": 1,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 38039552,
+        "user_seconds": 0.6546529999999999,
+        "system_seconds": 0.028159,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10915840
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            1.994067,
+            1.974667,
+            1.988508,
+            1.964632,
+            1.99019,
+            1.980776,
+            1.990632,
+            1.960657,
+            1.965654,
+            1.952634
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.542956,
+            3.417068,
+            3.508754,
+            3.315205,
+            3.27141,
+            3.562846,
+            3.542304,
+            3.393533,
+            4.568692,
+            3.397248
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.56797,
+            2.874405,
+            2.884189,
+            2.885972,
+            2.77759,
+            2.904399,
+            2.93185,
+            2.909538,
+            2.925181,
+            2.818662
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.516529,
+            2.415417,
+            2.431391,
+            2.392513,
+            2.426714,
+            2.406825,
+            2.406113,
+            2.656428,
+            2.451762,
+            2.388627
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.343937,
+            3.688213,
+            3.400433,
+            3.343738,
+            3.354654,
+            3.350317,
+            3.466371,
+            3.540462,
+            3.363848,
+            3.364779
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            26.108429,
+            27.772712,
+            26.147818,
+            25.503723,
+            25.440219,
+            25.910883,
+            25.526508,
+            25.399728,
+            25.820117,
+            26.050081
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.394063,
+            7.43869,
+            7.449917,
+            7.351098,
+            7.305992,
+            7.544859,
+            7.344089,
+            7.261755,
+            7.325451,
+            7.333091
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_set",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 50933760,
+        "user_seconds": 0.149704,
+        "system_seconds": 0.021389,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46014464
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            8.958467,
+            7.918299,
+            8.223745,
+            7.928073,
+            7.798629,
+            7.703066,
+            8.702212,
+            7.286592,
+            7.136417,
+            7.136737
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_noop",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 50937856,
+        "user_seconds": 0.118878,
+        "system_seconds": 0.012162,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.418919,
+            4.377006,
+            4.415342,
+            4.354431,
+            4.394662,
+            4.372098,
+            4.823213,
+            4.711586,
+            4.426379,
+            4.418598
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_remove",
+      "round": 1,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 50937856,
+        "user_seconds": 0.13746999999999998,
+        "system_seconds": 0.022296999999999997,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.920435,
+            7.056097,
+            7.183277,
+            7.208635,
+            6.95746,
+            7.022908,
+            6.989727,
+            6.922837,
+            6.950659,
+            6.931611
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-1/native/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "cohort-read",
+      "round": 2,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 50937856,
+        "user_seconds": 0.669572,
+        "system_seconds": 0.012067,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10915840
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            1.958192,
+            2.012895,
+            1.951422,
+            2.441987,
+            2.037301,
+            1.988728,
+            2.004872,
+            1.954917,
+            1.964382,
+            1.95642
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.28548,
+            3.260503,
+            3.3382,
+            3.33176,
+            3.34585,
+            3.327914,
+            3.294033,
+            3.25227,
+            3.276227,
+            3.454794
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.797439,
+            2.803879,
+            2.787264,
+            2.855287,
+            2.815667,
+            2.830819,
+            2.786823,
+            2.793073,
+            2.774505,
+            2.756939
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.453975,
+            2.448467,
+            2.409629,
+            2.431922,
+            2.487846,
+            2.442718,
+            2.437731,
+            2.404381,
+            2.438032,
+            2.386714
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.338349,
+            3.355996,
+            3.35247,
+            3.347553,
+            3.37185,
+            3.346181,
+            3.603255,
+            3.408004,
+            3.404338,
+            3.375354
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            26.013467,
+            30.051034,
+            26.874166,
+            27.13748,
+            26.35659,
+            25.546988,
+            25.972245,
+            25.632436,
+            25.809292,
+            25.422481
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.309667,
+            7.31844,
+            7.399552,
+            7.340192,
+            7.348295,
+            7.379832,
+            7.35875,
+            7.316486,
+            7.326653,
+            7.330889
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_set",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 59199488,
+        "user_seconds": 0.146748,
+        "system_seconds": 0.012230999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.951921,
+            6.987785,
+            6.983518,
+            6.870058,
+            6.921786,
+            6.96474,
+            6.980934,
+            7.034294,
+            6.931962,
+            6.968466
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_noop",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 59199488,
+        "user_seconds": 0.116908,
+        "system_seconds": 0.011727999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.331827,
+            4.348172,
+            4.373831,
+            4.353971,
+            4.796223,
+            4.33372,
+            4.350275,
+            4.303705,
+            4.343043,
+            4.320851
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_remove",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 59203584,
+        "user_seconds": 0.145145,
+        "system_seconds": 0.012440999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.019682,
+            6.997108,
+            7.03838,
+            7.007985,
+            6.959643,
+            6.973994,
+            6.975827,
+            6.923168,
+            6.907925,
+            7.003548
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/native/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "cohort-read",
+      "round": 2,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 59203584,
+        "user_seconds": 0.643708,
+        "system_seconds": 0.036074999999999996,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10457088
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.311141,
+            2.324281,
+            2.272793,
+            2.279804,
+            2.264571,
+            2.270329,
+            2.245673,
+            2.265662,
+            2.283369,
+            2.246705
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.569165,
+            3.575875,
+            3.563427,
+            3.572269,
+            3.570788,
+            3.540513,
+            3.563276,
+            3.586131,
+            3.573152,
+            3.698459
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.982366,
+            3.09147,
+            3.059762,
+            3.010879,
+            2.983448,
+            3.062997,
+            3.069177,
+            2.990178,
+            3.062496,
+            2.99791
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.710168,
+            2.695536,
+            2.706243,
+            2.683068,
+            2.670589,
+            2.66399,
+            2.679823,
+            2.687795,
+            2.68479,
+            2.703599
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.590658,
+            3.616326,
+            3.502636,
+            3.668373,
+            3.721884,
+            3.537458,
+            3.529996,
+            3.650256,
+            3.598229,
+            3.541784
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            24.741462,
+            24.555905,
+            24.908943,
+            26.022251,
+            25.06084,
+            24.759149,
+            24.541107,
+            24.405123,
+            24.272665,
+            24.393196
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.482157,
+            7.543228,
+            7.474556,
+            7.493444,
+            7.436829,
+            7.456489,
+            7.520665,
+            7.489649,
+            7.799792,
+            7.533194
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_set",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 66445312,
+        "user_seconds": 0.153494,
+        "system_seconds": 0.010747,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.718074,
+            6.724193,
+            6.729872,
+            6.642081,
+            6.721449,
+            6.674759,
+            6.650863,
+            6.705155,
+            6.761379,
+            6.638275
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_noop",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 66445312,
+        "user_seconds": 0.11481999999999999,
+        "system_seconds": 0.024439,
+        "os_read_bytes": 0,
+        "os_write_bytes": 36638720
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.473515,
+            4.681316,
+            4.493324,
+            4.535066,
+            4.479674,
+            4.543099,
+            4.521888,
+            4.576269,
+            4.479043,
+            4.674926
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_remove",
+      "round": 2,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 66445312,
+        "user_seconds": 0.139514,
+        "system_seconds": 0.026365999999999997,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.001828,
+            6.81569,
+            6.653687,
+            6.875729,
+            6.606947,
+            6.694068,
+            6.691434,
+            6.721588,
+            6.776917,
+            7.136761
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-2/row/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "cohort-read",
+      "round": 3,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 66445312,
+        "user_seconds": 0.664661,
+        "system_seconds": 0.027170999999999997,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10457088
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.314855,
+            2.327894,
+            2.269016,
+            2.306842,
+            2.289166,
+            2.290157,
+            2.268295,
+            2.331269,
+            2.331519,
+            2.283177
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.580268,
+            3.630003,
+            3.619978,
+            3.587899,
+            3.904023,
+            3.657393,
+            3.635911,
+            3.578014,
+            3.56849,
+            3.604474
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.977836,
+            2.992679,
+            2.98037,
+            2.990035,
+            2.964046,
+            2.961632,
+            2.991907,
+            2.976844,
+            2.976615,
+            2.991297
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.988869,
+            2.719069,
+            2.731397,
+            2.694042,
+            2.666471,
+            2.690437,
+            2.697697,
+            2.667512,
+            2.724818,
+            2.707692
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.522171,
+            3.539627,
+            3.504595,
+            3.511855,
+            3.511064,
+            3.532206,
+            3.54159,
+            3.550394,
+            3.495461,
+            3.50136
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            26.042815,
+            24.831631,
+            25.107946,
+            25.19796,
+            25.347454,
+            25.172272,
+            25.403137,
+            25.503177,
+            25.470828,
+            25.099983
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.508006,
+            7.469659,
+            7.48395,
+            7.451763,
+            7.494255,
+            7.462007,
+            7.458171,
+            7.493424,
+            7.493554,
+            7.478972
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_set",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 72683520,
+        "user_seconds": 0.169965,
+        "system_seconds": 0.041145999999999995,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.015049,
+            7.014077,
+            7.251021,
+            7.242709,
+            6.991222,
+            7.03011,
+            7.034628,
+            6.947778,
+            7.180647,
+            7.050211
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_noop",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 72683520,
+        "user_seconds": 0.14898599999999998,
+        "system_seconds": 0.004312,
+        "os_read_bytes": 0,
+        "os_write_bytes": 36638720
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.667405,
+            4.716058,
+            5.351259,
+            4.714936,
+            4.530801,
+            4.707916,
+            5.040944,
+            4.790289,
+            4.715087,
+            6.015553
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_remove",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 72683520,
+        "user_seconds": 0.147494,
+        "system_seconds": 0.031242,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.777393,
+            6.676191,
+            6.759516,
+            7.474316,
+            7.953262,
+            7.89828,
+            7.428026,
+            7.578602,
+            9.189533,
+            7.77174
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/row/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "cohort-read",
+      "round": 3,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 72683520,
+        "user_seconds": 0.687753,
+        "system_seconds": 0.011928999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10915840
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.01787,
+            2.12461,
+            1.97157,
+            2.084899,
+            1.976288,
+            3.62174,
+            2.087525,
+            1.996888,
+            2.03812,
+            2.170929
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.613678,
+            3.478326,
+            3.424034,
+            3.346568,
+            3.829561,
+            3.428,
+            3.356413,
+            3.426027,
+            3.42775,
+            3.356764
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.803516,
+            2.90644,
+            2.769364,
+            2.782444,
+            2.852389,
+            2.801643,
+            2.965318,
+            2.77966,
+            2.888463,
+            2.773661
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.644258,
+            2.54581,
+            2.587261,
+            2.473892,
+            2.412701,
+            2.424348,
+            2.409836,
+            2.404608,
+            2.418239,
+            2.388694
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.508441,
+            3.572627,
+            3.450854,
+            3.396583,
+            3.393879,
+            3.310625,
+            3.349583,
+            3.345316,
+            3.35392,
+            3.356203
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            26.358236,
+            26.448161,
+            25.851007,
+            26.06013,
+            26.243565,
+            25.825529,
+            28.510478,
+            26.638365,
+            27.852652,
+            26.879647
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.499744,
+            7.684991,
+            7.730459,
+            7.380565,
+            7.609148,
+            7.433334,
+            7.987584,
+            7.569659,
+            7.533674,
+            7.544151
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_set",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 77877248,
+        "user_seconds": 0.148315,
+        "system_seconds": 0.023011999999999998,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46014464
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            8.211969,
+            7.272454,
+            7.470289,
+            7.112474,
+            7.265172,
+            7.034738,
+            6.955018,
+            7.271091,
+            7.140416,
+            6.923431
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_noop",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 77877248,
+        "user_seconds": 0.113591,
+        "system_seconds": 0.016272,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.361036,
+            4.369138,
+            4.380385,
+            4.405563,
+            4.365883,
+            4.376339,
+            4.412604,
+            4.354356,
+            4.365904,
+            4.395939
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_remove",
+      "round": 3,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 77877248,
+        "user_seconds": 0.134157,
+        "system_seconds": 0.03367,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.2769,
+            9.218705,
+            6.939445,
+            7.502437,
+            7.380595,
+            7.030642,
+            7.011753,
+            7.228708,
+            7.15635,
+            7.050923
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-3/native/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "cohort-read",
+      "round": 4,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 77877248,
+        "user_seconds": 0.6652429999999999,
+        "system_seconds": 0.020383,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10915840
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.104413,
+            2.045261,
+            2.033403,
+            1.975486,
+            1.972322,
+            1.965031,
+            1.976588,
+            1.947584,
+            1.966343,
+            1.955216
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.304325,
+            3.321781,
+            3.299698,
+            3.311105,
+            3.283724,
+            3.294991,
+            3.297534,
+            3.295021,
+            3.266729,
+            3.340299
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.787231,
+            2.803205,
+            2.795033,
+            2.900301,
+            2.789254,
+            2.80668,
+            2.77991,
+            2.7931,
+            2.797757,
+            2.757337
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.42532,
+            2.437598,
+            2.408895,
+            2.447592,
+            2.418679,
+            2.417969,
+            2.438259,
+            2.43912,
+            2.443096,
+            2.404098
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.375381,
+            3.377104,
+            3.373559,
+            3.324955,
+            3.384175,
+            3.655671,
+            3.397925,
+            3.363944,
+            3.38088,
+            3.39403
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            25.607823,
+            25.428885,
+            25.555545,
+            25.455145,
+            25.494474,
+            26.033019,
+            25.774828,
+            25.506444,
+            25.533784,
+            25.790569
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.336155,
+            7.481853,
+            7.447262,
+            7.385419,
+            7.342505,
+            7.334203,
+            7.357407,
+            7.338589,
+            7.360181,
+            7.401502
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_set",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 82046976,
+        "user_seconds": 0.13907999999999998,
+        "system_seconds": 0.023892,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.176997,
+            7.211539,
+            7.016226,
+            6.999131,
+            7.026091,
+            7.031199,
+            6.996927,
+            7.006441,
+            7.015725,
+            6.954833
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_noop",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 82046976,
+        "user_seconds": 0.11680299999999999,
+        "system_seconds": 0.012178999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.386388,
+            4.358306,
+            4.345086,
+            4.372237,
+            4.4413,
+            4.331596,
+            4.372778,
+            4.346679,
+            4.336553,
+            4.358196
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_remove",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 82046976,
+        "user_seconds": 0.142284,
+        "system_seconds": 0.015413999999999999,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.93888,
+            7.163286,
+            6.935545,
+            7.078919,
+            7.007573,
+            7.153272,
+            7.048675,
+            6.936958,
+            7.124789,
+            7.362775
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/native/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "cohort-read",
+      "round": 4,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 82046976,
+        "user_seconds": 0.663839,
+        "system_seconds": 0.019874,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10457088
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.416899,
+            2.381606,
+            2.39152,
+            2.325211,
+            2.306875,
+            2.380645,
+            2.292462,
+            2.300935,
+            2.293494,
+            2.341757
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.590096,
+            3.62653,
+            3.615023,
+            3.695714,
+            3.69334,
+            3.575935,
+            3.763375,
+            3.704587,
+            3.75315,
+            3.598899
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.27218,
+            3.014253,
+            2.988405,
+            3.003768,
+            2.986522,
+            2.9919,
+            3.015986,
+            2.988545,
+            2.978581,
+            2.984179
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.699783,
+            2.71109,
+            2.679792,
+            2.701435,
+            2.785,
+            2.762467,
+            2.748345,
+            2.70467,
+            2.694555,
+            2.733032
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.682874,
+            3.681553,
+            3.523716,
+            3.564748,
+            3.568313,
+            3.558138,
+            3.573371,
+            3.53301,
+            3.547482,
+            3.534704
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            24.423782,
+            24.539957,
+            25.600234,
+            25.522048,
+            24.82262,
+            24.630041,
+            24.770321,
+            26.272952,
+            24.698453,
+            24.583982
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.482765,
+            7.45931,
+            7.500662,
+            7.468593,
+            7.487612,
+            7.550526,
+            7.522514,
+            7.469625,
+            7.47956,
+            7.758378
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_set",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 85180416,
+        "user_seconds": 0.129405,
+        "system_seconds": 0.036252,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.689478,
+            6.669247,
+            6.685531,
+            6.64492,
+            6.656307,
+            6.682798,
+            6.675316,
+            7.419951,
+            6.750768,
+            6.672952
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_noop",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 85180416,
+        "user_seconds": 0.129877,
+        "system_seconds": 0.008383,
+        "os_read_bytes": 0,
+        "os_write_bytes": 36638720
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.486308,
+            4.486308,
+            4.492657,
+            4.631405,
+            4.511785,
+            4.491235,
+            4.478276,
+            4.5478,
+            4.49417,
+            4.490144
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_remove",
+      "round": 4,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 85180416,
+        "user_seconds": 0.157852,
+        "system_seconds": 0.026469,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.06549,
+            6.753182,
+            6.796296,
+            6.812561,
+            8.739487,
+            8.12747,
+            7.890375,
+            7.111429,
+            7.202245,
+            8.315952
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-4/row/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "cohort-read",
+      "round": 5,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 85180416,
+        "user_seconds": 0.711695,
+        "system_seconds": 0.035688,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10461184
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.743438,
+            2.467985,
+            3.318499,
+            2.752922,
+            2.503309,
+            2.499062,
+            2.475677,
+            2.36396,
+            2.415477,
+            2.388046
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            5.627988,
+            3.91384,
+            3.788012,
+            3.753611,
+            5.39641,
+            5.541438,
+            3.931727,
+            3.869614,
+            3.852829,
+            3.852479
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.224103,
+            3.22192,
+            3.246887,
+            3.20168,
+            3.319807,
+            3.140779,
+            3.202771,
+            3.088631,
+            3.04804,
+            3.026869
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.728051,
+            2.691907,
+            2.761281,
+            2.911286,
+            2.754451,
+            2.80126,
+            2.793469,
+            2.736754,
+            2.751446,
+            2.739529
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.764949,
+            4.250348,
+            3.902227,
+            4.670948,
+            4.862124,
+            4.874903,
+            3.801707,
+            3.774187,
+            3.757602,
+            4.072051
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            27.222306,
+            25.181823,
+            24.721955,
+            24.777738,
+            24.652972,
+            30.244666,
+            27.884146,
+            26.661757,
+            26.518002,
+            38.690932
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.64708,
+            7.593,
+            7.52664,
+            7.690345,
+            7.688252,
+            7.681973,
+            7.609464,
+            7.543926,
+            7.502324,
+            7.583155
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_set",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86265856,
+        "user_seconds": 0.139623,
+        "system_seconds": 0.027004,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            6.873884,
+            6.706654,
+            6.656358,
+            6.797489,
+            6.643759,
+            6.727294,
+            6.728926,
+            6.667585,
+            6.677079,
+            7.471186
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_noop",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86265856,
+        "user_seconds": 0.129529,
+        "system_seconds": 0.012503,
+        "os_read_bytes": 0,
+        "os_write_bytes": 36638720
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.59877,
+            4.561815,
+            4.624068,
+            4.522937,
+            4.526922,
+            4.516377,
+            4.514314,
+            4.539931,
+            4.552631,
+            4.696045
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "row",
+      "family": "write-cohort_remove",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86265856,
+        "user_seconds": 0.14435199999999998,
+        "system_seconds": 0.033037,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            8.154389,
+            7.350206,
+            7.241654,
+            7.009957,
+            6.975206,
+            6.773624,
+            6.875345,
+            6.856407,
+            6.835266,
+            6.909036
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/row/write-cohort_remove/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "cohort-read",
+      "round": 5,
+      "mode": "read",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/cohort-read/after-hybrid.zyx",
+        "cohort_filter,cohort_group,cohort_point,cohort_missing,cohort_full_point,cohort_full_scan,cohort_gather",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86265856,
+        "user_seconds": 0.6470819999999999,
+        "system_seconds": 0.043633,
+        "os_read_bytes": 0,
+        "os_write_bytes": 10915840
+      },
+      "cases": [
+        {
+          "case": "cohort_filter",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.053342,
+            1.988334,
+            2.068525,
+            1.948255,
+            1.950698,
+            1.947944,
+            1.960263,
+            1.964759,
+            1.993633,
+            2.004399
+          ]
+        },
+        {
+          "case": "cohort_group",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.370532,
+            3.331164,
+            3.319536,
+            3.303462,
+            3.352836,
+            3.392755,
+            3.356352,
+            3.290593,
+            3.2551,
+            3.337743
+          ]
+        },
+        {
+          "case": "cohort_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.804436,
+            2.917345,
+            2.939488,
+            2.808612,
+            2.792648,
+            2.864495,
+            2.814099,
+            2.833188,
+            2.822522,
+            2.815021
+          ]
+        },
+        {
+          "case": "cohort_missing",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            2.4795,
+            2.487171,
+            2.480591,
+            2.457807,
+            2.496485,
+            2.419329,
+            2.57331,
+            2.526831,
+            2.498678,
+            2.495914
+          ]
+        },
+        {
+          "case": "cohort_full_point",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            3.801797,
+            3.432535,
+            3.397353,
+            3.353106,
+            3.440487,
+            3.372376,
+            3.841276,
+            3.419005,
+            3.681107,
+            3.399065
+          ]
+        },
+        {
+          "case": "cohort_full_scan",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            25.983242,
+            25.481101,
+            25.524927,
+            26.880745,
+            25.811015,
+            25.488422,
+            25.568062,
+            25.439799,
+            25.401001,
+            27.725348
+          ]
+        },
+        {
+          "case": "cohort_gather",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.430525,
+            7.425359,
+            7.350256,
+            7.363486,
+            7.540381,
+            7.905587,
+            7.524777,
+            7.452529,
+            7.507411,
+            7.471017
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/cohort-read/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/cohort-read/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_set",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_set/after-hybrid.zyx",
+        "cohort_set",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86597632,
+        "user_seconds": 0.14474499999999998,
+        "system_seconds": 0.024238,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_set",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.830495,
+            7.40641,
+            7.441052,
+            7.27222,
+            7.120322,
+            6.98541,
+            7.034904,
+            6.966351,
+            7.495504,
+            7.452929
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_set/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_set/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_noop",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_noop/after-hybrid.zyx",
+        "cohort_noop",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86597632,
+        "user_seconds": 0.119418,
+        "system_seconds": 0.011528,
+        "os_read_bytes": 0,
+        "os_write_bytes": 42602496
+      },
+      "cases": [
+        {
+          "case": "cohort_noop",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            4.429466,
+            4.596697,
+            4.422056,
+            4.414404,
+            4.399292,
+            4.35842,
+            4.402306,
+            4.346482,
+            4.343608,
+            4.424519
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_noop/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_noop/after-hybrid.stderr"
+    },
+    {
+      "engine": "after-hybrid",
+      "scale": "native",
+      "family": "write-cohort_remove",
+      "round": 5,
+      "mode": "write",
+      "status": "completed",
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership-public-probe-after-hybrid",
+        "write",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_remove/after-hybrid.zyx",
+        "cohort_remove",
+        "3",
+        "10"
+      ],
+      "resources": {
+        "exit": 0,
+        "timeout": false,
+        "peak_rss_bytes": 86597632,
+        "user_seconds": 0.140974,
+        "system_seconds": 0.023087999999999997,
+        "os_read_bytes": 0,
+        "os_write_bytes": 46010368
+      },
+      "cases": [
+        {
+          "case": "cohort_remove",
+          "status": "passed",
+          "errors": [],
+          "samples": [
+            7.070858,
+            6.974093,
+            7.049316,
+            7.189385,
+            7.385979,
+            7.026892,
+            7.501892,
+            7.17865,
+            7.049526,
+            7.483756
+          ]
+        }
+      ],
+      "parse_errors": [],
+      "raw_stdout": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_remove/after-hybrid.jsonl",
+      "raw_stderr": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/window/round-5/native/write-cohort_remove/after-hybrid.stderr"
+    }
+  ],
+  "all_families_attempted": true,
+  "all_passed": true
+}
