@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 namespace graph::storage {
 
@@ -73,8 +74,8 @@ namespace graph::storage {
 
 	class MetadataPagePoolAllocator final : public MetadataPageAllocator {
 	public:
-		// Trigger publication reclamation after roughly 4 MiB of allocations.
-		// The free-frame floor still forces reclamation before capacity pressure.
+		// Saturation bound for allocation diagnostics; ordinary reclamation uses
+        // authenticated retirement deltas rather than a periodic full traversal.
 		static constexpr uint32_t PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES =
 			32U * RSS_PAGE_POOL_DATA_FRAME_COUNT;
 
@@ -100,6 +101,12 @@ namespace graph::storage {
 					  const MetadataSlotReservationLookup *reservationLookup) override;
 		void beginUnpublishedBatch(const Superblock &current) override;
 		void endUnpublishedBatch(const Superblock &current) noexcept override;
+        void commitCatalogPoolOwnership(PhysicalSlotId slot) noexcept override;
+        void validateMetadataRetirement(const Superblock &current, const Superblock &candidate,
+            std::span<const PhysicalPageRef> retired, bool complete) const override;
+        void commitMetadataRetirement(const Superblock &current, const Superblock &candidate,
+            std::span<const PhysicalPageRef> retired, bool complete) noexcept override;
+
 		void reserveMetadataFrames(size_t count, std::span<const PhysicalSlotId> excludedPoolSlots,
 								   std::span<const PhysicalSlotRange> excludedDataSlotRanges,
 								   const MetadataSlotReservationLookup *reservationLookup) override;
@@ -166,9 +173,9 @@ namespace graph::storage {
 		// root. A snapshot is represented by its immutable Superblock generation.
 		// The caller must serialize this operation with metadata publication so no
 		// in-flight copy-on-write generation can lose an unpublished page.
-		// Ordinary publications may defer a full traversal for fewer than eight pools
-		// of allocations. Explicit cleanup/recovery remains eager. Deferred frames
-		// stay allocated and cannot be reused before authenticated reconciliation.
+        // Ordinary publications consume changed-frame retirement records and the
+        // oldest active generation. Missing coverage, explicit force and recovery
+        // rebuild the complete proof before any frame can be reused.
 		void reclaimUnreachable(const Superblock &current, std::span<const Superblock> activeSnapshots,
 								bool force = true);
 		// Keeps a relocated source pool out of normal COW allocation until every
@@ -187,6 +194,10 @@ namespace graph::storage {
 		// the now-free physical locations.
 		void releaseEmptyCatalogPools(std::span<const PhysicalSlotId> slots);
 		[[nodiscard]] std::vector<PhysicalSlotId> poolSlots() const;
+        // Newly created pools stay here until ownership is verified against a
+        // published Catalog. Failed/unpublished pool cleanup removes them.
+        [[nodiscard]] utils::OwnedStdVector<PhysicalSlotId> unconfirmedOwnershipSlots() const;
+
 
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 		// Test-only seams for proving fail-closed behavior when a process-local
@@ -196,8 +207,19 @@ namespace graph::storage {
 #endif
 
 	private:
+        struct RetiredFrameLink { uint64_t generation = 0U; uint64_t next = 0U; };
 		struct PoolState {
 			MetadataPagePoolHeader header;
+            uint64_t ownership_previous = 0U;
+            uint64_t ownership_next = 0U;
+            bool ownership_pending = false;
+            uint64_t available_previous = 0U, available_next = 0U;
+            uint8_t available_frames = 0U;
+            std::array<RetiredFrameLink, RSS_PAGE_POOL_DATA_FRAME_COUNT> retired_frames{};
+            uint32_t current_reachable_frames = 0U;
+            uint64_t retirement_dirty_next = 0U;
+            bool retirement_dirty = false;
+
 		};
 		struct ActiveBatchContext {
 			Superblock superblock;
@@ -223,6 +245,8 @@ namespace graph::storage {
 													LogSequenceNumber checkpointLsn, uint32_t flags = 0U,
 													bool reuseExistingSlot = false);
 		void eraseUnpublishedPoolLocked(PhysicalSlotId slot);
+        void linkUnconfirmedOwnershipLocked(PhysicalSlotId slot);
+        void unlinkUnconfirmedOwnershipLocked(PhysicalSlotId slot);
 		void abandonUnpublishedBatchLocked(std::span<const PhysicalSlotId> poolSlots,
 										   std::span<const PhysicalSlotId> dataSlots,
 										   std::span<const PhysicalSlotRange> dataSlotRanges, uint64_t initialFileSize);
@@ -235,10 +259,27 @@ namespace graph::storage {
 		void reconcileReachabilityLocked(std::span<const Superblock> protectedSuperblocks, bool resetPageId,
 										 bool reclaimUnreachable, bool persistReclaimedFrames);
 		void requireHealthyLocked() const;
+        void refreshPoolAvailabilityLocked(PhysicalSlotId slot);
+        void unlinkPoolAvailabilityLocked(PhysicalSlotId slot);
+        void rebuildPoolAvailabilityLocked();
+        void resetMetadataRetirementLocked();
+        void queueMetadataRetirementLocked(PhysicalSlotId slot, uint8_t frame, Generation after);
+        void reclaimRetiredMetadataLocked(const Superblock &current, std::span<const Superblock> snapshots);
+
 
 		std::shared_ptr<StorageIO> io_;
 		uint64_t data_region_offset_ = 0;
 		std::map<uint64_t, PoolState> pools_;
+        // Intrusive pending list: no extra tree nodes or retained writer arena.
+        uint64_t unconfirmed_ownership_head_ = 0U;
+        size_t unconfirmed_ownership_count_ = 0U;
+        uint64_t available_pool_head_ = 0U;
+        uint64_t available_metadata_frames_ = 0U;
+        std::optional<Superblock> retirement_base_;
+        uint64_t retired_metadata_head_ = 0U;
+        uint64_t retired_metadata_tail_ = 0U;
+        size_t retired_metadata_count_ = 0U;
+
 		// Relocated source pools stay unavailable while older snapshots can still
 		// resolve their frames, preserving eventual evacuation/reclaim progress.
 		std::set<uint64_t> snapshot_protected_pool_slots_;

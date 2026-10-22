@@ -331,6 +331,8 @@ namespace graph::storage {
 				MetadataRadixPage radix;
 				MetadataPageRouteLeafPage leaf;
 				utils::OwnedStdVector<ChildPlan> children;
+                PhysicalPageRef source{};
+                utils::OwnedVector<PhysicalPageRef> replaced_targets;
 				bool is_leaf = false;
 			};
 		public:
@@ -393,6 +395,9 @@ namespace graph::storage {
 						frame->radix.committed_lsn = batch.checkpointLsn();
 						pages_.writeMetadataRadix(reference, frame->radix);
 					}
+                    batch.retainBootstrapFrame(reference);
+                    if (frame->source.isValid()) batch.retireMetadataFrame(frame->source);
+                    for (const auto target : frame->replaced_targets) batch.retireMetadataFrame(target);
 					written.push_back(reference);
 				}
 				debug::PerfTrace::addValue("native_graph.route.incremental_written_frames", static_cast<int64_t>(written.size()));
@@ -426,7 +431,7 @@ namespace graph::storage {
 			}
 
 			Link leaf(PhysicalPageRef reference, uint64_t ordinal, std::span<const MetadataPageRoute> updates) {
-				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->is_leaf = true;
+				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->is_leaf = true; frame->source = reference;
 				if (reference.isValid()) {
 					validateReference(reference, batch_.candidate(), "incremental route leaf is not visible");
 					debug::PerfTrace::addValue("native_graph.route.incremental_source_frames", 1);
@@ -445,7 +450,10 @@ namespace graph::storage {
 					const auto found = std::lower_bound(routes.begin(), routes.end(), update.page_id.value(),
 						[](const auto &route, uint64_t id) { return route.page_id.value() < id; });
 					if (found != routes.end() && found->page_id == update.page_id) {
-						if (found->physical_reference != update.physical_reference) { *found = update; changed = true; }
+						if (found->physical_reference != update.physical_reference) {
+                            frame->replaced_targets.push_back(found->physical_reference);
+                            *found = update; changed = true;
+                        }
 					} else { routes.insert(found, update); changed = true; }
 				}
 				if (!changed) return {reference};
@@ -487,7 +495,7 @@ namespace graph::storage {
 				std::span<const MetadataPageRoute> updates, bool root) {
                 const auto outputKind = root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
                 if (updates.empty() && reference.isValid() && old.kind == outputKind) return {reference};
-				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->radix = old;
+				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->radix = old; frame->source = reference;
 				frame->radix.kind = root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
 				bool changed = !reference.isValid() || frame->radix.kind != old.kind;
 				const uint64_t factor = radixFactor(old.level);
@@ -943,8 +951,11 @@ namespace graph::storage {
 				replacement.metadata_directory_roots[i] = id;
 			}
 			const auto reference = batch.allocatePage();
+            batch.retireMetadataFrame(batch.candidate().page_directory_root);
+            batch.retainBootstrapFrame(reference);
 			pages_.writePageDirectoryBootstrap(reference, replacement);
 			batch.setPageDirectoryBootstrapRoot(reference); batch.markBootstrapRoutePublished();
+            batch.markMetadataRetirementComplete();
 			return reference;
 		}
         incremental_plan_.reset();
@@ -989,9 +1000,12 @@ namespace graph::storage {
 		header.generation = batch.generation();
 		header.committed_lsn = batch.checkpointLsn();
 		const PhysicalPageRef reference = batch.allocatePage();
+        batch.retireMetadataFrame(batch.candidate().page_directory_root);
+        batch.retainBootstrapFrame(reference);
 		pages_.writePageDirectoryBootstrap(reference, header);
 		batch.setPageDirectoryBootstrapRoot(reference);
 		batch.markBootstrapRoutePublished();
+        batch.markMetadataRetirementComplete();
 		return reference;
 	}
 

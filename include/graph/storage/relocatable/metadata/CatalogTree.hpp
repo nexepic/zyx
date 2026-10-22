@@ -119,6 +119,14 @@ namespace graph::storage {
 		// left by an interrupted unpublished candidate.
 		virtual void beginUnpublishedBatch(const Superblock &) {}
 		virtual void endUnpublishedBatch(const Superblock &) noexcept {}
+        // A complete changed-path retirement plan is validated before A/B
+        // publication. Successful handoff must not allocate or throw afterward.
+        virtual void commitCatalogPoolOwnership(PhysicalSlotId) noexcept {}
+        virtual void validateMetadataRetirement(const Superblock &, const Superblock &,
+            std::span<const PhysicalPageRef>, bool) const {}
+        virtual void commitMetadataRetirement(const Superblock &, const Superblock &,
+            std::span<const PhysicalPageRef>, bool) noexcept {}
+
 		// A publication may reserve its exact metadata-frame budget after ordinary
 		// COW work has converged. Concrete allocators bind this reservation to the
 		// active batch and reject allocations that exceed it; lightweight test
