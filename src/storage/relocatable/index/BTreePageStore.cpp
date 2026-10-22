@@ -3098,8 +3098,10 @@ namespace graph::storage {
             false, false, BTreeLeafValueLayout::BLVL_U64, std::move(sink), memory, nullptr, true);
         size_t emitted = 0;
         source([&](const BTreeScalarIndexOperation &operation) {
-            if (emitted == operationCount || operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT ||
-                operation.key.size() > RSS_INDEX_KEY_MAX_BYTES || IndexKeyCodec::decodeEntryEntityId(operation.key) != operation.value ||
+            if (emitted == operationCount ||
+                (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT && operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE) ||
+                operation.key.size() > RSS_INDEX_KEY_MAX_BYTES || !IndexKeyCodec::decodeEntryEntityId(operation.key) ||
+                (operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT && IndexKeyCodec::decodeEntryEntityId(operation.key) != operation.value) ||
                 IndexKeyCodec::decodeIntegerEntryValue(operation.key) <= 0)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "streamed membership source changed count, type or owner");
             ++emitted; overlay->apply(operation);
@@ -3120,8 +3122,9 @@ namespace graph::storage {
             false, false, BTreeLeafValueLayout::BLVL_EMPTY, std::move(sink), memory, nullptr);
         size_t emitted = 0;
         source([&](const BTreeScalarIndexOperation &operation) {
-            if (emitted == operationCount || operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT)
-                throw FormatException(FormatError::FERR_INVALID_STATE, "streamed adjacency image source is incomplete or not insertion-only");
+            if (emitted == operationCount ||
+                (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT && operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE))
+                throw FormatException(FormatError::FERR_INVALID_STATE, "streamed adjacency image source is incomplete or has an unknown mutation");
             ++emitted; overlay->apply(operation);
         });
         if (emitted != operationCount)

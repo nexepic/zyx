@@ -45,9 +45,32 @@ public:
         const auto tokens = context.tokens(owner, tokensAdmission, boundary);
         if (!tokens) return {};
         if (tokens->empty()) return {true, std::nullopt};
+        context.enableFullEntityWindow(tokens->size());
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+        std::array<HybridPropertyFieldView::ScalarCell, HybridPropertyColumnMembership::MAX_COLUMNS> cells{};
+        const bool fullColumns = context.fullColumnCells(owner, *tokens, cells, std::ref(boundary));
+        boundaryCredit.set(0);
+        const auto scalarValue = [](const HybridPropertyFieldView::ScalarCell &cell) {
+            if (cell.is_null) return PropertyValue{};
+            switch (cell.kind) {
+                case HybridPropertyScalarKind::HPSK_INT64: return PropertyValue(std::bit_cast<int64_t>(cell.word));
+                case HybridPropertyScalarKind::HPSK_DOUBLE: return PropertyValue(std::bit_cast<double>(cell.word));
+                case HybridPropertyScalarKind::HPSK_BOOL: return PropertyValue(bool(cell.word));
+                default: throw FormatException(FormatError::FERR_INVALID_ENUM, "unknown hybrid scalar kind");
+            }
+        };
+        if (fullColumns && admission) for (size_t i = 0; i < tokens->size(); ++i) {
+            context.checkpoint();
+            (*admission)(sizeof(uint32_t) + CanonicalPropertyValueCodec::encodedSize(scalarValue(cells[i])));
+        }
+#endif
         // Match ROW full-root semantics: admit every encoded entry before
         // allocating any decoded variable-sized value or returned entry slots.
-        if (admission) for (const auto token : *tokens) {
+        if (admission
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+            && !fullColumns
+#endif
+        ) for (const auto token : *tokens) {
             auto field = read(context, snapshot, owner, token, largeValues, admission, ReadMode::HRM_ADMISSION_ONLY);
             hybrid_property_detail::require(field.route == HybridPropertyReadContext::FieldRoute::HFR_FOUND,
                 "hybrid admission membership has no field");
@@ -59,8 +82,17 @@ public:
         else detail::admitScopedPropertyVectorGrowth(root.entries, tokens->size());
         root.entries.reserve(tokens->size());
         if (slotsAdmission) (*slotsAdmission)(root.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+        size_t ordinal = 0;
+#endif
         for (const auto token : *tokens) {
             context.checkpoint();
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+            if (fullColumns) {
+                root.entries.push_back({token, scalarValue(cells[ordinal++])});
+                continue;
+            }
+#endif
             auto field = read(context, snapshot, owner, token, largeValues);
             hybrid_property_detail::require(field.route == HybridPropertyReadContext::FieldRoute::HFR_FOUND && field.value,
                 "hybrid membership has no field within its pinned collection");

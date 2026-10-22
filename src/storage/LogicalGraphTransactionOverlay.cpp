@@ -637,6 +637,43 @@ namespace graph::storage {
 			return result;
 		}
 
+
+        // An unchanged overlay has exactly its pinned source's cells. Once a
+        // mutation is staged, the existing owning overlay adapter must merge it.
+        [[nodiscard]] bool supportsNodePropertyCellBatches() const override {
+            requireActive();
+            return overlay_.logical_revision_ == 0U && overlay_.baseSnapshot().supportsNodePropertyCellBatches();
+        }
+        void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const std::function<void(size_t)> &admission) const override {
+            if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
+            if (!values || !admission) throw std::invalid_argument("overlay direct cells require sink and admission");
+            const auto check = readRevisionCheckpoint();
+            const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                check(); values(row, column, std::move(value)); check();
+            };
+            const auto admit = guardReadAdmission(admission);
+            overlay_.baseSnapshot().readNodePropertyCellsSortedWithAdmission(ids, keys, guarded, admit);
+            check();
+        }
+        void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
+            if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
+            if (!values || !scalars || !admission) throw std::invalid_argument("overlay direct scalars require sinks and admission");
+            const auto check = readRevisionCheckpoint();
+            const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                check(); values(row, column, std::move(value)); check();
+            };
+            const auto scalar = [&](size_t row, size_t column, PropertyType type, uint64_t word) {
+                check(); scalars(row, column, type, word); check();
+            };
+            const auto admit = guardReadAdmission(admission);
+            overlay_.baseSnapshot().readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, guarded, scalar, admit);
+            check();
+        }
+
 		[[nodiscard]] bool supportsNativeNodeRefScans() const override {
 			requireActive();
 			return overlay_.baseSnapshot().supportsNativeNodeRefScans();
@@ -2407,6 +2444,43 @@ namespace graph::storage {
 		explicit VectorSnapshot(const LogicalGraphTransactionOverlay &overlay,
 									 LogicalGraphVectorSearchSnapshot &derivedSnapshot) :
 				overlay_(overlay), derived_snapshot_(derivedSnapshot) {}
+
+
+        // An unchanged overlay has exactly its pinned source's cells. Once a
+        // mutation is staged, the existing owning overlay adapter must merge it.
+        [[nodiscard]] bool supportsNodePropertyCellBatches() const override {
+            requireActive();
+            return overlay_.logical_revision_ == 0U && derived_snapshot_.supportsNodePropertyCellBatches();
+        }
+        void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const std::function<void(size_t)> &admission) const override {
+            if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
+            if (!values || !admission) throw std::invalid_argument("overlay direct cells require sink and admission");
+            const auto check = readRevisionCheckpoint();
+            const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                check(); values(row, column, std::move(value)); check();
+            };
+            const auto admit = guardReadAdmission(admission);
+            derived_snapshot_.readNodePropertyCellsSortedWithAdmission(ids, keys, guarded, admit);
+            check();
+        }
+        void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
+            if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
+            if (!values || !scalars || !admission) throw std::invalid_argument("overlay direct scalars require sinks and admission");
+            const auto check = readRevisionCheckpoint();
+            const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                check(); values(row, column, std::move(value)); check();
+            };
+            const auto scalar = [&](size_t row, size_t column, PropertyType type, uint64_t word) {
+                check(); scalars(row, column, type, word); check();
+            };
+            const auto admit = guardReadAdmission(admission);
+            derived_snapshot_.readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, guarded, scalar, admit);
+            check();
+        }
 
 		[[nodiscard]] bool supportsNativeNodeRefScans() const override {
 			requireActive();

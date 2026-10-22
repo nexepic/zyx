@@ -83,6 +83,12 @@ source/test allowlist。它们尚未关闭的 C0-C7 门禁只能由当前 native
 
 新增 Cypher clause、function、procedure、C++ API operation、Driver ABI operation、binding 或管理命令时，必须先增加一行记录。广义的“测试套件通过”不能替代具名契约行。
 
+## 2026-10-22 优化检查点边界
+
+本页的C0–C7／三平台门禁与[优化计划](optimization)的24项交付分别计数，不能互相替代。默认格式31仍为ROW；隔离格式33只允许有界、显式且通过完整成本门禁的混合属性转换。图邻接最终选择canonical key-only树和有界主记录复用，覆盖／分段原型不自动生产采用。
+
+已验证的修复包括：未修改事务的原生属性单元转发、修改后拥有型回退及回调revision保护（`test_RelocatableOverlayDirectCells.cpp`）；带预算／原pin／I/O epoch的读上下文复用（`test_HybridPropertyColumnReadReuse.cpp`）；全局邻接和EDGE成员索引的小批删除、末项退休及A/B恢复（`test_RelocatableStreamedAdjacencyDelta.cpp`）。第一版修复必要模块为候选559、默认272个不同执行用例最终通过，各另1个原有禁用项；有失败后定向重跑，不是一次全通过，也不是全量单测。只执行Linux。完整实体性能保护仍未通过，后续纯列批量读取源码和新增用例尚待验证；不据此关闭本页全平台、覆盖率或生产性能门禁。
+
 ## 当前能力台账
 
 | 公开能力族 | Native owner 与契约边界 | 当前 native 验收证据 | 状态与剩余门禁 |
