@@ -147,7 +147,7 @@ Integrity scanning reports sealed private scratch as requiring owner quiescence 
 
 ### 4.5 Isolated hybrid-property experimental format
 
-`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` defaults OFF. This matrix records the current development isolation boundary, not R3 production admission; `Format.hpp`/`Superblock.hpp` remain the version authority.
+`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` defaults OFF. This matrix records default/isolated boundaries. Final R3admission is limited to explicit cost-gated cohorts in the [optimization plan](optimization),without automatic layout switching; `Format.hpp`/`Superblock.hpp` remain the version authority.
 
 | Build | Segment profile/envelope version | Superblock version/header bytes | Property routing |
 |---|---:|---:|---|
@@ -165,6 +165,8 @@ Controlled ROW-to-hybrid conversion may create or reuse authenticated independen
 Normal explicit conversion or controlled field batches target one64-ID group under the existing4096-actual-membership/group and1 MiB work bounds. The dedicated pure-column cohort is the above exception:up to eight groups share that same account and one publication. These are not database lifetime limits. Multiple groups and Node/Edge namespaces share descriptor-bound directories. Adding or removing a group uses private dirty-path COW for existing trees and preserves unrelated prefixes/roots; orphan Index Roots without descriptor bindings still reject. Inverse conversion checks only the selected group and proves that its dedicated field frames contain exactly its authenticated records before removing them. Shared source pools retire only when every current frame is superseded; other routed frames keep the pool alive. A bounded exact census permits direct whole-tree retirement when the selected prefixes exhaust that directory. Inverse conversion clears the descriptor only after all namespaces disappear. Schema/derived-state coordination must preserve existing rejection guards; final production performance admission is recorded in the [optimization plan](optimization).
 
 Controlled Node deletion also authenticates inline/overflow labels and coalesces removals from shared LabelSet pages, preserving other Nodes’ stable slots. LabelSet, fixed Node, Entity Map and native fields publish atomically; empty label pages lose their current routes, and complete detached Entity pools release only after pins drain. Schema/derived-State and general topology coordination remain guarded.
+
+Final reads reuse at most two authenticated groups and an optional original-account column window under the same pin/I/O epoch. Only full owners containing every group column and no extension directory use one bounded column-directory walk;one authenticated field-page holder is retained and scalar bits are copied before callbacks. Mixed/sparse owners keep their original authentication;physical integrity bypasses retained caches. Membership eligibility always checks identity,tokens,live and unused bits:48complete owners prove every column eligible,otherwise exact per-column validation remains. Field writes reuse only the same source-pin authenticated descriptor/reader,without new authority or wire bytes. Budget,cancellation,pin and atomic-publication rules stay. See the [optimization plan](optimization) for process distributions,SET tail limits and Kuzu gaps.
 
 ## 5. Bootstrap, Roots, and Page Directory
 

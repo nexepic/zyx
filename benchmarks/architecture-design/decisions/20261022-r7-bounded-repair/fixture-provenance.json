@@ -1,0 +1,23 @@
+{
+  "fixtures": [
+    {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-fixtures-large.zyx",
+      "bytes": 2359296,
+      "sha256_now": "c6e15415876485ce1eec9b993544b8e9e0bc9da3380aace7a4ef7cd3cd8f9df5",
+      "mtime_ns": 1792619748582969516,
+      "mtime_predates_original_window": true,
+      "initial_byte_sha_registered": false,
+      "provenance": "Original preparation recorded shape/semantic oracle,not a byte SHA. All workers cloned this shared source to fresh private targets. Final hash is supplemental,not retroactive original-hash evidence."
+    },
+    {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-fixtures-skew.zyx",
+      "bytes": 2097152,
+      "sha256_now": "cec7f53e7fd52c724d5446f5399362a9fdd7e59c8a0653f34a9e8482ada3b94d",
+      "mtime_ns": 1792619748633205230,
+      "mtime_predates_original_window": true,
+      "initial_byte_sha_registered": false,
+      "provenance": "Original preparation recorded shape/semantic oracle,not a byte SHA. All workers cloned this shared source to fresh private targets. Final hash is supplemental,not retroactive original-hash evidence."
+    }
+  ],
+  "initial_preparation": "r7-fixtures-untimed-preparation.json"
+}

@@ -87,7 +87,7 @@ source/test allowlist。它们尚未关闭的 C0-C7 门禁只能由当前 native
 
 本页的C0–C7／三平台门禁与[优化计划](optimization)的24项交付分别计数，不能互相替代。默认格式31仍为ROW；隔离格式33只允许有界、显式且通过完整成本门禁的混合属性转换。图邻接最终选择canonical key-only树和有界主记录复用，覆盖／分段原型不自动生产采用。
 
-已验证的修复包括：未修改事务的原生属性单元转发、修改后拥有型回退及回调revision保护（`test_RelocatableOverlayDirectCells.cpp`）；带预算／原pin／I/O epoch的读上下文复用（`test_HybridPropertyColumnReadReuse.cpp`）；全局邻接和EDGE成员索引的小批删除、末项退休及A/B恢复（`test_RelocatableStreamedAdjacencyDelta.cpp`）。第一版修复必要模块为候选559、默认272个不同执行用例最终通过，各另1个原有禁用项；有失败后定向重跑，不是一次全通过，也不是全量单测。只执行Linux。完整实体性能保护仍未通过，后续纯列批量读取源码和新增用例尚待验证；不据此关闭本页全平台、覆盖率或生产性能门禁。
+已验证的修复包括：未修改事务的原生属性单元转发、修改后拥有型回退及回调revision保护（`test_RelocatableOverlayDirectCells.cpp`）；带预算／原pin／I/O epoch的读上下文复用（`test_HybridPropertyColumnReadReuse.cpp`）；全局邻接和EDGE成员索引的小批删除、末项退休及A/B恢复（`test_RelocatableStreamedAdjacencyDelta.cpp`）。第一版修复必要模块为候选559、默认272个不同执行用例最终通过，各另1个原有禁用项；有失败后定向重跑，不是一次全通过，也不是全量单测。只执行Linux。最终纯列读取／资格校验／源pin复用经实验365／默认24项必要模块、8组未计时预检和五组布局对照验证，按优化计划原登记的跨进程稳定拒绝公式验收。SET合并P50/P95仍约+5.9%/+13.4%，不保证每个合并尾延迟都低于5%；Kuzu目标未达到。优化计划的完成不能关闭本页独立的全平台、覆盖率及C0–C7门禁。
 
 ## 当前能力台账
 
