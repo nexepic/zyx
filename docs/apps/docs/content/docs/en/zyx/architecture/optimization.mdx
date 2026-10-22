@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 40%; P1/P2 are accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 50%; P1/P2/P3 are accepted and the Kuzu performance objective is unmet.**
 
 Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
 
@@ -48,10 +48,10 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 
 | Item | Required result | Weight | Status |
 |---|---|---:|---|
-| P0 | Corrected measurement, frozen cost contract and baseline | 0% | Baseline complete; exclusive read CPU attribution pending |
+| P0 | Corrected measurement, frozen cost contract and baseline | 0% | Baseline and exclusive read CPU attribution complete |
 | P1 | Route updates driven by changed paths | 25% | Accepted |
 | P2 | Incremental capacity planning, atomic publication, and local correctness proofs | 15% | Accepted |
-| P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Not started |
+| P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Accepted |
 | P4 | Cost-selected label/candidate scans | 15% | Not started |
 | P5 | Directly typed batches from storage through filtering/aggregation | 20% | Not started |
 | P6 | Bulk import reusing the new commit path | 5% | Not started |
@@ -115,6 +115,8 @@ Prefer existing immutable `findView` paths and audit hot `find` copies. Hold sha
 Page/route cache keys must bind database, logical/physical identity, generation, snapshot root, and applicable I/O epoch. Never let old snapshots hit new locations or copy a complete global map per commit. If needed, compare demand-loaded segmented arrays/radix mappings. Do not require the whole database in RAM or introduce a second authoritative table duplicating existing caches.
 
 Acceptance: materially reduce fixed-object copies and move reuse to batch/page granularity. Remain correct and bounded under low memory, eviction, reopen, and long-lived pins. Report residency, initial construction, and rebuild cost; do not hide whole-database preload during startup.
+
+P3 acceptance: hot bootstrap/radix/Catalog/Allocator lookups borrow immutable views and resolve selected paths within existing cache/budget/snapshot/I/O-epoch limits. Medium filter and real-group fixed object-copy counters fall 99.34%; all 460 affected module tests pass. These are mechanism counts, not latency or Kuzu acceptance. Evidence: `benchmarks/architecture-design/decisions/20261022-core-cost-views/`. Independent read CPU samples and limitations are in `20261022-core-cost-read-cpu/`; warm reads are user-CPU dominated.
 
 ## 7. P4/P5: Directly typed scan execution
 

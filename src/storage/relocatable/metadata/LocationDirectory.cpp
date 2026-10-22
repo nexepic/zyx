@@ -347,8 +347,8 @@ namespace graph::storage {
 				if (!superblock.usesPageDirectoryBootstrap() || !superblock.page_directory_root.isValid()) {
 					return superblock.page_directory_root;
 				}
-				const PageDirectoryBootstrap bootstrap =
-						pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+				const auto bootstrapView = pages.readPageDirectoryBootstrapView(superblock.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 				validateVisible(bootstrap.generation, bootstrap.committed_lsn, superblock,
 								"Page Directory bootstrap is newer than its Superblock");
 				return bootstrap.data_page_directory_root;
@@ -374,7 +374,8 @@ namespace graph::storage {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location bootstrap root is absent");
 			}
-			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			const auto bootstrapView = pages.readPageDirectoryBootstrapView(superblock.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 			validateVisible(bootstrap.generation, bootstrap.committed_lsn, superblock,
 							"Page Directory bootstrap is newer than its Superblock");
 			// A COW batch retains the prior header until its final route/header

@@ -99,6 +99,8 @@ namespace graph::storage {
 
         [[nodiscard]] DecodedMetadataPageView<CatalogLeafPage>
         readCatalogLeafView(PhysicalPageRef reference, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        [[nodiscard]] DecodedMetadataPageView<AllocatorLeafPage>
+        readAllocatorLeafView(PhysicalPageRef reference, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
         [[nodiscard]] DecodedMetadataPageView<LocationLeafPage>
         readLocationLeafView(PhysicalPageRef reference, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 
@@ -110,6 +112,9 @@ namespace graph::storage {
 		[[nodiscard]] PageDirectoryBootstrap
 		readPageDirectoryBootstrap(PhysicalPageRef reference,
 								   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        [[nodiscard]] DecodedMetadataPageView<PageDirectoryBootstrap>
+        readPageDirectoryBootstrapView(PhysicalPageRef reference,
+            BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		[[nodiscard]] const std::shared_ptr<StorageIO> &storageIO() const { return io_; }
 
         [[nodiscard]] HybridPropertyDescriptorPage readHybridPropertyDescriptor(PhysicalPageRef reference,

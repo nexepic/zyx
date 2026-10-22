@@ -61,7 +61,8 @@ namespace graph::storage {
 			if (!current.usesPageDirectoryBootstrap() || !current.page_directory_root.isValid()) {
 				return std::nullopt;
 			}
-			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(current.page_directory_root);
+			const auto bootstrapView = pages.readPageDirectoryBootstrapView(current.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 			if (bootstrap.generation != current.generation || bootstrap.committed_lsn != current.checkpoint_lsn ||
 				!bootstrap.metadata_page_directory_root.isValid()) {
 				throwMetadataPageError(FormatError::FERR_INVALID_HEADER,
@@ -149,7 +150,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<CatalogLeafPage>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<CatalogLeafPage>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.catalog", sizeof(CatalogLeafPage));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.catalog");
@@ -228,7 +232,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<MetadataRadixPage>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<MetadataRadixPage>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.radix", sizeof(MetadataRadixPage));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.radix");
@@ -323,7 +330,8 @@ namespace graph::storage {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "routed metadata relocation requires a published bootstrap route");
 		}
-		const PageDirectoryBootstrap bootstrap = readPageDirectoryBootstrap(current.page_directory_root);
+		const auto bootstrapView =  readPageDirectoryBootstrapView(current.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 		if (bootstrap.generation != current.generation || bootstrap.committed_lsn != current.checkpoint_lsn ||
 			!bootstrap.metadata_page_directory_root.isValid() ||
 			MetadataPageRouteDirectory(const_cast<MetadataPageFile &>(*this)).find(
@@ -397,7 +405,8 @@ namespace graph::storage {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "logical metadata radix page has no physical bootstrap route context");
 		}
-		const PageDirectoryBootstrap bootstrap = readPageDirectoryBootstrap(routeContext.page_directory_root);
+		const auto bootstrapView =  readPageDirectoryBootstrapView(routeContext.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 		if (!bootstrap.metadata_page_directory_root.isValid()) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 									   "logical metadata radix page is not visible through the published bootstrap route");
@@ -490,7 +499,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<AllocatorLeafPage>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<AllocatorLeafPage>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.allocator", sizeof(AllocatorLeafPage));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.allocator");
@@ -516,7 +528,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<LocationLeafPage>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<LocationLeafPage>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.location", sizeof(LocationLeafPage));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.location");
@@ -548,7 +563,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<MetadataPageRouteLeafPage>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<MetadataPageRouteLeafPage>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.route_leaf", sizeof(MetadataPageRouteLeafPage));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.route_leaf");
@@ -610,7 +628,10 @@ namespace graph::storage {
 		validateReadHint(hint);
 		auto *readContext = MetadataPageReadContext::current(*io_);
 		if (readContext != nullptr) {
-			if (auto cached = readContext->find<PageDirectoryBootstrap>(reference)) return std::move(*cached);
+			if (auto cached = readContext->find<PageDirectoryBootstrap>(reference)) {
+                debug::PerfTrace::addValue("native_graph.read.metadata_copy_fixed_bytes.bootstrap", sizeof(PageDirectoryBootstrap));
+                return std::move(*cached);
+            }
 		}
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.bootstrap");
@@ -623,6 +644,26 @@ namespace graph::storage {
 		if (readContext != nullptr) readContext->put(reference, bootstrap);
 		return bootstrap;
 	}
+
+    DecodedMetadataPageView<AllocatorLeafPage>
+    MetadataPageFile::readAllocatorLeafView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<AllocatorLeafPage>(reference))
+                return DecodedMetadataPageView<AllocatorLeafPage>(std::move(page));
+        }
+        return DecodedMetadataPageView<AllocatorLeafPage>(readAllocatorLeaf(reference, hint));
+    }
+
+    DecodedMetadataPageView<PageDirectoryBootstrap>
+    MetadataPageFile::readPageDirectoryBootstrapView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<PageDirectoryBootstrap>(reference))
+                return DecodedMetadataPageView<PageDirectoryBootstrap>(std::move(page));
+        }
+        return DecodedMetadataPageView<PageDirectoryBootstrap>(readPageDirectoryBootstrap(reference, hint));
+    }
 
     HybridPropertyDescriptorPage MetadataPageFile::readHybridPropertyDescriptor(PhysicalPageRef reference,
         const Superblock &snapshot, BufferPoolReadHint hint) const {

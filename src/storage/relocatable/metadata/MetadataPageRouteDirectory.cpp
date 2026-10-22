@@ -28,6 +28,19 @@ namespace graph::storage {
 
 	namespace {
 
+        // The immutable page view already passed full codec validation at decode.
+        // Authenticate its type/visibility at the caller; inspect only the requested
+        // child here rather than revalidating every sibling for every lookup.
+        std::optional<PhysicalPageRef> findDecodedRouteChild(const MetadataRadixPage &page, uint64_t ordinal) {
+            if (page.kind == CatalogRadixPageKind::CRPK_ROOT) {
+                uint64_t quotient = ordinal;
+                for (uint16_t level = 0U; level <= page.level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
+                if (quotient != 0U) return std::nullopt;
+            }
+            const auto child = page.children[CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, page.level)];
+            return child.isValid() ? std::optional<PhysicalPageRef>(child) : std::nullopt;
+        }
+
 		struct ReusableRouteLeaf final {
 			PhysicalPageRef reference;
 			size_t entries = 0U;
@@ -1055,7 +1068,8 @@ namespace graph::storage {
 		if (missing == 0U) return;
 		std::sort(order.begin(), order.begin() + missing,
 				[&](size_t left, size_t right) { return pageIds[left].value() < pageIds[right].value(); });
-		const MetadataRadixPage rootPage = pages_.readMetadataRadix(root);
+		const auto rootView = pages_.readMetadataRadixUnresolvedView(root);
+        const auto &rootPage = *rootView;
 		if (rootPage.kind != CatalogRadixPageKind::CRPK_ROOT ||
 			rootPage.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER, "metadata PageId route root has an invalid type");
@@ -1065,7 +1079,7 @@ namespace graph::storage {
 		const auto resolve = [&](const auto &self, const MetadataRadixPage &node, size_t begin, size_t end) -> void {
 			while (begin < end) {
 				const uint64_t ordinal = leafOrdinal(pageIds[order[begin]]);
-				const auto child = CatalogRadixPageCodec::findChildForLeafOrdinal(node, ordinal);
+				const auto child = findDecodedRouteChild(node, ordinal);
 				if (!child.has_value()) {
 					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 				}
@@ -1096,7 +1110,8 @@ namespace graph::storage {
 						results[order[index]] = route->physical_reference;
 					}
 				} else {
-					const auto childPage = pages_.readMetadataRadix(*child);
+					const auto childView = pages_.readMetadataRadixUnresolvedView(*child);
+                    const auto &childPage = *childView;
 					if (childPage.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
 						childPage.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
 						childPage.level + 1U != node.level) {
@@ -1129,21 +1144,22 @@ namespace graph::storage {
 		if (context != nullptr) {
 			if (const auto cached = context->findMetadataRoute(root, pageId, superblock)) return *cached;
 		}
-		MetadataRadixPage node = pages_.readMetadataRadix(root);
-		if (node.kind != CatalogRadixPageKind::CRPK_ROOT ||
-			node.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
+		auto nodeView = pages_.readMetadataRadixUnresolvedView(root);
+        const MetadataRadixPage *node = nodeView.get();
+		if (node->kind != CatalogRadixPageKind::CRPK_ROOT ||
+			node->directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 									"metadata PageId route root has an invalid type");
 		}
-		validateVisible(node.generation, node.committed_lsn, superblock,
+		validateVisible(node->generation, node->committed_lsn, superblock,
 						"metadata PageId route root is newer than its Superblock");
 		const uint64_t ordinal = leafOrdinal(pageId);
 		for (;;) {
-			const std::optional<PhysicalPageRef> child = CatalogRadixPageCodec::findChildForLeafOrdinal(node, ordinal);
+			const std::optional<PhysicalPageRef> child = findDecodedRouteChild(*node, ordinal);
 			if (!child.has_value()) {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 			}
-			if (node.level == 0U) {
+			if (node->level == 0U) {
 				const auto leaf = pages_.readMetadataPageRouteLeafView(*child);
 				validateVisible(leaf->generation, leaf->committed_lsn, superblock,
 								"metadata PageId route leaf is newer than its Superblock");
@@ -1165,13 +1181,16 @@ namespace graph::storage {
                 }
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 			}
-			node = pages_.readMetadataRadix(*child);
-			if (node.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
-				node.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
+			const auto parentLevel = node->level;
+            nodeView = pages_.readMetadataRadixUnresolvedView(*child);
+            node = nodeView.get();
+			if (node->kind != CatalogRadixPageKind::CRPK_INTERNAL ||
+				node->directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
+                node->level + 1U != parentLevel) {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 										"metadata PageId route has an invalid radix child");
 			}
-			validateVisible(node.generation, node.committed_lsn, superblock,
+			validateVisible(node->generation, node->committed_lsn, superblock,
 								"metadata PageId route child is newer than its Superblock");
 		}
 	}
