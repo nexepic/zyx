@@ -680,7 +680,14 @@ TEST_F(RelocatableStorageBackendTest, TypePageCostSelectionAccountsForScatteredM
  std::vector<LogicalGraphEdgeCreateRequest> edges;
  for (size_t i = 0; i < count; ++i)
   edges.push_back({nodes[0], nodes[1], (i * 97U) % count < selected ? "Selected" : "Other", {}});
+ const bool priorTracing = graph::debug::PerfTrace::areValuesEnabled();
+ graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
  const auto ids = backend->createLogicalEdges(edges);
+ const auto creationTrace = graph::debug::PerfTrace::snapshotAndReset();
+ graph::debug::PerfTrace::setValueCollectionEnabled(priorTracing);
+ ASSERT_TRUE(creationTrace.contains("native_graph.write.id_reservation_calls"));
+ EXPECT_EQ(creationTrace.at("native_graph.write.id_reservation_calls").totalValue, 1);
+ RecordProperty("batch_id_acquisitions", std::to_string(creationTrace.at("native_graph.write.id_reservation_calls").totalValue));
  auto snapshot = backend->openLogicalGraphReadSnapshot();
  const auto token = snapshot->findRelationshipTypeToken("Selected"); ASSERT_TRUE(token);
  std::vector<uint64_t> expected;

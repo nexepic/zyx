@@ -1099,6 +1099,21 @@ namespace graph::storage {
 		const std::vector<ConstraintSupportTreeMutationPlan> supportPlans =
 				validator.validate(constraintDefinitions, constraintBatch);
 
+        // The batch already knows its creation cardinality. Acquire one range
+        // per entity kind instead of retaining one capability-map node per row.
+        // This uses the same durable high-water protocol and bounded rollback.
+        if (!batch.creation_identity_plan.has_value()) {
+            if (readControl.checkpoint) readControl.checkpoint();
+            transaction.reserveNodeIds(nodes.size());
+            transaction.reserveEdgeIds(batch.edge_creates.size());
+        }
+        const auto reservedIdAt = [](std::span<const NativeGraphLogicalIdLeaseRange> ranges, size_t ordinal) {
+            for (const auto &range : ranges) {
+                if (ordinal < range.count) return range.first_id + ordinal;
+                ordinal -= static_cast<size_t>(range.count);
+            }
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native batch creation exceeds its ID reservation");
+        };
 		bool hasStagedWork = false;
 		LogicalGraphMutationBatchResult result;
 		result.created_node_ids.reserve(nodes.size());
@@ -1107,7 +1122,7 @@ namespace graph::storage {
 					batch.creation_identity_plan.has_value()
 							? transaction.createNodeWithReservedId(batch.creation_identity_plan->node_ids.at(ordinal),
 																   nodes[ordinal].labels)
-							: transaction.createNode(nodes[ordinal].labels);
+							: transaction.createNodeWithReservedId(reservedIdAt(transaction.node_id_ranges_, ordinal), nodes[ordinal].labels);
 			result.created_node_ids.push_back(nodeId);
 			const PropertyCollectionRoot createdRoot = nodeRoot(nodeId, nodes[ordinal].properties.entries);
 			stageVectorSemanticDelta(nodeId, {}, nullptr, nodes[ordinal].labels,
@@ -1147,7 +1162,8 @@ namespace graph::storage {
 							? transaction.createEdgeWithReservedId(batch.creation_identity_plan->edge_ids.at(ordinal),
 															   sourceNodeId, targetNodeId,
 															   typeToken)
-							: transaction.createEdge(sourceNodeId, targetNodeId, typeToken);
+							: transaction.createEdgeWithReservedId(reservedIdAt(transaction.edge_id_ranges_, ordinal),
+                                    sourceNodeId, targetNodeId, typeToken);
 			result.created_edge_ids.push_back(edgeId);
 			scalar.stageEdgeType(transaction, edgeId, typeToken, false);
 			accountToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, typeToken, false);

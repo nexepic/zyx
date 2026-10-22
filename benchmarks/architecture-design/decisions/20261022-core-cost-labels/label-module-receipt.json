@@ -1,0 +1,13 @@
+{
+  "units": [
+    "entity/test_NativeGraphMutationExecutor_Validation",
+    "entity/test_NativeGraphWritePlanner_LeaseRecovery",
+    "entity/test_NativeGraphWritePlanner_PublicContracts",
+    "backend/test_RelocatableLabelAccessLocality",
+    "backend/test_RelocatableLabelCandidates",
+    "backend/test_RelocatableTokenCardinality"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "2f96abb1038b27afcb7400ef748157a27c5740c75d8a3b4032c281ac04528539"
+}

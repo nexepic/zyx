@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess
+unknown file: Failure
+C++ exception with description "hierarchical resource admission denied" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess (379 ms)
+[----------] 1 test from RelocatableStorageBackendTest (379 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (379 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess
+
+ 1 FAILED TEST
