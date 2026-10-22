@@ -85,6 +85,33 @@ TEST(HybridPropertyColumnMembershipTest, RejectsSemanticallyCorruptMasksEvenWith
     matrix = f.matrix(); matrix.tokens[1] = matrix.tokens[0]; EXPECT_THROW(matrix.validate(), FormatException);
     matrix = f.matrix(); matrix.tokens[2] = 1; EXPECT_THROW(matrix.validate(), FormatException);
 }
+TEST(HybridPropertyColumnMembershipTest, CommonCompleteOwnersProveEligibilityButDoNotHideNoncanonicalBits) {
+    for (const auto count : {64U, 65U, 85U}) {
+        auto matrix = Fixture(count).matrix();
+        matrix.owners[63][0] &= ~UINT64_C(1);
+        ASSERT_NO_THROW(matrix.validate());
+        EXPECT_EQ(std::popcount(matrix.presence(matrix.tokens[0])), 63);
+        auto corrupt = matrix;
+        corrupt.owners[0][1] |= UINT64_C(1) << 63;
+        EXPECT_THROW(corrupt.validate(), FormatException);
+        corrupt = matrix; corrupt.tokens[1] = corrupt.tokens[0];
+        EXPECT_THROW(corrupt.validate(), FormatException);
+        corrupt = matrix; corrupt.live &= ~(UINT64_C(1) << 62);
+        EXPECT_THROW(corrupt.validate(), FormatException);
+    }
+}
+TEST(HybridPropertyColumnMembershipTest, ComplementaryPartialOwnersStillRequireExactPerColumnEligibility) {
+    auto matrix = Fixture(2).matrix();
+    for (unsigned slot = 32; slot < 48; ++slot) matrix.owners[slot][0] = 1;
+    for (unsigned slot = 48; slot < 64; ++slot) matrix.owners[slot][0] = 2;
+    // Only32 owners contain both fields, but each field has48 memberships.
+    ASSERT_NO_THROW(matrix.validate());
+    EXPECT_EQ(std::popcount(matrix.presence(matrix.tokens[0])), 48);
+    EXPECT_EQ(std::popcount(matrix.presence(matrix.tokens[1])), 48);
+    matrix.owners[0][0] = 1;
+    EXPECT_EQ(std::popcount(matrix.presence(matrix.tokens[1])), 47);
+    EXPECT_THROW(matrix.validate(), FormatException);
+}
 TEST(HybridPropertyColumnMembershipTest, ValidatesFinalGroupDomainAndDeadOwnerMasks) {
     Fixture f(2, (UINT64_C(1) << 48) - 1); auto matrix = f.matrix();
     matrix.live = (UINT64_C(1) << 48) - 1;

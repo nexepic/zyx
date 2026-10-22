@@ -1,0 +1,212 @@
+[
+  {
+    "scale": "medium",
+    "round": 1,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 41.694769,
+        "p95_ms": 50.409611
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 42.9684915,
+        "p95_ms": 52.59251
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 315621376,
+        "at_pin_drain": 315752448,
+        "peak": 315752448,
+        "final": 315752448
+      }
+    ],
+    "last_seven_files": [
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448
+    ],
+    "last_seven_plateau": true
+  },
+  {
+    "scale": "medium",
+    "round": 2,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 40.744603,
+        "p95_ms": 41.622303
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 42.455155000000005,
+        "p95_ms": 51.210021
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 315621376,
+        "at_pin_drain": 315752448,
+        "peak": 315752448,
+        "final": 315752448
+      }
+    ],
+    "last_seven_files": [
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448
+    ],
+    "last_seven_plateau": true
+  },
+  {
+    "scale": "medium",
+    "round": 3,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 40.96987,
+        "p95_ms": 49.94588
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 41.460184,
+        "p95_ms": 46.771725
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 315621376,
+        "at_pin_drain": 315752448,
+        "peak": 315752448,
+        "final": 315752448
+      }
+    ],
+    "last_seven_files": [
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448,
+      315752448
+    ],
+    "last_seven_plateau": true
+  },
+  {
+    "scale": "holdout",
+    "round": 1,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 37.224541,
+        "p95_ms": 40.055068
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 39.273706000000004,
+        "p95_ms": 67.213626
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 265814016,
+        "at_pin_drain": 265945088,
+        "peak": 266600448,
+        "final": 266600448
+      }
+    ],
+    "last_seven_files": [
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448
+    ],
+    "last_seven_plateau": true
+  },
+  {
+    "scale": "holdout",
+    "round": 2,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 37.09825,
+        "p95_ms": 43.363475
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 40.260377,
+        "p95_ms": 67.835785
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 265814016,
+        "at_pin_drain": 265945088,
+        "peak": 266600448,
+        "final": 266600448
+      }
+    ],
+    "last_seven_files": [
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448
+    ],
+    "last_seven_plateau": true
+  },
+  {
+    "scale": "holdout",
+    "round": 3,
+    "phases": {
+      "pinned": {
+        "samples": 17,
+        "p50_ms": 36.798244,
+        "p95_ms": 39.620024
+      },
+      "drained": {
+        "samples": 20,
+        "p50_ms": 37.988836500000005,
+        "p95_ms": 67.770691
+      }
+    },
+    "space": [
+      {
+        "event": "steady_space",
+        "initial": 265814016,
+        "at_pin_drain": 265945088,
+        "peak": 266600448,
+        "final": 266600448
+      }
+    ],
+    "last_seven_files": [
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448,
+      266600448
+    ],
+    "last_seven_plateau": true
+  }
+]

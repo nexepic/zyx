@@ -90,13 +90,31 @@ struct HybridPropertyColumnMembership {
         for (size_t i = 0; i < tokens.size(); ++i)
             require(i < column_count ? tokens[i] && (!i || tokens[i - 1] < tokens[i]) : !tokens[i],
                 "column membership tokens are unsorted, repeated or noncanonical");
-        for (unsigned slot = 0; slot < 64; ++slot) for (size_t word = 0; word < MAX_WORDS; ++word) {
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+        unsigned completeOwners = 0;
+        for (unsigned slot = 0; slot < 64; ++slot) {
+            unsigned fields = 0;
+#else
+        for (unsigned slot = 0; slot < 64; ++slot)
+#endif
+        for (size_t word = 0; word < MAX_WORDS; ++word) {
             const auto bits = owners[slot][word];
             require((live & (UINT64_C(1) << slot)) || !bits, "dead owner has column memberships");
             if (word >= width) require(!bits, "column membership unused word is nonzero");
             else if (word + 1U == width && column_count % 64U)
                 require(!(bits >> (column_count % 64U)), "column membership unused bits are nonzero");
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+            fields += unsigned(std::popcount(bits));
+#endif
         }
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+            if (fields == column_count) ++completeOwners;
+        }
+        // Every column contains these same owners. The row/domain checks above
+        // still cover every bit; 48 complete owners prove every column's
+        // eligibility without reconstructing each 64-owner presence mask.
+        if (completeOwners >= 48) return;
+#endif
         for (size_t field = 0; field < column_count; ++field)
             require(std::popcount(presence(tokens[field])) >= 48, "column membership lost column eligibility");
     }
