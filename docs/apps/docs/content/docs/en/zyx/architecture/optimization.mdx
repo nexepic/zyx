@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 65%; P1/P2/P3/P4 are accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 85%; P1/P2/P3/P4/P5 are accepted and the Kuzu performance objective is unmet.**
 
 Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
 
@@ -49,7 +49,7 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 | P2 | Incremental capacity planning, atomic publication, and local correctness proofs | 15% | Accepted |
 | P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Accepted |
 | P4 | Cost-selected label/candidate scans | 15% | Accepted |
-| P5 | Directly typed batches from storage through filtering/aggregation | 20% | Implementing; not accepted |
+| P5 | Directly typed batches from storage through filtering/aggregation | 20% | Accepted |
 | P6 | Bulk import reusing the new commit path | 5% | Batch-ID prerequisite integrated; not accepted |
 | P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Not started |
 
@@ -92,25 +92,17 @@ P3/P4 are complete. Hot bootstrap/radix/Catalog/Allocator reads borrow immutable
 
 Labels reuse existing B+Trees, atomic token cardinalities and Entity Map. Record/key widths and at most 64 actual candidate locations choose the path. All-node labels scan sequentially; candidates authenticate primary/all labels. Optional cost sampling may fall back only before visitor emission. Multi-label batches fit existing entity-cache bounds to avoid repeat decode.
 
-Evidence: `20261022-core-cost-views/` and `20261022-core-cost-labels/`. Medium filter/group reduce 225000 scanned nodes to 100000 authenticated candidates; 100000 fields still remain for P5. Old pins, overlay, deletion, rollback, reopen and affected modules were checked. Final lifecycle/performance gates remain P7.
+Evidence: `20261022-core-cost-views/` and `20261022-core-cost-labels/`. Medium filter/group reduce 225000 scanned nodes to 100000 authenticated candidates; 100000 fields remain and now enter typed columns under P5. Old pins, overlay, deletion, rollback, reopen and affected modules were checked. Final lifecycle/performance gates remain P7.
 
-## 7. P5: Directly typed scan execution
+## 7. Accepted direct typed batch contract
 
-### 7.1 Direct batch representation and consumers
+P5 connects production ROW selection → direct typed columns → filter/project → actual single/multiple-key grouping → owning output. Numeric bits and synchronous text views enter admitted typed storage; complex values/LargeValues/legacy adapters retain explicit owning fallbacks. Primary workloads do not construct complete PropertyValue matrices or row property maps. Authenticate immutable native identity at batch boundaries while preserving dynamic overlay and batch owner/incarnation checks.
 
-Define one contract for typed scalar buffers, NULL/missing states, string dictionaries or offsets, selection vectors, entity references, ownership, and budgets. Producers directly fill or borrow appropriate typed columns. Ordinary filtering/projection/aggregation must not first construct a complete `PropertyValue` matrix for conversion or fall back wholesale to per-row property maps afterward.
+Short-text kernels preflight types/lengths before consumption. Preserve missing/NULL, empty/embedded-NUL text, mixed-type fallback, complete tuples, numeric types/overflow, NaN and DISTINCT. Partial COUNT merges logical values, never cross-batch dictionary IDs. Charge temporary tables and permit admission fallback only before aggregate effects. Four short strings bound cancellation work to 256 text bytes; do not extend this contract to unbounded strings. Results own their data.
 
-First connect ordinary scan → filter/project → actual single/multi-key group-by → owning output. Low-cardinality strings may use dictionary codes and counters; codes from different dictionaries are not directly comparable without unification or logical-value comparison. Preserve numeric types, overflow, NaN, NULL, missing values, multiplicity, and complete tuple equality. Materialize full entities only where required.
+Evidence `20261022-core-cost-direct/`: 263 necessary module tests pass. One unchanged traversal-optimizer assertion also fails against the frozen baseline and is recorded separately. Medium filter/group each emit 100000 typed text cells with zero owning fallback in 196 batches. Filter count updates decrease 12500→196; group updates decrease 100000→1568 with unchanged oracles. There are still 100000 selected ROW roots.
 
-Reuse batch identity, resource accounting, and spill. Batch admission charges actual capacity; wide rows shrink batches. Complex consumers may retain named adapters with triggers and costs, but primary workloads must not rely on them. Random point/neighbor reads must not scan entire column groups.
-
-### 7.2 Decide whether persistent layout must change
-
-Separate fetching, conversion, and computation first. If ROW positioning/decoding still dominates, compare compact field blocks with ROW under the same executor; adding caches alone is not completion. Demonstrate a bounded prototype benefit before full lifecycle work. The existing hybrid layout is not presumed successful.
-
-Define ownership for dense, sparse/mixed-type, and large fields without complete duplicate data. Field blocks need direct owner/ordinal mapping, presence/type state, and selective-read boundaries. An update must not unconditionally rewrite a large group. Include block size, per-update work bounds, random gather, conversion/demotion, old-version space, deletion, reclamation, and file growth. New formats follow section 1.
-
-Acceptance: primary workloads must actually reduce positioning, generic objects, and repeated decoding. Cover empty input, type changes, multiple labels/keys, full entities, and low budgets. A column prototype without production consumers or update lifecycle earns no P5 progress.
+A bounded same-executor ROW/compact-field prototype retains Release identities and all samples. It isolates synthetic in-memory representation, excluding actual directories, IO, space and update lifecycle; it grants neither persistent adoption nor Kuzu acceptance. No persistent layout changed. If P7 proves field positioning remains dominant, continue within this core scope. A new layout still requires a prior storage-spec revision and dense/sparse access, random gather, bounded updates, demotion, deletion, old pins, reclamation and file-growth comparison. A prototype without production consumers/lifecycle earns no extra progress.
 
 ## 8. P6: Bulk import reusing the new mechanisms
 

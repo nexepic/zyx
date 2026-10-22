@@ -1,0 +1,981 @@
+diff --git a/include/graph/query/execution/LogicalAggregateAccumulator.hpp b/include/graph/query/execution/LogicalAggregateAccumulator.hpp
+index 79899d7c..049ee215 100644
+--- a/include/graph/query/execution/LogicalAggregateAccumulator.hpp
++++ b/include/graph/query/execution/LogicalAggregateAccumulator.hpp
+@@ -149,14 +149,21 @@ public:
+ 	void update(const PropertyValue& value) override {
+ 		// COUNT counts all non-NULL values
+ 		if (value.getType() != PropertyType::NULL_TYPE) {
+-			count_++;
++			addRows(1U);
+ 		}
+ 	}
+ 
+ 	void updateRow() override {
+-		count_++;
++		addRows(1U);
+ 	}
+ 
++    // A partial COUNT may merge a complete admitted batch in one operation.
++    void addRows(uint64_t rows) {
++        if (rows > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - count_)
++            throw std::overflow_error("COUNT exceeded the signed result range");
++        count_ += rows;
++    }
++
+ 	[[nodiscard]] PropertyValue getResult() const override {
+ 		return PropertyValue(static_cast<int64_t>(count_));
+ 	}
+@@ -172,7 +179,7 @@ public:
+ 	}
+ 
+ private:
+-	size_t count_ = 0;
++	uint64_t count_ = 0;
+ };
+ 
+ /**
+diff --git a/include/graph/storage/LogicalGraphRead.hpp b/include/graph/storage/LogicalGraphRead.hpp
+index c66277bc..96dc1e38 100644
+--- a/include/graph/storage/LogicalGraphRead.hpp
++++ b/include/graph/storage/LogicalGraphRead.hpp
+@@ -485,6 +485,13 @@ namespace graph::storage {
+             const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const {
+             if (!values || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
+             readNodePropertyCellsSortedWithAdmission(ids, keys, values, admission);
++        }
++        virtual void readNodePropertyCellsWithViewsSortedWithAdmission(std::span<const uint64_t> ids,
++            std::span<const std::string_view> keys, const PropertyCellSink &values,
++            const PropertyScalarReadSink &scalars, const PropertyTextReadSink &texts,
++            const std::function<void(size_t)> &admission) const {
++            if (!texts) throw std::invalid_argument("direct text cells require a sink");
++            readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, values, scalars, admission);
+         }
+ 		// Readers advertising admission invoke it before selected entry payload
+ 		// reads/copies. Native storage reports canonical token + value wire bytes;
+@@ -1138,6 +1145,9 @@ namespace graph::storage {
+ 		// fence. Read-only-only adapters may return nullopt; callers then must not
+ 		// attempt a read-dependent optimistic mutation through that adapter.
+ 		[[nodiscard]] virtual std::optional<LogicalGraphMutationFence> mutationFence() const { return std::nullopt; }
++        // True only when fence/schema/token identities cannot change for this
++        // snapshot's lifetime. Mutable overlays keep the default validation.
++        [[nodiscard]] virtual bool hasImmutableReadIdentity() const noexcept { return false; }
+ 		// Unsupported readers explicitly decline authenticated schema binding.
+ 		// The identity does not replace a data snapshot/fence, semantic plan key,
+ 		// capability validation or owning lifetime; it enables no plan cache alone.
+diff --git a/include/graph/storage/PropertyScalarReadSink.hpp b/include/graph/storage/PropertyScalarReadSink.hpp
+index 0bda21bc..d710fae9 100644
+--- a/include/graph/storage/PropertyScalarReadSink.hpp
++++ b/include/graph/storage/PropertyScalarReadSink.hpp
+@@ -7,10 +7,14 @@
+ #include <cstddef>
+ #include <cstdint>
+ #include <functional>
++#include <string_view>
+ #include "graph/core/PropertyTypes.hpp"
+ namespace graph::storage {
+ // Only NULL/INTEGER/DOUBLE/BOOLEAN are accepted. IEEE/integer words preserve
+ // exact bits; NULL has zero bits, BOOLEAN has 0/1. Missing cells are omitted.
+ // Ordinals refer to original input IDs/keys. No borrowed storage escapes.
+ using PropertyScalarReadSink = std::function<void(size_t, size_t, PropertyType, uint64_t)>;
++// A synchronous text borrow, valid only until this callback returns. Consumers
++// retain text by copying into their own admitted batch arena, never the view.
++using PropertyTextReadSink = std::function<void(size_t, size_t, std::string_view)>;
+ }
+diff --git a/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp b/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp
+index 5345275e..171545a5 100644
+--- a/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp
++++ b/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp
+@@ -144,7 +144,8 @@ namespace graph::storage {
+ 																		  NativeReadSession *session = nullptr) const;
+ 		void readNodePropertyCellsSorted(const MetadataSnapshotPin &, std::span<const uint64_t>,
+ 			std::span<const uint32_t>, const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &,
+-			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr) const;
++			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr,
++            const PropertyTextReadSink * = nullptr) const;
+ 		[[nodiscard]] NodeEntityRecord readNodeRecord(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+ 																		 NativeReadSession *session = nullptr) const;
+ 		// Resolves strictly increasing logical IDs with one Entity-Map batch. The
+diff --git a/include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp b/include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp
+index f025ce4d..1e9da92a 100644
+--- a/include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp
++++ b/include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp
+@@ -123,7 +123,8 @@ namespace graph::storage {
+ 				const SelectedPropertyReadAdmission *admission = nullptr) const;
+ 		void readNodePropertyCellsSorted(const MetadataSnapshotPin &, std::span<const uint64_t>,
+ 			std::span<const std::string_view>, const LogicalGraphReadSnapshot::PropertyCellSink &,
+-			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr) const;
++			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr,
++            const PropertyTextReadSink * = nullptr) const;
+ 		[[nodiscard]] PropertyValue readNodeProperty(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+ 																																				 std::string_view key, NativeReadSession *session = nullptr) const;
+ 		[[nodiscard]] bool nodePropertyExists(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+diff --git a/include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp b/include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp
+index e3cdb3aa..825fc2c0 100644
+--- a/include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp
++++ b/include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp
+@@ -97,6 +97,13 @@ namespace graph::storage {
+ 		// Decodes and validates only the fixed owner header. The returned root has
+ 		// no entries and is intended for storage-side ownership authentication.
+ 		[[nodiscard]] static PropertyCollectionRoot decodeOwner(std::span<const std::byte> bytes);
++        using EncodedSelectionSink = std::function<void(size_t, std::optional<std::span<const std::byte>>)>;
++        // Validates the complete owner/directory, then borrows selected value
++        // ranges synchronously. Missing cells are reported as nullopt.
++        static void visitSelectedEncoded(std::span<const std::byte> bytes,
++            uint64_t expectedOwnerId, uint32_t expectedOwnerType, std::span<const uint32_t> tokens,
++            const EncodedSelectionSink &sink, const SelectedPropertyReadAdmission *admission = nullptr,
++            const CancellationCheckpoint *cancellation = nullptr);
+ 		// Decodes at most one requested token through the canonical offset
+ 		// directory. The containing slotted or LargeValue page authenticates the
+ 		// complete payload before this projection is opened.
+diff --git a/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp b/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
+index 9f863a79..49a9e1ca 100644
+--- a/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
++++ b/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
+@@ -237,6 +237,12 @@ namespace graph::storage {
+ 									  PageOwnerKind ownerKind, std::span<const std::byte> bytes,
+ 																																														std::span<const uint32_t> keyTokens,
+ 				const SelectedPropertyReadAdmission *admission = nullptr) const;
++        [[nodiscard]] bool emitSelectedEntityProperties(const EntityPropertyKey &key,
++            const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
++            std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,
++            const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> &sink,
++            const PropertyScalarReadSink &scalars, const PropertyTextReadSink *texts,
++            const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation) const;
+ 		[[nodiscard]] std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+ 		decodeSelectedEntityPropertiesAndCount(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+ 				const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
+@@ -290,7 +296,7 @@ namespace graph::storage {
+ 				std::span<std::optional<PropertyCollectionRootEntry>> results,
+ 				bool columnBatch = true, const SelectedPropertyReadAdmission *admission = nullptr,
+ 				const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
+-            const PropertyScalarReadSink *scalars = nullptr);
++            const PropertyScalarReadSink *scalars = nullptr, const PropertyTextReadSink *texts = nullptr);
+ 		// Cursor-preserving counterpart used by indexed candidate streams. It keeps
+ 		// the owner-directory route across adjacent batches while returning the
+ 		// selected values and root counts required by the same validation pass.
+diff --git a/include/graph/storage/relocatable/property/PropertyValueCodec.hpp b/include/graph/storage/relocatable/property/PropertyValueCodec.hpp
+index cdd17f20..a6258a15 100644
+--- a/include/graph/storage/relocatable/property/PropertyValueCodec.hpp
++++ b/include/graph/storage/relocatable/property/PropertyValueCodec.hpp
+@@ -11,7 +11,9 @@
+ #include <cstddef>
+ #include <functional>
+ #include <memory_resource>
++#include <optional>
+ #include <span>
++#include <string_view>
+ #include <vector>
+ 
+ #include "graph/core/PropertyTypes.hpp"
+@@ -24,6 +26,15 @@ namespace graph::storage {
+ 	class CanonicalPropertyValueCodec final {
+ 	public:
+ 		static constexpr size_t HEADER_BYTES = 6U;
++        struct BorrowedPrimitive {
++            PropertyType type = PropertyType::NULL_TYPE;
++            uint64_t bits = 0U;
++            std::string_view text;
++        };
++        // Authenticates an exact scalar/string envelope without constructing a
++        // PropertyValue. Complex kinds return nullopt for the owning decoder.
++        [[nodiscard]] static std::optional<BorrowedPrimitive>
++        tryBorrowPrimitive(std::span<const std::byte> bytes);
+ 		// Inspect an authenticated value header without decoding its payload.
+ 		// encodedBytes includes header and payload; malformed envelopes fail closed.
+ 		[[nodiscard]] static bool isNullHeader(std::span<const std::byte> header, size_t encodedBytes);
+diff --git a/src/query/execution/BatchEnvelope.hpp b/src/query/execution/BatchEnvelope.hpp
+index 9e90b0d2..03ead8e4 100644
+--- a/src/query/execution/BatchEnvelope.hpp
++++ b/src/query/execution/BatchEnvelope.hpp
+@@ -94,7 +94,7 @@ public:
+ 	BatchEnvelope(uint64_t program, const BoundColumnLayout &layout, const storage::LogicalGraphReadSnapshot &snapshot,
+ 		size_t maximumRows, MaterializedByteBudget &budget, std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
+ 		: program_(program), layout_(layout), snapshot_(snapshot), fence_(snapshot.mutationFence()), schema_(snapshot.bindingSchemaIdentity()),
+-		  token_support_(snapshot.supportsPropertyTokenResolution()),
++		  token_support_(snapshot.supportsPropertyTokenResolution()), immutable_identity_(snapshot.hasImmutableReadIdentity()),
+ 		  maximum_rows_(maximumRows), budget_(&budget), memory_(budget, upstream), columns_(&memory_), selected_(&memory_), ordinals_(&memory_) {
+ 		if (!upstream || program == 0U || maximumRows == 0U || maximumRows > UINT32_MAX)
+ 			throw std::invalid_argument("batch envelope requires program, allocator and uint32 rows");
+@@ -203,7 +203,8 @@ private:
+ 			throw std::invalid_argument("batch legacy cell has no owning source value");
+ 	}
+ 	void validateRow(BatchRowId row) const {
+-		identity_.validate(row); if (!published_ || row.index >= rows_) throw std::out_of_range("batch row is outside publication"); validateSnapshot(snapshot_);
++		identity_.validate(row); if (!published_ || row.index >= rows_) throw std::out_of_range("batch row is outside publication");
++		if (!immutable_identity_) validateSnapshot(snapshot_);
+ 	}
+ 	uint64_t program_;
+ 	const BoundColumnLayout &layout_;
+@@ -211,6 +212,7 @@ private:
+ 	std::optional<storage::LogicalGraphMutationFence> fence_;
+ 	std::optional<storage::LogicalGraphSchemaIdentity> schema_;
+ 	bool token_support_;
++	bool immutable_identity_;
+ 	size_t maximum_rows_, rows_ = 0U;
+ 	bool published_ = false;
+ 	const MaterializedByteBudget *budget_;
+diff --git a/src/query/execution/BoundNodeColumnPredicates.hpp b/src/query/execution/BoundNodeColumnPredicates.hpp
+index 0b0314dd..e6fedba4 100644
+--- a/src/query/execution/BoundNodeColumnPredicates.hpp
++++ b/src/query/execution/BoundNodeColumnPredicates.hpp
+@@ -137,6 +137,14 @@ public:
+ 		ColumnFilterStats stats; size_t previous = SIZE_MAX;
+ 		for (const auto &predicate : predicates_) {
+ 			if (predicate.column != previous) { ++stats.scalar_columns; previous = predicate.column; }
++            if (predicate.expected && predicate.expected->getType() == PropertyType::STRING &&
++                columns.tryVisitShortTextColumn(predicate.column, selection, std::views::iota(size_t{0}, columns.size()),
++                    [&](size_t row, std::optional<std::string_view> text) {
++                        if (!text || !columnPredicateMatchesBorrowed(*text, predicate)) selection.reject(row);
++                    }, guard)) {
++                ++stats.typed_columns;
++                continue;
++            }
+ 			for (size_t row = 0; row < columns.size(); ++row) {
+ 				guard(); if (!selection.includes(row)) continue;
+ 				const auto cell = columns.cell(predicate.column, columns.rowId(row));
+diff --git a/src/query/execution/DirectPropertyColumns.hpp b/src/query/execution/DirectPropertyColumns.hpp
+index 4c4484f7..ddecdd6e 100644
+--- a/src/query/execution/DirectPropertyColumns.hpp
++++ b/src/query/execution/DirectPropertyColumns.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <span>
++#include <ranges>
+ #include <bit>
+ #include <string_view>
+ #include <variant>
+@@ -9,6 +10,7 @@
+ #include "graph/query/execution/RetainedPropertyBytes.hpp"
+ #include "query/execution/BatchIdentity.hpp"
+ #include "query/execution/FixedWidthColumn.hpp"
++#include "graph/query/execution/SelectionVector.hpp"
+ 
+ namespace graph::query::execution::detail {
+ 
+@@ -42,7 +44,7 @@ public:
+         MaterializedByteBudget &budget, std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
+         : snapshot_(snapshot), fence_(snapshot.mutationFence()), schema_(snapshot.bindingSchemaIdentity()),
+           budget_(&budget), memory_(budget, upstream), payload_(&budget), columns_(&memory_), rows_(rows),
+-          token_support_(snapshot.supportsPropertyTokenResolution()) {
++          token_support_(snapshot.supportsPropertyTokenResolution()), immutable_identity_(snapshot.hasImmutableReadIdentity()) {
+         if (!upstream || rows > UINT32_MAX) throw std::invalid_argument("direct columns require bounded rows/allocator");
+         columns_.reserve(columns);
+         for (size_t c = 0; c < columns; ++c) {
+@@ -93,8 +95,13 @@ public:
+                 const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
+                 for (size_t i = starts[row]; i < end; ++i) appendScalar(order[i], column, type, bits, guard);
+             };
+-        snapshot_.readNodePropertyCellsWithScalarsSortedWithAdmission(unique, keys,
+-            std::ref(emitValue), std::ref(emitScalar), admitSource);
++        const auto emitText = [&](size_t row, size_t column, std::string_view text) {
++            if (row >= unique.size() || column >= keys.size()) throw std::invalid_argument("direct text producer ordinal changed");
++            const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
++            for (size_t i = starts[row]; i < end; ++i) appendText(order[i], column, text, guard);
++        };
++        snapshot_.readNodePropertyCellsWithViewsSortedWithAdmission(unique, keys,
++            std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), admitSource);
+         seal();
+         attempt.complete = true;
+     }
+@@ -127,6 +134,27 @@ public:
+         attempt.complete = true;
+     }
+ 
++    template<class Guard>
++    void appendText(size_t row, size_t ordinal, std::string_view text, Guard guard) {
++        ConstructionAttempt attempt{failed_};
++        guard(); validateSnapshot();
++        if (sealed_ || failed_ || row >= rows_) throw std::invalid_argument("direct text outside construction");
++        auto &column = columns_.at(ordinal);
++        if (column.written[row]) throw std::invalid_argument("direct text producer emitted a duplicate cell");
++        if (column.texts.empty()) column.texts.resize(rows_);
++        const size_t offset = column.bytes.size();
++        if (text.size() > column.bytes.max_size() - offset) throw std::overflow_error("direct text size overflowed");
++        for (size_t i = 0U; i < text.size(); ++i) {
++            if ((i & 255U) == 0U) guard();
++            column.bytes.push_back(text[i]);
++        }
++        column.texts[row] = {offset, text.size()};
++        column.types[row] = PropertyType::STRING;
++        column.states[row] = ColumnCellState::CCS_VALUE;
++        column.written[row] = 1U;
++        attempt.complete = true;
++    }
++
+     template<class Guard>
+     void append(size_t row, size_t ordinal, std::optional<PropertyValue> value, Guard guard) {
+         ConstructionAttempt attempt{failed_};
+@@ -171,7 +199,7 @@ public:
+         attempt.complete = true;
+     }
+     void seal() {
+-        validateSnapshot();
++        validateSnapshot(true);
+         if (sealed_ || failed_) throw std::logic_error("direct columns cannot seal failed/repeated construction");
+         identity_.advance(); sealed_ = true;
+     }
+@@ -206,6 +234,38 @@ public:
+             default: return {c.states[i], &c.complex[i]};
+         }
+     }
++    // Batch kernel boundary: preflight before any consumer effects. Borrowed
++    // strings remain in this sealed owner, and bounded text keeps cancellation
++    // work finite even when a consumer hashes the complete value.
++    template<class Order, class Visitor, class Guard>
++    bool tryVisitShortTextColumn(size_t ordinal, const SelectionVector &selection,
++        const Order &order, Visitor visitor, Guard guard) const {
++        validateSnapshot(true);
++        if (!sealed_ || selection.size() != rows_) throw std::invalid_argument("text kernel requires a sealed aligned batch");
++        const auto &column = columns_.at(ordinal);
++        size_t checkpoint = 0U;
++        for (const auto row : order) {
++            if ((checkpoint++ & 3U) == 0U) guard();
++            if (row >= rows_) throw std::out_of_range("text kernel ordinal outside batch");
++            if (!selection.includes(row) || column.states[row] != ColumnCellState::CCS_VALUE) continue;
++            if (column.types[row] != PropertyType::STRING || column.texts[row].length > 64U) return false;
++        }
++        checkpoint = 0U;
++        for (const auto row : order) {
++            // At most four <=64-byte strings between cooperative checks.
++            if ((checkpoint++ & 3U) == 0U) guard();
++            if (!immutable_identity_) validateSnapshot();
++            if (!selection.includes(row)) continue;
++            std::optional<std::string_view> text;
++            if (column.states[row] == ColumnCellState::CCS_VALUE) {
++                const auto ref = column.texts[row];
++                text = ref.length ? std::string_view(column.bytes.data() + ref.offset, ref.length) : std::string_view{};
++            }
++            visitor(row, text);
++        }
++        validateSnapshot(true);
++        return true;
++    }
+     template<class Guard>
+     [[nodiscard]] PropertyValue copyValue(size_t column, BatchRowId row,
+         const std::function<void(size_t)> &admit, Guard guard) const {
+@@ -226,7 +286,8 @@ public:
+     }
+     void invalidate() noexcept { sealed_ = false; identity_.invalidate(); }
+ private:
+-    void validateSnapshot() const {
++    void validateSnapshot(bool force = false) const {
++        if (immutable_identity_ && !force) return;
+         if (snapshot_.mutationFence() != fence_ || snapshot_.bindingSchemaIdentity() != schema_ ||
+             snapshot_.supportsPropertyTokenResolution() != token_support_)
+             throw std::invalid_argument("direct batch snapshot identity changed");
+@@ -241,6 +302,7 @@ private:
+     size_t rows_;
+     BatchIdentity identity_;
+     bool token_support_;
++    bool immutable_identity_;
+     bool sealed_ = false;
+     bool failed_ = false;
+ };
+diff --git a/src/query/execution/LogicalPlanReadRuntime.cpp b/src/query/execution/LogicalPlanReadRuntime.cpp
+index c39fd9c9..06cd569f 100644
+--- a/src/query/execution/LogicalPlanReadRuntime.cpp
++++ b/src/query/execution/LogicalPlanReadRuntime.cpp
+@@ -11314,12 +11314,15 @@ namespace graph::query::execution {
+ 								const auto emitScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+ 									direct->appendScalar(row, column, type, bits, directGuard);
+ 								};
++                                const auto emitText = [&](size_t row, size_t column, std::string_view text) {
++                                    direct->appendText(row, column, text, directGuard);
++                                };
+ 								const auto admitSource = [&](size_t bytes) {
+ 									directGuard();
+ 									sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
+ 								};
+-								state.shared.snapshot.readNodePropertyCellsWithScalarsSortedWithAdmission(nodeIds, keyViews,
+-									std::ref(emitValue), std::ref(emitScalar), std::ref(admitSource));
++								state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
++                                    std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), std::ref(admitSource));
+ 								direct->seal(); sourceScratch.reset();
+ 								(void)predicates.filter(*direct, *selected, directGuard);
+ 								if (state.shared.bound_program) {
+@@ -13297,6 +13300,96 @@ namespace graph::query::execution {
+ 										else appendDistinctPropertyValue(key, PropertyValue(value));
+ 									}, cell.data);
+ 								};
++                                // Partial COUNT over a bounded short-text column. Ordinary
++                                // filters and low-cardinality groups merge per distinct value,
++                                // rather than serializing keys/updating virtual accumulators per row.
++                                bool batchCountEligible = directGroups.size() <= 1U &&
++                                    std::ranges::all_of(functions, [](auto function) { return function == AggregateFunctionType::AGG_COUNT; });
++                                for (size_t i = 0; i < aggregations.size(); ++i)
++                                    batchCountEligible = batchCountEligible && !aggregations[i].distinct && directArguments[i] == rowCountBinding;
++                                const size_t textColumn = !directGroups.empty() ? directGroups.front() :
++                                    !directTerms.empty() ? directTerms.front().column : rowCountBinding;
++                                for (const auto &term : directTerms)
++                                    batchCountEligible = batchCountEligible && term.column == textColumn && term.literal->isString() &&
++                                        term.operation == detail::ColumnPredicateOp::CPO_EQUAL;
++                                if (batchCountEligible && directGroups.empty() && directTerms.empty()) {
++                                    size_t accepted = 0U;
++                                    for (const auto row : ordinals) {
++                                        checkGuard(state);
++                                        if (row >= columns.size()) throw std::logic_error("partial count ordinal outside batch");
++                                        if (selection.includes(row)) ++accepted;
++                                    }
++                                    if (accepted > state.shared.bounds.maximum_rows - inputRows)
++                                        throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
++                                    inputRows += accepted;
++                                    for (auto &accumulator : groups.front().accumulators)
++                                        static_cast<CountAccumulator &>(*accumulator).addRows(accepted);
++                                    debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_batches", 1);
++                                    debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_updates", 1);
++                                    debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
++                                    return true;
++                                }
++                                if (batchCountEligible && textColumn != rowCountBinding) {
++                                    struct PartialCount { size_t first, rows; };
++                                    std::pmr::vector<PartialCount> partials(&aggregateIndexMemory);
++                                    std::pmr::unordered_map<std::optional<std::string_view>, size_t> indexes(&aggregateIndexMemory);
++                                    size_t accepted = 0U, rejected = 0U;
++                                    bool prepared = false;
++                                    try {
++                                        prepared = columns.tryVisitShortTextColumn(textColumn, selection, ordinals,
++                                            [&](size_t row, std::optional<std::string_view> text) {
++                                                for (const auto &term : directTerms) {
++                                                    if (!text || *text != term.literal->getStringValue()) { ++rejected; return; }
++                                                }
++                                                ++accepted;
++                                                // Global COUNT needs no dictionary or per-row group key.
++                                                const auto key = directGroups.empty() ? std::optional<std::string_view>{} : text;
++                                                auto [found, inserted] = indexes.try_emplace(key, partials.size());
++                                                if (inserted) partials.push_back({row, 0U});
++                                                ++partials[found->second].rows;
++                                            }, [&] { checkGuard(state); });
++                                    } catch (const MaterializedByteLimitExceeded &) {
++                                        // No aggregate state has changed. Optional partial buffers
++                                        // are destroyed before the existing direct consumer runs.
++                                        prepared = false;
++                                    } catch (const detail::ResourceAdmissionDenied &) {
++                                        prepared = false;
++                                    }
++                                    if (prepared) {
++                                        if (accepted > state.shared.bounds.maximum_rows - inputRows)
++                                            throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
++                                        inputRows += accepted;
++                                        for (const auto &partial : partials) {
++                                            checkGuard(state); size_t groupIndex = 0U;
++                                            if (!directGroups.empty()) {
++                                                const auto row = columns.rowId(partial.first);
++                                                std::pmr::string key{&aggregateIndexMemory}; appendCellKey(key, textColumn, row);
++                                                const auto found = groupIndexes.find(key);
++                                                if (found != groupIndexes.end()) groupIndex = found->second;
++                                                else {
++                                                    MaterializedByteReservation copies(&state.shared.materialized_budget);
++                                                    copies.set(sizeof(PropertyValue));
++                                                    std::vector<PropertyValue> values; values.reserve(1U);
++                                                    const size_t slots = values.capacity() * sizeof(PropertyValue); copies.set(slots);
++                                                    auto value = columns.copyValue(textColumn, row,
++                                                        [&](size_t bytes) { copies.set(checkedSizeAdd(slots, bytes, "partial count key copy overflowed")); },
++                                                        [&] { checkGuardNow(state); });
++                                                    copies.set(checkedSizeAdd(slots, detail::propertyBufferEstimates(value, [&] { checkGuardNow(state); }).heapBytes,
++                                                        "partial count key retention overflowed"));
++                                                    values.push_back(std::move(value)); groupIndex = createGroup(std::move(values), &copies);
++                                                    groupIndexes.emplace(std::move(key), groupIndex);
++                                                }
++                                            }
++                                            for (auto &accumulator : groups.at(groupIndex).accumulators)
++                                                static_cast<CountAccumulator &>(*accumulator).addRows(partial.rows);
++                                        }
++                                        debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_batches", 1);
++                                        debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_updates", static_cast<int64_t>(partials.size()));
++                                        debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
++                                        debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(rejected));
++                                        return true;
++                                    }
++                                }
+ 								size_t filterRejected = 0U;
+                                 for (const auto ordinal : ordinals) {
+ 									checkGuard(state);
+diff --git a/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp b/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
+index 0d699a76..c4eee1d3 100644
+--- a/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
++++ b/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
+@@ -129,6 +129,15 @@ namespace graph::storage {
+                 if (!sink || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
+                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                     sink, &read_session_, &admission, &scalars);
++            }
++            void readNodePropertyCellsWithViewsSortedWithAdmission(std::span<const uint64_t> ids,
++                std::span<const std::string_view> keys, const PropertyCellSink &sink,
++                const PropertyScalarReadSink &scalars, const PropertyTextReadSink &texts,
++                const std::function<void(size_t)> &admission) const override {
++                if (!sink || !scalars || !texts || !admission)
++                    throw std::invalid_argument("typed Property cells require sinks and admission");
++                native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
++                    sink, &read_session_, &admission, &scalars, &texts);
+             }
+ 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+ 			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
+@@ -534,6 +543,8 @@ namespace graph::storage {
+ 
+ 			[[nodiscard]] bool supportsNativeBatchAdjacentEdgeRefs() const override { return true; }
+ 
++            [[nodiscard]] bool hasImmutableReadIdentity() const noexcept override { return true; }
++
+ 			[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
+ 				const Superblock &superblock = snapshot_.superblock();
+ 				if (!superblock.database_id.isValid() || !superblock.generation.isValid()) { // ZYX_COV_EXCL_LINE:
+diff --git a/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp b/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp
+index 61fffe2f..f449316d 100644
+--- a/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp
++++ b/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp
+@@ -521,8 +521,9 @@ namespace graph::storage {
+ 	void PageBackedGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+ 		std::span<const uint64_t> ids, std::span<const uint32_t> tokens,
+ 		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
+-		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars) const {
+-		if (!sink || (scalars && !*scalars)) throw std::invalid_argument("direct Property cells require a sink");
++		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
++        const PropertyTextReadSink *texts) const {
++		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct Property cells require a sink");
+ 		if (ids.size() > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyKey))
+ 			throw std::overflow_error("direct Property owner staging overflowed");
+ 		if (admission) (*admission)(ids.size() * sizeof(EntityPropertyKey));
+@@ -535,7 +536,7 @@ namespace graph::storage {
+ 			};
+ 		const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> emit = std::ref(emitValue);
+ 		active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
+-			snapshot, keys, tokens, {}, true, admission, &emit, scalars);
++			snapshot, keys, tokens, {}, true, admission, &emit, scalars, texts);
+ 		debug::PerfTrace::addValue("native_graph.read.direct_property_batches", 1);
+ 	}
+ 
+diff --git a/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp b/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp
+index fd2d9a23..c888ebb6 100644
+--- a/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp
++++ b/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp
+@@ -900,9 +900,10 @@ namespace graph::storage {
+ 	void PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+ 		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+ 		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
+-		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars) const {
++		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
++        const PropertyTextReadSink *texts) const {
+ 		validateNamedPropertyColumnRequest(ids, keys);
+-		if (!sink || (scalars && !*scalars)) throw std::invalid_argument("direct named Property cells require a sink");
++		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct named Property cells require a sink");
+ 		std::optional<NativeReadSession> local;
+ 		auto &active = activeSession(snapshot, session, local);
+ 		constexpr size_t tokenBytes = sizeof(std::pair<uint32_t, size_t>) + sizeof(uint32_t);
+@@ -929,6 +930,14 @@ namespace graph::storage {
+                 (*scalars)(row, it->second, type, bits);
+         };
+         const PropertyScalarReadSink emitScalar = std::ref(mapScalar);
++        const auto mapText = [&](size_t row, size_t column, std::string_view text) {
++            const auto token = tokens.at(column);
++            const auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
++                [](const auto &entry, uint32_t key) { return entry.first < key; });
++            for (auto it = first; it != resolved.end() && it->first == token; ++it)
++                (*texts)(row, it->second, text);
++        };
++        const PropertyTextReadSink emitText = std::ref(mapText);
+ 		const auto mapValue = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+ 				const auto token = tokens.at(column);
+ 				auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
+@@ -943,7 +952,7 @@ namespace graph::storage {
+ 				}
+ 			};
+         pages_.readNodePropertyCellsSorted(snapshot, ids, tokens, std::ref(mapValue),
+-            &active, admission, scalars ? &emitScalar : nullptr);
++            &active, admission, scalars ? &emitScalar : nullptr, texts ? &emitText : nullptr);
+ 	}
+ 
+ 	PropertyValue PageBackedLogicalGraphReadAdapter::readEdgeProperty(const MetadataSnapshotPin &snapshot,
+diff --git a/src/storage/relocatable/property/PropertyCollectionRoot.cpp b/src/storage/relocatable/property/PropertyCollectionRoot.cpp
+index a110ffa1..45ccc985 100644
+--- a/src/storage/relocatable/property/PropertyCollectionRoot.cpp
++++ b/src/storage/relocatable/property/PropertyCollectionRoot.cpp
+@@ -573,6 +573,52 @@ namespace graph::storage {
+ 																				 LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyTokens, admission, slotsAdmission);
+ 	}
+ 
++    void EntityPropertyCollectionRootCodec::visitSelectedEncoded(std::span<const std::byte> bytes,
++        uint64_t expectedOwnerId, uint32_t expectedOwnerType, std::span<const uint32_t> tokens,
++        const EncodedSelectionSink &sink, const SelectedPropertyReadAdmission *admission,
++        const CancellationCheckpoint *cancellation) {
++        if (!sink || !expectedOwnerId || !isOwnerType(expectedOwnerType) || tokens.empty())
++            throwRootError(FormatError::FERR_INVALID_HEADER, "typed Property selection requires owner, tokens and sink");
++        // No owning root or value vector is constructed on this path.
++        if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES)
++            throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
++        if (LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC ||
++            LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION ||
++            LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
++            LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U ||
++            LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET) != bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
++            LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) != expectedOwnerId ||
++            LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET) != expectedOwnerType)
++            throwRootError(FormatError::FERR_INVALID_HEADER, "typed Entity Property root owner or header is invalid");
++        uint32_t previous = 0U;
++        for (const auto token : tokens) {
++            if (cancellation) cancellation->check();
++            if (!token || token <= previous)
++                throwRootError(FormatError::FERR_INVALID_HEADER, "typed Property tokens must be strictly increasing");
++            previous = token;
++        }
++        const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
++        const auto count = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
++        const auto directory = offsetDirectoryBytes(payload, count);
++        validateOffsetDirectory(payload, directory, count, cancellation);
++        for (size_t ordinal = 0U; ordinal < tokens.size(); ++ordinal) {
++            if (cancellation) cancellation->check();
++            uint32_t lower = 0U, upper = count;
++            while (lower < upper) {
++                const auto middle = lower + (upper - lower) / 2U;
++                const auto [start, end] = entryBounds(payload, directory, count, middle);
++                static_cast<void>(end);
++                if (LittleEndianCodec::readU32(payload, start) < tokens[ordinal]) lower = middle + 1U;
++                else upper = middle;
++            }
++            if (lower == count) { sink(ordinal, std::nullopt); continue; }
++            const auto [start, end] = entryBounds(payload, directory, count, lower);
++            if (LittleEndianCodec::readU32(payload, start) != tokens[ordinal]) { sink(ordinal, std::nullopt); continue; }
++            if (admission) (*admission)(end - start);
++            sink(ordinal, payload.subspan(start + sizeof(uint32_t), end - start - sizeof(uint32_t)));
++        }
++    }
++
+ 	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+ 	EntityPropertyCollectionRootCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
+ 																					 const std::span<const uint32_t> keyTokens, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
+diff --git a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+index 77fced87..50557594 100644
+--- a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
++++ b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+@@ -1124,6 +1124,50 @@ namespace graph::storage {
+ 		return EntityPropertyCollectionRootCodec::containsToken(bytes, keyToken, requireNonNull);
+ 	}
+ 
++    bool PropertyCollectionRootStore::emitSelectedEntityProperties(const EntityPropertyKey &key,
++        const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
++        std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,
++        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> &sink,
++        const PropertyScalarReadSink &scalars, const PropertyTextReadSink *texts,
++        const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation) const {
++        if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) return false;
++        if (location.key != key || location.page_id != pageId || ownerKind != PageOwnerKind::POK_PROPERTY)
++            throwRootStoreError(FormatError::FERR_INVALID_STATE, "typed Property selection has a foreign owner page");
++        const uint32_t ownerType = key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
++        const auto emit = [&](size_t column, std::optional<std::span<const std::byte>> encoded) {
++            if (cancellation) cancellation->check();
++            if (!encoded) { sink(ownerOrdinal, column, std::nullopt); return; }
++            if (const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(*encoded)) {
++                if (primitive->type != PropertyType::STRING) {
++                    scalars(ownerOrdinal, column, primitive->type, primitive->bits);
++                    debug::PerfTrace::addValue("native_graph.read.property_typed_scalar_cells", 1);
++                    debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
++                    return;
++                }
++                if (texts) {
++                    (*texts)(ownerOrdinal, column, primitive->text);
++                    debug::PerfTrace::addValue("native_graph.read.property_typed_text_cells", 1);
++                    debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
++                    return;
++                }
++            }
++            // Complex values and legacy consumers keep the admitted owning
++            // decoder; the primary scalar/text route allocates no value vector.
++            size_t offset = 0U;
++            auto value = CanonicalPropertyValueCodec::decodeNext(*encoded, offset);
++            if (offset != encoded->size())
++                throwRootStoreError(FormatError::FERR_INVALID_HEADER, "typed Property entry has trailing bytes");
++            sink(ownerOrdinal, column, PropertyCollectionRootEntry{tokens[column], std::move(value)});
++            debug::PerfTrace::addValue("native_graph.read.property_owning_fallback_cells", 1);
++            debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
++        };
++        EntityPropertyCollectionRootCodec::visitSelectedEncoded(bytes, key.entity_id, ownerType,
++            tokens, std::ref(emit), admission, cancellation);
++        debug::PerfTrace::addValue("native_graph.read.property_selected_column_decode", 1);
++        debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
++        return true;
++    }
++
+ 	std::vector<std::optional<PropertyCollectionRootEntry>>
+ 	PropertyCollectionRootStore::decodeSelectedEntityProperties(
+ 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+@@ -1392,7 +1436,7 @@ namespace graph::storage {
+ 			const std::span<const uint32_t> keyTokens,
+ 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+ 			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
+-			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars) {
++			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts) {
+ 			validateSnapshot(snapshot);
+ 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
+ 			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
+@@ -1469,11 +1513,25 @@ namespace graph::storage {
+ 			std::vector<std::optional<PropertyCollectionRootEntry>> decoded;
+ 			if (pinned.has_value()) {
+ 				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
++                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
++                        pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, ownerIndex,
++                        *sink, *scalars, texts, admission, cancellation_)) {
++                    if (cancellation_) cancellation_->check();
++                    debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
++                    continue;
++                }
+ 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
+ 						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission);
+ 				debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
+ 			} else {
+ 				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
++                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
++                        copied->pageId(), copied->ownerKind(), bytes, keyTokens, ownerIndex,
++                        *sink, *scalars, texts, admission, cancellation_)) {
++                    if (cancellation_) cancellation_->check();
++                    debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
++                    continue;
++                }
+ 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
+ 						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission);
+ 				debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
+diff --git a/src/storage/relocatable/property/PropertyValueCodec.cpp b/src/storage/relocatable/property/PropertyValueCodec.cpp
+index 50db928a..876fe5db 100644
+--- a/src/storage/relocatable/property/PropertyValueCodec.cpp
++++ b/src/storage/relocatable/property/PropertyValueCodec.cpp
+@@ -553,6 +553,32 @@ namespace graph::storage {
+ 		return kind == PropertyValueWireKind::PVW_NULL;
+ 	}
+ 
++    std::optional<CanonicalPropertyValueCodec::BorrowedPrimitive>
++    CanonicalPropertyValueCodec::tryBorrowPrimitive(std::span<const std::byte> bytes) {
++        static_cast<void>(isNullHeader(bytes, bytes.size()));
++        const auto kind = static_cast<PropertyValueWireKind>(std::to_integer<uint8_t>(bytes.front()));
++        ByteReader payload{bytes.subspan(HEADER_BYTES)};
++        switch (kind) {
++            case PropertyValueWireKind::PVW_NULL: return BorrowedPrimitive{};
++            case PropertyValueWireKind::PVW_BOOLEAN: {
++                const auto value = payload.readU8();
++                if (value > 1U) fail(FormatError::FERR_INVALID_HEADER, "Property boolean is not canonical");
++                return BorrowedPrimitive{PropertyType::BOOLEAN, value, {}};
++            }
++            case PropertyValueWireKind::PVW_INTEGER:
++                return BorrowedPrimitive{PropertyType::INTEGER, payload.readU64(), {}};
++            case PropertyValueWireKind::PVW_DOUBLE:
++                return BorrowedPrimitive{PropertyType::DOUBLE, payload.readU64(), {}};
++            case PropertyValueWireKind::PVW_STRING: {
++                const auto size = payload.readU32();
++                const auto text = payload.readStringView(size);
++                if (payload.remaining() != 0U) fail(FormatError::FERR_INVALID_HEADER, "Property string has trailing bytes");
++                return BorrowedPrimitive{PropertyType::STRING, 0U, text};
++            }
++            default: return std::nullopt;
++        }
++    }
++
+ 	size_t CanonicalPropertyValueCodec::encodedSize(const PropertyValue &value) {
+ 		return encodedValueSize(value, 0U);
+ 	}
+diff --git a/tests/src/query/execution/test_BatchEnvelope.cpp b/tests/src/query/execution/test_BatchEnvelope.cpp
+index 569a8c51..1b4a6fdf 100644
+--- a/tests/src/query/execution/test_BatchEnvelope.cpp
++++ b/tests/src/query/execution/test_BatchEnvelope.cpp
+@@ -7,7 +7,10 @@ class EnvelopeSnapshot final : public storage::LogicalGraphReadSnapshot {
+ public:
+ 	storage::LogicalGraphSchemaIdentity identity{1U, 2U, {}, 0U, 0U};
+ 	bool tokens = true;
+-	std::optional<storage::LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override { return identity; }
++	bool immutable = false;
++	mutable size_t identity_reads = 0;
++	bool hasImmutableReadIdentity() const noexcept override { return immutable; }
++	std::optional<storage::LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override { ++identity_reads; return identity; }
+ 	bool supportsPropertyTokenResolution() const override { return tokens; }
+ 	storage::LogicalGraphNode readNode(uint64_t) const override { throw std::logic_error("unexpected read"); }
+ 	storage::LogicalGraphEdge readEdge(uint64_t) const override { throw std::logic_error("unexpected read"); }
+@@ -183,3 +186,76 @@ TEST(BatchEnvelopeTest, DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExp
+ }
+ 
+ }
++
++namespace graph::query::execution::detail {
++TEST(BatchEnvelopeTest, DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries) {
++    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot; snapshot.immutable = true;
++    {
++        DirectPropertyColumns columns(snapshot, 2U, 1U, budget);
++        std::string buffer("a\0b", 3); columns.appendText(0, 0, buffer, [] {});
++        buffer.assign("changed"); columns.appendText(1, 0, buffer, [] {}); buffer.assign("reused");
++        columns.seal(); const size_t checks = snapshot.identity_reads;
++        for (size_t i = 0; i < 1000; ++i)
++            EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(0)).data), std::string_view("a\0b", 3));
++        EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(1)).data), "changed");
++        EXPECT_EQ(snapshot.identity_reads, checks); EXPECT_LE(checks, 2U);
++        const std::array<std::string, 1> names{"text"}; BoundColumnLayout layout(names, budget);
++        BatchEnvelope envelope(1U, layout, snapshot, 2U, budget);
++        const std::array sources{BatchColumnSource::direct(columns, 0U)};
++        const std::array<uint32_t, 2> selected{0U, 1U}; const std::array<uint64_t, 2> ordinals{0U, 1U};
++        envelope.publish(names, sources, 2U, selected, ordinals, [] {});
++        const size_t publishedChecks = snapshot.identity_reads;
++        for (size_t i = 0; i < 1000; ++i)
++            EXPECT_EQ(std::get<std::string_view>(envelope.cell(layout.column(0), envelope.rowId(0)).data), std::string_view("a\0b", 3));
++        EXPECT_EQ(snapshot.identity_reads, publishedChecks);
++
++    }
++    EXPECT_EQ(budget.used(), 0U);
++    snapshot.immutable = false;
++    DirectPropertyColumns mutableColumns(snapshot, 1U, 1U, budget);
++    mutableColumns.appendText(0, 0, "ok", [] {}); mutableColumns.seal();
++    ++snapshot.identity.catalog_tokens[0];
++    EXPECT_THROW((void)mutableColumns.cell(0, mutableColumns.rowId(0)), std::invalid_argument);
++}
++TEST(BatchEnvelopeTest, DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget) {
++    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot;
++    {
++        DirectPropertyColumns columns(snapshot, 1U, 1U, budget); size_t checkpoints = 0;
++        EXPECT_THROW(columns.appendText(0, 0, std::string(2048, 'x'), [&] {
++            if (++checkpoints == 3U) throw std::runtime_error("cancelled");
++        }), std::runtime_error);
++        EXPECT_THROW(columns.seal(), std::logic_error);
++    }
++    EXPECT_EQ(budget.used(), 0U);
++    {
++        DirectPropertyColumns columns(snapshot, 1U, 1U, budget);
++        EXPECT_THROW(columns.appendText(0, 0, std::string(131072, 'x'), [] {}), std::exception);
++        EXPECT_THROW(columns.seal(), std::logic_error);
++    }
++    EXPECT_EQ(budget.used(), 0U);
++}
++}
++
++namespace graph::query::execution::detail {
++TEST(BatchEnvelopeTest, ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects) {
++    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot;
++    const std::array<size_t, 5> order{2, 0, 0, 1, 3}; SelectionVector selected(4); selected.reject(3);
++    DirectPropertyColumns columns(snapshot, 4, 1, budget);
++    columns.appendText(0, 0, std::string_view("a\0b", 3), [] {});
++    columns.appendText(1, 0, "", [] {}); columns.append(2, 0, PropertyValue(), [] {});
++    columns.appendScalar(3, 0, PropertyType::INTEGER, 7, [] {}); columns.seal();
++    std::vector<std::optional<std::string>> values;
++    ASSERT_TRUE(columns.tryVisitShortTextColumn(0, selected, order, [&](size_t, auto text) {
++        values.emplace_back(text ? std::optional<std::string>(*text) : std::nullopt);
++    }, [] {}));
++    ASSERT_EQ(values.size(), 4U); EXPECT_FALSE(values[0]); EXPECT_EQ(values[1], std::string("a\0b", 3));
++    EXPECT_EQ(values[1], values[2]); EXPECT_EQ(values[3], std::string{});
++    size_t effects = 0; selected.select(3);
++    EXPECT_FALSE(columns.tryVisitShortTextColumn(0, selected, order, [&](size_t, auto) { ++effects; }, [] {}));
++    EXPECT_EQ(effects, 0U);
++    DirectPropertyColumns longText(snapshot, 1, 1, budget); longText.appendText(0, 0, std::string(65, 'x'), [] {}); longText.seal();
++    const std::array<size_t, 1> first{0}; SelectionVector one(1);
++    EXPECT_FALSE(longText.tryVisitShortTextColumn(0, one, first, [&](size_t, auto) { ++effects; }, [] {}));
++    EXPECT_EQ(effects, 0U);
++}
++}
+diff --git a/tests/src/query/execution/test_LogicalAggregateAccumulator.cpp b/tests/src/query/execution/test_LogicalAggregateAccumulator.cpp
+index e892d5f6..700d0121 100644
+--- a/tests/src/query/execution/test_LogicalAggregateAccumulator.cpp
++++ b/tests/src/query/execution/test_LogicalAggregateAccumulator.cpp
+@@ -1072,3 +1072,13 @@ TEST_F(CollectDistinctAccumulatorTest, RetainedAccountingIncludesBothSparseMapBu
+ 	EXPECT_EQ(result.getList()[0], value);
+ 	EXPECT_EQ(accumulator.retainedBytes(), 0U);
+ }
++
++TEST_F(CountAccumulatorTest, MergesPartialCountsAndRejectsOverflowWithoutChangingTheCount) {
++    CountAccumulator accumulator;
++    accumulator.addRows(17U); accumulator.updateRow();
++    EXPECT_EQ(accumulator.getResult(), PropertyValue(int64_t{18}));
++    accumulator.addRows(static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - 18U);
++    EXPECT_EQ(accumulator.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
++    EXPECT_THROW(accumulator.addRows(1U), std::overflow_error);
++    EXPECT_EQ(accumulator.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
++}
+diff --git a/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp b/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
+index ecb2074e..07c01b12 100644
+--- a/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
++++ b/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
+@@ -746,3 +746,36 @@ TEST(LogicalPlanDirectColumnAggregateTest, GuardAdmissionTypedExceptionDuringPro
+     EXPECT_EQ(runtime.executeToQueryResult(aggregate, directBounds()).getRows()[0].at("sum").asPrimitive(), PropertyValue(6));
+ }
+ } // namespace graph::query::execution
++
++namespace graph::query::execution {
++TEST(LogicalPlanDirectColumnAggregateTest, PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay) {
++    using namespace direct_edge_test;
++    for (bool mixed : {false, true}) {
++        std::map<std::pair<int, std::string>, int64_t> expected;
++        const std::array<PropertyValue, 8> values{PropertyValue(), PropertyValue(), PropertyValue(""),
++            PropertyValue(std::string("a\0b", 3)), PropertyValue("US"), PropertyValue("CN"),
++            mixed ? PropertyValue(1) : PropertyValue("US"), PropertyValue("US")};
++        for (bool direct : {false, true}) {
++            DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
++            for (size_t i = 0; i < values.size(); ++i) {
++                graph.nodes.emplace(i + 1, LogicalGraphNode{i + 1, {}, i == 1 ? std::vector<storage::LogicalGraphPropertyEntry>{} :
++                    std::vector<storage::LogicalGraphPropertyEntry>{{"country", values[i]}}});
++            }
++            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++            logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++                {std::make_shared<expressions::VariableReferenceExpression>("n", "country")}, {{"count", nullptr, "rows"}}, {"country"});
++            const auto result = runtime.executeToQueryResult(aggregate, directBounds());
++            std::map<std::pair<int, std::string>, int64_t> actual;
++            for (const auto &row : result.getRows()) {
++                const auto &value = row.at("country").asPrimitive(); std::string bytes;
++                if (const auto *text = std::get_if<std::string>(&value.getVariant())) bytes = *text;
++                else if (const auto *integer = std::get_if<int64_t>(&value.getVariant())) bytes = std::to_string(*integer);
++                actual[{static_cast<int>(value.getType()), bytes}] = std::get<int64_t>(row.at("rows").asPrimitive().getVariant());
++            }
++            if (!direct) expected = actual; else EXPECT_EQ(actual, expected);
++            EXPECT_EQ(actual.at({static_cast<int>(PropertyType::NULL_TYPE), ""}), 2);
++            EXPECT_EQ(actual.at({static_cast<int>(PropertyType::STRING), "US"}), mixed ? 2 : 3);
++        }
++    }
++}
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp b/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
+index f6a4f52d..af0130c0 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
+@@ -91,6 +91,14 @@ TEST_F(RelocatableStorageBackendTest, NativeDirectFilterGroupAndDistinctReturnEx
+     EXPECT_EQ(trace.at("logical_plan.aggregate.direct_input_rows").totalValue, totalRows);
+     EXPECT_FALSE(trace.contains("logical_plan.batch.rows"));
+ 
++    graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
++    auto counts = engine.execute("MATCH (n:DirectBatch) RETURN n.country AS country,count(*) AS rows");
++    const auto partialTrace = graph::debug::PerfTrace::snapshotAndReset(); graph::debug::PerfTrace::setValueCollectionEnabled(previous);
++    ASSERT_EQ(counts.rowCount(), 2U);
++    for (const auto &row : counts.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(300));
++    ASSERT_TRUE(partialTrace.contains("logical_plan.aggregate.partial_count_batches"));
++    EXPECT_LT(partialTrace.at("logical_plan.aggregate.partial_count_updates").totalValue, 600);
++
+     // Indexed fallback rows must still pass the retained residual Filter;
+     // forwarding a batch receiver must never skip it for index candidates.
+     (void)backend->createLogicalNodeIndex({"direct_rank", "DirectBatch", {"rank"}});
+@@ -144,3 +152,36 @@ TEST_F(RelocatableStorageBackendTest, DirectPropertyCellsIsolateOldPinsAcrossAno
+     auto fresh = reopened.openLogicalGraphReadSnapshot();
+     EXPECT_EQ(read(*fresh, gather), currentValues);
+ }
++
++TEST_F(RelocatableStorageBackendTest, NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks) {
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto ids = backend.createLogicalNodes({{{"Typed"}, {{"integer", PropertyValue(int64_t(-42))},
++        {"text", PropertyValue(std::string("a\0b", 3))}, {"null", PropertyValue()},
++        {"list", PropertyValue(std::vector<PropertyValue>{PropertyValue(7)})}}}});
++    auto old = backend.openLogicalGraphReadSnapshot(); ASSERT_TRUE(old->hasImmutableReadIdentity());
++    const std::array<std::string_view, 6> keys{"text", "integer", "text", "null", "list", "missing"};
++    std::map<size_t, std::string> texts; std::map<size_t, std::pair<graph::PropertyType, uint64_t>> scalars;
++    size_t owning = 0;
++    old->readNodePropertyCellsWithViewsSortedWithAdmission(ids, keys,
++        [&](size_t row, size_t column, std::optional<PropertyValue> value) {
++            EXPECT_EQ(row, 0U); ASSERT_EQ(column, 4U); ASSERT_TRUE(value); ++owning;
++            EXPECT_EQ(*value, PropertyValue(std::vector<PropertyValue>{PropertyValue(7)}));
++        }, [&](size_t row, size_t column, graph::PropertyType type, uint64_t bits) {
++            EXPECT_EQ(row, 0U); EXPECT_TRUE(scalars.emplace(column, std::pair{type, bits}).second);
++        }, [&](size_t row, size_t column, std::string_view value) {
++            EXPECT_EQ(row, 0U); EXPECT_TRUE(texts.emplace(column, value).second);
++        }, [](size_t) {});
++    EXPECT_EQ(owning, 1U); ASSERT_EQ(texts.size(), 2U); EXPECT_EQ(texts.at(0), std::string("a\0b", 3));
++    EXPECT_EQ(texts.at(0), texts.at(2)); ASSERT_EQ(scalars.size(), 2U);
++    EXPECT_EQ(scalars.at(1).second, std::bit_cast<uint64_t>(int64_t(-42)));
++    EXPECT_EQ(scalars.at(3).first, graph::PropertyType::NULL_TYPE);
++    graph::query::execution::MaterializedByteBudget budget(65536U);
++    {
++        graph::query::execution::detail::DirectPropertyColumns columns(*old, 1U, keys.size(), budget);
++        columns.readGather(ids, keys, [](size_t) {}, [] {});
++        EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(0)).data), std::string_view("a\0b", 3));
++    }
++    EXPECT_EQ(budget.used(), 0U);
++}

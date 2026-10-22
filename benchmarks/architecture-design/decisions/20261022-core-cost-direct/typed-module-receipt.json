@@ -1,0 +1,21 @@
+{
+  "units": [
+    "query/execution/test_LogicalAggregateAccumulator",
+    "query/execution/test_BoundNodeScanBatch",
+    "query/execution/test_LogicalPlanNodeColumnAggregate",
+    "query/execution/test_LogicalPlanFilterSelectedColumns",
+    "storage/relocatable/property/test_PropertyBorrowedSelection",
+    "storage/relocatable/property/test_PropertyValueCodec_Inspection",
+    "storage/relocatable/property/test_PropertyValueCodec_Bytes",
+    "storage/relocatable/property/test_PropertyCollectionRoot",
+    "storage/relocatable/property/test_PropertyCollectionRootStoreValidation",
+    "storage/relocatable/property/test_PropertyCollectionRootStoreCache",
+    "storage/relocatable/backend/test_RelocatableDirectPropertyBatch",
+    "query/execution/test_BatchEnvelope",
+    "query/execution/test_BoundNodeColumnPredicates",
+    "query/execution/test_BoundExpressionInputs"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "cf37041b6d5be36decc0e4540c608661f8c773dc87df61d7907ed7f218282185"
+}

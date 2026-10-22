@@ -573,6 +573,52 @@ namespace graph::storage {
 																				 LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyTokens, admission, slotsAdmission);
 	}
 
+    void EntityPropertyCollectionRootCodec::visitSelectedEncoded(std::span<const std::byte> bytes,
+        uint64_t expectedOwnerId, uint32_t expectedOwnerType, std::span<const uint32_t> tokens,
+        const EncodedSelectionSink &sink, const SelectedPropertyReadAdmission *admission,
+        const CancellationCheckpoint *cancellation) {
+        if (!sink || !expectedOwnerId || !isOwnerType(expectedOwnerType) || tokens.empty())
+            throwRootError(FormatError::FERR_INVALID_HEADER, "typed Property selection requires owner, tokens and sink");
+        // No owning root or value vector is constructed on this path.
+        if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES)
+            throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
+        if (LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC ||
+            LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION ||
+            LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+            LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U ||
+            LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET) != bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+            LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) != expectedOwnerId ||
+            LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET) != expectedOwnerType)
+            throwRootError(FormatError::FERR_INVALID_HEADER, "typed Entity Property root owner or header is invalid");
+        uint32_t previous = 0U;
+        for (const auto token : tokens) {
+            if (cancellation) cancellation->check();
+            if (!token || token <= previous)
+                throwRootError(FormatError::FERR_INVALID_HEADER, "typed Property tokens must be strictly increasing");
+            previous = token;
+        }
+        const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+        const auto count = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
+        const auto directory = offsetDirectoryBytes(payload, count);
+        validateOffsetDirectory(payload, directory, count, cancellation);
+        for (size_t ordinal = 0U; ordinal < tokens.size(); ++ordinal) {
+            if (cancellation) cancellation->check();
+            uint32_t lower = 0U, upper = count;
+            while (lower < upper) {
+                const auto middle = lower + (upper - lower) / 2U;
+                const auto [start, end] = entryBounds(payload, directory, count, middle);
+                static_cast<void>(end);
+                if (LittleEndianCodec::readU32(payload, start) < tokens[ordinal]) lower = middle + 1U;
+                else upper = middle;
+            }
+            if (lower == count) { sink(ordinal, std::nullopt); continue; }
+            const auto [start, end] = entryBounds(payload, directory, count, lower);
+            if (LittleEndianCodec::readU32(payload, start) != tokens[ordinal]) { sink(ordinal, std::nullopt); continue; }
+            if (admission) (*admission)(end - start);
+            sink(ordinal, payload.subspan(start + sizeof(uint32_t), end - start - sizeof(uint32_t)));
+        }
+    }
+
 	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
 	EntityPropertyCollectionRootCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
 																					 const std::span<const uint32_t> keyTokens, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {

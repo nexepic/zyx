@@ -94,7 +94,7 @@ public:
 	BatchEnvelope(uint64_t program, const BoundColumnLayout &layout, const storage::LogicalGraphReadSnapshot &snapshot,
 		size_t maximumRows, MaterializedByteBudget &budget, std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
 		: program_(program), layout_(layout), snapshot_(snapshot), fence_(snapshot.mutationFence()), schema_(snapshot.bindingSchemaIdentity()),
-		  token_support_(snapshot.supportsPropertyTokenResolution()),
+		  token_support_(snapshot.supportsPropertyTokenResolution()), immutable_identity_(snapshot.hasImmutableReadIdentity()),
 		  maximum_rows_(maximumRows), budget_(&budget), memory_(budget, upstream), columns_(&memory_), selected_(&memory_), ordinals_(&memory_) {
 		if (!upstream || program == 0U || maximumRows == 0U || maximumRows > UINT32_MAX)
 			throw std::invalid_argument("batch envelope requires program, allocator and uint32 rows");
@@ -203,7 +203,8 @@ private:
 			throw std::invalid_argument("batch legacy cell has no owning source value");
 	}
 	void validateRow(BatchRowId row) const {
-		identity_.validate(row); if (!published_ || row.index >= rows_) throw std::out_of_range("batch row is outside publication"); validateSnapshot(snapshot_);
+		identity_.validate(row); if (!published_ || row.index >= rows_) throw std::out_of_range("batch row is outside publication");
+		if (!immutable_identity_) validateSnapshot(snapshot_);
 	}
 	uint64_t program_;
 	const BoundColumnLayout &layout_;
@@ -211,6 +212,7 @@ private:
 	std::optional<storage::LogicalGraphMutationFence> fence_;
 	std::optional<storage::LogicalGraphSchemaIdentity> schema_;
 	bool token_support_;
+	bool immutable_identity_;
 	size_t maximum_rows_, rows_ = 0U;
 	bool published_ = false;
 	const MaterializedByteBudget *budget_;

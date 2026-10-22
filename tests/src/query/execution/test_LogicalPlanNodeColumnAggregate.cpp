@@ -746,3 +746,36 @@ TEST(LogicalPlanDirectColumnAggregateTest, GuardAdmissionTypedExceptionDuringPro
     EXPECT_EQ(runtime.executeToQueryResult(aggregate, directBounds()).getRows()[0].at("sum").asPrimitive(), PropertyValue(6));
 }
 } // namespace graph::query::execution
+
+namespace graph::query::execution {
+TEST(LogicalPlanDirectColumnAggregateTest, PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay) {
+    using namespace direct_edge_test;
+    for (bool mixed : {false, true}) {
+        std::map<std::pair<int, std::string>, int64_t> expected;
+        const std::array<PropertyValue, 8> values{PropertyValue(), PropertyValue(), PropertyValue(""),
+            PropertyValue(std::string("a\0b", 3)), PropertyValue("US"), PropertyValue("CN"),
+            mixed ? PropertyValue(1) : PropertyValue("US"), PropertyValue("US")};
+        for (bool direct : {false, true}) {
+            DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
+            for (size_t i = 0; i < values.size(); ++i) {
+                graph.nodes.emplace(i + 1, LogicalGraphNode{i + 1, {}, i == 1 ? std::vector<storage::LogicalGraphPropertyEntry>{} :
+                    std::vector<storage::LogicalGraphPropertyEntry>{{"country", values[i]}}});
+            }
+            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+            logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+                {std::make_shared<expressions::VariableReferenceExpression>("n", "country")}, {{"count", nullptr, "rows"}}, {"country"});
+            const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+            std::map<std::pair<int, std::string>, int64_t> actual;
+            for (const auto &row : result.getRows()) {
+                const auto &value = row.at("country").asPrimitive(); std::string bytes;
+                if (const auto *text = std::get_if<std::string>(&value.getVariant())) bytes = *text;
+                else if (const auto *integer = std::get_if<int64_t>(&value.getVariant())) bytes = std::to_string(*integer);
+                actual[{static_cast<int>(value.getType()), bytes}] = std::get<int64_t>(row.at("rows").asPrimitive().getVariant());
+            }
+            if (!direct) expected = actual; else EXPECT_EQ(actual, expected);
+            EXPECT_EQ(actual.at({static_cast<int>(PropertyType::NULL_TYPE), ""}), 2);
+            EXPECT_EQ(actual.at({static_cast<int>(PropertyType::STRING), "US"}), mixed ? 2 : 3);
+        }
+    }
+}
+}

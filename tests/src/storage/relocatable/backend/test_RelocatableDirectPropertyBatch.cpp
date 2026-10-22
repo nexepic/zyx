@@ -91,6 +91,14 @@ TEST_F(RelocatableStorageBackendTest, NativeDirectFilterGroupAndDistinctReturnEx
     EXPECT_EQ(trace.at("logical_plan.aggregate.direct_input_rows").totalValue, totalRows);
     EXPECT_FALSE(trace.contains("logical_plan.batch.rows"));
 
+    graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    auto counts = engine.execute("MATCH (n:DirectBatch) RETURN n.country AS country,count(*) AS rows");
+    const auto partialTrace = graph::debug::PerfTrace::snapshotAndReset(); graph::debug::PerfTrace::setValueCollectionEnabled(previous);
+    ASSERT_EQ(counts.rowCount(), 2U);
+    for (const auto &row : counts.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(300));
+    ASSERT_TRUE(partialTrace.contains("logical_plan.aggregate.partial_count_batches"));
+    EXPECT_LT(partialTrace.at("logical_plan.aggregate.partial_count_updates").totalValue, 600);
+
     // Indexed fallback rows must still pass the retained residual Filter;
     // forwarding a batch receiver must never skip it for index candidates.
     (void)backend->createLogicalNodeIndex({"direct_rank", "DirectBatch", {"rank"}});
@@ -143,4 +151,37 @@ TEST_F(RelocatableStorageBackendTest, DirectPropertyCellsIsolateOldPinsAcrossAno
     RelocatableStorageBackend reopened(options); reopened.open();
     auto fresh = reopened.openLogicalGraphReadSnapshot();
     EXPECT_EQ(read(*fresh, gather), currentValues);
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto ids = backend.createLogicalNodes({{{"Typed"}, {{"integer", PropertyValue(int64_t(-42))},
+        {"text", PropertyValue(std::string("a\0b", 3))}, {"null", PropertyValue()},
+        {"list", PropertyValue(std::vector<PropertyValue>{PropertyValue(7)})}}}});
+    auto old = backend.openLogicalGraphReadSnapshot(); ASSERT_TRUE(old->hasImmutableReadIdentity());
+    const std::array<std::string_view, 6> keys{"text", "integer", "text", "null", "list", "missing"};
+    std::map<size_t, std::string> texts; std::map<size_t, std::pair<graph::PropertyType, uint64_t>> scalars;
+    size_t owning = 0;
+    old->readNodePropertyCellsWithViewsSortedWithAdmission(ids, keys,
+        [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+            EXPECT_EQ(row, 0U); ASSERT_EQ(column, 4U); ASSERT_TRUE(value); ++owning;
+            EXPECT_EQ(*value, PropertyValue(std::vector<PropertyValue>{PropertyValue(7)}));
+        }, [&](size_t row, size_t column, graph::PropertyType type, uint64_t bits) {
+            EXPECT_EQ(row, 0U); EXPECT_TRUE(scalars.emplace(column, std::pair{type, bits}).second);
+        }, [&](size_t row, size_t column, std::string_view value) {
+            EXPECT_EQ(row, 0U); EXPECT_TRUE(texts.emplace(column, value).second);
+        }, [](size_t) {});
+    EXPECT_EQ(owning, 1U); ASSERT_EQ(texts.size(), 2U); EXPECT_EQ(texts.at(0), std::string("a\0b", 3));
+    EXPECT_EQ(texts.at(0), texts.at(2)); ASSERT_EQ(scalars.size(), 2U);
+    EXPECT_EQ(scalars.at(1).second, std::bit_cast<uint64_t>(int64_t(-42)));
+    EXPECT_EQ(scalars.at(3).first, graph::PropertyType::NULL_TYPE);
+    graph::query::execution::MaterializedByteBudget budget(65536U);
+    {
+        graph::query::execution::detail::DirectPropertyColumns columns(*old, 1U, keys.size(), budget);
+        columns.readGather(ids, keys, [](size_t) {}, [] {});
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(0)).data), std::string_view("a\0b", 3));
+    }
+    EXPECT_EQ(budget.used(), 0U);
 }

@@ -144,7 +144,8 @@ namespace graph::storage {
 																		  NativeReadSession *session = nullptr) const;
 		void readNodePropertyCellsSorted(const MetadataSnapshotPin &, std::span<const uint64_t>,
 			std::span<const uint32_t>, const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &,
-			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr) const;
+			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr,
+            const PropertyTextReadSink * = nullptr) const;
 		[[nodiscard]] NodeEntityRecord readNodeRecord(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 																		 NativeReadSession *session = nullptr) const;
 		// Resolves strictly increasing logical IDs with one Entity-Map batch. The

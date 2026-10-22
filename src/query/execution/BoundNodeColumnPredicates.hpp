@@ -137,6 +137,14 @@ public:
 		ColumnFilterStats stats; size_t previous = SIZE_MAX;
 		for (const auto &predicate : predicates_) {
 			if (predicate.column != previous) { ++stats.scalar_columns; previous = predicate.column; }
+            if (predicate.expected && predicate.expected->getType() == PropertyType::STRING &&
+                columns.tryVisitShortTextColumn(predicate.column, selection, std::views::iota(size_t{0}, columns.size()),
+                    [&](size_t row, std::optional<std::string_view> text) {
+                        if (!text || !columnPredicateMatchesBorrowed(*text, predicate)) selection.reject(row);
+                    }, guard)) {
+                ++stats.typed_columns;
+                continue;
+            }
 			for (size_t row = 0; row < columns.size(); ++row) {
 				guard(); if (!selection.includes(row)) continue;
 				const auto cell = columns.cell(predicate.column, columns.rowId(row));

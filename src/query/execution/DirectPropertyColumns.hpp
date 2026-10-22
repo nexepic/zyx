@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <ranges>
 #include <bit>
 #include <string_view>
 #include <variant>
@@ -9,6 +10,7 @@
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
 #include "query/execution/BatchIdentity.hpp"
 #include "query/execution/FixedWidthColumn.hpp"
+#include "graph/query/execution/SelectionVector.hpp"
 
 namespace graph::query::execution::detail {
 
@@ -42,7 +44,7 @@ public:
         MaterializedByteBudget &budget, std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
         : snapshot_(snapshot), fence_(snapshot.mutationFence()), schema_(snapshot.bindingSchemaIdentity()),
           budget_(&budget), memory_(budget, upstream), payload_(&budget), columns_(&memory_), rows_(rows),
-          token_support_(snapshot.supportsPropertyTokenResolution()) {
+          token_support_(snapshot.supportsPropertyTokenResolution()), immutable_identity_(snapshot.hasImmutableReadIdentity()) {
         if (!upstream || rows > UINT32_MAX) throw std::invalid_argument("direct columns require bounded rows/allocator");
         columns_.reserve(columns);
         for (size_t c = 0; c < columns; ++c) {
@@ -93,8 +95,13 @@ public:
                 const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
                 for (size_t i = starts[row]; i < end; ++i) appendScalar(order[i], column, type, bits, guard);
             };
-        snapshot_.readNodePropertyCellsWithScalarsSortedWithAdmission(unique, keys,
-            std::ref(emitValue), std::ref(emitScalar), admitSource);
+        const auto emitText = [&](size_t row, size_t column, std::string_view text) {
+            if (row >= unique.size() || column >= keys.size()) throw std::invalid_argument("direct text producer ordinal changed");
+            const size_t end = row + 1U < starts.size() ? starts[row + 1U] : order.size();
+            for (size_t i = starts[row]; i < end; ++i) appendText(order[i], column, text, guard);
+        };
+        snapshot_.readNodePropertyCellsWithViewsSortedWithAdmission(unique, keys,
+            std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), admitSource);
         seal();
         attempt.complete = true;
     }
@@ -124,6 +131,27 @@ public:
         c.types[row] = type;
         c.states[row] = type == PropertyType::NULL_TYPE ? ColumnCellState::CCS_NULL : ColumnCellState::CCS_VALUE;
         c.written[row] = 1U;
+        attempt.complete = true;
+    }
+
+    template<class Guard>
+    void appendText(size_t row, size_t ordinal, std::string_view text, Guard guard) {
+        ConstructionAttempt attempt{failed_};
+        guard(); validateSnapshot();
+        if (sealed_ || failed_ || row >= rows_) throw std::invalid_argument("direct text outside construction");
+        auto &column = columns_.at(ordinal);
+        if (column.written[row]) throw std::invalid_argument("direct text producer emitted a duplicate cell");
+        if (column.texts.empty()) column.texts.resize(rows_);
+        const size_t offset = column.bytes.size();
+        if (text.size() > column.bytes.max_size() - offset) throw std::overflow_error("direct text size overflowed");
+        for (size_t i = 0U; i < text.size(); ++i) {
+            if ((i & 255U) == 0U) guard();
+            column.bytes.push_back(text[i]);
+        }
+        column.texts[row] = {offset, text.size()};
+        column.types[row] = PropertyType::STRING;
+        column.states[row] = ColumnCellState::CCS_VALUE;
+        column.written[row] = 1U;
         attempt.complete = true;
     }
 
@@ -171,7 +199,7 @@ public:
         attempt.complete = true;
     }
     void seal() {
-        validateSnapshot();
+        validateSnapshot(true);
         if (sealed_ || failed_) throw std::logic_error("direct columns cannot seal failed/repeated construction");
         identity_.advance(); sealed_ = true;
     }
@@ -206,6 +234,38 @@ public:
             default: return {c.states[i], &c.complex[i]};
         }
     }
+    // Batch kernel boundary: preflight before any consumer effects. Borrowed
+    // strings remain in this sealed owner, and bounded text keeps cancellation
+    // work finite even when a consumer hashes the complete value.
+    template<class Order, class Visitor, class Guard>
+    bool tryVisitShortTextColumn(size_t ordinal, const SelectionVector &selection,
+        const Order &order, Visitor visitor, Guard guard) const {
+        validateSnapshot(true);
+        if (!sealed_ || selection.size() != rows_) throw std::invalid_argument("text kernel requires a sealed aligned batch");
+        const auto &column = columns_.at(ordinal);
+        size_t checkpoint = 0U;
+        for (const auto row : order) {
+            if ((checkpoint++ & 3U) == 0U) guard();
+            if (row >= rows_) throw std::out_of_range("text kernel ordinal outside batch");
+            if (!selection.includes(row) || column.states[row] != ColumnCellState::CCS_VALUE) continue;
+            if (column.types[row] != PropertyType::STRING || column.texts[row].length > 64U) return false;
+        }
+        checkpoint = 0U;
+        for (const auto row : order) {
+            // At most four <=64-byte strings between cooperative checks.
+            if ((checkpoint++ & 3U) == 0U) guard();
+            if (!immutable_identity_) validateSnapshot();
+            if (!selection.includes(row)) continue;
+            std::optional<std::string_view> text;
+            if (column.states[row] == ColumnCellState::CCS_VALUE) {
+                const auto ref = column.texts[row];
+                text = ref.length ? std::string_view(column.bytes.data() + ref.offset, ref.length) : std::string_view{};
+            }
+            visitor(row, text);
+        }
+        validateSnapshot(true);
+        return true;
+    }
     template<class Guard>
     [[nodiscard]] PropertyValue copyValue(size_t column, BatchRowId row,
         const std::function<void(size_t)> &admit, Guard guard) const {
@@ -226,7 +286,8 @@ public:
     }
     void invalidate() noexcept { sealed_ = false; identity_.invalidate(); }
 private:
-    void validateSnapshot() const {
+    void validateSnapshot(bool force = false) const {
+        if (immutable_identity_ && !force) return;
         if (snapshot_.mutationFence() != fence_ || snapshot_.bindingSchemaIdentity() != schema_ ||
             snapshot_.supportsPropertyTokenResolution() != token_support_)
             throw std::invalid_argument("direct batch snapshot identity changed");
@@ -241,6 +302,7 @@ private:
     size_t rows_;
     BatchIdentity identity_;
     bool token_support_;
+    bool immutable_identity_;
     bool sealed_ = false;
     bool failed_ = false;
 };

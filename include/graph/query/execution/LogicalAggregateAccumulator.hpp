@@ -149,13 +149,20 @@ public:
 	void update(const PropertyValue& value) override {
 		// COUNT counts all non-NULL values
 		if (value.getType() != PropertyType::NULL_TYPE) {
-			count_++;
+			addRows(1U);
 		}
 	}
 
 	void updateRow() override {
-		count_++;
+		addRows(1U);
 	}
+
+    // A partial COUNT may merge a complete admitted batch in one operation.
+    void addRows(uint64_t rows) {
+        if (rows > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - count_)
+            throw std::overflow_error("COUNT exceeded the signed result range");
+        count_ += rows;
+    }
 
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(static_cast<int64_t>(count_));
@@ -172,7 +179,7 @@ public:
 	}
 
 private:
-	size_t count_ = 0;
+	uint64_t count_ = 0;
 };
 
 /**

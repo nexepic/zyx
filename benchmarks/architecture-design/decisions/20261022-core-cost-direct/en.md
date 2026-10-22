@@ -1,0 +1,13 @@
+# P5 direct typed production chain
+
+Implementation progress: 85%. All 263 selected module tests pass; no full suite. An unchanged traversal-anchor optimizer assertion also fails against frozen 5500a068 headers/library; its independent reproduction is retained and excluded from this pass count.
+
+Authenticated ROW selection emits numeric bits or synchronous text views without per-owner optional-entry vectors or scalar/text PropertyValue construction. Text is copied once into admitted query-owned offsets/bytes; complex values, LargeValues and legacy adapters retain explicit owning fallbacks. Returned results own their values. No persistent format, index or cache is added.
+
+Native pinned snapshots advertise immutable fence/schema/token identity. Direct columns and envelopes authenticate it at batch boundaries while preserving owner/incarnation checks; mutable overlays retain dynamic checks. Short-text filtering consumes typed storage directly, preflighting before effects and declining mixed types or strings longer than 64 bytes. Cooperative checks bound four strings to 256 bytes of text work; existing copy guards remain. Partial COUNT merges by logical string before global aggregation, preserving absence/NULL, empty and embedded-NUL strings, first-occurrence order, budgets and checked uint64 state on 32-bit hosts. Multiple keys, DISTINCT and other types/aggregates retain direct typed consumers.
+
+One medium mechanism check per query: 100000 typed text cells, zero owning fallback, 196 batches. Filter accumulator updates decrease from 12500 to 196; actual grouping decreases from 100000 to 1568. Oracles remain 12500 and eight groups of 12500. There are still 100000 selected ROW roots.
+
+The bounded same-executor prototype compares synthetic in-memory ROW and compact fields for 100000 owners/four fields/eight countries. Source patch, Release library/probe hashes and every sample are retained. It excludes real directories, IO, space and updates and grants no persistent-format admission or Kuzu claim. Preliminary runs without a frozen archive identity are excluded from accepted latency evidence. Representation retains executor costs; production partial COUNT work reduction is verified separately. Final latency gates remain P7.
+
+Relevant tests cover exact bits, borrowed/owned lifetimes, aliases and duplicates, old pins, cross-handle growth/reopen, mixed types, NULL/missing, single/multiple grouping keys, complete tuples, DISTINCT, empty input, overflow, cancellation, corruption, low budgets and refunds. P5 mechanism acceptance is not a fivefold speedup or Kuzu acceptance. P6/P7 remain unfinished.
