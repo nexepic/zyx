@@ -13,6 +13,8 @@
 #include <limits>
 #include <memory>
 #include <memory_resource>
+#include <map>
+#include <mutex>
 #include <shared_mutex>
 
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
@@ -23,6 +25,19 @@ namespace graph::storage {
 	class MetadataPageReadContext;
 	class RelocatableMetadataStore;
 	struct MetadataSnapshotRegistryState;
+
+    // One process-local publication/pin domain per opened file identity. The
+    // registry keeps its own bootstrap and ownership; only barriers and pins
+    // are shared. Copies of a database file must use distinct domains.
+    struct MetadataSnapshotCoordination {
+        explicit MetadataSnapshotCoordination(std::shared_ptr<std::pmr::memory_resource> owner = {});
+        std::shared_ptr<std::pmr::memory_resource> memory_owner;
+        std::shared_mutex publication_mutex;
+        std::mutex snapshots_mutex;
+        std::pmr::map<uint64_t, std::pair<Superblock, uint64_t>> snapshots;
+    };
+    [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> makeMetadataSnapshotCoordination(
+        std::shared_ptr<std::pmr::memory_resource> owner = {});
 
 	struct MetadataSnapshotRegistryLimits {
 		uint64_t maximum_pins_per_generation = std::numeric_limits<uint64_t>::max();
@@ -85,7 +100,8 @@ namespace graph::storage {
 	public:
 		explicit MetadataSnapshotRegistry(SuperblockFile &bootstrap, MetadataSnapshotRegistryLimits limits = {},
                                           std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
-                                          std::shared_ptr<std::pmr::memory_resource> controlOwner = {});
+                                          std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
+            std::shared_ptr<MetadataSnapshotCoordination> coordination = {});
 		~MetadataSnapshotRegistry();
 		MetadataSnapshotRegistry(const MetadataSnapshotRegistry &) = delete;
 		MetadataSnapshotRegistry &operator=(const MetadataSnapshotRegistry &) = delete;
@@ -123,6 +139,8 @@ namespace graph::storage {
 
 	private:
         friend class RelocatableMetadataStore;
+        void recoverAllocatorUnderWrite(const MetadataWriteGuard &guard, MetadataPagePoolAllocator &allocator, const Superblock &current);
+        [[nodiscard]] MetadataWriteGuard adoptWriteLock(std::unique_lock<std::shared_mutex> lock);
         [[nodiscard]] MetadataWriteGuard beginWriteWithAdmission(
             const std::function<void(const Superblock &)> &admission,
             const std::function<void(MetadataWriteGuard &)> &initialize = {});

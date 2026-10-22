@@ -127,6 +127,17 @@ namespace graph::storage {
 #endif
 		}
 
+        [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
+            const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner) {
+            static std::mutex mutex;
+            static std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
+            std::lock_guard lock(mutex);
+            for (auto it = domains.begin(); it != domains.end();)
+                if (it->second.expired()) it = domains.erase(it); else ++it;
+            if (auto existing = domains[key].lock()) return existing;
+            auto created = makeMetadataSnapshotCoordination(owner); domains[key] = created; return created;
+        }
+
 		[[nodiscard]] std::shared_ptr<std::mutex>
 		nativeBulkSessionProcessMutex(file_handle_t handle) {
 			static std::mutex registryMutex;
@@ -2905,8 +2916,10 @@ namespace graph::storage {
         auto controlMemory = query::execution::detail::ProcessResourceDomains::defaultOwner()->controlGrant(resourceDomain);
         auto logicalIdMemory = writable ? query::execution::detail::ProcessResourceDomains::defaultOwner()->logicalIdGrant(resourceDomain) : nullptr;
         data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
-        auto metadata = writable ? RelocatableMetadataStore::open(data->io(), cacheMemory, controlMemory, logicalIdMemory)
-                                 : RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory, controlMemory, logicalIdMemory);
+        auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
+            std::to_string(recovered.database_id.value()), controlMemory);
+        auto metadata = writable ? RelocatableMetadataStore::open(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination)
+                                 : RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination);
 
 
 		try {

@@ -22,6 +22,8 @@ Read format values from current `RSS_FORMAT_VERSION`, Superblock and local codec
 
 Validation contract, 2026-10-22: ordinary reads/writes validate CRC, identity, type, generation, route range, and visibility on accessed pages and validate newly modified paths before publication. Reuse untouched subtrees by exact snapshot-bound immutable references. Unrelated commits do not promise detection of fresh corruption in unvisited pages; first access and explicit complete integrity detect it. Complete integrity still rejects duplicates, aliases, orphans, and corruption; atomicity, durability, old snapshots, and reclamation remain unchanged.
 
+2026-10-22 runtime coordination: native handles for one opened-file identity plus database ID share a process-local publication barrier and active-pin registry, retaining local guard/handle ownership and accounts. After a foreign publication, writers invalidate stale control caches and rebuild allocator/retirement proof and metadata ID bounds against the durable root and every registered pin. Own publications advance local source identity; ordinary single-handle commits do not gain global traversals. Open/recovery protects other handles’ old roots. Persistent formats, A/B and data-before-root are unchanged.
+
 ## 1. Decision Boundary
 
 ### 1.1 Hard constraints

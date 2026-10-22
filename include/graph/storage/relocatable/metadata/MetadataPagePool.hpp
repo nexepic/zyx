@@ -133,6 +133,7 @@ namespace graph::storage {
 		// Open-time recovery preserves pages reachable from the recovered Catalog
 		// root and returns only unreachable pool frames to the local free bitmap.
 		void recover(const Superblock &superblock);
+        void recoverWithSnapshots(const Superblock &current, std::span<const Superblock> activeSnapshots);
 		// Rebuild the process-local pool registry from a newer durable root before
 		// a separate database handle continues a sequential publication. Callers
 		// must first release every local metadata snapshot.
@@ -228,7 +229,7 @@ namespace graph::storage {
 
 		[[nodiscard]] uint64_t slotOffset(PhysicalSlotId slot) const;
 		void discoverPoolsLocked();
-		void discoverReachablePoolsLocked(const Superblock &superblock);
+		void discoverReachablePoolsLocked(const Superblock &superblock, bool reset = true);
 		[[nodiscard]] PoolState readPoolLocked(PhysicalSlotId slot, SegmentId expectedSegmentId,
 											   Generation expectedGeneration, LogSequenceNumber expectedLsn,
 											   std::array<std::byte, RSS_PAGE_SIZE> *controlPage = nullptr) const;
