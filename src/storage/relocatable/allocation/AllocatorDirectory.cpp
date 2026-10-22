@@ -34,7 +34,8 @@ namespace graph::storage {
 			if (!superblock.usesPageDirectoryBootstrap()) {
 				return superblock.allocator_root;
 			}
-			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			const auto bootstrapView = pages.readPageDirectoryBootstrapView(superblock.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 			if (bootstrap.generation > superblock.generation || bootstrap.committed_lsn > superblock.checkpoint_lsn) {
 				throwAllocatorDirectoryError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable Allocator bootstrap is newer than its Superblock");
@@ -353,32 +354,32 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::optional<AllocatorLeafPage>
-		readLeafForOrdinal(MetadataPageFile &pages, const Superblock &superblock, uint64_t ordinal) {
-			const PhysicalPageRef rootReference = allocatorRootReference(pages, superblock);
-			if (!rootReference.isValid()) {
-				return std::nullopt;
-			}
-			MetadataRadixPage node = pages.readMetadataRadix(rootReference, superblock);
-			validateRadix(node, true, node.level, superblock);
-			if (!rootCoversOrdinal(ordinal, node.level)) {
-				return std::nullopt;
-			}
-			for (;;) {
-				const PhysicalPageRef child = node.children[childIndex(ordinal, node.level)];
-				if (!child.isValid()) {
-					return std::nullopt;
-				}
-				if (node.level == 0U) {
-					AllocatorLeafPage leaf = pages.readAllocatorLeaf(child);
-					validateLeafRoute(leaf, ordinal, superblock);
-					return leaf;
-				}
-				const uint16_t childLevel = static_cast<uint16_t>(node.level - 1U);
-				node = pages.readMetadataRadix(child, superblock);
-				validateRadix(node, false, childLevel, superblock);
-			}
-		}
+        [[nodiscard]] std::optional<DecodedMetadataPageView<AllocatorLeafPage>>
+        readLeafForOrdinal(MetadataPageFile &pages, const Superblock &superblock, uint64_t ordinal) {
+            const auto rootReference = allocatorRootReference(pages, superblock);
+            if (!rootReference.isValid()) return std::nullopt;
+            auto node = pages.readMetadataRadixUnresolvedView(rootReference);
+            validateRadix(*node, true, node->level, superblock);
+            if (!rootCoversOrdinal(ordinal, node->level)) {
+                pages.resolveMetadataRadixChildren(*node, superblock, {}, {});
+                return std::nullopt;
+            }
+            for (;;) {
+                const std::array<uint32_t, 1U> indices{childIndex(ordinal, node->level)};
+                std::array<PhysicalPageRef, 1U> references{};
+                pages.resolveMetadataRadixChildren(*node, superblock, indices, references);
+                const auto child = references.front();
+                if (!child.isValid()) return std::nullopt;
+                if (node->level == 0U) {
+                    auto leaf = pages.readAllocatorLeafView(child);
+                    validateLeafRoute(*leaf, ordinal, superblock);
+                    return leaf;
+                }
+                const auto childLevel = static_cast<uint16_t>(node->level - 1U);
+                node = pages.readMetadataRadixUnresolvedView(child);
+                validateRadix(*node, false, childLevel, superblock);
+            }
+        }
 
 		[[nodiscard]] std::optional<PhysicalSlotId>
 		findFirstClearBit(const AllocatorLeafPage &leaf, PhysicalSlotId firstSlot, PhysicalSlotId lastSlot) {
@@ -616,11 +617,11 @@ namespace graph::storage {
 	bool AllocatorDirectory::isAllocated(const Superblock &superblock, PhysicalSlotId slot) const {
 		SuperblockCodec::validate(superblock);
 		const uint64_t ordinal = leafOrdinal(slot);
-		const std::optional<AllocatorLeafPage> leaf = readLeafForOrdinal(pages_, superblock, ordinal);
+		const auto leaf = readLeafForOrdinal(pages_, superblock, ordinal);
 		if (!leaf.has_value()) {
 			return false;
 		}
-		return slotBit(*leaf, slot);
+		return slotBit(**leaf, slot);
 	}
 
 	bool AllocatorDirectory::isAllocatedForMutation(const MetadataWriteBatch &batch, PhysicalSlotId slot) const {
@@ -645,12 +646,12 @@ namespace graph::storage {
 			if (!availableOrdinal.has_value()) {
 				return std::nullopt;
 			}
-			const std::optional<AllocatorLeafPage> leaf = readLeafForOrdinal(pages_, superblock, *availableOrdinal);
+			const auto leaf = readLeafForOrdinal(pages_, superblock, *availableOrdinal);
 			if (!leaf.has_value()) {
 				return PhysicalSlotId(std::max(firstSlot.value(), firstSlotFor(*availableOrdinal)));
 			}
-			const uint64_t leafFirstSlot = leaf->first_slot.value();
-			const uint64_t leafLastSlot = leafFirstSlot + leaf->slot_count - 1U;
+			const uint64_t leafFirstSlot = (*leaf)->first_slot.value();
+			const uint64_t leafLastSlot = leafFirstSlot + (*leaf)->slot_count - 1U;
 			const uint64_t scanFirstValue = std::max(firstSlot.value(), leafFirstSlot);
 			const uint64_t scanLastValue = std::min(lastSlot.value(), leafLastSlot);
 			if (scanFirstValue > scanLastValue) {
@@ -662,7 +663,7 @@ namespace graph::storage {
 			}
 			const PhysicalSlotId scanFirst(scanFirstValue);
 			const PhysicalSlotId scanLast(scanLastValue);
-			if (const std::optional<PhysicalSlotId> freeSlot = findFirstClearBit(*leaf, scanFirst, scanLast);
+			if (const std::optional<PhysicalSlotId> freeSlot = findFirstClearBit(**leaf, scanFirst, scanLast);
 				freeSlot.has_value()) {
 				return freeSlot;
 			}

@@ -824,3 +824,58 @@ TEST_F(MetadataPageReadContextTest, PointLocationLookupBorrowsRootAndChildWithou
  auto wrong=root;wrong.generation=Generation(0);
  EXPECT_THROW(directory.findPageOptional(wrong,PageId(1)),FormatException);
 }
+
+TEST_F(MetadataPageReadContextTest, BootstrapViewsSharePayloadAndInvalidateOnWrites) {
+    MetadataPageFile pages(io, root);
+    const PhysicalPageRef ref{PhysicalSlotId(1U), 1U, Generation(1U)};
+    PageDirectoryBootstrap header; header.generation = root.generation;
+    header.committed_lsn = root.checkpoint_lsn;
+    header.metadata_page_directory_root = {PhysicalSlotId(2U), 1U, root.generation};
+    pages.writePageDirectoryBootstrap(ref, header);
+    auto context = std::make_shared<MetadataPageReadContext>(root);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readPageDirectoryBootstrapView(ref));
+    const auto held = pages.readPageDirectoryBootstrapView(ref);
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    for (size_t i = 0U; i < 32U; ++i) {
+        const auto next = pages.readPageDirectoryBootstrapView(ref);
+        EXPECT_EQ(next.get(), held.get());
+    }
+    const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+    EXPECT_FALSE(trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes"));
+    EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.bootstrap"));
+    EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue,
+        32U * sizeof(PageDirectoryBootstrap));
+    header.metadata_page_directory_root.physical_slot = PhysicalSlotId(3U);
+    pages.writePageDirectoryBootstrap(ref, header);
+    const auto fresh = pages.readPageDirectoryBootstrapView(ref);
+    EXPECT_EQ(fresh->metadata_page_directory_root.physical_slot, PhysicalSlotId(3U));
+    EXPECT_EQ(held->metadata_page_directory_root.physical_slot, PhysicalSlotId(2U));
+    const std::byte corrupt{0}; io->writeAt(pages.pageOffset(ref), &corrupt, 1U);
+    EXPECT_THROW(pages.readPageDirectoryBootstrapView(ref), FormatException);
+    EXPECT_THROW(pages.readPageDirectoryBootstrapView(ref, static_cast<BufferPoolReadHint>(255U)), FormatException);
+}
+
+TEST_F(MetadataPageReadContextTest, AllocatorViewsKeepBorrowedBitmapAliveAndSupportZeroCache) {
+    MetadataPageFile pages(io, root);
+    const PhysicalPageRef ref{PhysicalSlotId(1U), 1U, Generation(1U)};
+    AllocatorLeafPage leaf; leaf.page_id = MetadataPageId(1U); leaf.first_slot = PhysicalSlotId(1U);
+    leaf.slot_count = RSS_ALLOCATOR_PAGE_SLOT_CAPACITY; leaf.generation = root.generation;
+    leaf.committed_lsn = root.checkpoint_lsn;
+    pages.writeAllocatorLeaf(ref, leaf);
+    auto context = std::make_shared<MetadataPageReadContext>(root);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readAllocatorLeafView(ref));
+    const auto held = pages.readAllocatorLeafView(ref);
+    EXPECT_EQ(held.get(), pages.readAllocatorLeafView(ref).get());
+    leaf.allocated_slots[0] = std::byte{1}; pages.writeAllocatorLeaf(ref, leaf);
+    EXPECT_EQ(pages.readAllocatorLeafView(ref)->allocated_slots[0], std::byte{1});
+    EXPECT_EQ(held->allocated_slots[0], std::byte{0});
+    auto uncached = std::make_shared<MetadataPageReadContext>(root, 0U);
+    MetadataPageReadContext::Scope inner(uncached, *io);
+    EXPECT_EQ(pages.readAllocatorLeafView(ref)->allocated_slots[0], std::byte{1});
+    EXPECT_EQ(uncached->size(), 0U);
+    const std::byte corrupt{0}; io->writeAt(pages.pageOffset(ref), &corrupt, 1U);
+    EXPECT_THROW(pages.readAllocatorLeafView(ref), FormatException);
+    EXPECT_EQ(held->allocated_slots[0], std::byte{0});
+}

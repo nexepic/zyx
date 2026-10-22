@@ -53,7 +53,8 @@ namespace graph::storage {
 			if (!superblock.page_directory_root.isValid()) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_HEADER, "relocatable Catalog bootstrap root is absent");
 			}
-			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			const auto bootstrapView = pages.readPageDirectoryBootstrapView(superblock.page_directory_root);
+            const auto &bootstrap = *bootstrapView;
 			validateVisiblePage(bootstrap.generation, bootstrap.committed_lsn, superblock,
 								"relocatable Catalog bootstrap is newer than its Superblock");
 			// An unpublished batch keeps the prior header until all final COW pairs
@@ -502,14 +503,14 @@ namespace graph::storage {
         // Point lookups authenticate the complete codec page, then resolve only
         // the requested child through the snapshot's published route branch.
         // Full traversal and mutable COW preparation still resolve every child.
-        [[nodiscard]] CatalogRadixPage readLookupRadix(MetadataPageFile &pages, PhysicalPageRef reference,
+        [[nodiscard]] DecodedMetadataPageView<CatalogRadixPage> readLookupRadix(MetadataPageFile &pages, PhysicalPageRef reference,
                 MetadataPageId expectedIdentity = {}) {
-            auto page = pages.readMetadataRadixUnresolved(reference);
-            if (page.directory_type != MetadataDirectoryType::MDT_CATALOG) {
+            auto page = pages.readMetadataRadixUnresolvedView(reference);
+            if (page->directory_type != MetadataDirectoryType::MDT_CATALOG) {
                 throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
                     "relocatable Catalog radix has an unexpected metadata directory type");
             }
-            if (expectedIdentity.isValid() && page.page_id != expectedIdentity) {
+            if (expectedIdentity.isValid() && page->page_id != expectedIdentity) {
                 throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
                     "relocatable Catalog radix identity does not match its logical route");
             }
@@ -985,22 +986,23 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 
-		CatalogRadixPage node = readLookupRadix(pages_, rootReference, rootIdentity);
-        if (node.kind != CatalogRadixPageKind::CRPK_ROOT) {
+		auto nodeView = readLookupRadix(pages_, rootReference, rootIdentity);
+        const auto *node = nodeView.get();
+        if (node->kind != CatalogRadixPageKind::CRPK_ROOT) {
             throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
                 "relocatable Catalog Superblock root is not a root radix page");
         }
-        validateVisiblePage(node.generation, node.committed_lsn, superblock,
+        validateVisiblePage(node->generation, node->committed_lsn, superblock,
             "relocatable Catalog root is newer than its Superblock");
 		for (;;) {
-			const std::optional<PhysicalPageRef> childReference = resolveLookupChild(pages_, node, superblock, segmentId, true);
+			const std::optional<PhysicalPageRef> childReference = resolveLookupChild(pages_, *node, superblock, segmentId, true);
 			if (!childReference.has_value()) {
 				return std::nullopt;
 			}
-            const MetadataPageId childIdentity = node.logical_children_enabled
-                ? node.logical_children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leafOrdinal(segmentId), node.level)]
+            const MetadataPageId childIdentity = node->logical_children_enabled
+                ? node->logical_children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leafOrdinal(segmentId), node->level)]
                 : MetadataPageId{};
-			if (node.level == 0) {
+			if (node->level == 0) {
 				const auto leaf = pages_.readCatalogLeafView(*childReference);
                 if (childIdentity.isValid() && leaf->page_id != childIdentity) {
                     throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
@@ -1018,14 +1020,15 @@ namespace graph::storage {
 				return *iterator;
 			}
 
-			CatalogRadixPage child = readLookupRadix(pages_, *childReference, childIdentity);
-			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.level + 1U != node.level) {
+			auto child = readLookupRadix(pages_, *childReference, childIdentity);
+			if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL || child->level + 1U != node->level) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable Catalog radix route has an invalid child level or kind");
 			}
-			validateVisiblePage(child.generation, child.committed_lsn, superblock,
+			validateVisiblePage(child->generation, child->committed_lsn, superblock,
 								"relocatable Catalog radix child is newer than its Superblock");
-			node = std::move(child);
+			nodeView = std::move(child);
+            node = nodeView.get();
 		}
 	}
 
@@ -1040,19 +1043,20 @@ namespace graph::storage {
 								  "relocatable Catalog lookup requires a Segment ID and published Catalog root");
 		}
 
-		CatalogRadixPage node = readLookupRadix(pages_, rootReference, rootIdentity);
-        if (node.kind != CatalogRadixPageKind::CRPK_ROOT) {
+		auto nodeView = readLookupRadix(pages_, rootReference, rootIdentity);
+        const auto *node = nodeView.get();
+        if (node->kind != CatalogRadixPageKind::CRPK_ROOT) {
             throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
                 "relocatable Catalog Superblock root is not a root radix page");
         }
-        validateVisiblePage(node.generation, node.committed_lsn, superblock,
+        validateVisiblePage(node->generation, node->committed_lsn, superblock,
             "relocatable Catalog root is newer than its Superblock");
 		for (;;) {
-			const PhysicalPageRef childReference = *resolveLookupChild(pages_, node, superblock, segmentId, false);
-            const MetadataPageId childIdentity = node.logical_children_enabled
-                ? node.logical_children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leafOrdinal(segmentId), node.level)]
+			const PhysicalPageRef childReference = *resolveLookupChild(pages_, *node, superblock, segmentId, false);
+            const MetadataPageId childIdentity = node->logical_children_enabled
+                ? node->logical_children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leafOrdinal(segmentId), node->level)]
                 : MetadataPageId{};
-			if (node.level == 0) {
+			if (node->level == 0) {
 				const auto leaf = pages_.readCatalogLeafView(childReference);
                 if (childIdentity.isValid() && leaf->page_id != childIdentity) {
                     throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
@@ -1071,14 +1075,15 @@ namespace graph::storage {
 				return *iterator;
 			}
 
-			CatalogRadixPage child = readLookupRadix(pages_, childReference, childIdentity);
-			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.level + 1U != node.level) {
+			auto child = readLookupRadix(pages_, childReference, childIdentity);
+			if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL || child->level + 1U != node->level) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable Catalog radix route has an invalid child level or kind");
 			}
-			validateVisiblePage(child.generation, child.committed_lsn, superblock,
+			validateVisiblePage(child->generation, child->committed_lsn, superblock,
 								"relocatable Catalog radix child is newer than its Superblock");
-			node = std::move(child);
+			nodeView = std::move(child);
+            node = nodeView.get();
 		}
 	}
 

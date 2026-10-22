@@ -1,0 +1,9 @@
+{
+  "purpose": "bounded exclusive CPU diagnostic; no formal latency results",
+  "sha256": {
+    "benchmarks/architecture-design/results/20261022-core-cost/cpu-attribution/cpu-probe": "f359dbe3dc3c03d615ccb07b06062a6efc230800503643ef3508a2bb14670e9e",
+    "benchmarks/architecture-design/results/20261022-core-cost/cpu-attribution/cpu-probe.cpp": "380f2e81a23c5bf144b944e2584fe221cdf05a0a6a01b5d046eccf2aaf315056",
+    "benchmarks/architecture-design/results/20261022-core-cost/cpu-attribution/cpu-sampler.hpp": "5626efed5a2f7a750b7779ab0710cb04680ebaa381b652d56f24c661cd5dd8bb",
+    "/workspace/zyx-build-r7-row/libzyx_core.a": "99241b2b8faff547a7749f97673ddecc6ccffbf0713081c6b8cf11aad06908ac"
+  }
+}
