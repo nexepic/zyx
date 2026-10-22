@@ -1,0 +1,16 @@
+{
+  "units": [
+    "metadata/test_MetadataPageRouteDirectoryReuse",
+    "metadata/test_MetadataPageRouteDirectory",
+    "metadata/test_RelocatableMetadataStore",
+    "metadata/test_MetadataWriteBatch",
+    "metadata/test_RelocatableMetadataStore_Boundaries",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "metadata/test_RelocatableMetadataStoreValidation_Boundaries",
+    "metadata/test_RelocatableMetadataStoreEvacuationValidation",
+    "metadata/test_RelocatableMetadataStoreEvacuationNativeFaults"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "9b4a633a21500286f8bf803783de217ebdd2e2779a9f3e09c5f5a69a102e05ca"
+}

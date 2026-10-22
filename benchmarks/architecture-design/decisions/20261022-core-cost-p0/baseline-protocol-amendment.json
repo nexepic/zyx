@@ -1,0 +1,16 @@
+{
+  "reason": "Repeated <=1000-row COPY exhausts Kuzu allocator at unchanged registered limits; failed control retained, no engine failure hidden",
+  "failed_control": "baseline/1-medium-import-equal-kuzu.json",
+  "replacement": "kuzu-unwind-import.py; <=1000-row autocommit batches, parsing/setup/final close included",
+  "tiny_preflight": {
+    "rows": 9644,
+    "nodes": 2420,
+    "edges": 7224,
+    "commits": 14,
+    "passed": true
+  },
+  "existing_completed_processes": "reused unchanged; not rerun or relabeled as new processes",
+  "limits_changed": false,
+  "production_COPY_comparison_retained": true,
+  "API_difference": "Kuzu parameterized Cypher versus ZYX columnar C++ API; not a pure storage microbenchmark"
+}

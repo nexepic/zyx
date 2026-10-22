@@ -1,0 +1,40 @@
+{
+  "plan": "core-cost-20261022",
+  "accepted": [
+    "P1"
+  ],
+  "progress_percent": 25,
+  "P2": "in progress; plan reuse implemented but metadata ownership/global reclamation work remains",
+  "tests": 183,
+  "failures": 0,
+  "full_suite": false,
+  "mechanism": [
+    {
+      "name": "FixedChangeVisitsOnlyItsPathAsTheRouteSetGrows",
+      "file": "/workspace/zyx/tests/src/storage/relocatable/metadata/test_MetadataPageRouteDirectoryReuse.cpp",
+      "line": 174,
+      "status": "RUN",
+      "result": "COMPLETED",
+      "timestamp": "2026-10-22T09:13:54Z",
+      "time": "0.008s",
+      "classname": "MetadataRouteBranchReuseTest",
+      "source_frames_3": "3",
+      "tree_height_3": "2",
+      "reserved_frames_3": "4",
+      "source_frames_300": "4",
+      "tree_height_300": "3",
+      "reserved_frames_300": "5",
+      "source_frames_900": "4",
+      "tree_height_900": "3",
+      "reserved_frames_900": "5"
+    }
+  ],
+  "sources": {
+    "src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp": "da4dbf5a8dc9ce3a46c73a62d0adc9f41a4b30159281acc9551a28b80359e607",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "1f9eb3afef6258a58432e07e143ac74ea35756bc9e88a730234327443b7157e3",
+    "include/graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp": "b44f356aca0827a066fc93b586236b08901c5bbb7f206d7c5f850e4e8d5b1438",
+    "tests/src/storage/relocatable/metadata/test_MetadataPageRouteDirectoryReuse.cpp": "281dd9894d9ba2c95ceed3682361cefb742a08c01bf15e21c700ae470206c31e"
+  },
+  "performance": "corrected baseline complete; candidate formal performance not yet measured; Kuzu objective unmet",
+  "validation_contract": "user approved local-access validation plus full integrity"
+}

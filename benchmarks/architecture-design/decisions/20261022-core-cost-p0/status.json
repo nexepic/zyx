@@ -1,0 +1,19 @@
+{
+  "implementation_progress_percent": 25,
+  "P0": "corrected baseline complete; exclusive read CPU attribution remains before P4/P5",
+  "P1_P2": "candidate implementing approved validation contract; module tests in progress",
+  "production_sources_unchanged": false,
+  "remote_work_verified": "5500a068d8038c50f06dee12712bc52b3250c12c",
+  "completed_worker_processes": 102,
+  "successful_worker_processes": 99,
+  "failed_worker_processes": 3,
+  "preflight": "both scales, five primary query/write cases passed in both engines",
+  "baseline_failure": "three rejected Kuzu equal-batch methods retained; bounded reopen/COPY control completed successfully on both scales",
+  "pending_user_question": null,
+  "tests_run": "no engine tests or engine edits; bounded semantic preflight only",
+  "benchmark_status": "corrected baseline completed; no final benchmark until all implementation is ready",
+  "commit_push": "required on this progress increase; pending completion",
+  "archive_sha256": "9e2eb2f28dc5e7b10ce5de980e7795a3e207394e9f2d3f86ed262cae8c8f0e65",
+  "P1": "accepted; 183 affected-module cases passed",
+  "P2": "in progress; ownership enumeration and global reclamation remain"
+}

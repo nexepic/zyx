@@ -1,0 +1,14 @@
+{
+  "method": "1000-row COPY transactions with database close/reopen between batches",
+  "reason": "retain original memory cap despite Kuzu persistent frame allocation across repeated bulk statements",
+  "all_lifecycle_costs_included": true,
+  "prepared_csv_split_cost": "excluded; source parsing remains inside COPY, prepared chunks hashes recorded",
+  "limits_increased": false,
+  "interpretation": "conservative bounded-memory transaction-size control, not pure storage/API parity",
+  "failed_methods_retained": [
+    "repeated COPY",
+    "UNWIND CREATE",
+    "UNWIND CREATE with checkpoints"
+  ],
+  "production_COPY_reported_separately": true
+}

@@ -454,9 +454,9 @@ namespace graph::storage {
 			   previous.metadata_directory_roots == current.metadata_directory_roots;
 	}
 
-	void RelocatableMetadataStore::prepareBootstrapRoutes(MetadataWriteBatch &batch) {
+    namespace {
+    void prepareBootstrapWithRoutes(MetadataWriteBatch &batch, MetadataPageRouteDirectory &routes) {
 		if (batch.candidate().usesPageDirectoryBootstrap() && !batch.bootstrapRoutePublished()) {
-			MetadataPageRouteDirectory routes(pages_);
 			if (batch.metadataPageRoutes().empty() && !batch.pendingBootstrapDataRoot().has_value() &&
 				!batch.bootstrapRouteRefreshRequested()) {
 				batch.reserveMetadataFrames(1U);
@@ -470,8 +470,16 @@ namespace graph::storage {
 		}
 	}
 
+    } // namespace
+
+	void RelocatableMetadataStore::prepareBootstrapRoutes(MetadataWriteBatch &batch) {
+        MetadataPageRouteDirectory routes(pages_);
+        prepareBootstrapWithRoutes(batch, routes);
+    }
+
     void RelocatableMetadataStore::prepareBatchPublication(MetadataWriteBatch &batch) {
         if (batch.publication_prepared_) return;
+        MetadataPageRouteDirectory routes(pages_);
         if (batch.candidate().hybrid_property_descriptor_root.isValid()) {
             const auto descriptor = pages_.readHybridPropertyDescriptor(batch.candidate().hybrid_property_descriptor_root,
                 batch.candidate());
@@ -496,7 +504,6 @@ namespace graph::storage {
 		// reconciled through the pending route overlay before the final publication.
 		pool_ownership_.preparePublication(batch);
 		if (batch.candidate().usesPageDirectoryBootstrap()) {
-			MetadataPageRouteDirectory routes(pages_);
 			for (size_t pass = 0U; pass < 8U; ++pass) {
 				const bool identityOnly = batch.metadataPageRoutes().empty() &&
 										  !batch.pendingBootstrapDataRoot().has_value() &&
@@ -517,7 +524,7 @@ namespace graph::storage {
 				}
 			}
 		}
-		prepareBootstrapRoutes(batch);
+		prepareBootstrapWithRoutes(batch, routes);
         batch.publication_prepared_ = true;
     }
 

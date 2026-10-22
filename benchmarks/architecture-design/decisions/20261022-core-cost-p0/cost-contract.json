@@ -1,0 +1,40 @@
+{
+  "status": "P0 registration; validation-boundary decision pending",
+  "route_commit": {
+    "M": "total existing routes",
+    "k": "all final route changes including causally modified allocator/catalog pages",
+    "h": "route tree height",
+    "ordinary_complete_base_traversals": 0,
+    "ordinary_complete_set_materializations": 0,
+    "route_read_bound": "at most 2 * (k + 1) * (h + 2) route frames for planning/publication, excluding explicit integrity/migration",
+    "new_route_frame_bound": "at most (k + 1) * (h + 2), merging shared ancestors",
+    "compare_fixed_k_at_three_sizes": true,
+    "do_not_shift_global_work_to_allocator_or_retirement": true
+  },
+  "read": {
+    "required": [
+      "exclusive CPU attribution before declaring dominant subcost",
+      "eliminate generic PropertyValue matrix on admitted primary typed paths",
+      "do not assume label-only pruning can close full gap",
+      "charge retained capacity and cold construction",
+      "preserve old snapshots and mixed/sparse data"
+    ],
+    "latency_gate": "5x on each registered filter and grouping workload in both datasets, plus Kuzu parity"
+  },
+  "resources": {
+    "no_increase_from_frozen_engine_limits": true,
+    "measure": "whole-process RSS includes observer setup; report query accounts separately; storage-read bytes are not device IO"
+  },
+  "progress": {
+    "P0": 0,
+    "P1": 25,
+    "P2": 15,
+    "P3": 10,
+    "P4": 15,
+    "P5": 20,
+    "P6": 5,
+    "P7": 10
+  },
+  "baseline": "one corrected window; three processes; retain every failure and sample",
+  "final": "one final window after implementation; no final progress without every gate"
+}

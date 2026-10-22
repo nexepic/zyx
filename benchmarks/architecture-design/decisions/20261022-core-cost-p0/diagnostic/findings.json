@@ -1,0 +1,34 @@
+{
+  "purpose": "targeted diagnostic, not formal benchmark",
+  "engine": {
+    "library_sha256": "99241b2b8faff547a7749f97673ddecc6ccffbf0713081c6b8cf11aad06908ac",
+    "evidence": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-membership/build.json",
+    "diagnostic_only": true
+  },
+  "samples": {
+    "read": 2,
+    "property_set_unflushed": 1,
+    "property_set_preflushed": 2
+  },
+  "limitations": [
+    "internal timers overlap and tracing adds overhead",
+    "read node_page_scan includes consumer callbacks",
+    "metadata page read counts are not unique pages or disk IO",
+    "fixed copy byte counter sums sizeof(Page), not measured DRAM traffic",
+    "import CPU statistics cover whole process including post-validation",
+    "original raw timing_benchmark flags inherited from harness; these runs are diagnostic only"
+  ],
+  "findings": [
+    "single-property commit performs full base route traversal in nextBootstrapFrameCount twice; 6698 metadata page reads and 292928 completed write bytes",
+    "read country filter/grouping enumerate 225000 node records for 100000 User property values",
+    "preflushing copied database reduces property SET diagnostic latency from 168.48ms to 79.04/102.06ms; original write comparison has preparation-related sync confounding"
+  ],
+  "raw_files": [
+    "read.jsonl",
+    "read.tsv",
+    "write.jsonl",
+    "write.tsv",
+    "preflush.jsonl",
+    "preflush.tsv"
+  ]
+}

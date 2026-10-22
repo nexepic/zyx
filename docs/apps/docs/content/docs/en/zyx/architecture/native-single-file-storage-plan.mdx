@@ -14,11 +14,13 @@ projectOrder: 1
 
 > This page retains current single-file rules and explicitly labeled design targets; it is no longer an independent implementation checklist. The [architecture and performance plan](optimization) exclusively owns tasks, admission and progress. Old Stage/P/C ledgers are archived outside the site; their percentages, test counts and not-started claims do not describe the current tree.
 
-Updated: 2026-10-19. Retain COW/A-B publication; do not introduce WAL. PageId, owner, generation, snapshots, codecs, publication and reclamation invariants remain. R3/R4/R5 may change relevant layouts/interfaces through the new plan's design and acceptance process; amend exact clauses and version affected formats before implementation, never silently relax reader validation.
+Updated: 2026-10-22. Retain COW/A-B publication; do not introduce WAL. Active implementation exclusively follows P0–P7 of [core performance plan](optimization) `core-cost-20261022`. PageId, owner, generation, snapshot, codec, publication, and reclamation invariants remain; amend specific clauses and version affected formats before changing layouts or interfaces, never silently relax reader validation.
 
-Status distinctions: general disjoint writers in Section 2 remain a target; existing bounded blind-patch rebase is not general conflict relaxation. Field staging in Section 10 already exists, while physical partial updates and large-collection splitting require R3 validation; current code still encodes complete owner collections. Section 14 key-only adjacency is the current format, not a permanent restriction on future formats. Determine other capability status from code and the capability matrix, not aspirational wording.
+Status distinctions: general disjoint writers in Section 2 remain a target; existing bounded blind-patch rebase is not general conflict relaxation. Check actual field-staging and ROW/hybrid capabilities against source and the capability matrix. Dated R-series entries below are historical format evidence, not active tasks or progress. Section 14 key-only adjacency describes the current format, not a permanent constraint on future formats.
 
 Read format values from current `RSS_FORMAT_VERSION`, Superblock and local codec source. These are distinct version spaces; this page does not duplicate stale version numbers.
+
+Validation contract, 2026-10-22: ordinary reads/writes validate CRC, identity, type, generation, route range, and visibility on accessed pages and validate newly modified paths before publication. Reuse untouched subtrees by exact snapshot-bound immutable references. Unrelated commits do not promise detection of fresh corruption in unvisited pages; first access and explicit complete integrity detect it. Complete integrity still rejects duplicates, aliases, orphans, and corruption; atomicity, durability, old snapshots, and reclamation remain unchanged.
 
 ## 1. Decision Boundary
 

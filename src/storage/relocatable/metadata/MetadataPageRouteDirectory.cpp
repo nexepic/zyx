@@ -235,6 +235,7 @@ namespace graph::storage {
 
 	MetadataPageRouteDirectory::MetadataPageRouteDirectory(MetadataPageFile &pages) : pages_(pages) {}
 
+
 	namespace {
 		PhysicalPageRef buildRouteBranch(MetadataPageFile &pages, MetadataWriteBatch &batch,
 			std::span<const MetadataPageRoute> routes, const RouteBranchReuse *reuse) {
@@ -315,7 +316,230 @@ namespace graph::storage {
 			}
 			return writeOrReuse(level, 0U, children, true).reference;
 		}
-	}
+	} // namespace
+
+		// Planning visits only changed paths. It owns private decoded images, never
+		// mutates published pages, and allocates no persistent identity or frame.
+		class MetadataRouteUpdatePlan final {
+			struct Link {
+				PhysicalPageRef reference{};
+				size_t planned = std::numeric_limits<size_t>::max();
+			};
+			struct ChildPlan { uint32_t slot; size_t child; };
+			struct Frame {
+				using OwnedHeapElement = void;
+				MetadataRadixPage radix;
+				MetadataPageRouteLeafPage leaf;
+				utils::OwnedStdVector<ChildPlan> children;
+				bool is_leaf = false;
+			};
+		public:
+			MetadataRouteUpdatePlan(MetadataPageFile &pages, const MetadataWriteBatch &batch, PhysicalPageRef root)
+				: pages_(pages), batch_(batch), source_root_(root), source_epoch_(pages.storageIO()->dataMutationEpoch()) {
+				const auto pending = batch.metadataPageRoutes();
+				source_routes_.assign(pending.begin(), pending.end());
+				utils::OwnedSet<std::pair<uint64_t, uint8_t>> targets;
+				for (const auto &route : pending) {
+					validateRoute(route, batch.candidate());
+					if (!batch.ownsAllocatedPage(route.physical_reference) ||
+						!targets.emplace(route.physical_reference.physical_slot.value(), route.physical_reference.frame_index).second)
+						throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
+							"incremental metadata routes require unique batch-owned targets");
+				}
+				const auto old = readNode(root, true, std::nullopt);
+				uint16_t level = old->level;
+				if (!pending.empty()) {
+					const uint64_t last = leafOrdinal(pending.back().page_id);
+					while (last / radixFactor(level) >= RSS_CATALOG_RADIX_FANOUT) {
+						if (level == RSS_CATALOG_RADIX_MAX_LEVEL)
+							throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"incremental metadata route growth exceeds its identity domain");
+						++level;
+					}
+				}
+				root_ = grow(root, *old, level, 0U, pending, true);
+			}
+
+            [[nodiscard]] bool matches(MetadataPageFile &pages, const MetadataWriteBatch &batch,
+                PhysicalPageRef root) const {
+                if (&pages != &pages_ || &batch != &batch_ || root != source_root_ ||
+                    source_epoch_ == std::numeric_limits<uint64_t>::max() ||
+                    pages.storageIO()->dataMutationEpoch() != source_epoch_) return false;
+                const auto pending = batch.metadataPageRoutes();
+                return pending.size() == source_routes_.size() &&
+                    std::equal(pending.begin(), pending.end(), source_routes_.begin());
+            }
+			[[nodiscard]] size_t frameCount() const {
+				if (frames_.size() == std::numeric_limits<size_t>::max())
+					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW, "incremental route frame count overflows");
+				return frames_.size() + 1U; // Always reserve the bootstrap header.
+			}
+
+			PhysicalPageRef materialize(MetadataWriteBatch &batch) {
+				utils::OwnedStdVector<PhysicalPageRef> written;
+				written.reserve(frames_.size());
+				for (const auto &frame : frames_) {
+					const auto id = batch.allocateMetadataPageId();
+					const auto reference = batch.allocatePage();
+					if (frame->is_leaf) {
+						frame->leaf.page_id = id;
+						frame->leaf.generation = batch.generation();
+						frame->leaf.committed_lsn = batch.checkpointLsn();
+						pages_.writeMetadataPageRouteLeaf(reference, frame->leaf);
+					} else {
+						for (const auto &[slot, child] : frame->children) frame->radix.children[slot] = written.at(child);
+						frame->radix.page_id = id;
+						frame->radix.generation = batch.generation();
+						frame->radix.committed_lsn = batch.checkpointLsn();
+						pages_.writeMetadataRadix(reference, frame->radix);
+					}
+					written.push_back(reference);
+				}
+				debug::PerfTrace::addValue("native_graph.route.incremental_written_frames", static_cast<int64_t>(written.size()));
+				return root_.planned == std::numeric_limits<size_t>::max() ? root_.reference : written.at(root_.planned);
+			}
+
+		private:
+			std::shared_ptr<const MetadataRadixPage> readNode(PhysicalPageRef reference, bool root, std::optional<uint16_t> level) {
+				validateReference(reference, batch_.candidate(), "incremental metadata route has an invalid source reference");
+				debug::PerfTrace::addValue("native_graph.route.incremental_source_frames", 1);
+				auto node = std::allocate_shared<MetadataRadixPage>(utils::OwnedPmrAllocator<MetadataRadixPage>{},
+                    pages_.readMetadataRadix(reference));
+				if (node->kind != (root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL) ||
+					node->directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE || node->logical_children_enabled ||
+					(level && node->level != *level))
+					throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER, "incremental metadata route has an invalid source node");
+				validateVisible(node->generation, node->committed_lsn, batch_.candidate(),
+					"incremental metadata route source is not visible");
+				utils::OwnedSet<std::pair<uint64_t, uint8_t>> siblings;
+				for (const auto child : node->children) if (child.isValid()) {
+					validateReference(child, batch_.candidate(), "incremental route child is not visible");
+					if (!siblings.emplace(child.physical_slot.value(), child.frame_index).second || child == reference)
+						throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "incremental route source has aliased children");
+				}
+				return node;
+			}
+
+			Link append(std::shared_ptr<Frame> frame) {
+				const auto index = frames_.size(); frames_.push_back(std::move(frame));
+				return {{}, index};
+			}
+
+			Link leaf(PhysicalPageRef reference, uint64_t ordinal, std::span<const MetadataPageRoute> updates) {
+				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->is_leaf = true;
+				if (reference.isValid()) {
+					validateReference(reference, batch_.candidate(), "incremental route leaf is not visible");
+					debug::PerfTrace::addValue("native_graph.route.incremental_source_frames", 1);
+					const auto old = pages_.readMetadataPageRouteLeafView(reference);
+					validateVisible(old->generation, old->committed_lsn, batch_.candidate(), "incremental route leaf is not visible");
+					for (const auto &route : old->routes) {
+						if (leafOrdinal(route.page_id) != ordinal)
+							throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER, "incremental route leaf is misrouted");
+						validateRoute(route, batch_.candidate());
+					}
+					frame->leaf = *old;
+				}
+				bool changed = !reference.isValid();
+				for (const auto &update : updates) {
+					auto &routes = frame->leaf.routes;
+					const auto found = std::lower_bound(routes.begin(), routes.end(), update.page_id.value(),
+						[](const auto &route, uint64_t id) { return route.page_id.value() < id; });
+					if (found != routes.end() && found->page_id == update.page_id) {
+						if (found->physical_reference != update.physical_reference) { *found = update; changed = true; }
+					} else { routes.insert(found, update); changed = true; }
+				}
+				if (!changed) return {reference};
+				return append(std::move(frame));
+			}
+
+			Link grow(PhysicalPageRef reference, const MetadataRadixPage &old, uint16_t level, uint64_t base,
+				std::span<const MetadataPageRoute> updates, bool root) {
+				if (level == old.level) return node(reference, old, base, updates, root);
+                auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{});
+                frame->radix.kind = root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
+                frame->radix.directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE;
+                frame->radix.level = level;
+				const uint64_t factor = radixFactor(level);
+				size_t begin = 0U;
+				// Existing root is always the zero-prefix subtree. Its kind must
+				// change to INTERNAL in a private image, including when untouched.
+				size_t end = 0U;
+				while (end < updates.size() && leafOrdinal(updates[end].page_id) / factor == 0U) ++end;
+				const auto previous = grow(reference, old, static_cast<uint16_t>(level - 1U), base, updates.first(end), false);
+				frame->children.push_back({0U, previous.planned});
+				begin = end;
+				while (begin < updates.size()) {
+					const uint64_t ordinal = leafOrdinal(updates[begin].page_id);
+					const auto slot = static_cast<uint32_t>((ordinal / factor) % RSS_CATALOG_RADIX_FANOUT);
+					end = begin + 1U;
+					while (end < updates.size() && leafOrdinal(updates[end].page_id) / factor == ordinal / factor) ++end;
+					auto blank = std::allocate_shared<MetadataRadixPage>(utils::OwnedPmrAllocator<MetadataRadixPage>{});
+                    blank->kind = CatalogRadixPageKind::CRPK_INTERNAL;
+                    blank->directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE; blank->level = level - 1U;
+					const auto child = node({}, *blank, base + static_cast<uint64_t>(slot) * factor,
+						updates.subspan(begin, end - begin), false);
+					frame->children.push_back({slot, child.planned}); begin = end;
+				}
+				return append(std::move(frame));
+			}
+
+			Link node(PhysicalPageRef reference, const MetadataRadixPage &old, uint64_t base,
+				std::span<const MetadataPageRoute> updates, bool root) {
+                const auto outputKind = root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
+                if (updates.empty() && reference.isValid() && old.kind == outputKind) return {reference};
+				auto frame = std::allocate_shared<Frame>(utils::OwnedPmrAllocator<Frame>{}); frame->radix = old;
+				frame->radix.kind = root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
+				bool changed = !reference.isValid() || frame->radix.kind != old.kind;
+				const uint64_t factor = radixFactor(old.level);
+				for (size_t begin = 0U; begin < updates.size();) {
+					const uint64_t ordinal = leafOrdinal(updates[begin].page_id);
+					if (ordinal < base || (ordinal - base) / factor >= RSS_CATALOG_RADIX_FANOUT)
+						throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "incremental route update is outside its source range");
+					const auto slot = static_cast<uint32_t>((ordinal - base) / factor);
+					size_t end = begin + 1U;
+					while (end < updates.size() && (leafOrdinal(updates[end].page_id) - base) / factor == slot) ++end;
+					const auto input = updates.subspan(begin, end - begin);
+					const auto childRef = old.children[slot];
+					Link child;
+					if (old.level == 0U) child = leaf(childRef, base + slot, input);
+					else {
+                        std::shared_ptr<const MetadataRadixPage> source;
+                        if (childRef.isValid()) source = readNode(childRef, false, old.level - 1U);
+                        else {
+                            auto blank = std::allocate_shared<MetadataRadixPage>(utils::OwnedPmrAllocator<MetadataRadixPage>{});
+                            blank->kind = CatalogRadixPageKind::CRPK_INTERNAL;
+                            blank->directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE; blank->level = old.level - 1U;
+                            source = std::move(blank);
+                        }
+                        child = node(childRef, *source, base + static_cast<uint64_t>(slot) * factor, input, false);
+					}
+					if (child.planned != std::numeric_limits<size_t>::max()) {
+						frame->children.push_back({slot, child.planned}); changed = true;
+					}
+					begin = end;
+				}
+				return changed ? append(std::move(frame)) : Link{reference};
+			}
+			MetadataPageFile &pages_;
+			const MetadataWriteBatch &batch_;
+			utils::OwnedStdVector<std::shared_ptr<Frame>> frames_;
+			Link root_;
+            PhysicalPageRef source_root_;
+            uint64_t source_epoch_;
+            utils::OwnedVector<MetadataPageRoute> source_routes_;
+		};
+
+    std::shared_ptr<MetadataRouteUpdatePlan> MetadataPageRouteDirectory::incrementalPlan(
+        const MetadataWriteBatch &batch, PhysicalPageRef root) const {
+        if (!incremental_plan_ || !incremental_plan_->matches(pages_, batch, root)) {
+            incremental_plan_.reset();
+            incremental_plan_ = std::allocate_shared<MetadataRouteUpdatePlan>(
+                utils::OwnedPmrAllocator<MetadataRouteUpdatePlan>{}, pages_, batch, root);
+            debug::PerfTrace::addValue("native_graph.route.incremental_plans_built", 1);
+        } else debug::PerfTrace::addValue("native_graph.route.incremental_plans_reused", 1);
+        return incremental_plan_;
+    }
+
 
 	PhysicalPageRef MetadataPageRouteDirectory::buildFromCompleteRouteSet(MetadataWriteBatch &batch,
 		std::span<const MetadataPageRoute> routes) {
@@ -471,6 +695,9 @@ namespace graph::storage {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
 								  "Page Directory bootstrap is newer than the metadata write batch");
 		}
+		if (!batch.bootstrapRouteRefreshRequested() && !batch.metadataRoutePruningRequested())
+			return incrementalPlan(batch, previous.metadata_page_directory_root)->frameCount();
+        incremental_plan_.reset();
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
@@ -656,6 +883,12 @@ namespace graph::storage {
 
 	PhysicalPageRef MetadataPageRouteDirectory::buildNextRouteBranch(MetadataWriteBatch &batch,
 																	PhysicalPageRef currentRoot) {
+		if (!batch.bootstrapRouteRefreshRequested() && !batch.metadataRoutePruningRequested()) {
+			auto plan = incrementalPlan(batch, currentRoot);
+            incremental_plan_.reset();
+            return plan->materialize(batch);
+		}
+        incremental_plan_.reset();
 		RouteBranchReuse reuse;
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, currentRoot, [&](const MetadataPageRoute &route) {
@@ -690,6 +923,31 @@ namespace graph::storage {
 		if (dataRoot.isValid()) {
 			replacement.data_page_directory_root = dataRoot;
 		}
+		if (!batch.bootstrapRouteRefreshRequested() && !batch.metadataRoutePruningRequested()) {
+			auto plan = incrementalPlan(batch, previous.metadata_page_directory_root);
+            incremental_plan_.reset();
+			replacement.metadata_page_directory_root = plan->materialize(batch);
+			const std::array roots = {batch.candidate().catalog_root, batch.candidate().allocator_root,
+				batch.candidate().extent_directory_root, batch.candidate().node_entity_directory_root,
+				batch.candidate().edge_entity_directory_root, batch.candidate().entity_property_directory_root,
+				batch.candidate().index_root_directory_root, batch.candidate().vector_location_directory_root,
+				batch.candidate().vector_manifest_directory_root, batch.candidate().large_value_manifest_directory_root,
+				batch.candidate().state_directory_root, batch.candidate().retire_queue_root};
+			static_assert(roots.size() == RSS_METADATA_DIRECTORY_ROOT_COUNT);
+			for (size_t i = 0U; i < roots.size(); ++i) {
+				if (!roots[i].isValid()) { replacement.metadata_directory_roots[i] = {}; continue; }
+				const auto rootPage = pages_.readMetadataRadixUnresolved(roots[i]);
+				const auto id = rootPage.page_id;
+				if (find(batch.candidate(), replacement.metadata_page_directory_root, id) != roots[i])
+					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "incremental bootstrap root has no matching route");
+				replacement.metadata_directory_roots[i] = id;
+			}
+			const auto reference = batch.allocatePage();
+			pages_.writePageDirectoryBootstrap(reference, replacement);
+			batch.setPageDirectoryBootstrapRoot(reference); batch.markBootstrapRoutePublished();
+			return reference;
+		}
+        incremental_plan_.reset();
 		RouteBranchReuse reuse;
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {

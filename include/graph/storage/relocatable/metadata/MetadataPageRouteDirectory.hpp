@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <span>
 #include <vector>
 #include "graph/utils/OwnedStdVector.hpp"
@@ -20,6 +21,7 @@ namespace graph::storage {
 	class MetadataPageFile;
 	class MetadataWriteBatch;
 	struct Superblock;
+    class MetadataRouteUpdatePlan;
 
 	class MetadataPageRouteDirectory final {
 	public:
@@ -44,11 +46,10 @@ namespace graph::storage {
 		// metadata COW has converged. This is used by the creation transaction so
 		// Catalog ownership pages are included in the reservation.
 		[[nodiscard]] size_t initialBootstrapFrameCount(const MetadataWriteBatch &batch) const;
-		// Bounds branch/header capacity for a full rewrite overlaying the current
-		// batch's final routes on a published bootstrap. Reuse may write fewer frames;
-		// retaining full capacity permits optional reuse-index denial to fall back safely.
-		// Callers preflight this
-		// after all ordinary metadata COW work has completed.
+		// Counts changed-path route frames plus one header for ordinary commits.
+        // Capacity and publication share a charged private plan, invalidated by
+        // pending-route or StorageIO epoch changes. Explicit maintenance refresh
+        // and pruning retain the complete-tree capacity calculation.
 		[[nodiscard]] size_t nextBootstrapFrameCount(const MetadataWriteBatch &batch) const;
 		// Once the bootstrap header is published, this replaces the physical-root
 		// collector. Bootstrap pages themselves are validated as traversal state,
@@ -90,6 +91,9 @@ namespace graph::storage {
 
 	private:
 		MetadataPageFile &pages_;
+        [[nodiscard]] std::shared_ptr<MetadataRouteUpdatePlan> incrementalPlan(
+            const MetadataWriteBatch &batch, PhysicalPageRef root) const;
+        mutable std::shared_ptr<MetadataRouteUpdatePlan> incremental_plan_;
 	};
 
 } // namespace graph::storage

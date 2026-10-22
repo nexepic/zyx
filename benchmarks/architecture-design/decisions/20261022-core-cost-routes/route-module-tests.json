@@ -1,0 +1,1894 @@
+{
+  "tests": 183,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T09:13:54Z",
+  "time": "3.763s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "MetadataRouteBranchReuseTest",
+      "tests": 12,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T09:13:54Z",
+      "time": "0.024s",
+      "testsuite": [
+        {
+          "name": "UnchangedOverlayReusesEveryPlumbingFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "ChangedLeafCopiesItsPathAndPreservesUnchangedLeavesAndOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "ForcedRefreshRewritesAllPlumbingEvenWithIdenticalTargets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 111,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "UnvisitedCorruptionIsDetectedOnAccessAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "RootGrowthRetainsTheUnchangedOldLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 133,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "UnchangedOverlayNeedsNoFullRouteIndexUnderSmallBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.008s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "ModifiedCorruptLeafFailsBeforeAllocatingRouteFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 164,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "FixedChangeVisitsOnlyItsPathAsTheRouteSetGrows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 174,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.008s",
+          "classname": "MetadataRouteBranchReuseTest",
+          "source_frames_3": "3",
+          "tree_height_3": "2",
+          "reserved_frames_3": "4",
+          "source_frames_300": "4",
+          "tree_height_300": "3",
+          "reserved_frames_300": "5",
+          "source_frames_900": "4",
+          "tree_height_900": "3",
+          "reserved_frames_900": "5"
+        },
+        {
+          "name": "DuplicateNewPhysicalTargetCannotEnterSeparateLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 200,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "CapacityAndPublicationReuseOneValidatedPlan",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "NewPendingRouteInvalidatesTheCapacityPlan",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        },
+        {
+          "name": "IoMutationInvalidatesPreviouslyValidatedChangedLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectoryReuse.cpp",
+          "line": 240,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "MetadataRouteBranchReuseTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataPageRouteDirectoryTest",
+      "tests": 39,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T09:13:54Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "ResolvesCompleteRoutesAcrossMultipleRadixLevelsAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "AuthenticatedTargetsServeRepeatedPointAndDuplicateBatchReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 167,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "CachedTargetsDoNotHideCorruptionAfterAnIoWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 195,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RouteRootsAndVisibilityFencesRemainIndependentWithAWarmCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "PartialCacheHitsStillValidateEveryMissingAndInvalidRequest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "ZeroCacheBudgetPreservesAuthenticatedUncachedLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "BatchResolvesSharedRouteLeafWithTwoPageReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 267,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "LogicalRadixChildrenShareRouteReadsAndPreserveSparseSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 313,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsMissingFutureAndWronglyTypedRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 365,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsEmptyInvalidAndFutureRouteInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 397,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsMissingAndWronglyTypedRouteDescendants",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 424,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "ResolvesLogicalRadixChildrenThroughPublishedBootstrapRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 457,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsUnorderedIncompleteOrFutureRouteSets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 506,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsRouteLeavesThatDoNotMatchTheirRadixOrdinal",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsInvalidOrFutureRouteBranchReferences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 567,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsAliasedRouteBranchFramesAndTargets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 594,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsRouteTargetsThatAliasBootstrapPlumbing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 643,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsWronglyTypedInternalRouteChildDuringLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 663,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsInvalidVisibilityAndRouteIdentityMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 681,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsEmptyPhysicalDirectoryRouteSet",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 706,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsFuturePhysicalDirectoryRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 714,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RejectsBootstrapRootMissingFromTheCompleteRouteSet",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 723,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "CountsAllFramesBeforeInitialBootstrapAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 757,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "CollectsEveryVisiblePhysicalDirectoryPageBeforeBootstrapMigration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 787,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "CollectsAllocatorAndExtentDirectoryRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 861,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "StagedBootstrapOverlaysFinalBatchFramesWithoutDroppingCurrentRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 926,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "InitialRouteBranchOverlaysPhysicalRootsWithBatchRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 979,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "NextRouteBranchOverlaysPublishedRoutesWithCurrentBatchFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1016,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "CountsExactFramesForNextBootstrapRoutePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1039,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "IdentityOnlyBootstrapPublicationPreservesThePublishedRouteBranchAndRejectsRouteChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1069,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "IdentifiesACompleteRouteBranchPoolForRefreshOnlyEvacuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1145,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "EvacuatesMixedRoutedTargetsRouteBranchAndBootstrapHeaderFromOnePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RelocatesThePhysicalDataDirectoryAnchorWithItsRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RelocatesARoutedPhysicalChildPageByPublishingLogicalChildren",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1353,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "RefreshesAnIsolatedBootstrapHeaderPoolDuringEvacuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1438,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "SelectedChildrenPreserveOrderSparseSlotsAndFullValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1485,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "PointAndBoundedCursorDoNotResolveUnvisitedSiblingRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1561,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "SparseEntityAndPropertyBatchesSkipUnrequestedInteriorRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1640,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        },
+        {
+          "name": "LookupRejectsAMisroutedEndpointEvenWhenTheRequestedEntryIsValid",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPageRouteDirectory.cpp",
+          "line": 1718,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPageRouteDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 108,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T09:13:54Z",
+      "time": "3.717s",
+      "testsuite": [
+        {
+          "name": "EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ObservesCompactionStateWithoutRetainingSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 50,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesCatalogPublicationSnapshotsReclamationAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 75,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopenFollowsPublishedRootsInsteadOfScanningAnUnreachableTailSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 195,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.118s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 336,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 428,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 443,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 457,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 492,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 532,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesAllocatorReservationAndReusesReleasedSnapshotPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 593,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapReservationExhaustionDoesNotPublishPartialGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 619,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 653,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatesLogicalNodeAndEdgeIdsDurablyAndIndependently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 696,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReservesDerivedPageAndSegmentIdentityBatchesDurably",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 713,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatesOnlineVectorAndTokenIdsDurablyAndIndependently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 737,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EntityPropertyPoolPublicationIsAtomicAcrossCatalogAndDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ValidatesAndRemovesOwnerKeyedPropertyLocationsThroughThePublicDirectoryBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 801,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ExistingPoolAppendRejectsMissingCallbacksStalePoolsAndInvalidPageIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 847,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ExistingPoolReplacementRejectsInvalidInputsAndPublishesOnlyCallbackFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 884,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesOnePageAcrossCurrentPoolsInOneDirectoryGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 948,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RetiresADurableVectorManifestWithItsPageDirectoryMapping",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1040,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesAVectorManifestAndRebindsItsGenerationInOnePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsIncompleteVectorReservationInputsBeforeAcquiringAPoolSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1169,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsVectorManifestReservationsOutsideTheirDedicatedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEveryMalformedVectorManifestReservationTarget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsRelocatedSourceReleaseWhenCatalogDestinationLostAllocationOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesPreparedLocationDataBeforeTheDirectoryRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1252,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesPoolReconciliationAgainstCurrentReachability",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1268,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReconcilesEveryCurrentSealedCatalogEntryUnderOneWriter",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1315,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsCurrentPageDirectoryLocationsOutsideSharedPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1345,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEmptyOrFailingPreparedLocationPublicationWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesNewCatalogPoolAndInitialPageLocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1384,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesAVectorManifestMappingForAnAlreadyDurableManifestPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1415,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidCombinedLocationBeforePreparingOrPublishingData",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesCombinedExtentLocationsAndRejectsForeignExtentGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1495,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RelocatesACodebookExtentWithItsCatalogGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapAndEmergencyPoolsAreDurablyAllocatedAndNeverReturnedToUserReservations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1576,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesAndRecoversAdditionalCatalogPoolOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1596,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "OpenFailsClosedWhenCatalogMetadataPoolIdentityIsCorrupted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1621,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.014s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReclaimsAnEmptyCatalogMetadataPoolOnlyAfterSnapshotReleaseAndReusesItsSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.07s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesASparseMetadataPoolThenReclaimsAndReusesItsSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1739,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.032s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationPreservesTheOldRootBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.021s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1832,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:54Z",
+          "time": "0.094s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1877,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:55Z",
+          "time": "0.127s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1988,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:55Z",
+          "time": "0.106s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2057,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:55Z",
+          "time": "1.65s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:56Z",
+          "time": "0.086s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.085s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2233,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.076s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.092s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.076s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2385,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.02s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2404,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.02s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationClonesEveryTypedDirectoryRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.022s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopeningBeforeMetadataPoolReclamationPublicationRestoresItsOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.047s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopeningAfterMetadataPoolReclamationPublicationKeepsTheSlotFree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2628,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.047s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "DiscardsUnpublishedAdditionalCatalogPoolAndReopensThePriorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2655,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsReservedUserSlotSeparateFromExistingCatalogMetadataPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2673,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsCombinedReservationDataSlotSeparateFromCatalogMetadataPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2697,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.052s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "OpenIgnoresAnUnownedEmptyCatalogPoolLeftBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReadOnlyOpenIgnoresAnUnreachablePoolWithoutRepairingIt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2795,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "OpenRejectsReachableCatalogPoolWithoutFreeSpaceOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2820,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesCatalogMappingAndAllocatorReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2834,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesMultipleCatalogMappingsAndSlotReservations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2861,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RunsPreparedDataWriteOnlyInsideTheUnpublishedReservationBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2887,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "DiscardsPreparedReservationWhenTheDataWriteFails",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2914,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsRelocationWithoutADataCopyPreparationCallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2929,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "MultiSegmentReservationHasNoPartialPublicationOrInvalidRequestState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2941,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicReservationDiscardsPrePublicationWorkAndRetainsDurableInterruptedWork",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2997,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LeasesLogicalGraphIdsFromDurableRangesWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 3027,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalGraphIdLeasesRejectInvalidRequestsWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 3053,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalGraphIdLeasesServeFullyCachedReservationsWithoutRepublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 3082,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReadOnlyMetadataStoreRejectsLeasesAndRefreshWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 3107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 3129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationBootstrapHeaderShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.088s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationBootstrapHeaderEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.087s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationRouteRadixShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.087s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationRouteRadixEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 202,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:57Z",
+          "time": "0.088s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationSuperblockShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 247,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.088s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationSuperblockEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp",
+          "line": 287,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.089s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopenRejectsCorruptedTypedDirectoryRootsAfterMetadataEvacuation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreEvacuationValidation.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.019s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RecoversPriorGenerationWhenCrashPrecedesInactiveSuperblockPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RecoversEveryGenerationWhoseInactiveSuperblockIsDurable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RequiresInitializedDataAndNonNullStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RefusesNonEmptyIncompleteAndAlreadyInitializedDataFiles",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidSnapshotPinsAcrossEveryDirectoryFacade",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsNoOpTransitionsAndDoesNotRetainFailedPublications",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesEveryTypedPageDirectoryReferenceThroughItsDedicatedDirectory",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ResumesVectorManifestTraversalThroughTheMetadataStoreBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 222,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidLargeValueManifestResumeTraversalArguments",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidLargeValueOwnerResumeTraversalArguments",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 317,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesTypedDirectoryErasuresWithoutRequiringReplacementEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 342,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsVectorLocationsPointingAtNonVectorPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 379,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsPageDirectoryLocationsTargetingFullSegmentExtents",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 399,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsTypedReservationMappingsWithoutTheirRequestedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore_Boundaries.cpp",
+          "line": 413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataWriteBatchTest",
+      "tests": 24,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T09:13:58Z",
+      "time": "0.006s",
+      "testsuite": [
+        {
+          "name": "ValidatesConstructionAllocatorResultsAndRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 137,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AllocatesAndObservesLogicalPageIdsWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RecordsFinalMetadataPageRouteFromOwnedCurrentFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 242,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReleasesMetadataFrameReservationWhenAbandoned",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "TracksNewPoolsCreatedForBootstrapRouteCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 286,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReservesContiguousLogicalPageIdRangesWithoutAIdentityVector",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReservesContiguousLogicalSegmentIdRangesWithoutAIdentityVector",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 330,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AllocatesAndObservesLogicalSegmentIdsWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AllocatesAndObservesLogicalEntityIdsWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 381,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReservesLogicalEntityIdRangesInConstantMetadataWork",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 414,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AllocatesAndObservesDerivedValueAndTokenIdsWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 450,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RejectsDuplicateLocationsAndReturnsUnpublishedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 525,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RejectsDuplicateLocationsAfterManyDistinctAllocatedFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReturnsNewMetadataPoolWhenItsCandidateIsNotPublished",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RejectsInvalidOrDuplicateDataAndPoolOwnershipRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "PublishesOnlyOnceAndRejectsStaleBootstrap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 619,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AbandonsPagesWhenPublicationStopsBeforeInactiveSuperblockWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 642,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "AbandonsPagesAfterTornInactiveSuperblockWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 661,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RetainsPagesAfterInactiveSuperblockIsDurable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 680,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "EndsTheAllocatorBatchContextAtPublicationOrAbandonment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 699,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ObservingMaximumLogicalIdentifiersPermanentlyExhaustsTheirNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 727,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "TracksDataReservationsAndDeferredBootstrapRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 761,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "RejectsCapacityRequestsAfterPublicationAndPublishesAllDeferredRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 821,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        },
+        {
+          "name": "ReservationStorageRetainsAccountAndRefundsFailedInsertions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataWriteBatch.cpp",
+          "line": 847,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T09:13:58Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataWriteBatchTest"
+        }
+      ]
+    }
+  ]
+}
