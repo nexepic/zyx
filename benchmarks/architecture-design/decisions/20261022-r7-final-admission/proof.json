@@ -213,7 +213,7 @@
   },
   "analysis": {
     "complete": true,
-    "readme": "Earlier source-specific R3 candidates remain in r7-final,r7-repair and r7-fullcollection. Final R3 distributions use only r7-write-auth five fixed pairs. Final ROW full-matrix reuse requires exact unchanged archive/observer SHA verified in the final freeze. Complete capped control distributions are combined without dropping any observations. Descriptive variation envelope uses maximum before process median and P95. The earlier max-after/min-before positive screen was conservative, not the registered stable-regression rejection. Uncertain cases remain unresolved. All original baseline and two extra complete control rounds retained; no failed-current observations reused. Import P95 with one sample/process is descriptive only.",
+    "readme": "Earlier source-specific R3 candidates remain in r7-final,r7-repair and r7-fullcollection. Final R3 distributions use only r7-membership five fixed pairs. Final ROW full-matrix reuse requires exact unchanged archive/observer SHA verified in the final freeze. Complete capped control distributions are combined without dropping any observations. Descriptive variation envelope uses maximum before process median and P95. The earlier max-after/min-before positive screen was conservative, not the registered stable-regression rejection. Uncertain cases remain unresolved. All original baseline and two extra complete control rounds retained; no failed-current observations reused. Import P95 with one sample/process is descriptive only.",
     "summary": [
       {
         "scale": "holdout",

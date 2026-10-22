@@ -1,0 +1,35 @@
+{
+  "plan": "cow-performance-20261019",
+  "progress_derived_from": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+  "bilingual_table_counts": {
+    "zh": {
+      "accepted": 24,
+      "total": 24
+    },
+    "en": {
+      "accepted": 24,
+      "total": 24
+    }
+  },
+  "accepted": 24,
+  "total": 24,
+  "percent": 100,
+  "scope": "optimization.mdxdeliverables",
+  "kuzu_goal_met": false,
+  "universal_pooled_tail_5pct_guarantee": false,
+  "verified_production_commit": "66a4e05754715b4d44f6bb8a06d90e655728eecb",
+  "archive": {
+    "path": "raw-evidence.tar.xz",
+    "bytes": 2722360,
+    "sha256": "57f671a0925e7ca5a48bdba4872d6a6d02e829647b0bec80280a4022aff30a02",
+    "files": 2502
+  },
+  "archive_members_verified": 2502,
+  "final_module_cases": {
+    "candidate": 365,
+    "default": 24,
+    "full_suite": false
+  },
+  "remaining_in_document_scope": [],
+  "independent_platform_C0_C7_gates_not_closed": true
+}

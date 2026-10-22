@@ -1,0 +1,182 @@
+{
+  "verified_production_commit": "66a4e05754715b4d44f6bb8a06d90e655728eecb",
+  "input_files_verified": 22,
+  "inputs": {
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/manifest.json": {
+      "sha256": "1c43782ba38f0750b7284500d60c2f4d386c9eb1676d2392b4511ecbcf80822a",
+      "bytes": 1532,
+      "mtime_ns": 1792603464515461115
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/authored.csv": {
+      "sha256": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+      "bytes": 3240016,
+      "mtime_ns": 1792603464280332399
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/follows.csv": {
+      "sha256": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+      "bytes": 13500016,
+      "mtime_ns": 1792603464176331911
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/has_tag.csv": {
+      "sha256": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641",
+      "bytes": 6240016,
+      "mtime_ns": 1792603464484333358
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/posts.csv": {
+      "sha256": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+      "bytes": 4054761,
+      "mtime_ns": 1792603463712329732
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/tags.csv": {
+      "sha256": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+      "bytes": 83899,
+      "mtime_ns": 1792603463719345932
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium/users.csv": {
+      "sha256": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+      "bytes": 2977829,
+      "mtime_ns": 1792603463576329094
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/manifest.json": {
+      "sha256": "7e7f6dffff2aa5769fdf458d82d721a8e8bbc79bcebc2de2dfebebc552d8c728",
+      "bytes": 1534,
+      "mtime_ns": 1792603465960829236
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/authored.csv": {
+      "sha256": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+      "bytes": 2349016,
+      "mtime_ns": 1792603465776339425
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/follows.csv": {
+      "sha256": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+      "bytes": 13797016,
+      "mtime_ns": 1792603465692339031
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/has_tag.csv": {
+      "sha256": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+      "bytes": 4524016,
+      "mtime_ns": 1792603465916340083
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/posts.csv": {
+      "sha256": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+      "bytes": 2939689,
+      "mtime_ns": 1792603465266872977
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/tags.csv": {
+      "sha256": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+      "bytes": 49899,
+      "mtime_ns": 1792603465269973415
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout/users.csv": {
+      "sha256": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41",
+      "bytes": 2173962,
+      "mtime_ns": 1792603465152336495
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx": {
+      "sha256": "e55db7c3bad581726009a4fd7d4f140f36a8c61cc3ae9a98aa2f1e170357b28a",
+      "bytes": 313655296,
+      "mtime_ns": 1792614219871280802
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r43-identity.zyx": {
+      "sha256": "ee0a13afad38dd6327f1a21bbc154caba084284aa803b3839e44c2a6b94123a1",
+      "bytes": 264372224,
+      "mtime_ns": 1792614437772560880
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu": {
+      "sha256": "4615483717d9d79deb202970ccc46d0a362b131914c2b48316ef235fda8b6da0",
+      "bytes": 41108096,
+      "mtime_ns": 1792619764267823936
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu": {
+      "sha256": "098c74889abef5e2ade89d5054089527276b85893da9dfd0ed5dbe3a4e54ad41",
+      "bytes": 34380344,
+      "mtime_ns": 1792619765096068591
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final-indexed.zyx": {
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "bytes": 315621376,
+      "mtime_ns": 1792618523687609023
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final-indexed.zyx": {
+      "sha256": "6bf075b56cc6f1f50b33e7fae2e680ff11133e96108d2b05788a8bf6c8fcfb5e",
+      "bytes": 265814016,
+      "mtime_ns": 1792618527799110141
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-row.zyx": {
+      "sha256": "e5063ab68ecb3cdb1e24ae14b138cfd67e89df27aae3f496ca6a88be8e0bac9b",
+      "bytes": 2621440,
+      "mtime_ns": 1792619748803043903
+    },
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-cohort-native.zyx": {
+      "sha256": "d76a0c4dd88533685a6b68ddec4701d9d51746d22e872b8fa81e1190802cccea",
+      "bytes": 3276800,
+      "mtime_ns": 1792619748826718886
+    }
+  },
+  "current_engine_and_observer_sha_verified": true,
+  "compiled_source_sha_verified": true,
+  "production_worktree_clean": true,
+  "retained_private_databases": [
+    {
+      "path": "r7-final/preflight/before-medium-write-steady_property.zyx",
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/preflight/before-medium-write-edge_create.zyx",
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/preflight/after-row-medium-write-edge_create.zyx",
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/preflight/after-row-medium-write-edge_create_delete.zyx",
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/preflight/before-medium-write-edge_create_delete.zyx",
+      "bytes": 315621376,
+      "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/window/round-3/holdout/fresh-import/after-row.zyx",
+      "bytes": 216137728,
+      "sha256": "03061b47b23c548d7a1b9847d7cc15013bda57ee0102b19de5e3f689de8a1296",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/window/round-1/medium/fresh-import/before.zyx",
+      "bytes": 2047344640,
+      "sha256": "44ec1b134039fa2a2dbdf2ce44fa8c26bded14ff6abfa3522d75321c26f44c54",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/window/round-1/maintenance/maintenance/after-row.zyx",
+      "bytes": 3145728,
+      "sha256": "5909e16d5e1c0a6bc0c939353da41bed572c21fbd187276bc7c62c1c2a57b8c5",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/window/round-1/maintenance/maintenance/before.zyx",
+      "bytes": 3145728,
+      "sha256": "3ef81c21aef11de534e81abbef19f6a6374229fb9f5e6a889c33af82436e1276",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    },
+    {
+      "path": "r7-final/window/round-1/holdout/write-steady_property/before.zyx",
+      "bytes": 265814016,
+      "sha256": "6bf075b56cc6f1f50b33e7fae2e680ff11133e96108d2b05788a8bf6c8fcfb5e",
+      "action": "retain locally as forensic failed/preflight-derived DB;excluded from Git archive;no successful sample invented"
+    }
+  ],
+  "cleanup": "Successful private measurement DBs were removed by their registered harness. Immutable original inputs,raw outcomes/errors,and source-specific frozen binaries/libraries remain. Archive excludes DB/engine/object binaries and superseded unaccepted prose drafts. No raw measurement failure is deleted."
+}
