@@ -20,12 +20,37 @@
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 namespace graph::storage {
 
 	namespace {
 
 		[[nodiscard]] constexpr uint8_t ownershipFlag(bool condition) { return static_cast<uint8_t>(condition); }
+
+        // Published ownership is established during recovery and preserved by
+        // typed mutations. Revalidate the pools touched by this candidate, plus
+        // reserve transitions; unrelated ownership is checked by full integrity.
+        [[nodiscard]] utils::OwnedSet<uint64_t> publicationPoolSlots(
+            MetadataPagePoolAllocator &pools, const MetadataWriteBatch &batch) {
+            utils::OwnedSet<uint64_t> slots;
+            if (!batch.current().catalog_root.isValid()) {
+                debug::PerfTrace::addValue("native_metadata.ownership.initial_pool_enumerations", 1);
+                for (const auto slot : pools.poolSlots()) slots.emplace(slot.value());
+                return slots;
+            }
+            for (const auto slot : pools.unconfirmedOwnershipSlots()) slots.emplace(slot.value());
+            for (const auto reference : batch.allocatedMetadataPages()) slots.emplace(reference.physical_slot.value());
+            for (size_t i = 0U; i < batch.createdPoolCount(); ++i) slots.emplace(batch.createdPoolSlot(i).value());
+            if (batch.current().metadata_emergency_reserve.isValid())
+                slots.emplace(batch.current().metadata_emergency_reserve.physical_slot.value());
+            if (batch.candidate().metadata_emergency_reserve.isValid())
+                slots.emplace(batch.candidate().metadata_emergency_reserve.physical_slot.value());
+            return slots;
+        }
+
 
 	} // namespace
 
@@ -105,12 +130,14 @@ namespace graph::storage {
 			}
 			return false;
 		};
-		std::set<uint64_t> identitiesBoundInBatch;
-		std::set<uint64_t> catalogEntriesPreparedInBatch;
+		utils::OwnedSet<uint64_t> identitiesBoundInBatch;
+		utils::OwnedSet<uint64_t> catalogEntriesPreparedInBatch;
 
 		for (size_t pass = 0; pass < MAX_OWNERSHIP_PUBLICATION_PASSES; ++pass) {
-			std::vector<CatalogEntry> newEntries;
-			for (const PhysicalSlotId slot: metadata_page_pool_.poolSlots()) {
+			utils::OwnedStdVector<CatalogEntry> newEntries;
+            for (const uint64_t value : publicationPoolSlots(metadata_page_pool_, batch)) {
+                const PhysicalSlotId slot(value);
+                debug::PerfTrace::addValue("native_metadata.ownership.visited_pools", 1);
 				MetadataPagePoolHeader header = metadata_page_pool_.poolHeader(slot);
 				const bool promotedEmergencyReserve =
 						(ownershipFlag(batch.current().metadata_emergency_reserve.isValid()) &
@@ -177,6 +204,8 @@ namespace graph::storage {
 								FormatError::FERR_INVALID_STATE,
 								"relocatable metadata-pool identity collides with a nonmatching Catalog entry");
 					}
+                    metadata_page_pool_.registerCatalogPool(slot, header.segment_id, header.generation, header.committed_lsn);
+                    batch.markCatalogPoolOwnershipPrepared(slot);
 					continue;
 				}
 				if ((ownershipFlag(batch.isDataSlotReserved(slot)) &

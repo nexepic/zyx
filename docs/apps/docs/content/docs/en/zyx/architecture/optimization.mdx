@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 25%; P1 is accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 40%; P1/P2 are accepted and the Kuzu performance objective is unmet.**
 
 Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
 
@@ -50,7 +50,7 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 |---|---|---:|---|
 | P0 | Corrected measurement, frozen cost contract and baseline | 0% | Baseline complete; exclusive read CPU attribution pending |
 | P1 | Route updates driven by changed paths | 25% | Accepted |
-| P2 | Incremental capacity planning, atomic publication, and local correctness proofs | 15% | Implementing; not accepted |
+| P2 | Incremental capacity planning, atomic publication, and local correctness proofs | 15% | Accepted |
 | P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Not started |
 | P4 | Cost-selected label/candidate scans | 15% | Not started |
 | P5 | Directly typed batches from storage through filtering/aggregation | 20% | Not started |
@@ -105,6 +105,8 @@ Reuse published immutable subtrees through exact provenance, generation, and pin
 Keep data/metadata durability before A/B publication and acknowledgement. Cover same-page changes, cross-leaf split/merge, last-entry deletion, sparse IDs, old snapshots, conflicts, cancellation, budget/space exhaustion, write/sync failure, reopen, retirement, relocation, and reuse. Do not fix routes while leaving another ordinary-commit global traversal in Allocator, Catalog, or retirement.
 
 Acceptance: increasing `M` at fixed `k` must not cause complete-set materialization or routine global traversal; repeated accesses and page writes must meet registered budgets. Establish mechanisms first; P7 verifies formal end-to-end gains.
+
+P2 acceptance: ownership preparation validates touched pools; an intrusive free-pool index and capacity counter skip full pools. Changed paths produce retired-frame deltas reclaimed after the oldest snapshot generation. Post-publication handoff and ownership confirmation allocate no memory. Missing coverage, explicit migration/reclamation, or recovery rebuild complete reachability. With 3/300/900 Catalog leaves and one fixed change, source route frames are 2/4/5, ownership visits are 6 each, and ordinary full traversals are zero. All 298 affected module tests pass. Evidence: `benchmarks/architecture-design/decisions/20261022-core-cost-ownership/acceptance.json`. Final performance acceptance remains pending.
 
 ## 6. P3: Memory structures must eliminate work
 

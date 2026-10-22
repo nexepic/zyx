@@ -4334,6 +4334,10 @@ namespace graph::storage {
 		batch.reserveMetadataFrames(requiredFrames);
 		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        pages_.rebindSuperblock(batch.candidate());
+        // Migration already validates the complete graph. Establish retirement
+        // coverage here, so the first ordinary publication stays incremental.
+        snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 		return batch.candidate();
 	}
 

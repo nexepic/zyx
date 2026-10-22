@@ -1,0 +1,23 @@
+{
+  "units": [
+    "metadata/test_MetadataPageRouteDirectoryReuse",
+    "metadata/test_MetadataPageRouteDirectory",
+    "metadata/test_RelocatableMetadataStore",
+    "metadata/test_MetadataWriteBatch",
+    "metadata/test_MetadataPoolOwnership",
+    "metadata/test_MetadataPagePoolRetirement",
+    "metadata/test_MetadataPagePool",
+    "metadata/test_MetadataPagePool_AllocationAvailability",
+    "metadata/test_MetadataPagePoolRecovery",
+    "metadata/test_MetadataPagePoolEmergencyReserve",
+    "metadata/test_MetadataPagePoolTypedIO",
+    "metadata/test_RelocatableMetadataStore_Boundaries",
+    "metadata/test_RelocatableMetadataStoreValidation",
+    "metadata/test_RelocatableMetadataStoreValidation_Boundaries",
+    "metadata/test_RelocatableMetadataStoreEvacuationValidation",
+    "metadata/test_RelocatableMetadataStoreEvacuationNativeFaults"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "d98f236cd5a6c0eb6054b324e45af642e37b00d3125367b6d5cffa97c1657e19"
+}

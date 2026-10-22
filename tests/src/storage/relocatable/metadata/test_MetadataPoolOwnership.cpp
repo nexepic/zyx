@@ -15,6 +15,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPoolOwnership.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace {
 
@@ -225,4 +226,43 @@ TEST_F(RelocatableMetadataStoreTest, MetadataPoolOwnershipSkipsAnObsoletePoolRel
 	components.allocator.prepareSetAllocated(batch, released.physical_slot, false);
 
 	EXPECT_NO_THROW(components.ownership.preparePublication(batch));
+}
+
+TEST_F(RelocatableMetadataStoreTest, MetadataPoolOwnershipVisitsTouchedPoolsInsteadOfEveryPublishedPool) {
+    for (const uint64_t leafCount : {900U}) {
+        auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+        static_cast<void>(store->upsertCatalog(catalogEntriesForLeafCount(leafCount), LogSequenceNumber(2U)));
+        auto pin = store->openSnapshot(); const auto current = pin.superblock(); pin.release(); store.reset();
+        MetadataPoolOwnershipComponents components(io, current, false);
+        components.ownership.restoreCatalogOwnership(current);
+        MetadataWriteBatch batch(components.pools, current, LogSequenceNumber(3U));
+        static_cast<void>(batch.allocatePage());
+        const auto totalPools = components.pools.poolSlots().size();
+        graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
+        EXPECT_NO_THROW(components.ownership.preparePublication(batch));
+        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+        graph::debug::PerfTrace::setValueCollectionEnabled(false);
+        EXPECT_FALSE(counters.contains("native_metadata.ownership.initial_pool_enumerations"));
+        ASSERT_TRUE(counters.contains("native_metadata.ownership.visited_pools"));
+        const auto visited = counters.at("native_metadata.ownership.visited_pools").totalValue;
+        EXPECT_LE(visited, 3);
+        EXPECT_LT(visited, totalPools + 1U);
+        RecordProperty("total_pools_" + std::to_string(leafCount), std::to_string(totalPools));
+        RecordProperty("visited_pools_" + std::to_string(leafCount), std::to_string(visited));
+    }
+}
+
+TEST_F(RelocatableMetadataStoreTest, UnconfirmedOwnershipSurvivesBitmapChangesAndClearsOnAbandonment) {
+    const Superblock current = initializeAndRecover(io);
+    MetadataPagePoolAllocator pools(io, current);
+    const auto orphan = appendUnownedMetadataPool(pools);
+    auto contains = [&](PhysicalSlotId slot) {
+        const auto pending = pools.unconfirmedOwnershipSlots();
+        return std::ranges::find(pending, slot) != pending.end();
+    };
+    EXPECT_TRUE(contains(orphan.physical_slot));
+    pools.abandonPage(orphan);
+    EXPECT_TRUE(contains(orphan.physical_slot));
+    pools.abandonUnpublishedPool(orphan.physical_slot);
+    EXPECT_FALSE(contains(orphan.physical_slot));
 }

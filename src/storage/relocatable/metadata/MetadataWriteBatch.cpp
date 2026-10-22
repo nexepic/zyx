@@ -119,6 +119,18 @@ namespace graph::storage {
 		metadata_page_routes_.insert_or_assign(pageId.value(), reference);
 	}
 
+    void MetadataWriteBatch::retireMetadataFrame(PhysicalPageRef reference) {
+        if (!reference.isValid() || reference.generation > generation())
+            throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "metadata retirement has an invalid source frame");
+        retired_metadata_frames_.push_back(reference);
+    }
+
+    void MetadataWriteBatch::retainBootstrapFrame(PhysicalPageRef reference) {
+        if (!ownsAllocatedPage(reference))
+            throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "live bootstrap frame is not batch-owned");
+        live_bootstrap_frames_.emplace(reference.physical_slot.value(), reference.frame_index);
+    }
+
 	std::optional<PhysicalPageRef> MetadataWriteBatch::pendingMetadataPageRoute(MetadataPageId pageId) const {
 		if (!pageId.isValid()) {
 			return std::nullopt;
@@ -691,10 +703,49 @@ namespace graph::storage {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
 									"relocatable metadata batch uses a stale Superblock generation");
 		}
+        using FrameKey = std::pair<uint64_t, uint8_t>;
+        using RetiredEntry = std::pair<const FrameKey, PhysicalPageRef>;
+        std::map<FrameKey, PhysicalPageRef, std::less<FrameKey>, utils::OwnedPmrAllocator<RetiredEntry>> retired;
+        std::vector<PhysicalPageRef, utils::OwnedPmrAllocator<PhysicalPageRef>> retirement;
+        if (metadata_retirement_complete_) {
+            const auto bootstrapRoot = candidate_.page_directory_root;
+            if (!ownsAllocatedPage(bootstrapRoot) ||
+                !live_bootstrap_frames_.contains({bootstrapRoot.physical_slot.value(), bootstrapRoot.frame_index}))
+                throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "complete metadata retirement requires a new live bootstrap");
+            auto live = live_bootstrap_frames_;
+            for (const auto &[id, reference] : metadata_page_routes_) {
+                static_cast<void>(id); live.emplace(reference.physical_slot.value(), reference.frame_index);
+            }
+            if (candidate_.hybrid_property_descriptor_root.isValid()) {
+                const auto reference = candidate_.hybrid_property_descriptor_root;
+                live.emplace(reference.physical_slot.value(), reference.frame_index);
+            }
+            for (const auto reference : retired_metadata_frames_)
+                retired.insert_or_assign({reference.physical_slot.value(), reference.frame_index}, reference);
+            if (current_.hybrid_property_descriptor_root.isValid() &&
+                current_.hybrid_property_descriptor_root != candidate_.hybrid_property_descriptor_root) {
+                const auto reference = current_.hybrid_property_descriptor_root;
+                retired.insert_or_assign({reference.physical_slot.value(), reference.frame_index}, reference);
+            }
+
+            for (const auto reference : allocated_pages_)
+                if (!live.contains({reference.physical_slot.value(), reference.frame_index}))
+                    retired.insert_or_assign({reference.physical_slot.value(), reference.frame_index}, reference);
+            retirement.reserve(retired.size());
+            for (const auto &[key, reference] : retired) {
+                if (live.contains(key))
+                    throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "metadata frame cannot be retired and live");
+                retirement.push_back(reference);
+            }
+        }
+        allocator_.validateMetadataRetirement(current_, candidate_, retirement, metadata_retirement_complete_);
 		try {
 			debug::ScopedPerfTimer timer("native_graph.write.metadata.publication");
 			bootstrap.publish(candidate_, failpoint);
 			published_ = true;
+            allocator_.commitMetadataRetirement(current_, candidate_, retirement, metadata_retirement_complete_);
+            for (const auto slot : catalog_pool_ownership_prepared_)
+                allocator_.commitCatalogPoolOwnership(PhysicalSlotId(slot));
 		} catch (...) {
 			published_ = candidateWasPublished(bootstrap, candidate_);
 			if (metadata_frame_reservation_active_) {

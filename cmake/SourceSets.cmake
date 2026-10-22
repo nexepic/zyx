@@ -274,6 +274,8 @@ set(ZYX_NATIVE_STORAGE_SOURCES
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/CatalogSegmentRetirementCoordinator.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataPagePool.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataPagePoolAvailability.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataPagePoolRetirement.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataPoolOwnership.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataReservationCoordinator.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/metadata/MetadataRetirement.cpp"

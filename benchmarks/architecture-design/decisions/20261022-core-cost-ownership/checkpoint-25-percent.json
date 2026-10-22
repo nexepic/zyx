@@ -1,0 +1,14 @@
+{
+  "implementation_progress_percent": 25,
+  "P2": "not accepted; full reclamation/capacity scans remain",
+  "tests": 196,
+  "full_suite": false,
+  "mechanism": "900 Catalog leaves, 33 published metadata pools, 2 pools visited for one changed pool plus reserve",
+  "sources": {
+    "include/graph/storage/relocatable/metadata/MetadataPagePool.hpp": "8a4b81ac59736cc9c8b56bd038e3d693431a1f9be923560d9ef651a39e6b3f66",
+    "include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp": "7a280a97cb606c1745a413387c7feb931c489a6a28e1c0adb8000b7b3336d304",
+    "src/storage/relocatable/metadata/MetadataPagePool.cpp": "fba83c1f317edcf2b4de1d689baa29c9876249821745874f42408ca731f3a585",
+    "src/storage/relocatable/metadata/MetadataPoolOwnership.cpp": "c54778e3bae397df2dec3242e56988cbcde55dfb6011f0754e9a62d6821a1350",
+    "tests/src/storage/relocatable/metadata/test_MetadataPoolOwnership.cpp": "35772446b86f1ea95efea1828cc4da9d5b411e973e84a179db45e0a88aace028"
+  }
+}

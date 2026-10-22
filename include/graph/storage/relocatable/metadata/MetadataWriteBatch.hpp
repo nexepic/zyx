@@ -52,6 +52,12 @@ namespace graph::storage {
 		// use the delta around one typed directory operation for bounded COW
 		// amplification accounting; it does not expose physical identity to readers.
 		[[nodiscard]] size_t allocatedPageCount() const noexcept { return allocated_pages_.size(); }
+        // Batch-local metadata frames only; the view cannot outlive this batch.
+        // Ownership reconciliation uses their pool slots rather than all pools.
+        [[nodiscard]] std::span<const PhysicalPageRef> allocatedMetadataPages() const noexcept {
+            return allocated_pages_;
+        }
+
 		[[nodiscard]] PhysicalSlotId createdPoolSlot(size_t index) const;
 		// A maintenance operation may materialize an empty pool before it has a
 		// metadata frame to allocate. Track it so every pre-publication failure
@@ -112,6 +118,10 @@ namespace graph::storage {
 		// earlier private frame for the same identity; only its final frame is
 		// retained for the future typed route branch at A/B publication.
 		void registerMetadataPageRoute(MetadataPageId pageId, PhysicalPageRef reference);
+        void retireMetadataFrame(PhysicalPageRef reference);
+        void retainBootstrapFrame(PhysicalPageRef reference);
+        void markMetadataRetirementComplete() noexcept { metadata_retirement_complete_ = true; }
+
 		[[nodiscard]] std::optional<PhysicalPageRef> pendingMetadataPageRoute(MetadataPageId pageId) const;
 		[[nodiscard]] std::vector<MetadataPageRoute> metadataPageRoutes() const;
 		// Allocates an application-visible Page ID from the durable Superblock
@@ -191,6 +201,11 @@ namespace graph::storage {
 		Superblock candidate_;
 		std::vector<PhysicalPageRef> allocated_pages_;
 		std::map<uint64_t, PhysicalPageRef> metadata_page_routes_;
+        std::vector<PhysicalPageRef, utils::OwnedPmrAllocator<PhysicalPageRef>> retired_metadata_frames_;
+        std::set<std::pair<uint64_t, uint8_t>, std::less<std::pair<uint64_t, uint8_t>>,
+            utils::OwnedPmrAllocator<std::pair<uint64_t, uint8_t>>> live_bootstrap_frames_;
+        bool metadata_retirement_complete_ = false;
+
 		// Keep rollback order in allocated_pages_; this index only rejects an
 		// allocator reusing the same physical frame within a COW batch.
 		std::set<std::pair<uint64_t, uint8_t>> allocated_page_locations_;
