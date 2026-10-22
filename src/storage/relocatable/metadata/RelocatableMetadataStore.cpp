@@ -107,26 +107,26 @@ namespace graph::storage {
 		}
 
         MetadataPagePoolAllocator openMetadataPoolWithControlScratch(
-                const std::shared_ptr<StorageIO> &io, const Superblock &current, bool readOnly,
+                const std::shared_ptr<StorageIO> &io, const Superblock &current,
                 const std::shared_ptr<std::pmr::memory_resource> &controlOwner) {
             std::optional<utils::OwnedAllocationScope> scratch;
             if (controlOwner) scratch.emplace(controlOwner);
             // Guaranteed copy elision constructs the nonmovable allocator in
             // its final member; constructor recovery/discovery uses MAINT.
-            return MetadataPagePoolAllocator(io, current, readOnly
-                ? MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY
-                : MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+            return MetadataPagePoolAllocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY);
         }
 
 	} // namespace
 
 	RelocatableMetadataStore::RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current,
-													   bool readOnly, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) :
+													   bool readOnly, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner,
+                                                       std::shared_ptr<MetadataSnapshotCoordination> coordination,
+                                                       std::unique_lock<std::shared_mutex> openLock) :
 		io_(std::move(io)), bootstrap_(io_), pages_(io_, current),
-		metadata_page_pool_(openMetadataPoolWithControlScratch(io_, current, readOnly, controlOwner)),
+		metadata_page_pool_(openMetadataPoolWithControlScratch(io_, current, controlOwner)),
 		catalog_(pages_, metadata_page_pool_), locations_(pages_, metadata_page_pool_),
 		allocator_(pages_, metadata_page_pool_), pool_ownership_(catalog_, allocator_, metadata_page_pool_, readOnly),
-		snapshots_(bootstrap_, {}, std::move(memoryOwner), controlOwner), retirement_(catalog_, locations_, snapshots_),
+		snapshots_(bootstrap_, {}, std::move(memoryOwner), controlOwner, std::move(coordination)), retirement_(catalog_, locations_, snapshots_),
 		reservation_coordinator_(catalog_, allocator_, locations_),
 		segment_retirement_coordinator_(catalog_, allocator_, locations_, retirement_),
 		segment_relocation_coordinator_(catalog_, allocator_, locations_, retirement_),
@@ -134,9 +134,11 @@ namespace graph::storage {
         lease_memory_owner_(std::move(leaseMemoryOwner)),
         outstanding_node_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
         outstanding_edge_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
-        read_only_(readOnly) {
+        read_only_(readOnly), synchronized_source_(current) {
         std::optional<utils::OwnedAllocationScope> scratch;
         if (controlOwner) scratch.emplace(controlOwner);
+        auto writer = snapshots_.adoptWriteLock(std::move(openLock));
+        if (!readOnly) snapshots_.recoverAllocatorUnderWrite(writer, metadata_page_pool_, current);
 		pool_ownership_.restoreCatalogOwnership(current);
 		pool_ownership_.verifyAfterOpen(current);
         if (current.hybrid_property_descriptor_root.isValid())
@@ -154,8 +156,9 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable read-only metadata store cannot publish or reclaim metadata");
 		}
-        if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return snapshots_.beginWrite();
+
         return snapshots_.beginWriteWithAdmission([this, allowHybridMutation](const Superblock &current) {
+            if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
             if (!current.hybrid_property_descriptor_root.isValid()) return;
             const auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current);
             if (!allowHybridMutation && std::ranges::any_of(descriptor.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
@@ -163,6 +166,19 @@ namespace graph::storage {
                     "native hybrid candidate rejects unadapted writes and pool reconciliation");
         }, [this](MetadataWriteGuard &writer) {
             const auto current = bootstrap_.recover();
+            if (current != synchronized_source_) {
+                // Another handle published under the same file barrier. Rebuild
+                // missing local allocation/retirement proof before allocating;
+                // every handle's active roots protect its old physical frames.
+                io_->discardBufferPoolForExternalRebase();
+                snapshots_.recoverAllocatorUnderWrite(writer, metadata_page_pool_, current);
+                pool_ownership_.restoreCatalogOwnership(current);
+                pool_ownership_.verifyAfterOpen(current);
+                pages_.rebindSuperblock(current);
+                synchronized_source_ = current;
+                debug::PerfTrace::addValue("native_metadata.external_source_refresh", 1);
+            }
+            if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
             // An optional admission can abandon private appends while its
             // durable source still uses ROW. Clean them before ANY next write.
             if (native_pool_recovery_required_) recoverNativePoolFrames(writer, current);
@@ -189,18 +205,22 @@ namespace graph::storage {
 		return open(std::move(io), std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner));
 	}
 
-	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::open(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::open(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner, std::shared_ptr<MetadataSnapshotCoordination> coordination) {
         std::optional<utils::OwnedAllocationScope> allocation;
         if (memoryOwner) allocation.emplace(memoryOwner);
+        if (!coordination) coordination = makeMetadataSnapshotCoordination(controlOwner ? controlOwner : memoryOwner);
+        std::unique_lock openLock(coordination->publication_mutex);
 		const Superblock current = recoverRelocatableMetadataSuperblock(io);
-		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, false, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner)));
+		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, false, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner), std::move(coordination), std::move(openLock)));
 	}
 
-	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::openReadOnly(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::openReadOnly(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner, std::shared_ptr<MetadataSnapshotCoordination> coordination) {
         std::optional<utils::OwnedAllocationScope> allocation;
         if (memoryOwner) allocation.emplace(memoryOwner);
+        if (!coordination) coordination = makeMetadataSnapshotCoordination(controlOwner ? controlOwner : memoryOwner);
+        std::unique_lock openLock(coordination->publication_mutex);
 		const Superblock current = recoverRelocatableMetadataSuperblock(io);
-		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, true, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner)));
+		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, true, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner), std::move(coordination), std::move(openLock)));
 	}
 
     MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const {
@@ -277,6 +297,7 @@ namespace graph::storage {
 		// same-generation route context for the next graph publication.
 		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
         // Optional diagnostics cannot turn an acknowledged publication into failure.
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
         catch (...) {}
@@ -368,6 +389,7 @@ namespace graph::storage {
         auto prepared = prepareOutstanding(result);
         prepareBootstrapRoutes(batch);
         batch.publish(bootstrap_);
+        synchronized_source_ = batch.candidate();
         // Optional diagnostics cannot turn an acknowledged publication into failure.
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
         catch (...) {}
@@ -532,6 +554,7 @@ namespace graph::storage {
 												const MetadataPublishOptions &options) {
         prepareBatchPublication(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
 		pages_.rebindSuperblock(batch.candidate());
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
         native_safe_io_epoch_ = io_->dataMutationEpoch();
@@ -3331,6 +3354,7 @@ namespace graph::storage {
 		prepareBootstrapRoutes(batch);
 		try {
 			batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
 		} catch (...) {
 			// A final durable fence can report an uncertain outcome after its complete
 			// candidate Superblock is readable. Reclaim only after this independent
@@ -3417,6 +3441,7 @@ namespace graph::storage {
 			pool_ownership_.preparePublication(batch);
 			prepareBootstrapRoutes(batch);
 			batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
 		} catch (const BootstrapPublishInterrupted &) {
 			if (bootstrap_.recover() != batch.candidate()) {
 				metadata_page_pool_.restoreEmergencyReserve(previous, successor);
@@ -4334,6 +4359,7 @@ namespace graph::storage {
 		batch.reserveMetadataFrames(requiredFrames);
 		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
         pages_.rebindSuperblock(batch.candidate());
         // Migration already validates the complete graph. Establish retirement
         // coverage here, so the first ordinary publication stays incremental.
@@ -4389,6 +4415,7 @@ namespace graph::storage {
 		batch.reserveMetadataFrames(routes.initialBootstrapFrameCount(batch));
 		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        synchronized_source_ = batch.candidate();
 		pages_.rebindSuperblock(batch.candidate());
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 		return batch.candidate();

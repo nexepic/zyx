@@ -35,38 +35,36 @@ namespace graph::storage {
 	} // namespace
 
 	struct MetadataSnapshotRegistryState {
-		mutable std::shared_mutex publication_mutex;
-		mutable std::mutex snapshots_mutex;
+        std::shared_ptr<MetadataSnapshotCoordination> coordination;
 		SuperblockFile *bootstrap = nullptr;
 		MetadataSnapshotRegistryLimits limits;
 		std::shared_ptr<std::pmr::memory_resource> memory_owner;
         std::shared_ptr<std::pmr::memory_resource> control_owner;
-        std::pmr::map<uint64_t, std::pair<Superblock, uint64_t>> snapshots;
 
 		MetadataSnapshotRegistryState(SuperblockFile &configuredBootstrap,
 									  MetadataSnapshotRegistryLimits configuredLimits,
                                       std::shared_ptr<std::pmr::memory_resource> memoryOwner,
-                                      std::shared_ptr<std::pmr::memory_resource> controlOwner) :
-            bootstrap(&configuredBootstrap), limits(configuredLimits), memory_owner(std::move(memoryOwner)), control_owner(controlOwner ? std::move(controlOwner) : memory_owner),
-            snapshots(control_owner ? control_owner.get() : std::pmr::get_default_resource()) {}
+                                      std::shared_ptr<std::pmr::memory_resource> controlOwner,
+                                      std::shared_ptr<MetadataSnapshotCoordination> sharedCoordination) :
+            coordination(sharedCoordination ? std::move(sharedCoordination) : makeMetadataSnapshotCoordination(controlOwner ? controlOwner : memoryOwner)), bootstrap(&configuredBootstrap), limits(configuredLimits), memory_owner(std::move(memoryOwner)), control_owner(controlOwner ? std::move(controlOwner) : memory_owner) {}
 	};
 
 	namespace {
 
 		void releaseSnapshot(const std::shared_ptr<MetadataSnapshotRegistryState> &state,
 							 const Superblock &superblock) {
-			std::lock_guard lock(state->snapshots_mutex);
-			auto &snapshot = state->snapshots.at(superblock.generation.value());
+			std::lock_guard lock(state->coordination->snapshots_mutex);
+			auto &snapshot = state->coordination->snapshots.at(superblock.generation.value());
 			if (--snapshot.second == 0U) {
-				state->snapshots.erase(superblock.generation.value());
+				state->coordination->snapshots.erase(superblock.generation.value());
 			}
 		}
 
 		[[nodiscard]] std::pmr::vector<Superblock> activeSuperblocks(const MetadataSnapshotRegistryState &state) {
-			std::lock_guard lock(state.snapshots_mutex);
+			std::lock_guard lock(state.coordination->snapshots_mutex);
 			std::pmr::vector<Superblock> activeSnapshots(state.control_owner ? state.control_owner.get() : std::pmr::get_default_resource());
-			activeSnapshots.reserve(state.snapshots.size());
-			for (const auto &[generation, snapshot]: state.snapshots) {
+			activeSnapshots.reserve(state.coordination->snapshots.size());
+			for (const auto &[generation, snapshot]: state.coordination->snapshots) {
 				static_cast<void>(generation);
 				activeSnapshots.push_back(snapshot.first);
 			}
@@ -74,6 +72,25 @@ namespace graph::storage {
 		}
 
 	} // namespace
+
+    MetadataSnapshotCoordination::MetadataSnapshotCoordination(std::shared_ptr<std::pmr::memory_resource> owner)
+        : memory_owner(std::move(owner)), snapshots(memory_owner ? memory_owner.get() : std::pmr::get_default_resource()) {}
+    std::shared_ptr<MetadataSnapshotCoordination> makeMetadataSnapshotCoordination(
+        std::shared_ptr<std::pmr::memory_resource> owner) {
+        return std::allocate_shared<MetadataSnapshotCoordination>(
+            utils::OwnedPmrAllocator<MetadataSnapshotCoordination>(owner), owner);
+    }
+    void MetadataSnapshotRegistry::recoverAllocatorUnderWrite(const MetadataWriteGuard &guard,
+        MetadataPagePoolAllocator &allocator, const Superblock &current) {
+        if (!guard.isValid() || guard.state_.get() != state_.get() || state_->bootstrap->recover() != current)
+            throw std::invalid_argument("metadata rebase requires its current writer domain");
+        allocator.recoverWithSnapshots(current, activeSuperblocks(*state_));
+    }
+    MetadataWriteGuard MetadataSnapshotRegistry::adoptWriteLock(std::unique_lock<std::shared_mutex> lock) {
+        if (!lock.owns_lock() || lock.mutex() != &state_->coordination->publication_mutex)
+            throw std::invalid_argument("metadata open requires its coordination writer lock");
+        return MetadataWriteGuard(state_, std::move(lock));
+    }
 
 	MetadataSnapshotPin::MetadataSnapshotPin(std::shared_ptr<MetadataSnapshotRegistryState> state,
 											 Superblock superblock, std::shared_ptr<MetadataPageReadContext> readContext) noexcept :
@@ -122,9 +139,10 @@ namespace graph::storage {
 	MetadataSnapshotRegistry::MetadataSnapshotRegistry(SuperblockFile &bootstrap,
 													   MetadataSnapshotRegistryLimits limits,
                                                        std::shared_ptr<std::pmr::memory_resource> memoryOwner,
-                                                       std::shared_ptr<std::pmr::memory_resource> controlOwner) :
+                                                       std::shared_ptr<std::pmr::memory_resource> controlOwner,
+                                                       std::shared_ptr<MetadataSnapshotCoordination> coordination) :
         state_(std::allocate_shared<MetadataSnapshotRegistryState>(
-            utils::OwnedPmrAllocator<MetadataSnapshotRegistryState>(controlOwner ? controlOwner : memoryOwner), bootstrap, limits, memoryOwner, controlOwner)) {
+            utils::OwnedPmrAllocator<MetadataSnapshotRegistryState>(controlOwner ? controlOwner : memoryOwner), bootstrap, limits, memoryOwner, controlOwner, std::move(coordination))) {
 		if (limits.maximum_pins_per_generation == 0U) {
 			throw std::invalid_argument("relocatable metadata snapshot registry needs a positive per-generation pin limit");
 		}
@@ -133,15 +151,15 @@ namespace graph::storage {
 	MetadataSnapshotRegistry::~MetadataSnapshotRegistry() = default;
 
 	MetadataSnapshotPin MetadataSnapshotRegistry::openSnapshot() const {
-		std::shared_lock lock(state_->publication_mutex);
+		std::shared_lock lock(state_->coordination->publication_mutex);
 		const Superblock snapshot = state_->bootstrap->recover();
 		SuperblockCodec::validate(snapshot);
 		// Allocate before registration so an allocation failure cannot leak a pin.
 		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), snapshot, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{
-			std::lock_guard snapshotsLock(state_->snapshots_mutex);
+			std::lock_guard snapshotsLock(state_->coordination->snapshots_mutex);
 			auto [position, inserted] =
-					state_->snapshots.emplace(snapshot.generation.value(), std::make_pair(snapshot, 0U));
+					state_->coordination->snapshots.emplace(snapshot.generation.value(), std::make_pair(snapshot, 0U));
 			static_cast<void>(inserted);
 			if (position->second.second >= state_->limits.maximum_pins_per_generation) {
 				throwSnapshotRegistryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -153,13 +171,13 @@ namespace graph::storage {
 	}
 
 	MetadataWriteGuard MetadataSnapshotRegistry::beginWrite() {
-		return MetadataWriteGuard(state_, std::unique_lock(state_->publication_mutex));
+		return MetadataWriteGuard(state_, std::unique_lock(state_->coordination->publication_mutex));
 	}
 
     MetadataWriteGuard MetadataSnapshotRegistry::beginWriteWithAdmission(
         const std::function<void(const Superblock &)> &admission,
         const std::function<void(MetadataWriteGuard &)> &initialize) {
-        std::unique_lock lock(state_->publication_mutex);
+        std::unique_lock lock(state_->coordination->publication_mutex);
         if (admission) admission(state_->bootstrap->recover());
         return MetadataWriteGuard(state_, std::move(lock), initialize);
     }
@@ -181,9 +199,9 @@ namespace graph::storage {
         const Superblock &current) const {
         auto readContext = createWriterReadContext(guard, current);
 		{
-			std::lock_guard snapshotsLock(state_->snapshots_mutex);
+			std::lock_guard snapshotsLock(state_->coordination->snapshots_mutex);
 			auto [position, inserted] =
-					state_->snapshots.emplace(current.generation.value(), std::make_pair(current, 0U));
+					state_->coordination->snapshots.emplace(current.generation.value(), std::make_pair(current, 0U));
 			static_cast<void>(inserted);
 			if (position->second.second >= state_->limits.maximum_pins_per_generation) {
 				throwSnapshotRegistryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -215,8 +233,8 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable active snapshot inspection requires this registry's active writer and predicate");
 		}
-		std::lock_guard lock(state_->snapshots_mutex);
-		for (const auto &[generation, snapshot]: state_->snapshots) {
+		std::lock_guard lock(state_->coordination->snapshots_mutex);
+		for (const auto &[generation, snapshot]: state_->coordination->snapshots) {
 			static_cast<void>(generation);
 			if (predicate(snapshot.first)) {
 				return true;
@@ -233,9 +251,9 @@ namespace graph::storage {
         if (exclude && !owns(*exclude))
             throw std::invalid_argument("snapshot pressure exclusion must be a live pin from this registry");
         const auto excluded = exclude ? exclude->superblock().generation : Generation{};
-        std::lock_guard lock(state_->snapshots_mutex);
+        std::lock_guard lock(state_->coordination->snapshots_mutex);
         MetadataSnapshotPressure result;
-        for (const auto &[generation, snapshot] : state_->snapshots) {
+        for (const auto &[generation, snapshot] : state_->coordination->snapshots) {
             const uint64_t count = snapshot.second - static_cast<uint64_t>(excluded.value() == generation);
             if (!count) continue;
             result.active_snapshot_count += count;

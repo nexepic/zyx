@@ -877,6 +877,30 @@ namespace graph::storage {
 		}
 	}
 
+    void MetadataPagePoolAllocator::recoverWithSnapshots(const Superblock &current,
+        std::span<const Superblock> activeSnapshots) {
+        SuperblockCodec::validate(current);
+        utils::OwnedStdVector<Superblock> protectedRoots{current};
+        for (const auto &root : activeSnapshots) {
+            SuperblockCodec::validate(root);
+            if (root.database_id != current.database_id || root.generation > current.generation ||
+                root.checkpoint_lsn > current.checkpoint_lsn || root.data_region_offset != current.data_region_offset ||
+                (root.generation == current.generation && root != current))
+                throwCatalogPoolError(FormatError::FERR_INVALID_STATE, "metadata rebase has a foreign pinned root");
+            if (root != current) protectedRoots.push_back(root);
+        }
+        std::lock_guard lock(mutex_);
+        if (!active_batches_.empty())
+            throwCatalogPoolError(FormatError::FERR_INVALID_STATE, "metadata source rebase cannot discard an unpublished batch");
+        try {
+            emergency_reserve_ = current.metadata_emergency_reserve;
+            discoverReachablePoolsLocked(current);
+            for (size_t i = 1; i < protectedRoots.size(); ++i) discoverReachablePoolsLocked(protectedRoots[i], false);
+            reconcileReachabilityLocked(protectedRoots, true, true, true);
+            poisoned_ = false;
+        } catch (...) { poisoned_ = true; throw; }
+    }
+
 	void MetadataPagePoolAllocator::rebaseToPublishedSuperblock(const Superblock &superblock) {
 		SuperblockCodec::validate(superblock);
 		std::lock_guard lock(mutex_);
@@ -1691,12 +1715,14 @@ namespace graph::storage {
 		}
 	}
 
-	void MetadataPagePoolAllocator::discoverReachablePoolsLocked(const Superblock &superblock) {
+	void MetadataPagePoolAllocator::discoverReachablePoolsLocked(const Superblock &superblock, bool reset) {
+        if (reset) {
 		pools_.clear();
         unconfirmed_ownership_head_ = 0U;
         unconfirmed_ownership_count_ = 0U;
         retired_metadata_head_ = 0U; retired_metadata_tail_ = 0U; retired_metadata_count_ = 0U; retirement_base_.reset();
 		allocation_cursor_slot_.reset();
+        }
 		MetadataPageFile pages(io_, superblock);
 		std::set<std::pair<uint64_t, uint8_t>> visitedPages;
 		std::set<uint64_t> reachableSlots;
@@ -1878,7 +1904,7 @@ namespace graph::storage {
 			const PoolState reserve = readPoolLocked(emergency_reserve_.physical_slot, emergency_reserve_.pool_token,
 													 emergency_reserve_.generation, emergency_reserve_.committed_lsn);
 			const auto [iterator, inserted] = pools_.emplace(emergency_reserve_.physical_slot.value(), reserve);
-			if (!inserted && (reserve.header.allocated_frames == 0U ||
+			if (!inserted && reachableSlots.contains(emergency_reserve_.physical_slot.value()) && (reserve.header.allocated_frames == 0U ||
 							  (reserve.header.flags & MPPF_EMERGENCY_RESERVE_ORIGIN) == 0U)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata emergency reserve aliases a root-reachable pool");

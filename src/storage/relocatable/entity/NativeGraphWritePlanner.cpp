@@ -68,6 +68,7 @@ namespace graph::storage {
 			PhysicalPageRef node_directory_root{};
 			PhysicalPageRef edge_directory_root{};
 			std::vector<InsertionTarget> targets;
+            std::array<bool, 2> complete_kinds{};
 			bool valid = false;
 		};
 		std::mutex insertion_cache_mutex;
@@ -2969,11 +2970,17 @@ namespace graph::storage {
 		std::vector<NativeGraphWritePlannerContext::InsertionTarget> priorInsertionTargets;
 		bool priorInsertionCacheValid = false;
 		bool usedInsertionTargetCache = false;
+        std::array<bool, 2> insertionKindsComplete{};
 		{
 			std::lock_guard cacheLock(context_->insertion_cache_mutex);
 			const auto &cache = context_->insertion_cache;
 			priorInsertionCacheValid = cache.valid;
 			priorInsertionTargets = cache.targets;
+            // PhysicalPageRef includes the COW generation, so this also
+            // rejects a retired frame address reused by another publication.
+            insertionKindsComplete = {
+                cache.valid && cache.complete_kinds[0] && cache.node_directory_root == snapshot_.superblock().node_entity_directory_root,
+                cache.valid && cache.complete_kinds[1] && cache.edge_directory_root == snapshot_.superblock().edge_entity_directory_root};
 			// Directory roots are physical COW identities and can change after an
 			// unrelated insertion. Cached logical PageIds remain usable; each selected
 			// candidate is re-authenticated lazily against the current snapshot below.
@@ -2981,8 +2988,8 @@ namespace graph::storage {
 				return std::ranges::any_of(cache.targets, [kind](const auto &target) { return target.kind == kind; });
 			};
 			usedInsertionTargetCache = cache.valid &&
-					(!needsNodeInsertSearch || hasCachedKind(EntityPageRecordKind::EPRK_NODE)) &&
-					(!needsEdgeInsertSearch || hasCachedKind(EntityPageRecordKind::EPRK_EDGE));
+					(!needsNodeInsertSearch || insertionKindsComplete[0] || hasCachedKind(EntityPageRecordKind::EPRK_NODE)) &&
+                    (!needsEdgeInsertSearch || insertionKindsComplete[1] || hasCachedKind(EntityPageRecordKind::EPRK_EDGE));
 			if (usedInsertionTargetCache) {
 				existingInsertCandidates.reserve(cache.targets.size());
 				for (const auto &target : cache.targets) {
@@ -3002,12 +3009,14 @@ namespace graph::storage {
 					debug::PerfTrace::addValue("native_graph.commit.entity_insert_node_directory_pages", 1);
 					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
 				});
+                insertionKindsComplete[0] = true;
 			}
 			if (needsEdgeInsertSearch) {
 				context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
 					debug::PerfTrace::addValue("native_graph.commit.entity_insert_edge_directory_pages", 1);
 					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
 				});
+                insertionKindsComplete[1] = true;
 			}
 			for (const auto &[pageValue, kind]: currentEntityPageKinds) {
 				const PageId pageId(pageValue);
@@ -4324,6 +4333,7 @@ namespace graph::storage {
 				}
 				context_->insertion_cache.node_directory_root = nextSnapshot.superblock().node_entity_directory_root;
 				context_->insertion_cache.edge_directory_root = nextSnapshot.superblock().edge_entity_directory_root;
+				context_->insertion_cache.complete_kinds = insertionKindsComplete;
 				context_->insertion_cache.valid = true;
 				nextSnapshot.release();
 			} catch (...) {

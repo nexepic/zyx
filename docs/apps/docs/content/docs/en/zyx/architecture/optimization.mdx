@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 85%; P1/P2/P3/P4/P5 are accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 90%; P1/P2/P3/P4/P5/P6 are accepted and the Kuzu performance objective is unmet.**
 
 Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
 
@@ -50,8 +50,8 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 | P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Accepted |
 | P4 | Cost-selected label/candidate scans | 15% | Accepted |
 | P5 | Directly typed batches from storage through filtering/aggregation | 20% | Accepted |
-| P6 | Bulk import reusing the new commit path | 5% | Batch-ID prerequisite integrated; not accepted |
-| P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Not started |
+| P6 | Bulk import reusing the new commit path | 5% | Accepted |
+| P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Core gap in progress; final matrix not run |
 
 Freeze weights after P0. Award an item's weight only after production integration, its mechanism evidence, and necessary tests all pass. Designs, prototypes, cache-hit rates, and lines of code earn no progress. Progress cannot exceed 90% before P7 passes; gap reports, failed candidates, and archives cannot earn the last 10%. Rewriting this document does not increase implementation progress.
 
@@ -104,13 +104,25 @@ Evidence `20261022-core-cost-direct/`: 263 necessary module tests pass. One unch
 
 A bounded same-executor ROW/compact-field prototype retains Release identities and all samples. It isolates synthetic in-memory representation, excluding actual directories, IO, space and update lifecycle; it grants neither persistent adoption nor Kuzu acceptance. No persistent layout changed. If P7 proves field positioning remains dominant, continue within this core scope. A new layout still requires a prior storage-spec revision and dense/sparse access, random gather, bounded updates, demotion, deletion, old pins, reclamation and file-growth comparison. A prototype without production consumers/lifecycle earns no extra progress.
 
-## 8. P6: Bulk import reusing the new mechanisms
+## 8. Accepted bounded import contract
 
-Confirm dominant import costs in P0. Reuse incremental commit and existing bulk APIs, merge entity/property changes by page, and build indexes from sorted batches where appropriate instead of per-row lookup/update and repeated publication. Do not create an import backend inconsistent with online storage.
+P6 reuses existing public batches, ID ranges, page-grouped entity/property writes, ordered index changes and incremental commit, without a separate backend or higher limits. Empty insertion targets retain a record-kind completeness proof bound to the exact physical COW root including generation. Local publication maintains it; foreign entity-root changes invalidate it. No cached target is different from never having checked.
 
-Register memory limits, batch size, transaction boundaries, scratch usage, failure visibility, recovery, and cleanup. Include all indexes, constraints, and final durability. Over-memory input must use existing supported bounded mechanisms or fail explicitly; do not expand this into a general external-sort rewrite. Verify query results, node/edge counts, and index validity after import.
+Handles for one opened-file identity plus database ID share publication barriers/pin registration while guards retain local registry ownership. A foreign publication discards stale control caches and rebuilds missing allocator/retirement proof and metadata ID bounds against all pins. Every own publication advances local source identity, preserving incremental single-handle writes. Open/recovery must protect other handles' old roots. Preserve accounts, cancellation, constraints, indexes, fault refunds and data-before-root.
 
-## 9. P7: Material gains and final objective
+Evidence `20261022-core-cost-import/`: 262 module tests pass. Three aligned 65-row batches yield three cache hits and zero entity-directory/global metadata traversals. Public 1000-node/1000-edge ingestion uses two ID ranges and verifies indexes, grouping and topology after reopen. Foreign deletion, 20 alternating publications, eviction of old record caches, old-pin reads, drain and integrity pass. Input/batch/durability boundaries remain frozen under P0; import throughput has no final acceptance yet.
+
+## 9. P7: Material improvement and final objectives
+
+### 9.0 Known core gap before final freezing
+
+Cold insertion still enumerates the Entity Map to find holes: the medium 1000-node diagnostic visits 225000 mappings. Negative caching fixes repeated continuous-import discovery only. **Remove this known population-dependent work before starting the final matrix; do not hide it through warming or moving work outside timing.**
+
+Next implement a durable page-level free-space summary using existing B+Tree/atomic publication, without another backend or WAL. Locate candidates by record kind, free slots and complete PageId. Distinguish complete empty state from missing/stale state. Completeness binds exact entity-directory roots, not counts, addresses alone or hashes. Reserve an internal namespace and reject user index CRUD. The summary is derived; allocation still authenticates current directories, page identity and actual slots.
+
+First establish when candidate directory roots become available in the coordinator. Publish summaries, fences, entities/properties/indexes, allocation and retirement in one A/B change. Maintain creation, deletion, relocation and empty-page retirement. Explicit old-file initialization/rebuild must record one-time time, memory, space and failure state; silently migrating at open/ordinary writes is not constant cost. Incomplete initialization cannot certify absence. Reuse existing bounded batches or reject over-budget input. Any necessary new wire format still requires a prior storage-spec revision and no silent reinterpretation.
+
+Acceptance includes cold reopen with fixed k and growing populations, complete empty summaries, sparse holes, type separation, old pins, faults/cancellation, corrupt/missing index entries and file growth. Full integrity checks derived summaries against authoritative pages. Prototypes/initialization earn no extra progress; P7 retains its final all-gates weight.
 
 ### 9.1 Measurement windows and acceptance
 

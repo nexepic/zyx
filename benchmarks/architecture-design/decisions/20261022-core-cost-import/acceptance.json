@@ -1,0 +1,61 @@
+{
+  "accepted_item": "P6 bounded import reuses incremental commit and batched identity/index/entity paths",
+  "progress_percent": 90,
+  "test_count": 262,
+  "full_suite": false,
+  "module_properties": [
+    {
+      "suite": "CppApiTest",
+      "name": "BoundedImportBatchPublishesNodesEdgesAndIndexesThroughOneGraphCommit",
+      "properties": {
+        "imported_nodes": "1000",
+        "imported_edges": "1000",
+        "id_range_reservations": "2",
+        "full_metadata_traversals": "0"
+      }
+    },
+    {
+      "suite": "RelocatableStorageBackendTest",
+      "name": "FullEntityPagesRemainKnownFullAcrossImportBatches",
+      "properties": {
+        "batch_rows": "65",
+        "cache_hits_across_three_batches": "3",
+        "entity_directory_entries_visited": "0",
+        "full_metadata_traversals": "0"
+      }
+    },
+    {
+      "suite": "RelocatableStorageBackendTest",
+      "name": "AnotherHandleDeletionInvalidatesNegativeInsertionKnowledge",
+      "properties": {
+        "cold_refresh_directory_entries": "259",
+        "protected_old_rows": "260",
+        "alternating_publications": "20"
+      }
+    }
+  ],
+  "format_change": false,
+  "limits_increased": false,
+  "full_performance_matrix": false,
+  "kuzu_objective_met": false,
+  "debug_library_sha256": "37b4d72f8750fdb3f6515aa8172b55b4c4aefcbbd9b707caf2b995a520fd4fc3",
+  "release_library_sha256": "9faa4f71c8dd80a2de48a496331e5eb6c334b49ab0ffc702d2bb91ccbbbf0ff8",
+  "sources": {
+    "include/graph/storage/relocatable/metadata/MetadataPagePool.hpp": "34a95d633754e1abff0131bba24ddbceea0bca9c714f2d3b63b3523e0b8d7b50",
+    "include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp": "ee88be4cd9ef1fd3afa7ed4151cc25a4d362f8c17e00cd3001968135ae2c3026",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "78b93a3821802d2d814a7eb38a64d2ae32421c2a39e7abcd5960df6404824bb7",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "0c475e75ca19e4c696858eb73125a4c712ffc1d9ecfa28b97cd97d775d35265b",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "454a3ecc2eca594f8a0c1dc924ca7053f3285c0fa41ff51c9c1865ebeb2d9a1d",
+    "src/storage/relocatable/metadata/MetadataPagePool.cpp": "9642c2b8147c320cbb6212d1006d9b5580d69849d91c655927bcfd030a1a8cad",
+    "src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp": "007ace0855a2efb6a490dc26b52f05ecd89543ade236ba9fe34cce2757cc18d0",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "45079e032e4ce8b3b9a731059e3e606dd75627c6934b5cb02587bcd65d18df1f",
+    "tests/src/api/test_ApiTransaction.cpp": "f29d2a7a042b9d3928bd1aeb4cc008b1c201cb6ceafcc558100a87d93c5e88b3",
+    "tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp": "6090fd11e3927a01b16ef44399fb19d51479b45a1de407de5006ce6c8d486d25",
+    "tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp": "60225be858ec7c4c2aafac3933248ca49983d40f1eb384a56493708fb8058f31"
+  },
+  "remaining_core_gap": "A newly opened insertion context still discovers free entity slots by enumerating existing entity mappings. The prechange 1000-node diagnostic visits 225000 mappings. P7 must resolve this known cold-insert cost before freezing the final performance matrix.",
+  "diagnostic_limitations": [
+    "Nested timers overlap and are not CPU attribution",
+    "Prechange diagnostic build recipe has an inherited Debug purpose label but links the separately frozen Release candidate; use counters only"
+  ]
+}

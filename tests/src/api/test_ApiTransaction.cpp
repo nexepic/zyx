@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "ApiTestFixture.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 // ============================================================================
 // Transaction API Tests
@@ -616,4 +617,42 @@ TEST_F(CppApiTest, ExecuteImplicitTransactionCommit) {
 	auto val = queryRes.get("n.val");
 	EXPECT_TRUE(std::holds_alternative<int64_t>(val));
 	EXPECT_EQ(std::get<int64_t>(val), 99);
+}
+
+TEST_F(CppApiTest, BoundedImportBatchPublishesNodesEdgesAndIndexesThroughOneGraphCommit) {
+    ASSERT_TRUE(db->createNodePropertyIndexes("ImportUser", {"id", "score"}));
+    std::vector<zyx::PropertyColumn> columns{{"id", {}}, {"score", {}}, {"country", {}}};
+    for (int64_t row = 0; row < 1000; ++row) {
+        columns[0].values.push_back(std::string("import-") + std::to_string(row));
+        columns[1].values.push_back(row); columns[2].values.push_back(std::string(row % 2 ? "US" : "CN"));
+    }
+    struct Trace {
+        bool previous = graph::debug::PerfTrace::areValuesEnabled();
+        Trace() { graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true); }
+        ~Trace() { graph::debug::PerfTrace::setValueCollectionEnabled(previous); }
+    } trace;
+    auto transaction = db->beginBulkTransaction();
+    const auto nodes = transaction.createNodesColumnar("ImportUser", 1000, columns); ASSERT_EQ(nodes.size(), 1000U);
+    const auto edges = transaction.createEdgesColumnar("IMPORT_EDGE", std::vector<int64_t>(1000, nodes.front()),
+        std::vector<int64_t>(1000, nodes.back()), {{"weight", std::vector<zyx::Value>(1000, int64_t{1})}});
+    ASSERT_EQ(edges.size(), 1000U); transaction.commit();
+    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+    ASSERT_TRUE(counters.contains("native_graph.write.id_reservation_calls"));
+    EXPECT_EQ(counters.at("native_graph.write.id_reservation_calls").totalValue, 2);
+    RecordProperty("imported_nodes", static_cast<int>(nodes.size()));
+    RecordProperty("imported_edges", static_cast<int>(edges.size()));
+    RecordProperty("id_range_reservations", static_cast<int>(counters.at("native_graph.write.id_reservation_calls").totalValue));
+    RecordProperty("full_metadata_traversals", 0);
+    EXPECT_FALSE(counters.contains("native_metadata.external_source_refresh"));
+    EXPECT_FALSE(counters.contains("native_metadata.reclaim.full_traversals"));
+    db->close(); db->open();
+    auto node = db->execute("MATCH (u:ImportUser {id:'import-517'}) RETURN u.score AS score");
+    ASSERT_TRUE(node.isSuccess()); ASSERT_TRUE(node.hasNext()); node.next(); EXPECT_EQ(std::get<int64_t>(node.get("score")), 517);
+    auto counts = db->execute("MATCH (u:ImportUser) RETURN u.country AS country,count(*) AS rows");
+    ASSERT_TRUE(counts.isSuccess()); size_t groups = 0;
+    while (counts.hasNext()) { counts.next(); EXPECT_EQ(std::get<int64_t>(counts.get("rows")), 500); ++groups; }
+    EXPECT_EQ(groups, 2U);
+    auto topology = db->execute("MATCH (:ImportUser {id:'import-0'})-[r:IMPORT_EDGE]->(:ImportUser {id:'import-999'}) RETURN count(r) AS rows,sum(r.weight) AS weight");
+    ASSERT_TRUE(topology.isSuccess()); ASSERT_TRUE(topology.hasNext()); topology.next();
+    EXPECT_EQ(std::get<int64_t>(topology.get("rows")), 1000); EXPECT_EQ(std::get<int64_t>(topology.get("weight")), 1000);
 }

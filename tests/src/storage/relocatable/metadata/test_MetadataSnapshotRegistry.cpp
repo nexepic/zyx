@@ -441,3 +441,24 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, WriterDecodeCacheDoesNotConsumeP
     expectFormatError([&] { (void)registry.pinCurrentUnderWrite(writer, initial); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
     context.reset(); EXPECT_EQ(registry.activeSnapshotCount(), 1U); pin.release(); EXPECT_EQ(registry.activeSnapshotCount(), 0U);
 }
+
+TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainCountsForeignPinsButKeepsGuardOwnershipLocal) {
+    SuperblockFile firstBootstrap(io); firstBootstrap.initializeNew(superblock(1, 1));
+    SuperblockFile secondBootstrap(io); auto domain = makeMetadataSnapshotCoordination();
+    MetadataSnapshotRegistry first(firstBootstrap, {}, {}, {}, domain), second(secondBootstrap, {}, {}, {}, domain);
+    auto pin = first.openSnapshot();
+    EXPECT_EQ(second.activeSnapshotCount(), 1U);
+    auto writer = second.beginWrite();
+    EXPECT_TRUE(second.anyActiveSnapshot(writer, [](const auto &root) { return root.generation == Generation(1); }));
+    EXPECT_THROW((void)first.anyActiveSnapshot(writer, [](const auto &) { return true; }), FormatException);
+    writer.release(); pin.release(); EXPECT_EQ(first.activeSnapshotCount(), 0U); EXPECT_EQ(second.activeSnapshotCount(), 0U);
+}
+TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainSerializesWritersAcrossRegistryInstances) {
+    SuperblockFile bootstrap(io); bootstrap.initializeNew(superblock(1, 1));
+    auto domain = makeMetadataSnapshotCoordination();
+    MetadataSnapshotRegistry first(bootstrap, {}, {}, {}, domain), second(bootstrap, {}, {}, {}, domain);
+    auto held = first.beginWrite();
+    auto waiting = std::async(std::launch::async, [&] { auto writer = second.beginWrite(); return writer.isValid(); });
+    EXPECT_EQ(waiting.wait_for(20ms), std::future_status::timeout);
+    held.release(); EXPECT_TRUE(waiting.get());
+}

@@ -1233,10 +1233,12 @@ namespace graph::storage {
             std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> open(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
             std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
-            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {},
+            std::shared_ptr<MetadataSnapshotCoordination> coordination = {});
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> openReadOnly(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
             std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
-            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {},
+            std::shared_ptr<MetadataSnapshotCoordination> coordination = {});
 
 		RelocatableMetadataStore(const RelocatableMetadataStore &) = delete;
 		RelocatableMetadataStore &operator=(const RelocatableMetadataStore &) = delete;
@@ -2009,7 +2011,9 @@ namespace graph::storage {
 		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly,
                                  std::shared_ptr<std::pmr::memory_resource> memoryOwner,
                                  std::shared_ptr<std::pmr::memory_resource> controlOwner,
-                                 std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner);
+                                 std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner,
+                                 std::shared_ptr<MetadataSnapshotCoordination> coordination,
+                                 std::unique_lock<std::shared_mutex> openLock);
 
 		std::shared_ptr<StorageIO> io_;
 		SuperblockFile bootstrap_;
@@ -2032,6 +2036,7 @@ namespace graph::storage {
         std::pmr::map<uint64_t, uint64_t> outstanding_node_id_leases_;
 		std::pmr::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
 		bool read_only_ = false;
+        Superblock synchronized_source_{};
         // Writer-protected physical recovery state; never a permission for generic writes.
         friend class HybridPropertyPoolPlacement;
         std::array<CatalogEntry, 12> native_pool_placement_hints_{};
