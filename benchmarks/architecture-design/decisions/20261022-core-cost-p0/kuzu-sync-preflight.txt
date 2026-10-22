@@ -1,0 +1,7 @@
+99751 fsync(3)                          = 0
+99751 fdatasync(4)                      = 0
+99751 fdatasync(5)                      = 0
+99751 fdatasync(4)                      = 0
+99751 fdatasync(3)                      = 0
+99752 +++ exited with 0 +++
+99751 +++ exited with 0 +++

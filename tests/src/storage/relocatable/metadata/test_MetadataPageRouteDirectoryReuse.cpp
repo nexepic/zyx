@@ -100,7 +100,7 @@ TEST_F(MetadataRouteBranchReuseTest, ChangedLeafCopiesItsPathAndPreservesUnchang
     const auto root = directory.buildNextRouteBranch(batch, oldRoot); const auto newLeaves = leaves(pages, root);
     EXPECT_EQ(newLeaves.at(0U), oldLeaves.at(0U)); EXPECT_EQ(newLeaves.at(1U), oldLeaves.at(1U));
     EXPECT_NE(newLeaves.at(2U), oldLeaves.at(2U));
-    EXPECT_LT(batch.allocatedPageCount() - before + 1U, capacity);
+    EXPECT_EQ(batch.allocatedPageCount() - before + 1U, capacity);
     EXPECT_EQ(directory.find(published, oldRoot, expected.back().page_id), expected.back().physical_reference);
     auto wanted = expected; wanted.back().physical_reference = replacement;
     EXPECT_EQ(directory.collectRoutesFromRouteBranch(batch.candidate(), root), wanted);
@@ -118,15 +118,17 @@ TEST_F(MetadataRouteBranchReuseTest, ForcedRefreshRewritesAllPlumbingEvenWithIde
     EXPECT_EQ(batch.allocatedPageCount() - before + 1U, capacity);
     EXPECT_EQ(directory.collectRoutesFromRouteBranch(batch.candidate(), root), expected);
 }
-TEST_F(MetadataRouteBranchReuseTest, UnmodifiedCorruptLeafIsRejectedBeforeAnyPublicationFrameAllocation) {
+TEST_F(MetadataRouteBranchReuseTest, UnvisitedCorruptionIsDetectedOnAccessAndCompleteIntegrity) {
     seed(3U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
     MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
     const auto oldLeaves = leaves(pages, oldRoot); const auto replacement = batch.allocatePage();
     batch.registerMetadataPageRoute(expected.front().page_id, replacement);
     const std::byte corrupt{0U}; io->writeAt(pages.pageOffset(oldLeaves.at(2U)), &corrupt, 1U);
-    const auto before = batch.allocatedPageCount();
-    EXPECT_THROW((void)directory.buildNextRouteBranch(batch, oldRoot), FormatException);
-    EXPECT_EQ(batch.allocatedPageCount(), before);
+    const auto root = directory.buildNextRouteBranch(batch, oldRoot);
+    EXPECT_EQ(directory.find(batch.candidate(), root, expected.front().page_id), replacement);
+    EXPECT_THROW((void)directory.find(batch.candidate(), root, expected.back().page_id), FormatException);
+    EXPECT_THROW((void)directory.collectRoutesFromRouteBranch(batch.candidate(), root), FormatException);
+    EXPECT_THROW((void)directory.collectRoutesFromRouteBranch(published, oldRoot), FormatException);
 }
 TEST_F(MetadataRouteBranchReuseTest, RootGrowthRetainsTheUnchangedOldLeaf) {
     seed(1U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
@@ -142,7 +144,7 @@ TEST_F(MetadataRouteBranchReuseTest, RootGrowthRetainsTheUnchangedOldLeaf) {
     EXPECT_EQ(directory.find(batch.candidate(), root, farId), replacement);
     EXPECT_EQ(directory.find(published, oldRoot, expected.front().page_id), expected.front().physical_reference);
 }
-TEST_F(MetadataRouteBranchReuseTest, WorkAdmissionDenialRefundsOptionalIndexAndFallsBackToFullRewrite) {
+TEST_F(MetadataRouteBranchReuseTest, UnchangedOverlayNeedsNoFullRouteIndexUnderSmallBudget) {
     seed(300U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
     MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
     auto work = reuseWorkGrant(16384U); PhysicalPageRef root;
@@ -153,7 +155,96 @@ TEST_F(MetadataRouteBranchReuseTest, WorkAdmissionDenialRefundsOptionalIndexAndF
         EXPECT_LE(work->used(), work->capacity());
     }
     EXPECT_EQ(work->used(), 0U); const auto counters = graph::debug::PerfTrace::snapshotAndReset();
-    ASSERT_TRUE(counters.contains("native_graph.route.reuse_admission_fallback"));
-    EXPECT_NE(root, oldRoot);
+    EXPECT_FALSE(counters.contains("native_graph.route.publication_base_traversals"));
+    EXPECT_FALSE(counters.contains("native_graph.route.reuse_admission_fallback"));
+    EXPECT_EQ(root, oldRoot);
     EXPECT_EQ(directory.collectRoutesFromRouteBranch(batch.candidate(), root), expected);
+}
+
+TEST_F(MetadataRouteBranchReuseTest, ModifiedCorruptLeafFailsBeforeAllocatingRouteFrames) {
+    seed(3U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+    MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+    const auto oldLeaves = leaves(pages, oldRoot); const auto replacement = batch.allocatePage();
+    batch.registerMetadataPageRoute(expected.front().page_id, replacement);
+    const std::byte corrupt{0U}; io->writeAt(pages.pageOffset(oldLeaves.at(0U)), &corrupt, 1U);
+    const auto before = batch.allocatedPageCount();
+    EXPECT_THROW((void)directory.buildNextRouteBranch(batch, oldRoot), FormatException);
+    EXPECT_EQ(batch.allocatedPageCount(), before);
+}
+TEST_F(MetadataRouteBranchReuseTest, FixedChangeVisitsOnlyItsPathAsTheRouteSetGrows) {
+    for (const size_t count : {3U, 300U, 900U}) {
+        expected.clear(); seed(count);
+        MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+        MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+        const auto height = pages.readMetadataRadix(oldRoot).level + 1U;
+        const auto replacement = batch.allocatePage();
+        batch.registerMetadataPageRoute(expected.back().page_id, replacement);
+        graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
+        const auto capacity = directory.nextBootstrapFrameCount(batch);
+        const auto before = batch.allocatedPageCount();
+        const auto root = directory.buildNextRouteBranch(batch, oldRoot);
+        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+        EXPECT_FALSE(counters.contains("native_graph.route.publication_base_traversals"));
+        ASSERT_TRUE(counters.contains("native_graph.route.incremental_source_frames"));
+        EXPECT_LE(counters.at("native_graph.route.incremental_source_frames").totalValue, height + 1);
+        EXPECT_LE(capacity, height + 2U);
+        RecordProperty("source_frames_" + std::to_string(count),
+            std::to_string(counters.at("native_graph.route.incremental_source_frames").totalValue));
+        RecordProperty("tree_height_" + std::to_string(count), std::to_string(height));
+        RecordProperty("reserved_frames_" + std::to_string(count), std::to_string(capacity));
+        EXPECT_EQ(batch.allocatedPageCount() - before + 1U, capacity);
+        EXPECT_EQ(directory.find(batch.candidate(), root, expected.back().page_id), replacement);
+        EXPECT_EQ(directory.find(published, oldRoot, expected.back().page_id), expected.back().physical_reference);
+    }
+}
+TEST_F(MetadataRouteBranchReuseTest, DuplicateNewPhysicalTargetCannotEnterSeparateLeaves) {
+    seed(3U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+    MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+    const auto replacement = batch.allocatePage();
+    batch.registerMetadataPageRoute(expected.front().page_id, replacement);
+    batch.registerMetadataPageRoute(expected.back().page_id, replacement);
+    const auto before = batch.allocatedPageCount();
+    EXPECT_THROW((void)directory.buildNextRouteBranch(batch, oldRoot), FormatException);
+    EXPECT_EQ(batch.allocatedPageCount(), before);
+}
+TEST_F(MetadataRouteBranchReuseTest, CapacityAndPublicationReuseOneValidatedPlan) {
+    seed(300U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+    MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+    const auto replacement = batch.allocatePage();
+    batch.registerMetadataPageRoute(expected.back().page_id, replacement);
+    graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
+    const auto first = directory.nextBootstrapFrameCount(batch);
+    EXPECT_EQ(directory.nextBootstrapFrameCount(batch), first);
+    const auto root = directory.buildNextRouteBranch(batch, oldRoot);
+    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+    ASSERT_TRUE(counters.contains("native_graph.route.incremental_plans_built"));
+    ASSERT_TRUE(counters.contains("native_graph.route.incremental_plans_reused"));
+    EXPECT_EQ(counters.at("native_graph.route.incremental_plans_built").totalValue, 1);
+    EXPECT_EQ(counters.at("native_graph.route.incremental_plans_reused").totalValue, 2);
+    EXPECT_EQ(directory.find(batch.candidate(), root, expected.back().page_id), replacement);
+}
+TEST_F(MetadataRouteBranchReuseTest, NewPendingRouteInvalidatesTheCapacityPlan) {
+    seed(3U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+    MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+    const auto first = batch.allocatePage(); batch.registerMetadataPageRoute(expected.front().page_id, first);
+    const auto capacity = directory.nextBootstrapFrameCount(batch);
+    const auto second = batch.allocatePage(); batch.registerMetadataPageRoute(expected.back().page_id, second);
+    const auto updatedCapacity = directory.nextBootstrapFrameCount(batch);
+    EXPECT_GT(updatedCapacity, capacity);
+    const auto before = batch.allocatedPageCount();
+    const auto root = directory.buildNextRouteBranch(batch, oldRoot);
+    EXPECT_EQ(batch.allocatedPageCount() - before + 1U, updatedCapacity);
+    EXPECT_EQ(directory.find(batch.candidate(), root, expected.front().page_id), first);
+    EXPECT_EQ(directory.find(batch.candidate(), root, expected.back().page_id), second);
+}
+TEST_F(MetadataRouteBranchReuseTest, IoMutationInvalidatesPreviouslyValidatedChangedLeaf) {
+    seed(3U); MetadataWriteBatch batch(allocator, published, LogSequenceNumber(3U));
+    MetadataPageFile pages(io, batch.candidate()); MetadataPageRouteDirectory directory(pages);
+    const auto oldLeaves = leaves(pages, oldRoot);
+    const auto replacement = batch.allocatePage(); batch.registerMetadataPageRoute(expected.front().page_id, replacement);
+    EXPECT_GT(directory.nextBootstrapFrameCount(batch), 1U);
+    const std::byte corrupt{0U}; io->writeAt(pages.pageOffset(oldLeaves.at(0U)), &corrupt, 1U);
+    const auto before = batch.allocatedPageCount();
+    EXPECT_THROW((void)directory.buildNextRouteBranch(batch, oldRoot), FormatException);
+    EXPECT_EQ(batch.allocatedPageCount(), before);
 }

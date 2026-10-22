@@ -1,0 +1,14 @@
+{
+  "baseline_processes": 99,
+  "passed_processes": 99,
+  "retained_failed_controls": 3,
+  "all_input_sha_unchanged": true,
+  "baseline_binaries_sha_unchanged": true,
+  "candidate_source_edits": "not linked into baseline observers; baseline archive remains frozen",
+  "platform": "Linux",
+  "full_unit_suite_run": false,
+  "archive_sha256": "9e2eb2f28dc5e7b10ce5de980e7795a3e207394e9f2d3f86ed262cae8c8f0e65",
+  "production_import_comparison": "ZYX 1000-row transactions versus Kuzu whole-table COPY, not equivalent transaction sizes",
+  "equal_row_boundary_control": "Kuzu close/reopen per <=1000-row COPY at original memory cap; lifecycle cost included; not a pure API/storage comparison",
+  "read_cpu_attribution": "exclusive read CPU sampling remains required before P4/P5; existing diagnostics include nested timers"
+}

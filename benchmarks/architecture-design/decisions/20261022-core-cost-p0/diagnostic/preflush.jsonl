@@ -1,0 +1,2 @@
+{"timing_benchmark":true,"case":"property_set","iteration":0,"latency_ms":79.043498,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":1,"latency_ms":102.056151,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}

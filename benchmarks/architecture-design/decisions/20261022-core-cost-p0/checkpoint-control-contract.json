@@ -1,0 +1,11 @@
+{
+  "method": "1000-row parameterized CREATE with CHECKPOINT after each committed batch",
+  "purpose": "bound Kuzu dirty-page accumulation at unchanged 64MiB buffer pool",
+  "extra_checkpoint_time_included": true,
+  "semantic_boundary": "same row transaction size with stronger per-batch materialization; separate production COPY comparison retained",
+  "failed_controls_retained": [
+    "import-equal",
+    "import-equal-unwind"
+  ],
+  "user_validation_boundary": "approved 2026-10-22"
+}
