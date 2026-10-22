@@ -1,0 +1,47 @@
+{
+  "implementation_progress_percent": 65,
+  "P4": "accepted",
+  "P6": "not accepted; batch-ID prerequisite only",
+  "tests": 85,
+  "full_suite": false,
+  "formal_benchmark_run": false,
+  "mechanism": {
+    "medium_filter": {
+      "before_node_records": 225000,
+      "after_node_records": 100000,
+      "label_index_candidates": 100000,
+      "locality_sample_rows": 64,
+      "locality_sample_pages": 1
+    },
+    "medium_group": {
+      "before_node_records": 225000,
+      "after_node_records": 100000,
+      "label_index_candidates": 100000,
+      "locality_sample_rows": 64,
+      "locality_sample_pages": 1
+    },
+    "multi_label_module": {
+      "nodes_total": 1024,
+      "selected": 400,
+      "records_decoded": 400,
+      "dense_label_scanned": 1024
+    },
+    "8192_edge_batch_id_acquisitions": 1
+  },
+  "limits": [
+    "bounded prefix locality is a cost heuristic, not a query oracle",
+    "unknown/inconsistent counts and scan bounds preserve authenticated candidates",
+    "fragmentation outside the sample is not known; formal P7 remains required",
+    "optional sampling falls back only before visitor emission",
+    "no file format, new persistent index, budget increase or thread increase"
+  ],
+  "candidate_library_sha256": "2f96abb1038b27afcb7400ef748157a27c5740c75d8a3b4032c281ac04528539",
+  "diagnostic_binary_sha256": "6935330a8836a94f234f4829fd6435a50151ee028642e5def8c1bec091e389c5",
+  "sources": {
+    "include/graph/storage/relocatable/entity/NativeMembershipAccessCost.hpp": "d70552c584ea35dbbc21f6ea657614739c9bf653a6ee8e2a828b7608cec55b58",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "51c8952ec3514c43cbed4240f5e013a221910734014062198b0411da84bf949b",
+    "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "bbfefcf37778cd43c61dbc56ba7720c27d11f083b8027d5099e76c6b780f9c05",
+    "tests/src/storage/relocatable/backend/test_RelocatableLabelCandidates.cpp": "26b82746944ab34a98e86763334e1ad4f0bff2ede761d2ee1a2178c4768a97bf",
+    "tests/src/storage/relocatable/backend/test_RelocatableLabelAccessLocality.cpp": "9aa295773e031b971387f8edf24b1e648f6dc2279e479b225822af13eb614942"
+  }
+}

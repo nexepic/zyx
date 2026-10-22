@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 50%; P1/P2/P3 are accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 65%; P1/P2/P3/P4 are accepted and the Kuzu performance objective is unmet.**
 
 Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
 
@@ -27,20 +27,16 @@ Implement only three connected paths: **incremental metadata commit, directly ty
 - Preserve macOS/Linux/Windows portability and the WASM path; list actually tested platforms. Independent platform release gates belong to [release follow-ups](native-remaining-work-roadmap); Linux results do not establish three-platform acceptance.
 - Run only necessary affected-module unit tests, not the full suite. `--file` is not a test filter: use named suite/test filters. Documentation-only changes require documentation checks only.
 
-## 2. Known problems and evidence limits
+## 2. Remaining core costs and evidence limits
 
-| Problem | Existing evidence | Work to eliminate |
+| Remaining cost | Current evidence | Work that must be removed next |
 |---|---|---|
-| Metadata amplification on small writes | One SET diagnostic counted 6,698 metadata-page reads, 3 complete route collections, and 2 frame-count calculations | Complete route collection, complete-set construction, and repeated capacity planning during ordinary commits |
-| Copies despite memory hits | Read diagnostics counted about 95,000 metadata-cache hits and about 139 MB of fixed-object copies | Repeated copies of decoded pages and per-value acquisition of shared state |
-| Scan scope and representation | Country filter/grouping examined 225,000 nodes and decoded 100,000 property values | Unrelated entity visits and generic-value to typed-batch to row-object conversions |
-| Confounded write measurements | Preflushing the copied database changed traced SET latency from about 168 ms to 79–102 ms | Charging dirty database-copy pages to transaction synchronization |
+| Field access and representation | Medium filter/group still read 100000 fields after P4; exclusive samples distribute CPU across decode, validation, identity checks and objects | Field positioning, repeat decode and generic-value/typed-column/row conversion |
+| Bulk-import lifecycle | Corrected baseline import is about 276/214 s for medium/holdout; final new-path latency remains unverified | Per-row lookups, repeat publication/index construction, plus bounded staging/recovery costs |
 
-These are limited diagnostics, not new formal scores. Metadata-page counters are not disk I/O; fixed-copy counters sum `sizeof(Page)`, not measured memory traffic. Timers overlap, and the scan timer includes consumer callbacks. Exclusive read-side CPU shares remain unmeasured; do not attribute all time to directories. Reducing enumeration from 225,000 to 100,000 alone cannot explain or eliminate an approximately 50-fold aggregation gap.
+P1–P4 mechanisms are accepted and are no longer implementation tasks. Independent CPU evidence is in `benchmarks/architecture-design/decisions/20261022-core-cost-read-cpu/`: warm reads are user-CPU dominated, with about 28–29% unattributed/internal libc. Do not attribute all time to directories or sum nested timers. Fixed copy counts sum sizeof objects, not DRAM traffic. Fewer candidates/copies do not establish Kuzu latency acceptance.
 
-Source anchors: `nextBootstrapFrameCount` and `publishNextBootstrap` in `MetadataPageRouteDirectory.cpp`; `prepareBatchPublication` in `RelocatableMetadataStore.cpp`; `find`/`findView` in `MetadataPageReadContext.hpp`; node scans in `EntityPageStore.cpp`; and the generic-value batch input in `BoundNodeScanBatch.hpp`. Recheck frozen source rather than relying on line numbers.
-
-Previous formal results are in repository directory `benchmarks/architecture-design/decisions/20261022-r7-final-admission/`, with delivery evidence in `20261022-r7-bounded-repair/`. These are historical controls, not the corrected baseline. P0 must preserve diagnostic source, actual engine SHA, commands, and raw output; session-local paths are not delivery evidence.
+Remaining source anchors: `PropertyCollectionRootStore.cpp`, `PageBackedGraphReadAdapter.cpp`, `DirectPropertyColumns.hpp`, `LogicalPlanReadRuntime.cpp`, and ordinary/bulk write coordinators. Use `20261022-core-cost-p0/` as the formal baseline; historical R7 results are not substitutes.
 
 ## 3. Sequence, progress, and scope control
 
@@ -52,9 +48,9 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 | P1 | Route updates driven by changed paths | 25% | Accepted |
 | P2 | Incremental capacity planning, atomic publication, and local correctness proofs | 15% | Accepted |
 | P3 | Snapshot-bound immutable metadata views throughout the path | 10% | Accepted |
-| P4 | Cost-selected label/candidate scans | 15% | Not started |
-| P5 | Directly typed batches from storage through filtering/aggregation | 20% | Not started |
-| P6 | Bulk import reusing the new commit path | 5% | Not started |
+| P4 | Cost-selected label/candidate scans | 15% | Accepted |
+| P5 | Directly typed batches from storage through filtering/aggregation | 20% | Implementing; not accepted |
+| P6 | Bulk import reusing the new commit path | 5% | Batch-ID prerequisite integrated; not accepted |
 | P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Not started |
 
 Freeze weights after P0. Award an item's weight only after production integration, its mechanism evidence, and necessary tests all pass. Designs, prototypes, cache-hit rates, and lines of code earn no progress. Progress cannot exceed 90% before P7 passes; gap reports, failed candidates, and archives cannot earn the last 10%. Rewriting this document does not increase implementation progress.
@@ -82,51 +78,25 @@ Record `M` (total routes), `k` (changed routes), tree height, unique and repeate
 
 P0 produces named cost budgets, equivalent query/write contracts, correctness oracles, and one corrected baseline. Freeze these six primary workloads: ordinary label filter, actual grouping, multi-key grouping, single-property SET, 1,000-edge batch, and full import. Guard against regressions with point lookup, full entities, adjacency, no-op, deletion, and sparse/large properties.
 
-## 5. P1/P2: Small changes must touch changed paths
+## 5. Accepted incremental-commit contract
 
-### 5.1 Incremental tree algorithm
+P1/P2 are complete. Preserve sorted/deduplicated final changes, changed-path radix COW and one copy per shared ancestor. Capacity and publication share the modification plan. Ownership checks touched pools; intrusive free-pool capacity skips full pools. Retired frames wait for the oldest pin. Post-publication handoff allocates no memory; missing coverage or a mismatched source rebuilds complete reachability.
 
-Use the current persistent radix tree for changed-path COW updates, and redesign capacity planning and publication validation together to eliminate complete route traversal from ordinary commits. Radix trees support incremental updates and path copying in theory; their feasibility is not an open question for this plan. Replacing the tree with a B+Tree is not a required task. Only if evidence after incremental refactoring identifies sparse space usage, path depth, or page-write amplification as a remaining dominant radix cost should a comparison of alternative structures be proposed through section 3; this does not automatically expand the current scope. Build a transaction-local change set sorted/deduplicated by logical ID, defining insert, replace, delete, and no-op semantics. Coalesce repeated modifications to their final values.
+Keep the approved local-access validation plus complete-integrity contract. Accessed pages/new paths are validated; fresh unvisited corruption is discovered on access/full integrity. Preserve snapshots, atomic A/B publication, data-before-root, recovery and refunds. Initialization, explicit migration and full checks may traverse globally; ordinary commits must not reintroduce full collections or periodic whole-graph reclamation.
 
-Construct one COW modification plan for affected leaves and ancestors. Copy shared ancestors once and retain old references for unchanged subtrees. Ordinary commit must not collect complete routes or construct a complete `std::map`/vector; replacing the container with a hash table is insufficient. Retain logical root IDs with physical references during construction instead of reverse-searching a complete route set.
+Evidence: `20261022-core-cost-routes/` and `20261022-core-cost-ownership/`. One fixed change across 3/300/900 Catalog leaves visits 2/4/5 source route frames, six ownership visits each, and zero ordinary full traversals. End-to-end gains remain P7. B+Tree replacement is not a current task or automatic scope expansion.
 
-Route work should primarily follow `k` and tree height, approximately `O(k × h)`, rather than `O(M)`; separately account for splits, merges, and allocation. Initial creation, explicit migration, and integrity checks may traverse globally but must be separate from ordinary commit. Do not move work to reads through unbounded delta chains.
+## 6. Accepted immutable-view and candidate contract
 
-### 5.2 Capacity planning and allocation closure
+P3/P4 are complete. Hot bootstrap/radix/Catalog/Allocator reads borrow immutable pages within existing 128-entry/1 MiB cache, budgets, snapshot and I/O epoch limits. Writers use private COW; escaping results copy/transfer ownership as needed. The 99.34% reduction in fixed-page copy counters is not a latency result.
 
-Capacity estimation and publication must consume the same validated modification plan, covering changed data pages, tree paths, split bounds, Catalog, Allocator, routes, retirement, and bootstrap. Validated occupancy/subtree summaries may be maintained; caching a count while rescanning everything is not sufficient.
+Labels reuse existing B+Trees, atomic token cardinalities and Entity Map. Record/key widths and at most 64 actual candidate locations choose the path. All-node labels scan sequentially; candidates authenticate primary/all labels. Optional cost sampling may fall back only before visitor emission. Multi-label batches fit existing entity-cache bounds to avoid repeat decode.
 
-Resolve the dependency where allocating metadata requires more metadata updates: reserve bounded capacity from changed paths, prepare within it, and process only newly introduced dependencies when extra capacity is needed. Freeze convergence bounds and out-of-space behavior. Repeated whole-tree recalculation is not incremental merely because its retry count is bounded. Charge and refund over-reservation; unpublished candidates must not leak ID/page ownership.
+Evidence: `20261022-core-cost-views/` and `20261022-core-cost-labels/`. Medium filter/group reduce 225000 scanned nodes to 100000 authenticated candidates; 100000 fields still remain for P5. Old pins, overlay, deletion, rollback, reopen and affected modules were checked. Final lifecycle/performance gates remain P7.
 
-### 5.3 Correctness and lifecycle
+## 7. P5: Directly typed scan execution
 
-Reuse published immutable subtrees through exact provenance, generation, and pins. Validate key ranges, directory types, owners, child references, aliases/duplicates, and allocation ownership on new paths. Enumerate every invariant previously established by global checks, supplying a local proof or required auxiliary index. Use the local-access validation plus full-integrity contract confirmed by the user on 2026-10-22: ordinary commits validate accessed pages and new paths, reusing untouched subtrees by exact immutable references. Fresh corruption in unvisited branches is detected on first access or explicit complete integrity. Complete checks still validate global duplicates, aliases, and orphans; new changes must not introduce them. Access validation, atomic publication, and durability are not weakened.
-
-Keep data/metadata durability before A/B publication and acknowledgement. Cover same-page changes, cross-leaf split/merge, last-entry deletion, sparse IDs, old snapshots, conflicts, cancellation, budget/space exhaustion, write/sync failure, reopen, retirement, relocation, and reuse. Do not fix routes while leaving another ordinary-commit global traversal in Allocator, Catalog, or retirement.
-
-Acceptance: increasing `M` at fixed `k` must not cause complete-set materialization or routine global traversal; repeated accesses and page writes must meet registered budgets. Establish mechanisms first; P7 verifies formal end-to-end gains.
-
-P2 acceptance: ownership preparation validates touched pools; an intrusive free-pool index and capacity counter skip full pools. Changed paths produce retired-frame deltas reclaimed after the oldest snapshot generation. Post-publication handoff and ownership confirmation allocate no memory. Missing coverage, explicit migration/reclamation, or recovery rebuild complete reachability. With 3/300/900 Catalog leaves and one fixed change, source route frames are 2/4/5, ownership visits are 6 each, and ordinary full traversals are zero. All 298 affected module tests pass. Evidence: `benchmarks/architecture-design/decisions/20261022-core-cost-ownership/acceptance.json`. Final performance acceptance remains pending.
-
-## 6. P3: Memory structures must eliminate work
-
-Prefer existing immutable `findView` paths and audit hot `find` copies. Hold shared page views once per query/batch instead of per-value locking, LRU mutation, acquisition, or validation. Writers modify private COW images only; copy escaping results as needed before pins are released and transfer resource ownership.
-
-Page/route cache keys must bind database, logical/physical identity, generation, snapshot root, and applicable I/O epoch. Never let old snapshots hit new locations or copy a complete global map per commit. If needed, compare demand-loaded segmented arrays/radix mappings. Do not require the whole database in RAM or introduce a second authoritative table duplicating existing caches.
-
-Acceptance: materially reduce fixed-object copies and move reuse to batch/page granularity. Remain correct and bounded under low memory, eviction, reopen, and long-lived pins. Report residency, initial construction, and rebuild cost; do not hide whole-database preload during startup.
-
-P3 acceptance: hot bootstrap/radix/Catalog/Allocator lookups borrow immutable views and resolve selected paths within existing cache/budget/snapshot/I/O-epoch limits. Medium filter and real-group fixed object-copy counters fall 99.34%; all 460 affected module tests pass. These are mechanism counts, not latency or Kuzu acceptance. Evidence: `benchmarks/architecture-design/decisions/20261022-core-cost-views/`. Independent read CPU samples and limitations are in `20261022-core-cost-read-cpu/`; warm reads are user-CPU dominated.
-
-## 7. P4/P5: Directly typed scan execution
-
-### 7.1 Candidate scope and access choice
-
-Audit and reuse existing label/property indexes and statistics before adding structures. Compare sorted IDs/block bitmaps with sequential scans for sparse candidates. Choose by selectivity, column width, and locality; do not force random gathers for high-coverage labels. Page grouping must preserve required ordinals, duplicates, and output order.
-
-Keep multi-label intersections, deletion, transaction overlays, and old snapshots consistent. Maintain derived label structures atomically or define snapshot validity explicitly. Do not gain speed by skipping label authentication. P4 addresses candidate scope only; it does not by itself establish an order-of-magnitude scan improvement.
-
-### 7.2 Direct batch representation and consumers
+### 7.1 Direct batch representation and consumers
 
 Define one contract for typed scalar buffers, NULL/missing states, string dictionaries or offsets, selection vectors, entity references, ownership, and budgets. Producers directly fill or borrow appropriate typed columns. Ordinary filtering/projection/aggregation must not first construct a complete `PropertyValue` matrix for conversion or fall back wholesale to per-row property maps afterward.
 
@@ -134,7 +104,7 @@ First connect ordinary scan → filter/project → actual single/multi-key group
 
 Reuse batch identity, resource accounting, and spill. Batch admission charges actual capacity; wide rows shrink batches. Complex consumers may retain named adapters with triggers and costs, but primary workloads must not rely on them. Random point/neighbor reads must not scan entire column groups.
 
-### 7.3 Decide whether persistent layout must change
+### 7.2 Decide whether persistent layout must change
 
 Separate fetching, conversion, and computation first. If ROW positioning/decoding still dominates, compare compact field blocks with ROW under the same executor; adding caches alone is not completion. Demonstrate a bounded prototype benefit before full lifecycle work. The existing hybrid layout is not presumed successful.
 

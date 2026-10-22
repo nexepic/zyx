@@ -4194,8 +4194,16 @@ namespace graph::storage {
 		if (*token > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return std::nullopt;
 		const auto estimate = system_catalog_->readTokenCardinalityEstimate(
 				snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, *token);
-		if (estimate && !NativeMembershipAccessCost::preferCandidates(
-				estimate->first.node_count, estimate->second, maximumRecords, false)) return std::nullopt;
+        const bool countsPreferScan = estimate && !NativeMembershipAccessCost::preferNodeCandidates(
+            estimate->first.node_count, estimate->second, maximumRecords);
+        // An all-node label cannot save decoding and adds an index walk. For
+        // intermediate selectivity, inspect a bounded prefix before deciding.
+        if (countsPreferScan && estimate->first.node_count == estimate->second) {
+            debug::PerfTrace::addValue("native_graph.read.label_access.scan", 1);
+            return std::nullopt;
+        }
+        bool samplingPending = countsPreferScan;
+        try {
 		const auto *definitions = session == nullptr ? nullptr :
 				session->indexDefinitions(options_.maximum_index_definitions);
 		utils::OwnedStdVector<IndexDefinition> loaded;
@@ -4215,10 +4223,63 @@ namespace graph::storage {
 			const size_t cursorBound = maximumRecords == std::numeric_limits<size_t>::max() ?
 					maximumRecords : maximumRecords + 1U;
 			auto cursor = index.openRangeCursor(snapshot, std::span<const std::byte>(lower), cursorBound);
-			std::vector<uint64_t> ids;
-			ids.reserve(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+            // Multiple-label verification revisits the authenticated records.
+            // Keep the whole batch within the existing session bound, avoiding
+            // a second Entity decode after the primary-label pass evicts it.
+            const size_t membershipBatchRows = labels.size() == 1U ? BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES :
+                std::min(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES, NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS);
+			utils::OwnedStdVector<uint64_t> ids;
+			ids.reserve(membershipBatchRows);
 			uint64_t previous = 0U;
 			size_t visited = 0U;
+            const auto nextId = [&]() -> std::optional<uint64_t> {
+                auto entry = cursor.next();
+                if (!entry || entry->key > upper) return std::nullopt;
+                if (entry->key.size() != lower.size() ||
+                    !std::equal(lower.begin(), lower.end() - sizeof(uint64_t), entry->key.begin()))
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has a malformed key");
+                const auto id = IndexKeyCodec::decodeEntryEntityId(entry->key);
+                if (id <= previous || entry->value_or_child != id)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has an invalid Node ID");
+                previous = id;
+                return id;
+            };
+            bool exhaustedPrefix = false;
+            if (countsPreferScan) {
+                constexpr size_t localitySampleRows = 64U;
+                const auto sampleBound = std::min(maximumRecords, localitySampleRows);
+                while (ids.size() < sampleBound) {
+                    const auto id = nextId();
+                    if (!id) { exhaustedPrefix = true; break; }
+                    ++visited; ids.push_back(*id);
+                }
+                if (!ids.empty()) {
+                    try {
+                        utils::OwnedStdVector<std::optional<EntityPageLocation>> locations(ids.size());
+                        metadata_->findNodePageLocationsSorted(snapshot, ids, locations);
+                        utils::OwnedSet<PageId> pages;
+                        for (size_t i = 0U; i < locations.size(); ++i) {
+                            if (!locations[i] || locations[i]->entity_id != ids[i] || !locations[i]->page_id.isValid())
+                                throw FormatException(FormatError::FERR_INVALID_STATE,
+                                    "native label Index references an unavailable primary Node");
+                            pages.emplace(locations[i]->page_id);
+                        }
+                        debug::PerfTrace::addValue("native_graph.read.label_access.sample_rows", ids.size());
+                        debug::PerfTrace::addValue("native_graph.read.label_access.sample_pages", pages.size());
+                        if (!NativeMembershipAccessCost::preferNodeCandidates(estimate->first.node_count,
+                                estimate->second, maximumRecords, ids.size(), pages.size(), lower.size(), membershipBatchRows)) {
+                            debug::PerfTrace::addValue("native_graph.read.label_access.scan", 1);
+                            return std::nullopt;
+                        }
+                    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        // Cost sampling is optional, before any visitor emission.
+                        debug::PerfTrace::addValue("native_graph.read.label_access.sample_admission_fallback", 1);
+                        return std::nullopt;
+                    }
+                }
+            }
+            samplingPending = false; // Never restart a scan after emitting a candidate.
+            debug::PerfTrace::addValue("native_graph.read.label_access.index", 1);
 			const auto emit = [&]() {
 				if (ids.empty()) return true;
 				const auto primary = native_logical_graph_reads_->readNodeLabelMatchesSorted(
@@ -4236,26 +4297,22 @@ namespace graph::storage {
 				ids.clear();
 				return true;
 			};
-			while (auto entry = cursor.next()) {
-				if (entry->key > upper) break;
-				if (entry->key.size() != lower.size() ||
-						!std::equal(lower.begin(), lower.end() - sizeof(uint64_t), entry->key.begin())) {
-					throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has a malformed key");
-				}
-				const uint64_t id = IndexKeyCodec::decodeEntryEntityId(entry->key);
-				if (id <= previous || entry->value_or_child != id) {
-					throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has an invalid Node ID");
-				}
-				if (visited == maximumRecords) {
-					// Give a stopping visitor a chance to terminate at the bound.
-					if (!emit()) return false;
-					throw std::runtime_error("native label candidate access exceeded its record bound");
-				}
-				++visited; previous = id; ids.push_back(id);
-				if ((ids.size() == BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES || visited == maximumRecords) && !emit()) return false;
-			}
+            while (!exhaustedPrefix) {
+                const auto id = nextId();
+                if (!id) break;
+                if (visited == maximumRecords) {
+                    if (!emit()) return false;
+                    throw std::runtime_error("native label candidate access exceeded its record bound");
+                }
+                ++visited; ids.push_back(*id);
+                if ((ids.size() == membershipBatchRows || visited == maximumRecords) && !emit()) return false;
+            }
 			return emit();
 		}
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            if (!samplingPending) throw;
+            debug::PerfTrace::addValue("native_graph.read.label_access.sample_admission_fallback", 1);
+        }
 		return std::nullopt;
 	}
 

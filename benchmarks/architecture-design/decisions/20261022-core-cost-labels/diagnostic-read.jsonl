@@ -1,0 +1,2 @@
+{"timing_benchmark":false,"case":"label_scan_filter","iteration":0,"rows":[[["integer",12500]]]}
+{"timing_benchmark":false,"case":"aggregation_count_by_group","iteration":0,"rows":[[["string","CN"],["integer",12500]],[["string","US"],["integer",12500]],[["string","DE"],["integer",12500]],[["string","JP"],["integer",12500]],[["string","SG"],["integer",12500]],[["string","BR"],["integer",12500]],[["string","IN"],["integer",12500]],[["string","FR"],["integer",12500]]]}

@@ -10,8 +10,10 @@
 
 namespace graph::storage {
 
-// Native access estimates, in milliseconds. Node coefficients retain the
-// original count fit. Edge costs estimate dispersed page occupancy and
+// Edge estimates retain the existing millisecond fit. Node estimates compare
+// bytes of record decoding, page validation and index keys, using a bounded
+// snapshot-owned page-locality sample when counts alone favor scanning.
+// Edge costs estimate dispersed page occupancy and
 // cursor-batch revisits using codec capacity and the real cursor batch size.
 // A fitted residual margin favors scanning near ties. Unknown/inconsistent
 // estimates and a scan exceeding the caller budget retain candidates.
@@ -38,10 +40,31 @@ public:
    const long double indexed = 0.250L + 0.0001890586L * candidates + 0.01043849L * gatheredPages;
    return indexed + 0.250L < scan;
   }
-  const long double scan = 0.112L + 0.001784L * total;
-  const long double indexed = 0.640L + 0.007185L * candidates;
+  return preferNodeCandidates(total, candidates, maximumRecords);
+ }
+ // A sample affects access selection only. Cardinalities never answer a query;
+ // candidates still authenticate primary records and every requested label.
+ [[nodiscard]] static bool preferNodeCandidates(uint64_t total, uint64_t candidates,
+     size_t maximumRecords, size_t sampleRows = 0U, size_t samplePages = 0U,
+     size_t indexKeyBytes = 2U * sizeof(uint64_t) + 1U,
+     size_t batchRows = BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES) noexcept {
+  if (total == 0U || candidates == 0U || candidates > total || total > maximumRecords) return true;
+  if (candidates == total) return false;
+  const auto capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
+  const long double scanPages = total / capacity + (total % capacity != 0U);
+  // Without an authenticated sample, charge a separate page per candidate.
+  // This upper bound permits very sparse probes without paying for sampling.
+  const long double candidatePages = sampleRows != 0U && samplePages != 0U && samplePages <= sampleRows
+      ? std::ceil(static_cast<long double>(candidates) * samplePages / sampleRows) +
+          (candidates - 1U) / std::max<size_t>(1U, batchRows)
+      : static_cast<long double>(candidates);
+  const long double scan = static_cast<long double>(total) * RSS_ENTITY_NODE_RECORD_BYTES + scanPages * RSS_PAGE_SIZE;
+  const long double indexed = static_cast<long double>(candidates) *
+      (RSS_ENTITY_NODE_RECORD_BYTES + static_cast<long double>(indexKeyBytes)) +
+      (candidatePages + 2.0L) * RSS_PAGE_SIZE;
   return indexed < scan;
  }
+
 };
 
 } // namespace graph::storage

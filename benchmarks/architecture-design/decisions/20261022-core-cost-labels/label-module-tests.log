@@ -1,0 +1,189 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeGraphMutationExecutorValidationTest.*:NativeGraphWritePlannerLeaseRecoveryTest.*:NativeGraphWritePlannerTest.*:RelocatableStorageBackendTest.*:NativeMembershipAccessCostTest.*
+[==========] Running 85 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots (22 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesKeepConstraintAndAdmissionFailuresAtomic (15 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing (56 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization
+[       OK ] NativeGraphMutationExecutorValidationTest.CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges (7 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsUnresolvableAndAliasedTokensWithoutPublishingPartialLogicalMutations (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsInvalidCreationPlansAndFinalStateCombinationsWithoutAdvancingTheGeneration (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsMalformedLogicalReferencesAndCreationLeasePlansWithoutPublishingAWrite (3 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreatePropertyReplacementsThroughCreatedEntityReferences (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties (8 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties (17 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties
+[       OK ] NativeGraphMutationExecutorValidationTest.ReplacesPersistedNodeLabelsWithoutRewritingItsProperties (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor (13 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode
+[       OK ] NativeGraphMutationExecutorValidationTest.DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode (16 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication
+[       OK ] NativeGraphMutationExecutorValidationTest.AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication (13 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken
+[       OK ] NativeGraphMutationExecutorValidationTest.CreatesUntypedRelationshipWithoutResolvingASchemaToken (9 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsUniqueConstraintSupportEntriesForCreatedAndPersistedNodes (36 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges
+[       OK ] NativeGraphMutationExecutorValidationTest.MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges (29 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity
+[       OK ] NativeGraphMutationExecutorValidationTest.FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity (5 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsNonDetachDeletionWhenAnIncidentEdgeIsMissingFromTheSameBatch (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints
+[       OK ] NativeGraphMutationExecutorValidationTest.DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints (16 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp
+[       OK ] NativeGraphMutationExecutorValidationTest.TreatsAnIdempotentPersistedFinalStateAsACommittedNoOp (10 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsIncompleteOrUnboundedPublicExecutorConfiguration (3 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsBoundViolationsAndZeroValuedResolverResultsBeforePublishingGraphData (4 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst
+[       OK ] NativeGraphMutationExecutorValidationTest.RebasesADisjointLogicalCreateWhenAnotherWriterPublishesFirst (11 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction
+[       OK ] NativeGraphMutationExecutorValidationTest.RejectsRemainingInvalidFinalStateReferencesBeforeStartingTheNativeTransaction (3 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite
+[       OK ] NativeGraphMutationExecutorValidationTest.ReturnsConflictWithoutPublishingAPropertyChangeAfterAnIncompatibleConcurrentWrite (12 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing
+[       OK ] NativeGraphMutationExecutorValidationTest.FailsClosedForEveryWriteWhenAPersistedVectorManifestIsMissing (14 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement
+[       OK ] NativeGraphMutationExecutorValidationTest.UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement (22 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot
+[       OK ] NativeGraphMutationExecutorValidationTest.NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot (22 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot
+[       OK ] NativeGraphMutationExecutorValidationTest.MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot (16 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology
+[       OK ] NativeGraphMutationExecutorValidationTest.UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology (18 ms)
+[ RUN      ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields
+[       OK ] NativeGraphMutationExecutorValidationTest.CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields (4 ms)
+[----------] 37 tests from NativeGraphMutationExecutorValidationTest (508 ms total)
+
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.SharesDurableLogicalIdLeaseStreamAcrossPlannerContexts (5 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsCumulativeLogicalIdReservationBeforeAcquiringOrRetainingAnotherLease (6 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt (4 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsAReleasedLogicalIdRangeEvenBelowTheDurableHighWaterMark (5 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RejectsDuplicateReservationOnlyPublicationWithoutAdvancingGeneration (5 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversOldGenerationWhenSuperblockWriteIsInterruptedBeforePublication (10 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RecoversNewGenerationWhenSuperblockWriteCompletesBeforeInterruption (12 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedNodeLeaseOnlyPublication (8 ms)
+[ RUN      ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication
+[       OK ] NativeGraphWritePlannerLeaseRecoveryTest.RebasesGraphWorkAcrossAnInterleavedEdgeLeaseOnlyPublication (8 ms)
+[----------] 9 tests from NativeGraphWritePlannerLeaseRecoveryTest (68 ms total)
+
+[----------] 4 tests from NativeMembershipAccessCostTest
+[ RUN      ] NativeMembershipAccessCostTest.SameCardinalityUsesObservedPageLocalityAndKeepsDenseScans
+[       OK ] NativeMembershipAccessCostTest.SameCardinalityUsesObservedPageLocalityAndKeepsDenseScans (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates
+[       OK ] NativeMembershipAccessCostTest.UnknownOrInconsistentCountsRetainAuthenticatedCandidates (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget
+[       OK ] NativeMembershipAccessCostTest.KnownDenseCountsChooseScanOnlyWithinCallerBudget (0 ms)
+[ RUN      ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath
+[       OK ] NativeMembershipAccessCostTest.IncreasingCandidateCountCannotReenterCandidatePath (9 ms)
+[----------] 4 tests from NativeMembershipAccessCostTest (9 ms total)
+
+[----------] 35 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.LabelLocalityAvoidsUnrelatedNodesAndRetainsOldSnapshotMembership
+[       OK ] RelocatableStorageBackendTest.LabelLocalityAvoidsUnrelatedNodesAndRetainsOldSnapshotMembership (133 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesUsePrimaryValidatedMembershipAndIntersectLabels
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesUsePrimaryValidatedMembershipAndIntersectLabels (165 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesRespectStoppingAndCandidateBounds
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesRespectStoppingAndCandidateBounds (155 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesFollowWritesWithoutChangingAnOlderSnapshot
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesFollowWritesWithoutChangingAnOlderSnapshot (163 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPredicateFallsBackWithoutAnIndex
+[       OK ] RelocatableStorageBackendTest.LabelPredicateFallsBackWithoutAnIndex (116 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesRejectMembershipDisagreeingWithPrimaryLabels
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesRejectMembershipDisagreeingWithPrimaryLabels (154 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesContinueAcrossBatchesAndDriveRuntimeCounts
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesContinueAcrossBatchesAndDriveRuntimeCounts (220 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesTrackReplacementDeletionAndRollback
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesTrackReplacementDeletionAndRollback (184 ms)
+[ RUN      ] RelocatableStorageBackendTest.TypeCandidatesValidatePrimaryTypeAndPreserveUntypedFallback
+[       OK ] RelocatableStorageBackendTest.TypeCandidatesValidatePrimaryTypeAndPreserveUntypedFallback (154 ms)
+[ RUN      ] RelocatableStorageBackendTest.TypeCandidatesRejectWrongMembershipAndFallBackWithoutAnIndex
+[       OK ] RelocatableStorageBackendTest.TypeCandidatesRejectWrongMembershipAndFallBackWithoutAnIndex (161 ms)
+[ RUN      ] RelocatableStorageBackendTest.TypeCandidatesFollowInsertionsDeletionAndOldSnapshots
+[       OK ] RelocatableStorageBackendTest.TypeCandidatesFollowInsertionsDeletionAndOldSnapshots (187 ms)
+[ RUN      ] RelocatableStorageBackendTest.MembershipBuildPublishesBothRootsAndIsIdempotent
+[       OK ] RelocatableStorageBackendTest.MembershipBuildPublishesBothRootsAndIsIdempotent (142 ms)
+[ RUN      ] RelocatableStorageBackendTest.MembershipBuildCancellationCannotPublishPartialDefinitions
+[       OK ] RelocatableStorageBackendTest.MembershipBuildCancellationCannotPublishPartialDefinitions (128 ms)
+[ RUN      ] RelocatableStorageBackendTest.TypeCandidatesContinueAcrossBatchesAndDriveRuntimeCounts
+[       OK ] RelocatableStorageBackendTest.TypeCandidatesContinueAcrossBatchesAndDriveRuntimeCounts (379 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedBulkMaintainsTypeMembershipIncludingNewTypesAndOldSnapshots
+[       OK ] RelocatableStorageBackendTest.StreamedBulkMaintainsTypeMembershipIncludingNewTypesAndOldSnapshots (404 ms)
+[ RUN      ] RelocatableStorageBackendTest.StreamedMembershipWriteFailureKeepsOldGraphAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.StreamedMembershipWriteFailureKeepsOldGraphAndAllowsRetry (261 ms)
+[ RUN      ] RelocatableStorageBackendTest.FreshDatabaseHasMembershipRootsAndZeroCardinalityBeforeItsFirstWrite
+[       OK ] RelocatableStorageBackendTest.FreshDatabaseHasMembershipRootsAndZeroCardinalityBeforeItsFirstWrite (112 ms)
+[ RUN      ] RelocatableStorageBackendTest.FreshMembershipPublicationFailureRemovesPrivateFileAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.FreshMembershipPublicationFailureRemovesPrivateFileAndAllowsRetry (47 ms)
+[ RUN      ] RelocatableStorageBackendTest.MembershipBuildBackfillsMissingLiveTotalsFromCompleteSources
+[       OK ] RelocatableStorageBackendTest.MembershipBuildBackfillsMissingLiveTotalsFromCompleteSources (152 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelCandidatesChooseTheSmallestKnownMembershipWithoutChangingPredicateSemantics
+[       OK ] RelocatableStorageBackendTest.LabelCandidatesChooseTheSmallestKnownMembershipWithoutChangingPredicateSemantics (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.MembershipCostSelectionPreservesSparseDenseAndBudgetedPredicates
+[       OK ] RelocatableStorageBackendTest.MembershipCostSelectionPreservesSparseDenseAndBudgetedPredicates (180 ms)
+[ RUN      ] RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess
+[       OK ] RelocatableStorageBackendTest.TypePageCostSelectionAccountsForScatteredMembershipAndKeepsBudgetedAccess (530 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowOrdinaryFinalStateAndDetachDeletion (119 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges
+[       OK ] RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges (416 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure
+[       OK ] RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure (257 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildReplacesPartialRecordsAndPublishesCompleteSnapshots (180 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCancellationAndScanBoundsNeverPublishPartialCounts (82 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildRejectsAChangedSourceSnapshot (107 ms)
+[ RUN      ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry
+[       OK ] RelocatableStorageBackendTest.TokenStatisticsRebuildCatalogWriteFailureRetainsUnknownStateAndAllowsRetry (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesUseMetadataAndFollowCommittedCounts (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild
+[       OK ] RelocatableStorageBackendTest.LabelPlanningEstimatesRejectPartialStatisticsAndRecoverAfterRebuild (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchPreservesInputOrderAndFreshCommittedCounts (73 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneCountIsCorrupt (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt
+[       OK ] RelocatableStorageBackendTest.PlanningStatisticsBatchRetainsUnrelatedCostsWhenOneNameIsCorrupt (67 ms)
+[ RUN      ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness
+[       OK ] RelocatableStorageBackendTest.PlanningTypeCountsKeepOrderUnknownsAndCommittedFreshness (95 ms)
+[----------] 35 tests from RelocatableStorageBackendTest (5922 ms total)
+
+[----------] Global test environment tear-down
+[==========] 85 tests from 4 test suites ran. (6508 ms total)
+[  PASSED  ] 85 tests.
