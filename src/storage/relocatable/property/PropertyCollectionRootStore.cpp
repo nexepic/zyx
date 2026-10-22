@@ -911,9 +911,20 @@ namespace graph::storage {
 		return PropertyCollectionRootScanCursor(*this, snapshot.superblock().generation, cancellation);
 	}
 
+    struct HybridPropertyScanContext final : utils::OwnedPmrObject {
+        HybridPropertyReadContext reader;
+        HybridPropertyScanContext(SlottedPagePool &pages, RelocatableMetadataStore &metadata,
+            const MetadataSnapshotPin &snapshot, const CancellationCheckpoint *cancellation)
+            : reader(pages, metadata, snapshot, cancellation) {}
+    };
+    PropertyCollectionRootScanCursor::~PropertyCollectionRootScanCursor() = default;
+    PropertyCollectionRootScanCursor::PropertyCollectionRootScanCursor(const PropertyCollectionRootStore &store,
+        Generation generation, const CancellationCheckpoint *cancellation)
+        : store_(&store), generation_(generation), cancellation_(cancellation) {}
+
 	PropertyCollectionRootScanCursor::PropertyCollectionRootScanCursor(
 			PropertyCollectionRootScanCursor &&other) noexcept :
-		store_(std::exchange(other.store_, nullptr)), generation_(std::exchange(other.generation_, Generation{})),
+		hybrid_context_(std::move(other.hybrid_context_)), store_(std::exchange(other.store_, nullptr)), generation_(std::exchange(other.generation_, Generation{})),
 		cancellation_(std::exchange(other.cancellation_, nullptr)),
 		current_page_id_(std::exchange(other.current_page_id_, PageId{})),
 		current_page_(std::move(other.current_page_)), directory_cursor_(std::move(other.directory_cursor_)),
@@ -929,6 +940,7 @@ namespace graph::storage {
 	PropertyCollectionRootScanCursor &
 	PropertyCollectionRootScanCursor::operator=(PropertyCollectionRootScanCursor &&other) noexcept {
 		if (this != &other) {
+			hybrid_context_ = std::move(other.hybrid_context_);
 			store_ = std::exchange(other.store_, nullptr);
 			generation_ = std::exchange(other.generation_, Generation{});
 			cancellation_ = std::exchange(other.cancellation_, nullptr);
@@ -1274,9 +1286,10 @@ namespace graph::storage {
         if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 if (cancellation_) cancellation_->check();
-                auto result = store_->readEntity(snapshot, key, admission, slotsAdmission);
-                if (cancellation_) cancellation_->check();
-                return result;
+                auto result = readEntityOptional(snapshot, key, admission, slotsAdmission);
+                if (!result) throwRootStoreError(FormatError::FERR_INVALID_STATE,
+                    "Entity Property scan read requires a present Property root");
+                return std::move(*result);
             }
         }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
@@ -1299,9 +1312,32 @@ namespace graph::storage {
         if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 if (cancellation_) cancellation_->check();
-                auto result = store_->readEntityOptional(snapshot, key, admission, slotsAdmission);
+                const auto pointRead = [&] {
+                    auto result = store_->readEntityOptional(snapshot, key, admission, slotsAdmission);
+                    if (cancellation_) cancellation_->check();
+                    return result;
+                };
+                if (!hybrid_context_ || !hybrid_context_->reader.usesSnapshot(snapshot)) {
+                    const auto memory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+                        (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr);
+                    // Cursor retention is optional. A tight original account
+                    // keeps the existing stack-local point reader available.
+                    if (!memory) return pointRead();
+                    try {
+                        hybrid_context_.reset(new (memory) HybridPropertyScanContext(store_->pages_, store_->metadata_, snapshot, cancellation_));
+                    } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                        return pointRead();
+                    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        return pointRead();
+                    }
+                }
+                auto result = HybridPropertyValueReader::readCollection(hybrid_context_->reader, snapshot, key,
+                    key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId,
+                    store_->large_values_, admission, slotsAdmission);
                 if (cancellation_) cancellation_->check();
-                return result;
+                if (result.routed) return std::move(result.value);
+                // This owner follows ROW, so use the ordinary directory cursor.
+
             }
         }
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);

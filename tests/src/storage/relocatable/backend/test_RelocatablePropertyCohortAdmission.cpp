@@ -74,6 +74,26 @@ TEST_F(RelocatableStorageBackendTest, PublicAdaptiveRowStoreAdmitsOnlyTheWholeNa
     for (uint64_t field = 1; field <= 64; ++field)
         EXPECT_EQ(owning.getRows()[0].at("owner").asNode().getProperties().at("p" + std::to_string(field)),
                   PropertyValue(int64_t(1 + field)));
+    // Exercise the scalar callback itself, rather than the ROW owning fallback.
+    for (bool vector : {false, true}) {
+        auto transaction = backend->beginLogicalGraphTransaction(false);
+        LogicalGraphTransactionOverlay overlay(*transaction);
+        auto snapshot = vector ? std::unique_ptr<LogicalGraphReadSnapshot>(overlay.openLogicalGraphVectorSearchSnapshot())
+            : overlay.openLogicalGraphReadSnapshot();
+        ASSERT_TRUE(snapshot->supportsNodePropertyCellBatches());
+        const std::array<uint64_t, 1> ids{1}; const std::array<std::string_view, 1> keys{"p1"};
+        bool scalarDelivered = false;
+        EXPECT_THROW(snapshot->readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys,
+            [](size_t, size_t, std::optional<PropertyValue>) { ADD_FAILURE() << "native column used owning fallback"; },
+            [&](size_t row, size_t column, graph::PropertyType type, uint64_t word) {
+                scalarDelivered = true; EXPECT_EQ(row, 0U); EXPECT_EQ(column, 0U);
+                EXPECT_EQ(type, graph::PropertyType::INTEGER); EXPECT_EQ(word, 2U);
+                overlay.replaceLogicalNodeProperties({{1, {{"p1", PropertyValue(999)}}}});
+            }, [](size_t) {}), std::runtime_error);
+        EXPECT_TRUE(scalarDelivered); EXPECT_FALSE(snapshot->supportsNodePropertyCellBatches());
+        EXPECT_EQ(snapshot->readNodeProperty(1, "p1"), PropertyValue(999));
+        transaction->rollback();
+    }
     const auto changed = engine.execute("MATCH (o:Owner) WHERE o.p1=2 SET o.p64=777 RETURN o.p64 AS value");
     ASSERT_EQ(changed.rowCount(), 1U); EXPECT_EQ(changed.getRows()[0].at("value").asPrimitive(), PropertyValue(int64_t(777)));
     const auto current = engine.execute("MATCH (o:Owner) WHERE o.p1=2 RETURN o.p64 AS value");

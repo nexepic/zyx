@@ -2122,10 +2122,7 @@ namespace graph::storage {
 				return;
 			}
             const auto memory = utils::OwnedAllocationScope::owner();
-            if (memory && operations.size() < NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD &&
-                std::ranges::all_of(operations, [](const auto &operation) {
-                return operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT;
-            })) {
+            if (memory && operations.size() < NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD) {
                 auto proof = std::shared_ptr<NativeGraphDeferredIndexImages>(
                     new (memory) NativeGraphDeferredIndexImages(*context_->metadata, snapshot_.superblock().generation,
                         RSS_GLOBAL_ADJACENCY_INDEX_ID, context_->metadata->findIndexRoot(snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID),
@@ -2136,6 +2133,13 @@ namespace graph::storage {
                     [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
                         for (const auto &operation : operations) emit(operation);
                     }, memory, [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); });
+                if (proof->plan_.final_tree_empty) {
+                    // Terminal adjacency deletion still removes the root using
+                    // the existing bounded, authenticated retirement protocol.
+                    global_adjacency_retirement_plan_ = context_->indexes->planTreeRetirement(snapshot_,
+                        RSS_GLOBAL_ADJACENCY_INDEX_ID, context_->options.maximum_global_adjacency_tree_pages);
+                    return;
+                }
                 proof->assignments_credit_.set(16384U +
                     (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
                         size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
@@ -2402,10 +2406,7 @@ namespace graph::storage {
 			}
             const auto memory = utils::OwnedAllocationScope::owner();
             if (memory && isSystemCatalogIndexDefinitionId(staged.index_id) && staged.operations.size() <
-                NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD &&
-                std::ranges::all_of(staged.operations, [](const auto &operation) {
-                    return operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT;
-                })) {
+                NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD) {
                 SystemCatalog schema(*staged.index, *context_->metadata);
                 const auto definition = schema.findIndexDefinitionById(snapshot_, staged.index_id);
                 if (definition && definition->kind == IndexDefinitionKind::IDK_LABEL &&
@@ -2420,12 +2421,16 @@ namespace graph::storage {
                         staged.operations.size(), [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
                             for (const auto &operation : staged.operations) emit(operation);
                         }, memory, [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); });
-                    proof->assignments_credit_.set(16384U +
-                        (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
-                            size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
-                    staged.plan.reset(); staged.images = std::move(proof);
-                    debug::PerfTrace::addValue("native_graph.write.ordinary_membership.incremental_plans", 1);
-                    continue;
+                    if (!proof->plan_.final_tree_empty) {
+                        proof->assignments_credit_.set(16384U +
+                            (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
+                                size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
+                        staged.plan.reset(); staged.images = std::move(proof);
+                        debug::PerfTrace::addValue("native_graph.write.ordinary_membership.incremental_plans", 1);
+                        continue;
+                    }
+                    // Empty membership roots keep their ordinary scalar plan.
+
                 }
             }
 			staged.plan =

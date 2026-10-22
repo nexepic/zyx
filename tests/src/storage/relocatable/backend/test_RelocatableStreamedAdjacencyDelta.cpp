@@ -308,3 +308,81 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryIndexImagesRegisterSharedBatchFres
     const auto counts = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(counts); EXPECT_EQ(counts->edge_count, 6000U);
     EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
 }
+
+TEST_P(StreamedAdjacencyBootstrapFaultTest, OrdinaryDeletionImagesRecoverOneCompleteGeneration) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+    const auto initial = backend.createLogicalEdges(std::vector<LogicalGraphEdgeCreateRequest>(3, {nodes[0], nodes[1], "ORDINARY_FAULT", {}}));
+    auto old = backend.openLogicalGraphReadSnapshot();
+    struct Armed { DeltaWork work; bool ready = false; } armed;
+    bool injected = false;
+    graph::debug::PerfTrace::ScopedObserver observer(&armed, [](void *owner, std::string_view key, int64_t value, bool duration) noexcept {
+        auto &a = *static_cast<Armed *>(owner); DeltaWork::observe(&a.work, key, value, duration);
+        if (key == "native_graph.write.ordinary_adjacency.incremental_plans" && value) a.ready = true;
+    });
+    {
+        StorageIO::ScopedNativeWriteHookForTesting failure([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+            if (armed.ready && offset >= 0 && uint64_t(offset) < 2U * RSS_SUPERBLOCK_BYTES) {
+                if (!injected) {
+                    injected = true;
+                    if (GetParam()) static_cast<void>(portable_pwrite(fd, bytes, count, offset));
+                    else return portable_pwrite(fd, bytes, RSS_SUPERBLOCK_HEADER_CRC_OFFSET, offset);
+                }
+#ifdef _WIN32
+                SetLastError(ERROR_DISK_FULL);
+#else
+                errno = ENOSPC;
+#endif
+                return static_cast<pwrite_ssize_t>(-1);
+            }
+            return portable_pwrite(fd, bytes, count, offset);
+        });
+        EXPECT_THROW(backend.deleteLogicalEdges({{initial.front()}}), std::system_error);
+    }
+    EXPECT_TRUE(injected); EXPECT_GT(armed.work.ordinary_plans, 0);
+    EXPECT_EQ(old->readEdge(initial.front()).target_node_id, nodes[1]); old.reset(); backend.close();
+    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    RelocatableStorageBackend recovered(options); recovered.open();
+    const auto counts = recovered.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(counts);
+    EXPECT_EQ(counts->edge_count, GetParam() ? 2U : 3U);
+    auto now = recovered.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 10).edges.size(), counts->edge_count);
+    if (GetParam()) EXPECT_THROW((void)now->readEdge(initial.front()), FormatException);
+    else EXPECT_EQ(now->readEdge(initial.front()).target_node_id, nodes[1]);
+    now.reset(); recovered.close(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend cleaned(options); cleaned.open(); EXPECT_NO_THROW((void)cleaned.verifyIntegrity()); cleaned.close();
+}
+
+
+TEST_F(RelocatableStorageBackendTest, OrdinaryDeletionImagesPreserveBothDirectionsAndTerminalRoots) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+    const auto initial = backend.createLogicalEdges(std::vector<LogicalGraphEdgeCreateRequest>(512,
+        {nodes[0], nodes[1], "DELETE_DELTA", {{"weight", PropertyValue(7)}}}));
+    const auto self = backend.createLogicalEdges({{nodes[0], nodes[0], "LAST_TYPE", {}}});
+    auto old = backend.openLogicalGraphReadSnapshot();
+    DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
+    backend.deleteLogicalEdges({{initial[255]}});
+    EXPECT_EQ(work.ordinary_plans, 1); EXPECT_EQ(work.ordinary_member_plans, 1);
+    EXPECT_GT(work.ordinary_images, 0); EXPECT_LE(work.ordinary_images, 8);
+    EXPECT_GT(work.ordinary_member_images, 0); EXPECT_LE(work.ordinary_member_images, 8);
+    backend.deleteLogicalEdges({{self.front()}}); // last type entry, nonempty global root
+    auto now = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1000).edges.size(), 511U);
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[1], LogicalGraphReadDirection::LGRD_INCOMING, {}, 1000).edges.size(), 511U);
+    EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1000).edges.size(), 513U);
+    EXPECT_EQ(old->readEdge(initial[255]).target_node_id, nodes[1]);
+    EXPECT_THROW((void)now->readEdge(initial[255]), FormatException);
+    now.reset();
+    std::vector<LogicalGraphEdgeDeleteRequest> rest;
+    for (auto id : initial) if (id != initial[255]) rest.push_back({id});
+    backend.deleteLogicalEdges(rest); // last global entry uses bounded retirement
+    const auto counts = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(counts); EXPECT_EQ(counts->edge_count, 0U);
+    EXPECT_EQ(old->readEdge(initial.front()).target_node_id, nodes[1]);
+    old.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close(); backend.open();
+    now = backend.openLogicalGraphReadSnapshot();
+    EXPECT_TRUE(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1000).edges.empty());
+    now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+}

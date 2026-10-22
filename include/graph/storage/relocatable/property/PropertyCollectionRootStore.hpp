@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -22,6 +23,7 @@
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 
 namespace graph::storage {
+	struct HybridPropertyScanContext;
 	class LargeValueStore;
 	class PropertyCollectionRootScanCursor;
 	class PropertyCollectionRootStoreTestAccess;
@@ -263,6 +265,7 @@ namespace graph::storage {
 	// while moving to another page releases the transient Buffer Pool frame.
 	class PropertyCollectionRootScanCursor final {
 	public:
+		~PropertyCollectionRootScanCursor();
 		PropertyCollectionRootScanCursor(const PropertyCollectionRootScanCursor &) = delete;
 		PropertyCollectionRootScanCursor &operator=(const PropertyCollectionRootScanCursor &) = delete;
 		PropertyCollectionRootScanCursor(PropertyCollectionRootScanCursor &&other) noexcept;
@@ -311,8 +314,7 @@ namespace graph::storage {
 	private:
 		friend class PropertyCollectionRootStore;
 		PropertyCollectionRootScanCursor(const PropertyCollectionRootStore &store, Generation generation,
-									 const CancellationCheckpoint *cancellation) :
-			store_(&store), generation_(generation), cancellation_(cancellation) {}
+									 const CancellationCheckpoint *cancellation);
 
 		[[nodiscard]] PropertyCollectionRoot readLocation(const MetadataSnapshotPin &snapshot,
 														  const EntityPropertyKey &key,
@@ -337,6 +339,7 @@ namespace graph::storage {
 		void accountDirectoryPages();
 		void validateSnapshot(const MetadataSnapshotPin &snapshot) const;
 
+		std::unique_ptr<HybridPropertyScanContext> hybrid_context_;
 		const PropertyCollectionRootStore *store_ = nullptr;
 		Generation generation_{};
 		const CancellationCheckpoint *cancellation_ = nullptr;
