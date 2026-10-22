@@ -11314,12 +11314,15 @@ namespace graph::query::execution {
 								const auto emitScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
 									direct->appendScalar(row, column, type, bits, directGuard);
 								};
+                                const auto emitText = [&](size_t row, size_t column, std::string_view text) {
+                                    direct->appendText(row, column, text, directGuard);
+                                };
 								const auto admitSource = [&](size_t bytes) {
 									directGuard();
 									sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
 								};
-								state.shared.snapshot.readNodePropertyCellsWithScalarsSortedWithAdmission(nodeIds, keyViews,
-									std::ref(emitValue), std::ref(emitScalar), std::ref(admitSource));
+								state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
+                                    std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), std::ref(admitSource));
 								direct->seal(); sourceScratch.reset();
 								(void)predicates.filter(*direct, *selected, directGuard);
 								if (state.shared.bound_program) {
@@ -13297,6 +13300,96 @@ namespace graph::query::execution {
 										else appendDistinctPropertyValue(key, PropertyValue(value));
 									}, cell.data);
 								};
+                                // Partial COUNT over a bounded short-text column. Ordinary
+                                // filters and low-cardinality groups merge per distinct value,
+                                // rather than serializing keys/updating virtual accumulators per row.
+                                bool batchCountEligible = directGroups.size() <= 1U &&
+                                    std::ranges::all_of(functions, [](auto function) { return function == AggregateFunctionType::AGG_COUNT; });
+                                for (size_t i = 0; i < aggregations.size(); ++i)
+                                    batchCountEligible = batchCountEligible && !aggregations[i].distinct && directArguments[i] == rowCountBinding;
+                                const size_t textColumn = !directGroups.empty() ? directGroups.front() :
+                                    !directTerms.empty() ? directTerms.front().column : rowCountBinding;
+                                for (const auto &term : directTerms)
+                                    batchCountEligible = batchCountEligible && term.column == textColumn && term.literal->isString() &&
+                                        term.operation == detail::ColumnPredicateOp::CPO_EQUAL;
+                                if (batchCountEligible && directGroups.empty() && directTerms.empty()) {
+                                    size_t accepted = 0U;
+                                    for (const auto row : ordinals) {
+                                        checkGuard(state);
+                                        if (row >= columns.size()) throw std::logic_error("partial count ordinal outside batch");
+                                        if (selection.includes(row)) ++accepted;
+                                    }
+                                    if (accepted > state.shared.bounds.maximum_rows - inputRows)
+                                        throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+                                    inputRows += accepted;
+                                    for (auto &accumulator : groups.front().accumulators)
+                                        static_cast<CountAccumulator &>(*accumulator).addRows(accepted);
+                                    debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_batches", 1);
+                                    debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_updates", 1);
+                                    debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
+                                    return true;
+                                }
+                                if (batchCountEligible && textColumn != rowCountBinding) {
+                                    struct PartialCount { size_t first, rows; };
+                                    std::pmr::vector<PartialCount> partials(&aggregateIndexMemory);
+                                    std::pmr::unordered_map<std::optional<std::string_view>, size_t> indexes(&aggregateIndexMemory);
+                                    size_t accepted = 0U, rejected = 0U;
+                                    bool prepared = false;
+                                    try {
+                                        prepared = columns.tryVisitShortTextColumn(textColumn, selection, ordinals,
+                                            [&](size_t row, std::optional<std::string_view> text) {
+                                                for (const auto &term : directTerms) {
+                                                    if (!text || *text != term.literal->getStringValue()) { ++rejected; return; }
+                                                }
+                                                ++accepted;
+                                                // Global COUNT needs no dictionary or per-row group key.
+                                                const auto key = directGroups.empty() ? std::optional<std::string_view>{} : text;
+                                                auto [found, inserted] = indexes.try_emplace(key, partials.size());
+                                                if (inserted) partials.push_back({row, 0U});
+                                                ++partials[found->second].rows;
+                                            }, [&] { checkGuard(state); });
+                                    } catch (const MaterializedByteLimitExceeded &) {
+                                        // No aggregate state has changed. Optional partial buffers
+                                        // are destroyed before the existing direct consumer runs.
+                                        prepared = false;
+                                    } catch (const detail::ResourceAdmissionDenied &) {
+                                        prepared = false;
+                                    }
+                                    if (prepared) {
+                                        if (accepted > state.shared.bounds.maximum_rows - inputRows)
+                                            throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+                                        inputRows += accepted;
+                                        for (const auto &partial : partials) {
+                                            checkGuard(state); size_t groupIndex = 0U;
+                                            if (!directGroups.empty()) {
+                                                const auto row = columns.rowId(partial.first);
+                                                std::pmr::string key{&aggregateIndexMemory}; appendCellKey(key, textColumn, row);
+                                                const auto found = groupIndexes.find(key);
+                                                if (found != groupIndexes.end()) groupIndex = found->second;
+                                                else {
+                                                    MaterializedByteReservation copies(&state.shared.materialized_budget);
+                                                    copies.set(sizeof(PropertyValue));
+                                                    std::vector<PropertyValue> values; values.reserve(1U);
+                                                    const size_t slots = values.capacity() * sizeof(PropertyValue); copies.set(slots);
+                                                    auto value = columns.copyValue(textColumn, row,
+                                                        [&](size_t bytes) { copies.set(checkedSizeAdd(slots, bytes, "partial count key copy overflowed")); },
+                                                        [&] { checkGuardNow(state); });
+                                                    copies.set(checkedSizeAdd(slots, detail::propertyBufferEstimates(value, [&] { checkGuardNow(state); }).heapBytes,
+                                                        "partial count key retention overflowed"));
+                                                    values.push_back(std::move(value)); groupIndex = createGroup(std::move(values), &copies);
+                                                    groupIndexes.emplace(std::move(key), groupIndex);
+                                                }
+                                            }
+                                            for (auto &accumulator : groups.at(groupIndex).accumulators)
+                                                static_cast<CountAccumulator &>(*accumulator).addRows(partial.rows);
+                                        }
+                                        debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_batches", 1);
+                                        debug::PerfTrace::addValue("logical_plan.aggregate.partial_count_updates", static_cast<int64_t>(partials.size()));
+                                        debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
+                                        debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(rejected));
+                                        return true;
+                                    }
+                                }
 								size_t filterRejected = 0U;
                                 for (const auto ordinal : ordinals) {
 									checkGuard(state);

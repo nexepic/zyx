@@ -1124,6 +1124,50 @@ namespace graph::storage {
 		return EntityPropertyCollectionRootCodec::containsToken(bytes, keyToken, requireNonNull);
 	}
 
+    bool PropertyCollectionRootStore::emitSelectedEntityProperties(const EntityPropertyKey &key,
+        const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
+        std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,
+        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> &sink,
+        const PropertyScalarReadSink &scalars, const PropertyTextReadSink *texts,
+        const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation) const {
+        if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) return false;
+        if (location.key != key || location.page_id != pageId || ownerKind != PageOwnerKind::POK_PROPERTY)
+            throwRootStoreError(FormatError::FERR_INVALID_STATE, "typed Property selection has a foreign owner page");
+        const uint32_t ownerType = key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
+        const auto emit = [&](size_t column, std::optional<std::span<const std::byte>> encoded) {
+            if (cancellation) cancellation->check();
+            if (!encoded) { sink(ownerOrdinal, column, std::nullopt); return; }
+            if (const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(*encoded)) {
+                if (primitive->type != PropertyType::STRING) {
+                    scalars(ownerOrdinal, column, primitive->type, primitive->bits);
+                    debug::PerfTrace::addValue("native_graph.read.property_typed_scalar_cells", 1);
+                    debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
+                    return;
+                }
+                if (texts) {
+                    (*texts)(ownerOrdinal, column, primitive->text);
+                    debug::PerfTrace::addValue("native_graph.read.property_typed_text_cells", 1);
+                    debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
+                    return;
+                }
+            }
+            // Complex values and legacy consumers keep the admitted owning
+            // decoder; the primary scalar/text route allocates no value vector.
+            size_t offset = 0U;
+            auto value = CanonicalPropertyValueCodec::decodeNext(*encoded, offset);
+            if (offset != encoded->size())
+                throwRootStoreError(FormatError::FERR_INVALID_HEADER, "typed Property entry has trailing bytes");
+            sink(ownerOrdinal, column, PropertyCollectionRootEntry{tokens[column], std::move(value)});
+            debug::PerfTrace::addValue("native_graph.read.property_owning_fallback_cells", 1);
+            debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
+        };
+        EntityPropertyCollectionRootCodec::visitSelectedEncoded(bytes, key.entity_id, ownerType,
+            tokens, std::ref(emit), admission, cancellation);
+        debug::PerfTrace::addValue("native_graph.read.property_selected_column_decode", 1);
+        debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
+        return true;
+    }
+
 	std::vector<std::optional<PropertyCollectionRootEntry>>
 	PropertyCollectionRootStore::decodeSelectedEntityProperties(
 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
@@ -1392,7 +1436,7 @@ namespace graph::storage {
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
 			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
-			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars) {
+			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts) {
 			validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
@@ -1469,11 +1513,25 @@ namespace graph::storage {
 			std::vector<std::optional<PropertyCollectionRootEntry>> decoded;
 			if (pinned.has_value()) {
 				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
+                        pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, ownerIndex,
+                        *sink, *scalars, texts, admission, cancellation_)) {
+                    if (cancellation_) cancellation_->check();
+                    debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
+                    continue;
+                }
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
 						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
 			} else {
 				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
+                        copied->pageId(), copied->ownerKind(), bytes, keyTokens, ownerIndex,
+                        *sink, *scalars, texts, admission, cancellation_)) {
+                    if (cancellation_) cancellation_->check();
+                    debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
+                    continue;
+                }
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
 						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));

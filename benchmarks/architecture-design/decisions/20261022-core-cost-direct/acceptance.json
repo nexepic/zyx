@@ -1,0 +1,55 @@
+{
+  "accepted_item": "P5 direct typed production chain",
+  "progress_percent": 85,
+  "test_count": 263,
+  "full_suite": false,
+  "excluded_preexisting_test": "LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop; also fails frozen 5500a068 with frozen headers/library",
+  "primary_medium": {
+    "queries": [
+      "label_scan_filter",
+      "aggregation_count_by_group"
+    ],
+    "typed_text_cells_each": 100000,
+    "generic_value_fallback_cells_each": 0,
+    "property_root_selections_each": 100000,
+    "batches_each": 196,
+    "filter_count_updates": 196,
+    "group_count_updates": 1568,
+    "oracles": "filter 12500; eight groups of 12500"
+  },
+  "format_change": false,
+  "full_performance_matrix": false,
+  "kuzu_objective_met": false,
+  "persistent_compact_layout_adopted": false,
+  "library_sha256": "cf37041b6d5be36decc0e4540c608661f8c773dc87df61d7907ed7f218282185",
+  "sources": {
+    "include/graph/query/execution/LogicalAggregateAccumulator.hpp": "4a4553b32eec2818fff03e0056d966ccae1de482f1e1e7270a0abd2f49fb3357",
+    "include/graph/storage/LogicalGraphRead.hpp": "005fcb88856c7daac17e78af6617d4aaeb638b907bd211ab5a022b454f68ef3a",
+    "include/graph/storage/PropertyScalarReadSink.hpp": "9d597983e98025f824932c9d692cfd41b972133942bf2d4f8b47b504f2b01340",
+    "include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp": "455a36ca57d6072ef6484ee468f0be4c0a5122d24041351b52f5055b857779e6",
+    "include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp": "7e2f5de88010ba7b0ef60d5d9c608f8703b3dcee843d4e2ad24a5e299ffb58e1",
+    "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp": "b9fe4b9d1543c41c1dc98dd54bb49a5022fec79230575e92ec0efeb85d656d36",
+    "include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": "60b561dc2104a792dbe9cd65adc34a4047aa8643d285e6d82c6ffe158fcd6ca2",
+    "include/graph/storage/relocatable/property/PropertyValueCodec.hpp": "d5a5465753a67497359ce798ee6ed48204b7fb17c2bbabbeedcad805a8b3ced0",
+    "src/query/execution/BatchEnvelope.hpp": "ddec636e60afafd01f8a8206f88b80c650fe37ce58ca61f960eaea343762a093",
+    "src/query/execution/BoundNodeColumnPredicates.hpp": "7b05a22bd0ef6fee563e1a138ebe783e9db144c42d79161d416f59c789649c48",
+    "src/query/execution/DirectPropertyColumns.hpp": "a8840ca7926963f4b92bfc189dddaa74f60ef0915fad23893b74d08583e53e6d",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "846859aeb48cb777ab413798749a625511406df14b4030f040029b34f3ec4de7",
+    "src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp": "a64c51bc5ece0c5ba31ce13c031746ea1a0579d2756e9517836fc31f1f94092c",
+    "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": "0442405bb996730e0ff90ac42c883f6ec2ab9f56cd0f856642ddec6a2fb41bbd",
+    "src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp": "3053742b097ad26fdfcab9aaa11544c4d795af33a894cd70a522c93960bbbd25",
+    "src/storage/relocatable/property/PropertyCollectionRoot.cpp": "a29ced528c326beaca391ec4b94b7884c8dfc6fe93478d722ec5b56bc62c6f7b",
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "a9bbfe076045b23c67599db765e50903bce981667f05506d99f5279d82dcb4a0",
+    "src/storage/relocatable/property/PropertyValueCodec.cpp": "4084de72bff7d2130cb4671163129f9db685a07354b435f8e2ae9b735e215f5a",
+    "tests/src/query/execution/test_BatchEnvelope.cpp": "6a2c051818b98c25c7063c3f373587035f960d8c2d036b9f2a1db9a28340bb1c",
+    "tests/src/query/execution/test_LogicalAggregateAccumulator.cpp": "065c8be09b013f126af524e23ff3bfb0bb57f50c1c7471724d90693c63d1e5d1",
+    "tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp": "c0fc5a71231f9a3c1aed6a4d249b3071155e5d9430fd3be14908af6e4953a0ae",
+    "tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp": "b2eef397ef47bf2b1eebfea49c8557dfa98030cd678ced48562b578093f4d3ad",
+    "tests/src/storage/relocatable/property/test_PropertyBorrowedSelection.cpp": "9471ef31e6c6f218a5c36277bbfd4880272bc151b8c300ce86b67675e2b2f4a4"
+  },
+  "limitations": [
+    "ROW roots still require one selected-field lookup per owner",
+    "compact prototype isolates synthetic in-memory representation; no IO/directory/updates or persistent admission",
+    "no production latency improvement claimed; final P7 gates remain unchanged"
+  ]
+}

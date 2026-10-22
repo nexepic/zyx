@@ -521,8 +521,9 @@ namespace graph::storage {
 	void PageBackedGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
 		std::span<const uint64_t> ids, std::span<const uint32_t> tokens,
 		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
-		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars) const {
-		if (!sink || (scalars && !*scalars)) throw std::invalid_argument("direct Property cells require a sink");
+		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
+        const PropertyTextReadSink *texts) const {
+		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct Property cells require a sink");
 		if (ids.size() > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyKey))
 			throw std::overflow_error("direct Property owner staging overflowed");
 		if (admission) (*admission)(ids.size() * sizeof(EntityPropertyKey));
@@ -535,7 +536,7 @@ namespace graph::storage {
 			};
 		const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> emit = std::ref(emitValue);
 		active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
-			snapshot, keys, tokens, {}, true, admission, &emit, scalars);
+			snapshot, keys, tokens, {}, true, admission, &emit, scalars, texts);
 		debug::PerfTrace::addValue("native_graph.read.direct_property_batches", 1);
 	}
 

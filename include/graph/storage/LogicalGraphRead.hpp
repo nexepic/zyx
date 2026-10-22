@@ -486,6 +486,13 @@ namespace graph::storage {
             if (!values || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
             readNodePropertyCellsSortedWithAdmission(ids, keys, values, admission);
         }
+        virtual void readNodePropertyCellsWithViewsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const PropertyScalarReadSink &scalars, const PropertyTextReadSink &texts,
+            const std::function<void(size_t)> &admission) const {
+            if (!texts) throw std::invalid_argument("direct text cells require a sink");
+            readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, values, scalars, admission);
+        }
 		// Readers advertising admission invoke it before selected entry payload
 		// reads/copies. Native storage reports canonical token + value wire bytes;
 		// these are source scratch estimates, not decoded object capacity or RSS.
@@ -1138,6 +1145,9 @@ namespace graph::storage {
 		// fence. Read-only-only adapters may return nullopt; callers then must not
 		// attempt a read-dependent optimistic mutation through that adapter.
 		[[nodiscard]] virtual std::optional<LogicalGraphMutationFence> mutationFence() const { return std::nullopt; }
+        // True only when fence/schema/token identities cannot change for this
+        // snapshot's lifetime. Mutable overlays keep the default validation.
+        [[nodiscard]] virtual bool hasImmutableReadIdentity() const noexcept { return false; }
 		// Unsupported readers explicitly decline authenticated schema binding.
 		// The identity does not replace a data snapshot/fence, semantic plan key,
 		// capability validation or owning lifetime; it enables no plan cache alone.

@@ -11,7 +11,9 @@
 #include <cstddef>
 #include <functional>
 #include <memory_resource>
+#include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
@@ -24,6 +26,15 @@ namespace graph::storage {
 	class CanonicalPropertyValueCodec final {
 	public:
 		static constexpr size_t HEADER_BYTES = 6U;
+        struct BorrowedPrimitive {
+            PropertyType type = PropertyType::NULL_TYPE;
+            uint64_t bits = 0U;
+            std::string_view text;
+        };
+        // Authenticates an exact scalar/string envelope without constructing a
+        // PropertyValue. Complex kinds return nullopt for the owning decoder.
+        [[nodiscard]] static std::optional<BorrowedPrimitive>
+        tryBorrowPrimitive(std::span<const std::byte> bytes);
 		// Inspect an authenticated value header without decoding its payload.
 		// encodedBytes includes header and payload; malformed envelopes fail closed.
 		[[nodiscard]] static bool isNullHeader(std::span<const std::byte> header, size_t encodedBytes);

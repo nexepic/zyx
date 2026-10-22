@@ -97,6 +97,13 @@ namespace graph::storage {
 		// Decodes and validates only the fixed owner header. The returned root has
 		// no entries and is intended for storage-side ownership authentication.
 		[[nodiscard]] static PropertyCollectionRoot decodeOwner(std::span<const std::byte> bytes);
+        using EncodedSelectionSink = std::function<void(size_t, std::optional<std::span<const std::byte>>)>;
+        // Validates the complete owner/directory, then borrows selected value
+        // ranges synchronously. Missing cells are reported as nullopt.
+        static void visitSelectedEncoded(std::span<const std::byte> bytes,
+            uint64_t expectedOwnerId, uint32_t expectedOwnerType, std::span<const uint32_t> tokens,
+            const EncodedSelectionSink &sink, const SelectedPropertyReadAdmission *admission = nullptr,
+            const CancellationCheckpoint *cancellation = nullptr);
 		// Decodes at most one requested token through the canonical offset
 		// directory. The containing slotted or LargeValue page authenticates the
 		// complete payload before this projection is opened.

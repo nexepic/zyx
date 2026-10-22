@@ -7,7 +7,10 @@ class EnvelopeSnapshot final : public storage::LogicalGraphReadSnapshot {
 public:
 	storage::LogicalGraphSchemaIdentity identity{1U, 2U, {}, 0U, 0U};
 	bool tokens = true;
-	std::optional<storage::LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override { return identity; }
+	bool immutable = false;
+	mutable size_t identity_reads = 0;
+	bool hasImmutableReadIdentity() const noexcept override { return immutable; }
+	std::optional<storage::LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override { ++identity_reads; return identity; }
 	bool supportsPropertyTokenResolution() const override { return tokens; }
 	storage::LogicalGraphNode readNode(uint64_t) const override { throw std::logic_error("unexpected read"); }
 	storage::LogicalGraphEdge readEdge(uint64_t) const override { throw std::logic_error("unexpected read"); }
@@ -182,4 +185,77 @@ TEST(BatchEnvelopeTest, DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExp
     EXPECT_THROW(static_cast<void>(batch.cell(layout.column(0), batch.rowId(0))), std::invalid_argument);
 }
 
+}
+
+namespace graph::query::execution::detail {
+TEST(BatchEnvelopeTest, DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries) {
+    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot; snapshot.immutable = true;
+    {
+        DirectPropertyColumns columns(snapshot, 2U, 1U, budget);
+        std::string buffer("a\0b", 3); columns.appendText(0, 0, buffer, [] {});
+        buffer.assign("changed"); columns.appendText(1, 0, buffer, [] {}); buffer.assign("reused");
+        columns.seal(); const size_t checks = snapshot.identity_reads;
+        for (size_t i = 0; i < 1000; ++i)
+            EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(0)).data), std::string_view("a\0b", 3));
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(1)).data), "changed");
+        EXPECT_EQ(snapshot.identity_reads, checks); EXPECT_LE(checks, 2U);
+        const std::array<std::string, 1> names{"text"}; BoundColumnLayout layout(names, budget);
+        BatchEnvelope envelope(1U, layout, snapshot, 2U, budget);
+        const std::array sources{BatchColumnSource::direct(columns, 0U)};
+        const std::array<uint32_t, 2> selected{0U, 1U}; const std::array<uint64_t, 2> ordinals{0U, 1U};
+        envelope.publish(names, sources, 2U, selected, ordinals, [] {});
+        const size_t publishedChecks = snapshot.identity_reads;
+        for (size_t i = 0; i < 1000; ++i)
+            EXPECT_EQ(std::get<std::string_view>(envelope.cell(layout.column(0), envelope.rowId(0)).data), std::string_view("a\0b", 3));
+        EXPECT_EQ(snapshot.identity_reads, publishedChecks);
+
+    }
+    EXPECT_EQ(budget.used(), 0U);
+    snapshot.immutable = false;
+    DirectPropertyColumns mutableColumns(snapshot, 1U, 1U, budget);
+    mutableColumns.appendText(0, 0, "ok", [] {}); mutableColumns.seal();
+    ++snapshot.identity.catalog_tokens[0];
+    EXPECT_THROW((void)mutableColumns.cell(0, mutableColumns.rowId(0)), std::invalid_argument);
+}
+TEST(BatchEnvelopeTest, DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget) {
+    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot;
+    {
+        DirectPropertyColumns columns(snapshot, 1U, 1U, budget); size_t checkpoints = 0;
+        EXPECT_THROW(columns.appendText(0, 0, std::string(2048, 'x'), [&] {
+            if (++checkpoints == 3U) throw std::runtime_error("cancelled");
+        }), std::runtime_error);
+        EXPECT_THROW(columns.seal(), std::logic_error);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+    {
+        DirectPropertyColumns columns(snapshot, 1U, 1U, budget);
+        EXPECT_THROW(columns.appendText(0, 0, std::string(131072, 'x'), [] {}), std::exception);
+        EXPECT_THROW(columns.seal(), std::logic_error);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+}
+
+namespace graph::query::execution::detail {
+TEST(BatchEnvelopeTest, ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects) {
+    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot;
+    const std::array<size_t, 5> order{2, 0, 0, 1, 3}; SelectionVector selected(4); selected.reject(3);
+    DirectPropertyColumns columns(snapshot, 4, 1, budget);
+    columns.appendText(0, 0, std::string_view("a\0b", 3), [] {});
+    columns.appendText(1, 0, "", [] {}); columns.append(2, 0, PropertyValue(), [] {});
+    columns.appendScalar(3, 0, PropertyType::INTEGER, 7, [] {}); columns.seal();
+    std::vector<std::optional<std::string>> values;
+    ASSERT_TRUE(columns.tryVisitShortTextColumn(0, selected, order, [&](size_t, auto text) {
+        values.emplace_back(text ? std::optional<std::string>(*text) : std::nullopt);
+    }, [] {}));
+    ASSERT_EQ(values.size(), 4U); EXPECT_FALSE(values[0]); EXPECT_EQ(values[1], std::string("a\0b", 3));
+    EXPECT_EQ(values[1], values[2]); EXPECT_EQ(values[3], std::string{});
+    size_t effects = 0; selected.select(3);
+    EXPECT_FALSE(columns.tryVisitShortTextColumn(0, selected, order, [&](size_t, auto) { ++effects; }, [] {}));
+    EXPECT_EQ(effects, 0U);
+    DirectPropertyColumns longText(snapshot, 1, 1, budget); longText.appendText(0, 0, std::string(65, 'x'), [] {}); longText.seal();
+    const std::array<size_t, 1> first{0}; SelectionVector one(1);
+    EXPECT_FALSE(longText.tryVisitShortTextColumn(0, one, first, [&](size_t, auto) { ++effects; }, [] {}));
+    EXPECT_EQ(effects, 0U);
+}
 }

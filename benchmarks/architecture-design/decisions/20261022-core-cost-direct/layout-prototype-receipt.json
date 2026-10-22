@@ -1,0 +1,9 @@
+{
+  "head": "76b372cef3f1af38faf4cf270ebd7d4c450e20cf",
+  "patch_sha256": "82c333d8f983f9769411118d541c462a6101f20859a291bb6038d02545dc72df",
+  "library_sha256": "e8334965a370c0c09c5736eae17a0a8da08dfc733321cff4b7cbc57c7a39befe",
+  "prototype_source_sha256": "06f08543892272e7c32071154ec9f42bef30e4a0bc3bb6e5f95f269bcb1e740a",
+  "purpose": "bounded same-executor ROW/compact representation prototype after partial COUNT kernels; synthetic memory source; no storage-lifecycle or Kuzu latency claim",
+  "probe_sha256": "8496b06e6b8971bc78889322094b92325dcd4b5b1eed9139545c5002e69453b9",
+  "samples_sha256": "ac51d15734d6d2f551c9ae111fc7006b55fccca900d070c5ba7aba78a11e856b"
+}

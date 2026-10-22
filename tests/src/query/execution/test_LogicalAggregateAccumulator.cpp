@@ -1072,3 +1072,13 @@ TEST_F(CollectDistinctAccumulatorTest, RetainedAccountingIncludesBothSparseMapBu
 	EXPECT_EQ(result.getList()[0], value);
 	EXPECT_EQ(accumulator.retainedBytes(), 0U);
 }
+
+TEST_F(CountAccumulatorTest, MergesPartialCountsAndRejectsOverflowWithoutChangingTheCount) {
+    CountAccumulator accumulator;
+    accumulator.addRows(17U); accumulator.updateRow();
+    EXPECT_EQ(accumulator.getResult(), PropertyValue(int64_t{18}));
+    accumulator.addRows(static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - 18U);
+    EXPECT_EQ(accumulator.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
+    EXPECT_THROW(accumulator.addRows(1U), std::overflow_error);
+    EXPECT_EQ(accumulator.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
+}

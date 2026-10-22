@@ -553,6 +553,32 @@ namespace graph::storage {
 		return kind == PropertyValueWireKind::PVW_NULL;
 	}
 
+    std::optional<CanonicalPropertyValueCodec::BorrowedPrimitive>
+    CanonicalPropertyValueCodec::tryBorrowPrimitive(std::span<const std::byte> bytes) {
+        static_cast<void>(isNullHeader(bytes, bytes.size()));
+        const auto kind = static_cast<PropertyValueWireKind>(std::to_integer<uint8_t>(bytes.front()));
+        ByteReader payload{bytes.subspan(HEADER_BYTES)};
+        switch (kind) {
+            case PropertyValueWireKind::PVW_NULL: return BorrowedPrimitive{};
+            case PropertyValueWireKind::PVW_BOOLEAN: {
+                const auto value = payload.readU8();
+                if (value > 1U) fail(FormatError::FERR_INVALID_HEADER, "Property boolean is not canonical");
+                return BorrowedPrimitive{PropertyType::BOOLEAN, value, {}};
+            }
+            case PropertyValueWireKind::PVW_INTEGER:
+                return BorrowedPrimitive{PropertyType::INTEGER, payload.readU64(), {}};
+            case PropertyValueWireKind::PVW_DOUBLE:
+                return BorrowedPrimitive{PropertyType::DOUBLE, payload.readU64(), {}};
+            case PropertyValueWireKind::PVW_STRING: {
+                const auto size = payload.readU32();
+                const auto text = payload.readStringView(size);
+                if (payload.remaining() != 0U) fail(FormatError::FERR_INVALID_HEADER, "Property string has trailing bytes");
+                return BorrowedPrimitive{PropertyType::STRING, 0U, text};
+            }
+            default: return std::nullopt;
+        }
+    }
+
 	size_t CanonicalPropertyValueCodec::encodedSize(const PropertyValue &value) {
 		return encodedValueSize(value, 0U);
 	}
