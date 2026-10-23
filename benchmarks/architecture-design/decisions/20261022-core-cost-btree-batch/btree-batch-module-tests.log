@@ -1,0 +1,302 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 142 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 86 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.CachedAppendSizePreservesMixedWritesAndOldSnapshots
+[       OK ] RelocatableBTreePageStoreTest.CachedAppendSizePreservesMixedWritesAndOldSnapshots (30 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers
+[       OK ] RelocatableBTreePageStoreTest.OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers (27 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay
+[       OK ] RelocatableBTreePageStoreTest.ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay (215 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth
+[       OK ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth (18 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.OrderedOverlayAppendDoesNotCopyEveryExistingLeafKey
+[       OK ] RelocatableBTreePageStoreTest.OrderedOverlayAppendDoesNotCopyEveryExistingLeafKey (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.OverlayLeafRedistributionDoesNotMaterializeEveryCandidateSplit
+[       OK ] RelocatableBTreePageStoreTest.OverlayLeafRedistributionDoesNotMaterializeEveryCandidateSplit (163 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.LargeValueCleanupPreservesMappedIndexRootsAndReclaimsOnlyOrphanPools
+[       OK ] RelocatableBTreePageStoreTest.LargeValueCleanupPreservesMappedIndexRootsAndReclaimsOnlyOrphanPools (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MiddleUpsertBatchesCopyLeavesPerGroupAndKeepOldPinsAndDuplicateValues
+[       OK ] RelocatableBTreePageStoreTest.MiddleUpsertBatchesCopyLeavesPerGroupAndKeepOldPinsAndDuplicateValues (763 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BufferedDuplicatesAcrossSixtyFourEntryBoundariesRespectEraseBarriers
+[       OK ] RelocatableBTreePageStoreTest.BufferedDuplicatesAcrossSixtyFourEntryBoundariesRespectEraseBarriers (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull
+[       OK ] RelocatableBTreePageStoreTest.ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull (77 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.CollapsesATransactionLocalSplitBackToOneEmptyStableRoot
+[       OK ] RelocatableBTreePageStoreTest.CollapsesATransactionLocalSplitBackToOneEmptyStableRoot (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsASiblingLinkedLeafAsTheOverlayRoot
+[       OK ] RelocatableBTreePageStoreTest.RejectsASiblingLinkedLeafAsTheOverlayRoot (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACyclicTreeWithAnInconsistentRevisitedLevel
+[       OK ] RelocatableBTreePageStoreTest.RejectsACyclicTreeWithAnInconsistentRevisitedLevel (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayKeyThatCannotFitInAnyLeafPage
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayKeyThatCannotFitInAnyLeafPage (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment
+[       OK ] RelocatableBTreePageStoreTest.DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment (78 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools (1275 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement
+[       OK ] RelocatableBTreePageStoreTest.PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnEmptySplitOverlayIntoOneFreshRootPage
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnEmptySplitOverlayIntoOneFreshRootPage (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsASharedChildDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsASharedChildDuringForcedOverlayRebuild (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAZeroLeafPayloadDuringForcedOverlayRebuild
+[       OK ] RelocatableBTreePageStoreTest.RejectsAZeroLeafPayloadDuringForcedOverlayRebuild (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf (13 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists
+[       OK ] RelocatableBTreePageStoreTest.RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyRightLeafThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyRightLeafThroughTheTransactionOverlay (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf
+[       OK ] RelocatableBTreePageStoreTest.RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase
+[       OK ] RelocatableBTreePageStoreTest.CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink
+[       OK ] RelocatableBTreePageStoreTest.RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase
+[       OK ] RelocatableBTreePageStoreTest.RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState
+[       OK ] RelocatableBTreePageStoreTest.RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAndPreparesAStableRootLeafReplacementForAnExistingKey
+[       OK ] RelocatableBTreePageStoreTest.PlansAndPreparesAStableRootLeafReplacementForAnExistingKey (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans
+[       OK ] RelocatableBTreePageStoreTest.ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOverlayEraseForAnAbsentScalarKey
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOverlayEraseForAnAbsentScalarKey (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool
+[       OK ] RelocatableBTreePageStoreTest.RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates
+[       OK ] RelocatableBTreePageStoreTest.RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates (79 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction
+[       OK ] RelocatableBTreePageStoreTest.RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction
+[       OK ] RelocatableBTreePageStoreTest.UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull
+[       OK ] RelocatableBTreePageStoreTest.PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull (72 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant
+[       OK ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant (416 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration
+[       OK ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration (114 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication (154 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication (76 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot (72 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase
+[       OK ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool (2 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks
+[       OK ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AtomicallyMaterializesNewTreePagesAndSwitchesTheIndexRoot
+[       OK ] RelocatableBTreePageStoreTest.AtomicallyMaterializesNewTreePagesAndSwitchesTheIndexRoot (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen
+[       OK ] RelocatableBTreePageStoreTest.NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DoesNotPublishAnIncompleteTreeFactoryBatch
+[       OK ] RelocatableBTreePageStoreTest.DoesNotPublishAnIncompleteTreeFactoryBatch (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidTreeRequestsAndFactoryPageIdentities
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidTreeRequestsAndFactoryPageIdentities (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsOversizedBatchesAndNonIndexPoolsBeforeMaterialization
+[       OK ] RelocatableBTreePageStoreTest.RejectsOversizedBatchesAndNonIndexPoolsBeforeMaterialization (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAtomicTreeBatchWhenThePoolLacksEnoughFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsAtomicTreeBatchWhenThePoolLacksEnoughFrames (63 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversAnInterruptedAtomicTreePublicationFromTheWal
+[       OK ] RelocatableBTreePageStoreTest.RecoversAnInterruptedAtomicTreePublicationFromTheWal (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DiscardsTreeFramesWhenTheWalPublicationHeaderWasNotDurable
+[       OK ] RelocatableBTreePageStoreTest.DiscardsTreeFramesWhenTheWalPublicationHeaderWasNotDurable (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BindsInitialLeafValuesAfterTheMetadataBatchAssignsPageIds
+[       OK ] RelocatableBTreePageStoreTest.BindsInitialLeafValuesAfterTheMetadataBatchAssignsPageIds (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesAndReplacesKeyOnlyFreshTreesThroughTheNativeTransaction
+[       OK ] RelocatableBTreePageStoreTest.PublishesAndReplacesKeyOnlyFreshTreesThroughTheNativeTransaction (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation
+[       OK ] RelocatableBTreePageStoreTest.RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames (1 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames
+[       OK ] RelocatableBTreePageStoreTest.RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames (1 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages
+[       OK ] RelocatableBTreePageStoreTest.RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages (1 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidRetirementAndFreshTreePlanningContracts
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidRetirementAndFreshTreePlanningContracts (1 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages
+[       OK ] RelocatableBTreePageStoreTest.InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsRootLeafWithPersistedSiblingLinkBeforeErasing
+[       OK ] RelocatableBTreePageStoreTest.RejectsRootLeafWithPersistedSiblingLinkBeforeErasing (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansRootLeafRetirementAndRejectsTamperedPreparationBatches
+[       OK ] RelocatableBTreePageStoreTest.PlansRootLeafRetirementAndRejectsTamperedPreparationBatches (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.TraversesEveryInternalTreePageWhenPlanningRetirement
+[       OK ] RelocatableBTreePageStoreTest.TraversesEveryInternalTreePageWhenPlanningRetirement (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnUnroutedInternalChildDuringTreeRetirementPlanning
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnUnroutedInternalChildDuringTreeRetirementPlanning (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsACyclicInternalTreeDuringRetirementPlanning
+[       OK ] RelocatableBTreePageStoreTest.RejectsACyclicInternalTreeDuringRetirementPlanning (4 ms)
+[----------] 86 tests from RelocatableBTreePageStoreTest (4248 ms total)
+
+[----------] 21 tests from RelocatableBTreeIndexTest
+[ RUN      ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf
+[       OK ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf (5 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree
+[       OK ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree (4 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults
+[       OK ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults (4 ms)
+[ RUN      ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks (9 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound
+[       OK ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound (10 ms)
+[ RUN      ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors
+[       OK ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors (9 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree
+[       OK ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree (30 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges
+[       OK ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges (19 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks (8 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink
+[       OK ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink (8 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence
+[       OK ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence (10 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains (8 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains (8 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange
+[       OK ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange (8 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator
+[       OK ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange
+[       OK ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange (6 ms)
+[----------] 21 tests from RelocatableBTreeIndexTest (186 ms total)
+
+[----------] 16 tests from BTreeIndexScanCacheTest
+[ RUN      ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently
+[       OK ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently (17 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute (15 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot (15 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves
+[       OK ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage
+[       OK ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage (15 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease
+[       OK ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees
+[       OK ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees (17 ms)
+[ RUN      ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries
+[       OK ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys (19 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots (15 ms)
+[ RUN      ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt
+[       OK ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt (15 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves
+[       OK ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo
+[       OK ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo (16 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies
+[       OK ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies (16 ms)
+[----------] 16 tests from BTreeIndexScanCacheTest (266 ms total)
+
+[----------] 19 tests from RelocatableScalarIndexTreeReachabilityReclaimerTest
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresDroppedAndOrphanedTreesWithoutBreakingPinnedSnapshots
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresDroppedAndOrphanedTreesWithoutBreakingPinnedSnapshots (32 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.DoesNotPartiallyRetireAnObsoleteTreeWhenMetadataPublicationIsInterrupted
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.DoesNotPartiallyRetireAnObsoleteTreeWhenMetadataPublicationIsInterrupted (26 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsUnknownSealedRootsAndInvalidBounds
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsUnknownSealedRootsAndInvalidBounds (4 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsActiveConstraintSupportTreeAndRetiresDroppedOrOrphanedRoots
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsActiveConstraintSupportTreeAndRetiresDroppedOrOrphanedRoots (24 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsTombstonedVectorMappingUntilItsVisibleManifestIsRetired
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsTombstonedVectorMappingUntilItsVisibleManifestIsRetired (34 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsEveryZeroScanBoundAndAnInvalidCheckpointLsn
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsEveryZeroScanBoundAndAnInvalidCheckpointLsn (2 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsANonUniqueConstraintWithoutASupportTree
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsANonUniqueConstraintWithoutASupportTree (6 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsNodeKeySupportTreesAndRejectsMissingOrUnneededConstraintSupportTrees
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetainsNodeKeySupportTreesAndRejectsMissingOrUnneededConstraintSupportTrees (30 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnActiveVectorRootWithoutItsVisibleManifest
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnActiveVectorRootWithoutItsVisibleManifest (9 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnIncompleteVisibleVectorManifest
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnIncompleteVisibleVectorManifest (4 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAVisibleVectorManifestWhoseMappingRootWasReplaced
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAVisibleVectorManifestWhoseMappingRootWasReplaced (18 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.EnforcesVectorManifestAndIndexRootScanBounds
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.EnforcesVectorManifestAndIndexRootScanBounds (38 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.EnforcesRetirementAndTreePageBounds
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.EnforcesRetirementAndTreePageBounds (27 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnOversizedMultiLevelTreeBeforeRetiringAnyRoot
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsAnOversizedMultiLevelTreeBeforeRetiringAnyRoot (11 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresEveryPageOfAnOrphanedMultiLevelTree
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresEveryPageOfAnOrphanedMultiLevelTree (15 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresABTreeFromASharedIndexPool
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RetiresABTreeFromASharedIndexPool (10 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.ReleasesRetiredTreeFramesOnlyAfterPinnedSnapshotsDrain
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.ReleasesRetiredTreeFramesOnlyAfterPinnedSnapshotsDrain (12 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsABTreeWithOneChildReferencedTwice
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RejectsABTreeWithOneChildReferencedTwice (9 ms)
+[ RUN      ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RequiresEveryCollaboratorToUseTheSameMetadataStore
+[       OK ] RelocatableScalarIndexTreeReachabilityReclaimerTest.RequiresEveryCollaboratorToUseTheSameMetadataStore (3 ms)
+[----------] 19 tests from RelocatableScalarIndexTreeReachabilityReclaimerTest (322 ms total)
+
+[----------] Global test environment tear-down
+[==========] 142 tests from 4 test suites ran. (5023 ms total)
+[  PASSED  ] 142 tests.

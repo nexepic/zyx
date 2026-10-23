@@ -1,0 +1,18 @@
+{
+  "purpose": "explicit legacy input initialization; excluded from ordinary writes, reported separately",
+  "returncode": 0,
+  "source": "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final-indexed.zyx",
+  "target": "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/final/inputs/medium-summary.zyx",
+  "wall_seconds": 0.3557024100155104,
+  "before_bytes": 315621376,
+  "after_bytes": 315883520,
+  "user_seconds": 0.28607699999999997,
+  "system_seconds": 0.067804,
+  "peak_rss_bytes": 81182720,
+  "os_read_bytes": 0,
+  "os_write_bytes": 524288,
+  "source_sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee",
+  "target_sha256": "e4714b423bb807b3011a62c904ff4d0e3ad41bb1f6cf5600ba6047d27bc2d4cc",
+  "library_sha256": "842f2e1c2fcd722688e8a7c6fb6cb8e6bba443b2668a15c2db0e6bec1a7be98a",
+  "probe_sha256": "0b63d2e6de6353dd8c61a66120d8d740f0e4d07026caeb355676d739ca9af30d"
+}

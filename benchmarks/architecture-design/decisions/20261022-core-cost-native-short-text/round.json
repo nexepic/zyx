@@ -1,0 +1,46 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-short-text-hybrid-candidate/libzyx_core.a",
+      "sha256": "b3975e4889e546be299e0f457afeef9fc762a2dc3f72b649e3252b2a3ed1dea9",
+      "profile": "9/35"
+    },
+    "default": {
+      "path": "/workspace/zyx-short-text-default-candidate/libzyx_core.a",
+      "sha256": "3e4132e114655c12befed02d0ecb4cb003c6586e17fd2f0c42cd383e847196f0",
+      "profile": "5/31"
+    }
+  },
+  "checks": {
+    "experimental_legacy_membership": 180,
+    "experimental_compact_membership": 180,
+    "default_format": 35,
+    "expanded_short_text_case": 1
+  },
+  "semantics": [
+    "short text <=7 bytes, embedded NUL, empty, multibyte, canonical tail/length checks",
+    "NULL versus empty updates and no-op",
+    "controlled conversion, typed text sinks with zero owning fallback",
+    "single update, long-text demotion, old pins, partial A/B faults, read-only reopen",
+    "old experimental 7/33 and 6/32 rejection; default 5/31 retained"
+  ],
+  "summary_fix": "native hybrid deletion updates only changed authenticated source/final Entity pages and existing summary keys/counts in the same publication; missing summaries remain absent and stale proofs stay stale; private BTree image source/operation validation recognizes summary encoding",
+  "retained_failures": [
+    "first-failure: incorrect writable reopen fixture and missing hybrid-delete free summary maintenance",
+    "summary-gate-failure: derived-image role admission initially omitted reserved summary IDs",
+    "summary-source-validation-failure: source leaf validator incorrectly interpreted summary markers as ordinary Entity-ID keys"
+  ],
+  "pending": [
+    "grouped source authentication/delivery without per-owner Entity/ROW-route lookups",
+    "complete production space, lifecycle, resource and performance acceptance",
+    "no default layout adoption"
+  ],
+  "patch_sha256": "8212053fb2a53e2dd0aa1da2ba354c3cde5723fad33dbca5ef5721c462a09f01",
+  "additional_source_sha256": "67b502815ccd9019d0f384dcde7401c03ad7a98c9212b136ac8ab2df8f01726b",
+  "test_hook_note": "test binary overrides current StorageIO translation unit solely to enable syscall fault injection; Release engine archives are unchanged and contain no testing hook dispatch",
+  "performance_observer_note": "Recompile observers with the selected current headers and profile; do not pair old format33 or macro0 observer objects with the format35 engine."
+}

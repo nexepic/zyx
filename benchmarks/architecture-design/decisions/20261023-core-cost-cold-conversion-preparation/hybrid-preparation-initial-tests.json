@@ -1,0 +1,244 @@
+{
+  "tests": 20,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T00:23:32Z",
+  "time": "0.021s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyLargeFieldPreparationTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T00:23:32Z",
+      "time": "0.005s",
+      "testsuite": [
+        {
+          "name": "SingleFieldEncoderPreservesExistingWireBytesAndRefunds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLargeFieldPreparation.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyLargeFieldPreparationTest"
+        },
+        {
+          "name": "ProposalOwnsPayloadWithoutPublishingOrConsumingIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLargeFieldPreparation.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyLargeFieldPreparationTest"
+        },
+        {
+          "name": "SharedContentReusesIdentityAndDifferentTokenDoesNot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLargeFieldPreparation.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyLargeFieldPreparationTest"
+        },
+        {
+          "name": "CorruptDedupIndexCannotCompareBeyondShorterInput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLargeFieldPreparation.cpp",
+          "line": 128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyLargeFieldPreparationTest"
+        },
+        {
+          "name": "BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLargeFieldPreparation.cpp",
+          "line": 169,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyLargeFieldPreparationTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableBorrowedPropertyRootTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T00:23:32Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "CanonicalNodeAndEdgeBytesMatchExistingCodecWithoutCloningSourceValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootBorrowed.cpp",
+          "line": 22,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "RelocatableBorrowedPropertyRootTest"
+        },
+        {
+          "name": "OwnerNeutralLargeBytesMatchExistingCanonicalPayloadForNestedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootBorrowed.cpp",
+          "line": 38,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "RelocatableBorrowedPropertyRootTest"
+        },
+        {
+          "name": "EmptyCanonicalRootsAndInvalidOwnersPointersOrOrderRetainExistingContract",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootBorrowed.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "RelocatableBorrowedPropertyRootTest"
+        },
+        {
+          "name": "QuotaAndCancellationAfterAllocationReleaseBothOutputAndCanonicalWorkspace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootBorrowed.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "RelocatableBorrowedPropertyRootTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyConversionPreparationTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T00:23:32Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 37,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "CompleteMembershipBoundPacksIntoActualSlottedPageCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 123,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 159,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 224,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 268,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:23:32Z",
+          "time": "0.008s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        }
+      ]
+    }
+  ]
+}

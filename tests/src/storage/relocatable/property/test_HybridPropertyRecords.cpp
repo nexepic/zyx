@@ -154,3 +154,21 @@ TEST(HybridPropertyRecordsTest, EveryTruncatedWidthAndOversizedRecordRejectWitho
     EXPECT_THROW(HybridPropertyGroupRecord::decode(oversized, group().owner_kind, 3, Generation(11), Generation(13)), FormatException);
 }
 } // namespace
+
+TEST(HybridPropertyRecordsTest, ShortTextWordsAreCanonicalByteValuesAcrossNullAndMissingMasks) {
+ auto record=column();record.identity.scalar_kind=HybridPropertyScalarKind::HPSK_SHORT_TEXT7;
+ const std::array<std::string,5> values{"",std::string("a\0b",3),"1234567",std::string("\xe4\xb8\xad",3),std::string("\xff",1)};
+ for(unsigned i=0;i<64;++i) {
+  const auto bit=UINT64_C(1)<<i;
+  record.words[i]=(record.presence&~record.nulls&bit)?*HybridPropertyShortText::encode(values[i%values.size()]):0;
+ }
+ const auto wire=encoded(record);const auto restored=decode(wire,record);
+ EXPECT_EQ(restored,record);EXPECT_EQ(wire.size(),576U);
+ for(unsigned i=0;i<48;++i)if(i!=4)EXPECT_EQ(HybridPropertyShortText::decode(restored.words[i]),values[i%values.size()]);
+ EXPECT_FALSE(HybridPropertyShortText::encode("12345678"));
+ for(const uint64_t invalid : {UINT64_C(8)<<56U,(UINT64_C(1)<<56U)|UINT64_C(0x0100),UINT64_C(1)}) {
+  auto bad=record;bad.words[0]=invalid;EXPECT_THROW(bad.validate(),FormatException);
+ }
+ auto badNull=record;badNull.words[4]=*HybridPropertyShortText::encode("x");EXPECT_THROW(badNull.validate(),FormatException);
+ auto badMissing=record;badMissing.words[63]=*HybridPropertyShortText::encode("x");EXPECT_THROW(badMissing.validate(),FormatException);
+}

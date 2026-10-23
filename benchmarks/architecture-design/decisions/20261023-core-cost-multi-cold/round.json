@@ -1,0 +1,54 @@
+{
+  "recorded_at_utc": "2026-10-23T03:40:37.471342+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-multi-cold-legacy-": {
+      "tests": 492,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-multi-cold-compact-": {
+      "tests": 492,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-multi-cold-": {
+      "tests": 16,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "0d67b5921c77ae4b644af48c8d4144412f6b1e1a39f218039a2ffe2d83a6371b",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "551c74d0c49f6927705a0c66e4cb4164f0e1f5d930fdcf32830c9fdaa5b9ddfb",
+      "binary_preserved": false
+    }
+  },
+  "implemented": [
+    "One-group multiple affected cold blocks with combined64hot/cold change bound",
+    "Preflight distinct blocks/owner roots, original-pin source authentication and accumulated private-image updates",
+    "Continue after group/membership relocation, retain one final GroupDirectory upsert",
+    "Preserve preceding hot value/presence/NULL and cold changes; discard whole batch on later failure"
+  ],
+  "remaining": [
+    "New cold block creation and same-batch LargeValues",
+    "Actual Native field dispatch/schema/constraint/index coordination",
+    "Global hot demotion, owner liveness/delete/inverse/public atomic lifecycle",
+    "Whole-space admission and final P7 performance matrix"
+  ]
+}

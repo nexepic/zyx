@@ -1,0 +1,19 @@
+{
+  "units": [
+    "storage/relocatable/metadata/test_CatalogTree",
+    "storage/relocatable/metadata/test_CatalogSlotHistory",
+    "storage/relocatable/metadata/test_Catalog",
+    "storage/relocatable/metadata/test_LocationDirectory",
+    "storage/relocatable/metadata/test_LocationDirectory_RouteValidation",
+    "storage/relocatable/metadata/test_LocationDirectoryRootGrowth",
+    "storage/relocatable/metadata/test_LocationDirectoryScanCache",
+    "storage/relocatable/metadata/test_MetadataPageRouteDirectory",
+    "storage/relocatable/metadata/test_MetadataPageRouteDirectoryReuse",
+    "storage/relocatable/metadata/test_MetadataPageRoute",
+    "storage/relocatable/metadata/test_MetadataWriteBatch",
+    "storage/relocatable/metadata/test_MetadataPageReadContext"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "5cc0f74d5d55eb7d80ccafbb9e4abf768869e782aed155719670bf462d9a0cb8"
+}

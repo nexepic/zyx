@@ -236,6 +236,11 @@ namespace graph::storage {
 														LargeValueId valueId, PageOwnerKind ownerKind) const;
 
 	private:
+        friend class HybridPropertyReadContext;
+        // Read attachment to an authenticated live source while a metadata
+        // writer may be held. This grants no independent publication authority.
+        LargeValueStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+            const MetadataSnapshotPin &snapshot);
 		friend class PropertyCollectionRootStore;
 
 		// The metadata transaction allocates and validates the identity fields

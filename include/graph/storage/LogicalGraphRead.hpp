@@ -493,6 +493,11 @@ namespace graph::storage {
             if (!texts) throw std::invalid_argument("direct text cells require a sink");
             readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, values, scalars, admission);
         }
+        // False grants no capability and must precede every output callback.
+        // Legacy adapters and mutable overlays keep the scalar/owning route.
+        virtual bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t>,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const PropertyColumnBatchReadSinks &, const std::function<void(size_t)> &) const { return false; }
 		// Readers advertising admission invoke it before selected entry payload
 		// reads/copies. Native storage reports canonical token + value wire bytes;
 		// these are source scratch estimates, not decoded object capacity or RSS.

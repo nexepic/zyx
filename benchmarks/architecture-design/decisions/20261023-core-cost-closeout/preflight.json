@@ -1,0 +1,188 @@
+[
+  {
+    "scale": "medium",
+    "engine": "zyx",
+    "cases": "label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-zyx-label_scan_filter.db",
+      "label_scan_filter,aggregation_count_by_group,multi_key_group",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "medium",
+    "engine": "kuzu",
+    "cases": "label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-kuzu-label_scan_filter.db",
+      "label_scan_filter,aggregation_count_by_group,multi_key_group",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "medium",
+    "engine": "zyx",
+    "cases": "property_set",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/medium-summary.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-zyx-property_set.db",
+      "property_set",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "medium",
+    "engine": "kuzu",
+    "cases": "property_set",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-kuzu-property_set.db",
+      "property_set",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "medium",
+    "engine": "zyx",
+    "cases": "edge_batch_1000",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/medium-summary.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-zyx-edge_batch_1000.db",
+      "edge_batch_1000",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "medium",
+    "engine": "kuzu",
+    "cases": "edge_batch_1000",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-medium-kuzu-edge_batch_1000.db",
+      "edge_batch_1000",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "zyx",
+    "cases": "label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r43-identity.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-zyx-label_scan_filter.db",
+      "label_scan_filter,aggregation_count_by_group,multi_key_group",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "kuzu",
+    "cases": "label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-kuzu-label_scan_filter.db",
+      "label_scan_filter,aggregation_count_by_group,multi_key_group",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "zyx",
+    "cases": "property_set",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/holdout-summary.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-zyx-property_set.db",
+      "property_set",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "kuzu",
+    "cases": "property_set",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-kuzu-property_set.db",
+      "property_set",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "zyx",
+    "cases": "edge_batch_1000",
+    "passed": true,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/public-baseline",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/holdout-summary.zyx",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-zyx-edge_batch_1000.db",
+      "edge_batch_1000",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "scale": "holdout",
+    "engine": "kuzu",
+    "cases": "edge_batch_1000",
+    "passed": true,
+    "command": [
+      "/workspace/zyx-tools/bin/python",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-closeout/kuzu-worker.py",
+      "check-write",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/closeout/preflight-holdout-kuzu-edge_batch_1000.db",
+      "edge_batch_1000",
+      "0",
+      "1"
+    ]
+  }
+]

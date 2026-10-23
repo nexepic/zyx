@@ -1,0 +1,52 @@
+{
+  "recorded_at_utc": "2026-10-23T00:02:00.809848+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-general-legacy-": {
+      "tests": 365,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-general-compact-": {
+      "tests": 365,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 119,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-general-window-hybrid-candidate/libzyx_core.a",
+      "sha256": "3c40d07316cb2d7f9111fd823057687c877a10a2f2f07623d666669934d1f916",
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-general-window-default-candidate/libzyx_core.a",
+      "sha256": "9ea04d60b8aa010d6c1fde035563df18c6e1c474ad3c3534ad2fa3fd8a413bab",
+      "format": "5/31"
+    }
+  },
+  "implemented": [
+    "Multiple-field/exact-count selected reads share decoded body per ordered consecutive same-reference run in original64owner window",
+    "Synchronous stack lease into original point/count readers, no owning context cache or escaped decoded bytes",
+    "Borrowed output/count rectangles and translated sink ordinals; exception/nested parent restoration",
+    "Accounted fixed-size membership boundary protects against existing-cache reuse by nested consumers",
+    "Cold physical-page pin released after owned decoding and before hot/manifest reads",
+    "No quota replay after potentially observable output/count writes, original EntityMap/no competing ROW/selector preflight"
+  ],
+  "work_evidence": "Mixed hot/cold owning projection and exact counts decode shared block once, real LargeValue count-only likewise once, quota failure after output restores lease as proven by subsequent point read doing a new decode, bad cold CRC does not affect hot-only owning projection.",
+  "not_accepted": [
+    "Full owning collection API sharing",
+    "Actual public mode3 conversion, complete mutation/reclamation/old-pin/retirement lifecycle",
+    "Mature whole allocation, staged migration bootstrap, final P7 performance matrix"
+  ],
+  "performance_claim": null
+}

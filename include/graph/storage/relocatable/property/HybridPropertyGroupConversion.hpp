@@ -66,6 +66,8 @@ private:
         if (std::holds_alternative<int64_t>(value.getVariant())) return HybridPropertyScalarKind::HPSK_INT64;
         if (std::holds_alternative<double>(value.getVariant())) return HybridPropertyScalarKind::HPSK_DOUBLE;
         if (std::holds_alternative<bool>(value.getVariant())) return HybridPropertyScalarKind::HPSK_BOOL;
+        if(const auto *text=std::get_if<std::string>(&value.getVariant());text && text->size()<=HybridPropertyShortText::MAX_BYTES)
+            return HybridPropertyScalarKind::HPSK_SHORT_TEXT7;
         return {};
     }
     static bool isNull(const PropertyValue &value) {
@@ -74,6 +76,8 @@ private:
     static uint64_t bits(const PropertyValue &value, HybridPropertyScalarKind kind) {
         if (kind == HybridPropertyScalarKind::HPSK_INT64) return std::bit_cast<uint64_t>(std::get<int64_t>(value.getVariant()));
         if (kind == HybridPropertyScalarKind::HPSK_DOUBLE) return std::bit_cast<uint64_t>(std::get<double>(value.getVariant()));
+        if(kind == HybridPropertyScalarKind::HPSK_SHORT_TEXT7)
+            return *HybridPropertyShortText::encode(std::get<std::string>(value.getVariant()));
         return std::get<bool>(value.getVariant());
     }
 public:
@@ -193,6 +197,8 @@ public:
                     value = PropertyValue(std::bit_cast<int64_t>(column.words[slot]));
                 else if (column.identity.scalar_kind == HybridPropertyScalarKind::HPSK_DOUBLE)
                     value = PropertyValue(std::bit_cast<double>(column.words[slot]));
+                else if(column.identity.scalar_kind == HybridPropertyScalarKind::HPSK_SHORT_TEXT7)
+                    value=PropertyValue(HybridPropertyShortText::decode(column.words[slot]));
                 else value = PropertyValue(bool(column.words[slot]));
             }
             visitor(found->token, value);

@@ -1,0 +1,42 @@
+{
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r43-identity.zyx": {
+    "bytes": 264372224,
+    "sha256": "ee0a13afad38dd6327f1a21bbc154caba084284aa803b3839e44c2a6b94123a1"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final-indexed.zyx": {
+    "bytes": 265814016,
+    "sha256": "6bf075b56cc6f1f50b33e7fae2e680ff11133e96108d2b05788a8bf6c8fcfb5e"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu": {
+    "bytes": 34380344,
+    "sha256": "098c74889abef5e2ade89d5054089527276b85893da9dfd0ed5dbe3a4e54ad41"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx": {
+    "bytes": 313655296,
+    "sha256": "e55db7c3bad581726009a4fd7d4f140f36a8c61cc3ae9a98aa2f1e170357b28a"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final-indexed.zyx": {
+    "bytes": 315621376,
+    "sha256": "65852fdced53810645824c887a66ebd9fb37db24f37830d270074f3d7189a6ee"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu": {
+    "bytes": 41108096,
+    "sha256": "4615483717d9d79deb202970ccc46d0a362b131914c2b48316ef235fda8b6da0"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-fixtures-large.zyx": {
+    "bytes": 2359296,
+    "sha256": "c6e15415876485ce1eec9b993544b8e9e0bc9da3380aace7a4ef7cd3cd8f9df5"
+  },
+  "benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/r7-fixtures-skew.zyx": {
+    "bytes": 2097152,
+    "sha256": "cec7f53e7fd52c724d5446f5399362a9fdd7e59c8a0653f34a9e8482ada3b94d"
+  },
+  "benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/holdout-summary.zyx": {
+    "bytes": 266076160,
+    "sha256": "1b3a179f705815e68db2d927ec8dfc42cc9f8ee2f005cca2da8eb5fb2e1275ae"
+  },
+  "benchmarks/architecture-design/results/20261022-core-cost/closeout/inputs/medium-summary.zyx": {
+    "bytes": 315883520,
+    "sha256": "e4714b423bb807b3011a62c904ff4d0e3ad41bb1f6cf5600ba6047d27bc2d4cc"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "units": [
+    "storage/relocatable/cache/test_BufferPool"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "2c6a418c30bb6a7d98c560c1e3af30353f0d2801375ca87e310bf97da6ba0de8"
+}

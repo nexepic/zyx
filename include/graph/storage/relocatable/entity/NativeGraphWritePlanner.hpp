@@ -194,7 +194,8 @@ namespace graph::storage {
             const CancellationCheckpoint *cancellation = nullptr, bool publishCandidate = false,
             NativeHybridPropertyConversionDirection direction = NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID,
             bool compactColumnMemberships = false,
-            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission = {}, uint8_t groupCount = 1);
+            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission = {}, uint8_t groupCount = 1,
+            bool coldRowRemainder = false);
         // Isolated-format cells; copied into the same bounded account and
         // committed exclusively under this transaction's pin. The opt-in
         // lifecycle mode includes field insertion/removal and inline writes.
@@ -361,6 +362,8 @@ namespace graph::storage {
         // ordinary graph work while native groups are active.
         bool native_graph_coordinated_ = false;
         bool native_schema_coordinated_ = false;
+        bool rebuild_entity_free_summaries_ = false;
+        std::function<void()> free_summary_checkpoint_;
 		std::vector<NativeGraphLogicalIdLeaseRange> node_id_ranges_;
 		std::vector<NativeGraphLogicalIdLeaseRange> edge_id_ranges_;
 		std::map<uint64_t, NodeChange> nodes_;
@@ -382,6 +385,7 @@ namespace graph::storage {
         std::optional<utils::OwnedHeapReservation> hybrid_catalog_credit_;
         std::optional<utils::OwnedVector<uint32_t>> hybrid_catalog_tokens_;
         void adoptHybridPropertyCatalog(NativeGraphWriteTransaction &&catalog, utils::OwnedHeapReservation &&credit);
+        std::unique_ptr<utils::OwnedHeapReservation> free_summary_credit_;
 		std::vector<StagedScalarIndexMutation> scalar_index_mutations_;
 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;
         struct StagedHybridVectors {

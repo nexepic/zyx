@@ -1,0 +1,28 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLayoutScaleTest.*
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from HybridPropertyLayoutScaleTest
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners
+[       OK ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners (316 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLayoutScale.cpp:83: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners (1436 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners
+unknown file: Failure
+C++ exception with description "nonempty native hybrid publication requires its metadata-owned candidate coordinator" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners (106 ms)
+[----------] 3 tests from HybridPropertyLayoutScaleTest (1858 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (1858 ms total)
+[  PASSED  ] 1 test.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners
+
+ 2 FAILED TESTS

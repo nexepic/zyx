@@ -1,0 +1,26 @@
+{
+  "units": [
+    "api/test_ApiTransaction",
+    "storage/relocatable/metadata/test_MetadataSnapshotRegistry",
+    "storage/relocatable/metadata/test_MetadataWriteBatch",
+    "storage/relocatable/metadata/test_MetadataPagePoolRecovery",
+    "storage/relocatable/metadata/test_MetadataPagePoolRetirement",
+    "storage/relocatable/metadata/test_MetadataPoolOwnership",
+    "storage/relocatable/backend/test_RelocatableStorageBackend_LifecycleContracts",
+    "storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot",
+    "storage/relocatable/backend/test_RelocatableDirectPropertyBatch",
+    "storage/relocatable/backend/test_RelocatableImportInsertionTargets",
+    "storage/relocatable/backend/test_RelocatableStorageBackendSchema_IndexContracts",
+    "storage/relocatable/entity/test_NativeGraphMutationExecutor_Validation",
+    "storage/relocatable/entity/test_NativeGraphWritePlanner_LeaseRecovery",
+    "storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts",
+    "storage/relocatable/maintenance/test_RelocatableIntegrityScanner",
+    "storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption",
+    "storage/relocatable/metadata/test_RelocatableMetadataStoreEvacuationNativeFaults",
+    "storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults",
+    "storage/relocatable/cache/test_BufferPool"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "175cc684c94baee32a647c45206b6b9687fd27a2e4697a4dee3ecf63de00bf34"
+}

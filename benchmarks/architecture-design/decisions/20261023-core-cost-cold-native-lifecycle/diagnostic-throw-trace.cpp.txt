@@ -1,0 +1,21 @@
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <exception>
+#include <typeinfo>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+extern "C" [[noreturn]] void __cxa_throw(void *object, std::type_info *type, void (*destroy)(void *)) {
+    using Throw = void (*)(void *, std::type_info *, void (*)(void *));
+    static auto original = reinterpret_cast<Throw>(dlsym(RTLD_NEXT, "__cxa_throw"));
+    if (std::strstr(type->name(), "FormatException") &&
+        std::strstr(reinterpret_cast<std::exception *>(object)->what(), "native physical reconciliation")) {
+        void *frames[48]; const int count = backtrace(frames, 48);
+        std::fprintf(stderr, "RECONCILIATION THROW: %s\n", reinterpret_cast<std::exception *>(object)->what());
+        for (int i = 0; i < count; ++i) { Dl_info info{}; if (dladdr(frames[i], &info))
+            std::fprintf(stderr, "%s + 0x%zx %s\n", info.dli_fname,
+                size_t(reinterpret_cast<char *>(frames[i]) - reinterpret_cast<char *>(info.dli_fbase)),
+                info.dli_sname ? info.dli_sname : ""); }
+    }
+    original(object, type, destroy); std::abort();
+}

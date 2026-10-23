@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "storage/relocatable/property/HybridPropertyConversionPreparationTestAccess.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyFieldView.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyLargeFieldPreparation.hpp"
@@ -161,4 +164,78 @@ TEST_F(HybridPropertyLargeFieldPreparationTest, CorruptDedupIndexCannotCompareBe
     } catch (const FormatException &error) {
         EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
     }
+}
+
+TEST_F(HybridPropertyLargeFieldPreparationTest, BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing) {
+    LargeValueStore store(io_, *metadata_);
+    PropertyCollectionRootStore roots(*slotted_pages_, store, *metadata_);
+    const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
+    PropertyCollectionRoot row{1, graph::Node::typeId, {{2, PropertyValue("user-000000")}, {4, PropertyValue(std::string(8193, 'x'))}}};
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    const std::array<BorrowedPropertyCollectionRootEntry, 2> entries{{{2, &row.entries[0].value}, {4, &row.entries[1].value}}};
+    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        const auto pin = metadata_->openSnapshot();
+        EXPECT_THROW(HybridPropertyLargeFieldPreparation::prepareRootBorrowed(*metadata_, pin, store, owner, entries,
+            LargeValueId(pin.superblock().next_large_value_id), memory), FormatException);
+        EXPECT_EQ(memory->used(), 0U); return;
+    }
+    NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(80);
+    options.entity_pool_owner_id = 901; options.logical_id_lease_block_size = 1;
+    options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, roots, *btree_pages_, options);
+    auto tx = planner.beginTransaction(); tx.reserveNodeIds(1); tx.createNodeWithReservedId(1, {}); tx.replaceNodeProperty(row);
+    ASSERT_TRUE(tx.commit().committed());
+    static_cast<void>(store.contentIndex());
+    const auto pin = metadata_->openSnapshot(); const auto source = pin.superblock();
+    ASSERT_EQ(roots.readEntity(pin, owner), std::optional(row));
+    const auto size = std::filesystem::file_size(path_); const auto epoch = io_->dataMutationEpoch();
+    {
+        const auto proposal = HybridPropertyLargeFieldPreparation::prepareRootBorrowed(*metadata_, pin, store, owner, entries,
+            LargeValueId(source.next_large_value_id), memory);
+        EXPECT_TRUE(proposal.reused()); EXPECT_EQ(proposal.token(), 0U); EXPECT_EQ(proposal.owner(), owner);
+        EXPECT_EQ(proposal.newDataPages(), 0U); EXPECT_EQ(proposal.newManifestPages(), 0U);
+        const auto actual = store.manifest(pin, proposal.reference()); EXPECT_EQ(actual.reference(), proposal.reference());
+        EXPECT_TRUE(std::ranges::equal(proposal.payload(), EntityPropertyLargeValuePayloadCodec::encode(row.entries)));
+        class RejectPhysicalAllocation final : public MetadataPageAllocator {
+            MetadataPageId allocateMetadataPageId() override { throw std::logic_error("private root allocated physical metadata"); }
+            MetadataPageAllocation allocatePage(Generation, LogSequenceNumber, std::span<const PhysicalSlotId>) override {
+                throw std::logic_error("private root allocated a physical page");
+            }
+            void abandonPage(PhysicalPageRef) noexcept override {}
+        } allocator;
+        MetadataWriteBatch batch(allocator, source, LogSequenceNumber(source.checkpoint_lsn.value() + 1));
+        const std::array<PropertyCollectionRoot, 1> sourceRows{row};
+        HybridPropertyGroupConversion plan(memory, sourceRows, owner.owner_kind, 1, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES);
+        const auto retained = memory->used();
+        const HybridPropertyConversionPreparationTestAccess::WholeRootResolver future = [&](EntityPropertyKey, auto) {
+            auto reference = proposal.reference(); reference.generation = Generation(batch.generation().value() + 1);
+            const auto bytes = EntityPropertyLargeValueReferenceCodec::encode({owner.entity_id, graph::Node::typeId, reference});
+            return std::pmr::vector<std::byte>(bytes.begin(), bytes.end(), memory.get());
+        };
+        EXPECT_THROW(HybridPropertyConversionPreparationTestAccess::prepareCold(batch, plan, {}, future), FormatException);
+        EXPECT_EQ(memory->used(), retained); EXPECT_EQ(batch.candidate().next_logical_page_id, source.next_logical_page_id);
+        size_t resolverCalls = 0;
+        const HybridPropertyConversionPreparationTestAccess::WholeRootResolver resolver = [&](EntityPropertyKey requested, auto fields) {
+            EXPECT_EQ(requested, owner); EXPECT_EQ(fields.size(), 2U); ++resolverCalls;
+            const auto bytes = EntityPropertyLargeValueReferenceCodec::encode({owner.entity_id, graph::Node::typeId, proposal.reference()});
+            return std::pmr::vector<std::byte>(bytes.begin(), bytes.end(), memory.get());
+        };
+        const auto prepared = HybridPropertyConversionPreparationTestAccess::prepareCold(batch, plan, {}, resolver);
+        const auto groupRef = HybridPropertyDirectoryCodec::decodeLocator(prepared->group().value);
+        const auto image = [&](PageId id) -> const HybridPropertyPageImage & {
+            for (const auto &page : prepared->pages()) if (page.pageId() == id) return page;
+            throw std::logic_error("missing prepared root page");
+        };
+        const auto group = image(groupRef.page_id).readGroup(groupRef, owner.owner_kind, 1, batch.generation());
+        const auto matrix = image(groupRef.page_id).readColumnMembership(group.column_membership, group, batch.generation());
+        const auto ref = matrix.cold_rows.roots[0]; const auto bytes = image(ref.page_id).readRecord(ref);
+        const auto block = HybridPropertyFieldView::decodeColdRows(bytes, ref, group, matrix, batch.generation(), batch.generation(), memory);
+        const auto cold = block.row(0); ASSERT_TRUE(cold); EXPECT_TRUE(cold->large_value_reference); EXPECT_EQ(cold->field_count, 2U);
+        const auto bound = EntityPropertyLargeValueReferenceCodec::decode(cold->root); EXPECT_EQ(bound.value, proposal.reference());
+        EXPECT_EQ(store.manifest(pin, bound.value).reference(), bound.value); EXPECT_EQ(resolverCalls, 1U);
+        EXPECT_TRUE(prepared->owners().empty()); EXPECT_TRUE(prepared->extensions().empty());
+        EXPECT_EQ(batch.current(), source); EXPECT_EQ(batch.candidate().next_large_value_id, source.next_large_value_id);
+    }
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), source); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+    EXPECT_EQ(std::filesystem::file_size(path_), size); EXPECT_EQ(memory->used(), 0U);
 }

@@ -1,0 +1,11 @@
+# Cold ROW reading integration (producer/lifecycle incomplete)
+
+Accepted progress remains **90%**, P7 open. No timing benchmark, full unit suite, commit or push.
+
+Point reads, NULL/missing, exact counts, ordered hot/cold tokens, full values and typed scalar/text borrows now use the same Native reading code. Actual Entity Map and competing ordinary ROW checks remain. Group-global hot ownership forbids cold fallback for missing hot cells. Presence-only scalar fallback uses authenticated membership metadata, so a corrupt unvisited cold record stays unvisited; exact counts still authenticate the actual cold directory.
+
+The existing cursor lends its optional ROW representation through a synchronous scoped handoff before cold decode. Nested/exceptional calls restore their parent callback. Hot reads never trigger this handoff. No additional ROW cache, index, backend or allowance was introduced. `HPS_COLD_ROW` is an in-library enumeration kind only; old OwnerMap bytes still allow only1/2 and reject3.
+
+Final affected module selections pass **282 checks in each membership configuration** and **68 default checks**. They include10 new read-routing checks and8 actual-root inspection checks, plus affected existing storage lifecycle modules. Final experimental selection excludes the inapplicable default-only test, which passes in default. The initial report retains the obsolete assertion that the experimental Superblock was32; the documented/source profile is13/39, so that explicit assertion was updated to39. The affected old-pin/reopen test then runs and passes. No semantic assertion was relaxed.
+
+Read fixtures use the same private candidate descriptor facility as the existing read-context tests, with actual native pages, indexes and Entity Map. An actual empty durable descriptor and compact feature flag supply valid pin framing. **This is not public conversion or real-query acceptance after conversion.** The normal producer does not emit new-mode groups. Default group/mutation and full-ownership entry points still refuse mode3. Cold-owner LargeValue reachability/retirement must also be integrated before activation; the old explicit-selector iterator is insufficient. Conversion, cold batching, full mutation/ownership lifecycle, mature space/migration bootstrap and final performance acceptance remain pending.

@@ -1,0 +1,3 @@
+case,version,samples,p50_ms,p95_ms
+property_set,before,10,4.913514,5.378439
+property_set,after,10,4.889683,5.123466

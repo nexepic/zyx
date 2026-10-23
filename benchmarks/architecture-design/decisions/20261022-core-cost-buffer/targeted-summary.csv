@@ -1,0 +1,5 @@
+case,version,samples,p50_ms,p95_ms
+property_set,before,30,23.6543385,27.065915
+property_set,after,30,11.140630999999999,13.241626
+edge_batch_1000,before,30,194.9731735,209.580815
+edge_batch_1000,after,30,148.2714105,154.814961

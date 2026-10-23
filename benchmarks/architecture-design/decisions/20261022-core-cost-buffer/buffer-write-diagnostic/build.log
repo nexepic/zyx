@@ -1,0 +1,23 @@
+In file included from /workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/buffer-write-diagnostic/probe.cpp:6:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:529:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  529 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:623:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  623 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:632:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  632 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/buffer-write-diagnostic/probe.cpp:6:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.

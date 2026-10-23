@@ -1,0 +1,42 @@
+{
+  "tests": 2,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T00:48:34Z",
+  "time": "0.083s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyOrdinaryConversionTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T00:48:34Z",
+      "time": "0.083s",
+      "testsuite": [
+        {
+          "name": "CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount",
+          "file": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline-corrected\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp",
+          "line": 270,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:48:34Z",
+          "time": "0.006s",
+          "classname": "HybridPropertyOrdinaryConversionTest"
+        },
+        {
+          "name": "FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry",
+          "file": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline-corrected\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp",
+          "line": 1483,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:48:34Z",
+          "time": "0.077s",
+          "classname": "HybridPropertyOrdinaryConversionTest"
+        }
+      ]
+    }
+  ]
+}

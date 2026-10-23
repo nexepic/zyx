@@ -13,6 +13,7 @@
 namespace graph::storage {
 class HybridPropertyPoolPlacement final {
     friend class RelocatableMetadataStore;
+    friend class HybridPropertyNativeWriteTestAccess;
     struct Reservation {
         CatalogEntry pool;
         size_t capacity = 0, assigned = 0, prepared = 0;

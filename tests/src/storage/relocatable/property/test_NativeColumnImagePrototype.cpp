@@ -203,3 +203,259 @@ TEST_F(RelocatableMetadataStoreTest, NativeColumnPrototypeLastOwnerDeletionRetai
  EXPECT_THROW(static_cast<void>(store.readOwner(next,inserted.root(),originalRoute,std::vector<uint32_t>{1})),std::runtime_error);
  EXPECT_EQ(store.readOwner(next,inserted.root(),route,std::vector<uint32_t>{1}),single[0]);
 }
+
+namespace {
+PropertyValue ownBorrowedCell(const TypedPropertyBlock::BorrowedCell &cell) {
+ if (!cell.present) throw std::logic_error("missing cell has no value");
+ if (cell.primitive) {
+  const auto &p = *cell.primitive;
+  switch (p.type) {
+   case graph::PropertyType::NULL_TYPE: return PropertyValue{};
+   case graph::PropertyType::INTEGER: return PropertyValue(std::bit_cast<int64_t>(p.bits));
+   case graph::PropertyType::DOUBLE: return PropertyValue(std::bit_cast<double>(p.bits));
+   case graph::PropertyType::BOOLEAN: return PropertyValue(bool(p.bits));
+   case graph::PropertyType::STRING: return PropertyValue(std::string(p.text));
+   default: throw std::logic_error("unexpected borrowed primitive");
+  }
+ }
+ size_t consumed = 0;
+ auto result = CanonicalPropertyValueCodec::decodeNext(cell.complex, consumed);
+ EXPECT_EQ(consumed, cell.complex.size());
+ return result;
+}
+std::vector<PropertyCollectionRoot> borrowedRows(std::span<const TypedPropertyBlock::BorrowedCell> cells, uint32_t token) {
+ std::vector<PropertyCollectionRoot> result;
+ for (const auto &cell : cells) {
+  PropertyCollectionRoot row{cell.owner, 1U, {}};
+  if (cell.present) row.entries.push_back({token, ownBorrowedCell(cell)});
+  result.push_back(std::move(row));
+ }
+ return result;
+}
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeColumnBorrowedSupplyMatchesOwningAcrossCowPinsAndReopen) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1,1));
+ LargeValueRef finalRoot;
+ std::vector<PropertyCollectionRoot> source;
+ for (size_t i = 0; i < 64; ++i) {
+  PropertyCollectionRoot row{uint64_t(i * 3 + 1), 1U, {{1U, PropertyValue(int64_t(i)-32)}}};
+  if (i % 5 == 0) row.entries.push_back({2U, PropertyValue{}});
+  else if (i % 5 != 1) row.entries.push_back({2U, PropertyValue(std::string(i % 2 ? "a\0b" : "", i % 2 ? 3 : 0))});
+  if (i % 3) row.entries.push_back({3U, PropertyValue(i % 2 == 0)});
+  if(i==0)row.entries.push_back({4U,PropertyValue(std::vector<PropertyValue>{PropertyValue(7),PropertyValue("nested")})});
+  else if(i==63)row.entries.push_back({4U,PropertyValue(std::string(9000,'v'))});
+  else row.entries.push_back({4U,PropertyValue(int64_t(i))});
+  source.push_back(std::move(row));
+ }
+ {
+  LargeValueStore values(io,*metadata); NativeColumnImageStore store(values); uint64_t lsn=2;
+  auto before = store.write(TypedPropertyBlock::verify(TypedPropertyBlock::encode(17U,source),17U,1U),
+                            writeOptions(LargeValueCodec::LVC_RAW), lsn);
+  auto old = metadata->openSnapshot();
+  const auto read = [&](const MetadataSnapshotPin &pin, const LargeValueRef &root, uint32_t token) {
+   std::vector<PropertyCollectionRoot> result;
+   store.visitSelectedColumn(pin,root,17U,1U,token,[&](auto cells){result=borrowedRows(cells,token);});
+   return result;
+  };
+  for (uint32_t token : {1U,2U,3U,4U,99U})
+   EXPECT_EQ(read(old,before.root(),token),store.readSelected(old,before.root(),17U,1U,std::array{token}));
+  auto changed = source; changed[1].entries.insert(changed[1].entries.begin()+1,{2U,PropertyValue(std::string(600,'x'))});
+  auto proof = TypedPropertyBlock::replaceVerified(before.proof(),17U,1U,changed[1].owner_entity_id,changed[1].entries);
+  auto after = store.write(proof,writeOptions(LargeValueCodec::LVC_RAW),lsn,&before);
+  auto current = metadata->openSnapshot();
+  EXPECT_EQ(read(old,before.root(),2U),store.readSelected(old,before.root(),17U,1U,std::array{2U}));
+  EXPECT_EQ(read(current,after.root(),2U),store.readSelected(current,after.root(),17U,1U,std::array{2U}));
+  EXPECT_THROW(static_cast<void>(read(old,after.root(),2U)),FormatException);
+  size_t callbacks=0;
+  EXPECT_THROW(store.visitSelectedColumn(current,after.root(),18U,1U,2U,[&](auto){++callbacks;}),std::runtime_error);
+  EXPECT_EQ(callbacks,0U);
+  finalRoot=after.root();
+ }
+ metadata.reset();metadata=RelocatableMetadataStore::open(io);
+ LargeValueStore values(io,*metadata);NativeColumnImageStore store(values);auto reopened=metadata->openSnapshot();
+ std::vector<PropertyCollectionRoot> observed;
+ store.visitSelectedColumn(reopened,finalRoot,17U,1U,2U,[&](auto cells){observed=borrowedRows(cells,2U);});
+ EXPECT_EQ(observed,store.readSelected(reopened,finalRoot,17U,1U,std::array{2U}));
+}
+
+TEST_F(RelocatableMetadataStoreTest, BorrowedColumnValidatesEntireSelectedPayloadBeforeAnyOutput) {
+ std::vector<PropertyCollectionRoot> rows;
+ for (uint64_t i=1;i<=64;++i) rows.push_back({i,1U,{{1U,PropertyValue(true)}}});
+ auto image=TypedPropertyBlock::encode(9U,rows);
+ auto payload=std::make_shared<std::vector<std::byte>>(*image.columns.front());
+ payload->back()=std::byte{2};image.columns.front()=payload;
+ const size_t descriptor=TypedPropertyBlock::HEADER+64U*8U;
+ LittleEndianCodec::writeU32(image.metadata,descriptor+32U,graph::utils::calculateCrc(payload->data(),payload->size()));
+ LittleEndianCodec::writeU32(image.metadata,24U,0U);
+ LittleEndianCodec::writeU32(image.metadata,24U,graph::utils::calculateCrc(image.metadata.data(),image.metadata.size()));
+ size_t callbacks=0;
+ EXPECT_THROW(TypedPropertyBlock::visitSelectedColumn(image,9U,1U,1U,[&](auto){++callbacks;}),std::runtime_error);
+ EXPECT_EQ(callbacks,0U);
+ // An untouched corrupt payload is outside selected-column validation.
+ TypedPropertyBlock::visitSelectedColumn(image,9U,1U,2U,[&](auto cells){
+  ++callbacks;EXPECT_EQ(cells.size(),64U);for(const auto &cell:cells) EXPECT_FALSE(cell.present);
+ });
+ EXPECT_EQ(callbacks,1U);
+ image=TypedPropertyBlock::encode(9U,rows);size_t checks=0;callbacks=0;
+ EXPECT_THROW(TypedPropertyBlock::visitSelectedColumn(image,9U,1U,1U,[&](auto){++callbacks;},[&]{
+  if(++checks==20)throw std::runtime_error("cancelled");
+ }),std::runtime_error);
+ EXPECT_EQ(callbacks,0U);
+}
+
+#include "storage/relocatable/property/NativeColumnSupplyTestSnapshot.hpp"
+#include "query/execution/DirectPropertyColumns.hpp"
+#include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
+#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/logical/operators/LogicalAggregate.hpp"
+#include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#include "graph/query/expressions/Expression.hpp"
+
+namespace {
+void runNativeSupplyExperiment(const std::shared_ptr<StorageIO> &io, const Superblock &initial, bool sparse) {
+ using namespace graph::query;
+ using namespace graph::query::execution;
+ auto metadata=RelocatableMetadataStore::initializeNew(io,initial);
+ LargeValueStore values(io,*metadata);SlottedPagePool pages(io,*metadata);
+ PropertyCollectionRootStore properties(pages,values,*metadata);EntityPageStore entities(io,*metadata);
+ std::vector<PropertyCollectionRoot> inputRows;std::vector<uint64_t> ids;
+ EntityPageBatchNewPool nodePool;
+ nodePool.request={SegmentId(31U),901U,Generation(1U),PageId(101U),PhysicalSlotId(40U),PhysicalSlotId(40U)};
+ nodePool.record_kind=EntityPageRecordKind::EPRK_NODE;
+ for(size_t i=0;i<64;++i) {
+  const uint64_t id=i*3+1;ids.push_back(id);nodePool.node_insertions.push_back({id,NodeEntityRecord{}});
+  PropertyCollectionRoot row{id,graph::Node::typeId,{}};
+  if(sparse && i%16U==1U)row.entries.push_back({1U,PropertyValue{}});
+  else if(!sparse || i%16U!=0U)row.entries.push_back({1U,PropertyValue(std::string(i%8==0?"CN":"US"))});
+  inputRows.push_back(std::move(row));
+ }
+ const PropertyCollectionRootStoreOptions options{PhysicalSlotId(41U),PhysicalSlotId(80U),902U};
+ {
+  auto pin=metadata->openSnapshot();const auto plans=properties.planEntityRootReplacements(pin,inputRows,options);
+  const std::array pools{nodePool};
+  static_cast<void>(entities.applyNativeGraphBatchTransaction(pin,{},{},pools,plans,properties,options,LogSequenceNumber(2U)));
+ }
+ const auto rowFileBytes=io->fileSize();
+ auto censusMemory=std::make_shared<MaterializedByteBudget>(1024U*1024U);
+ NativeStorageAllocationCensus census(io,*metadata,censusMemory);
+ auto beforeColumns=metadata->openSnapshot();
+ const auto rowCost=census.inspect(beforeColumns);
+ ASSERT_TRUE(rowCost);ASSERT_TRUE(rowCost->fullyAttributed());beforeColumns.release();
+ NativeColumnImageStore store(values);uint64_t lsn=3;
+ const auto saved=store.write(TypedPropertyBlock::verify(TypedPropertyBlock::encode(19U,inputRows),19U,graph::Node::typeId),
+                              writeOptions(LargeValueCodec::LVC_RAW),lsn);
+ ::testing::Test::RecordProperty("row_fixture_file_bytes",std::to_string(rowFileBytes));
+ ::testing::Test::RecordProperty("column_fixture_incremental_file_bytes",std::to_string(io->fileSize()-rowFileBytes));
+ size_t columnLogicalBytes=saved.root().logical_bytes;
+ for(const auto &column:saved.columns())columnLogicalBytes+=column.logical_bytes;
+ ::testing::Test::RecordProperty("column_root_and_payload_logical_bytes",std::to_string(columnLogicalBytes));
+ const bool valuesEnabled=graph::debug::PerfTrace::areValuesEnabled();
+ struct RestoreTrace {bool enabled;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(enabled);}} restore{valuesEnabled};
+ graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ auto pin=metadata->openSnapshot();
+ const auto combinedCost=census.inspect(pin);
+ ASSERT_TRUE(combinedCost);ASSERT_TRUE(combinedCost->fullyAttributed());
+ ::testing::Test::RecordProperty("row_fixture_steady_allocated_bytes",std::to_string(rowCost->steadyAllocatedBytes()));
+ ::testing::Test::RecordProperty("combined_fixture_steady_allocated_bytes",std::to_string(combinedCost->steadyAllocatedBytes()));
+ ::testing::Test::RecordProperty("combined_fixture_total_allocated_bytes",std::to_string(combinedCost->totalAllocatedBytes()));
+ for(bool compact:{false,true}) {
+  graph::debug::PerfTrace::reset();
+  native_column_supply_test::Source source{pin,properties,store,saved.root(),19U,ids,compact};
+  native_column_supply_test::Backend backend(source);LogicalPlanReadRuntime runtime(backend);
+  LogicalPlanReadRuntimeBounds bounds;
+  bounds.maximum_node_records=65;bounds.maximum_rows=65;bounds.maximum_node_page_records=64;
+  bounds.maximum_metadata_pages_per_node_page=64;bounds.maximum_property_entries=16;bounds.maximum_distinct_rows=65;
+  bounds.maximum_edges_per_node=1;bounds.maximum_edge_records=1;bounds.maximum_adjacency_page_records=1;
+  for(bool grouped:{false,true}) {
+   auto scan=std::make_unique<logical::LogicalNodeScan>("n");
+   if(!grouped)scan->setRangePredicates({{"country",PropertyValue("CN"),PropertyValue("CN"),true,true}});
+   std::vector<std::shared_ptr<expressions::Expression>> groups;
+   if(grouped)groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("n","country"));
+   logical::LogicalAggregate plan(std::move(scan),std::move(groups),{{"count",nullptr,"rows"}},grouped?std::vector<std::string>{"country"}:std::vector<std::string>{});
+   const auto result=runtime.executeToQueryResult(plan,bounds);
+   ASSERT_EQ(result.rowCount(),grouped?(sparse?3U:2U):1U);
+   if(!grouped)EXPECT_EQ(result.getRows().front().at("rows").asPrimitive(),PropertyValue(int64_t{sparse?4:8}));
+   else {
+    std::map<std::pair<int,std::string>,int64_t> actual;
+    for(const auto &row:result.getRows()) {
+     const auto &value=row.at("country").asPrimitive();
+     const auto *text=std::get_if<std::string>(&value.getVariant());
+     actual[{static_cast<int>(value.getType()),text?*text:""}]=std::get<int64_t>(row.at("rows").asPrimitive().getVariant());
+    }
+    std::map<std::pair<int,std::string>,int64_t> expected{
+     {{static_cast<int>(graph::PropertyType::STRING),"CN"},sparse?4:8},
+     {{static_cast<int>(graph::PropertyType::STRING),"US"},sparse?52:56}};
+    if(sparse)expected[{static_cast<int>(graph::PropertyType::NULL_TYPE),""}]=8;
+    EXPECT_EQ(actual,expected);
+   }
+  }
+  const auto trace=graph::debug::PerfTrace::snapshotAndReset();
+  const auto rootSelections=trace.find("native_graph.read.property_selected_column_decode");
+  if(compact)EXPECT_EQ(rootSelections,trace.end());
+  else {
+   ASSERT_NE(rootSelections,trace.end());// Four missing roots per sparse batch require no payload selection.
+   EXPECT_EQ(rootSelections->second.totalValue,sparse?120:128);
+  }
+  EXPECT_EQ(source.supplied_cells,128U);
+  EXPECT_EQ(source.column_visits,compact?2U:0U);
+  EXPECT_EQ(source.row_batches,compact?0U:2U);
+  // The production gather boundary restores sparse, duplicate, unordered owners.
+  MaterializedByteBudget budget(65536U);
+  {
+   native_column_supply_test::Snapshot snapshot(source);
+   const std::array gatherIds{ids[63],ids[1],ids[0],ids[1],ids[8]};
+   const std::array<std::string_view,1> keys{"country"};
+   graph::query::execution::detail::DirectPropertyColumns gathered(snapshot,gatherIds.size(),1U,budget);
+   gathered.readGather(gatherIds,keys,[](size_t){},[]{});
+   EXPECT_EQ(std::get<std::string_view>(gathered.cell(0,gathered.rowId(0)).data),"US");
+   if(sparse) {
+    EXPECT_EQ(gathered.cell(0,gathered.rowId(1)).state,graph::query::execution::detail::ColumnCellState::CCS_NULL);
+    EXPECT_EQ(gathered.cell(0,gathered.rowId(2)).state,graph::query::execution::detail::ColumnCellState::CCS_MISSING);
+    EXPECT_EQ(gathered.cell(0,gathered.rowId(3)).state,graph::query::execution::detail::ColumnCellState::CCS_NULL);
+   } else {
+    EXPECT_EQ(std::get<std::string_view>(gathered.cell(0,gathered.rowId(1)).data),"US");
+    EXPECT_EQ(std::get<std::string_view>(gathered.cell(0,gathered.rowId(2)).data),"CN");
+    EXPECT_EQ(std::get<std::string_view>(gathered.cell(0,gathered.rowId(3)).data),"US");
+   }
+   EXPECT_EQ(std::get<std::string_view>(gathered.cell(0,gathered.rowId(4)).data),"CN");
+  }
+  EXPECT_EQ(budget.used(),0U);
+ }
+}
+} // namespace
+
+TEST_F(RelocatableMetadataStoreTest, NativeDenseRowAndColumnPagesFeedProductionFilterGroupAndGather) {
+ runNativeSupplyExperiment(io,superblock(1,1),false);
+}
+TEST_F(RelocatableMetadataStoreTest, NativeSparseRowAndColumnPagesPreserveNullMissingFilterGroupAndGather) {
+ runNativeSupplyExperiment(io,superblock(1,1),true);
+}
+
+TEST_F(RelocatableMetadataStoreTest, BorrowedColumnPreservesDoubleBitsAndMixedComplexFallback) {
+ const std::array<uint64_t,4> bits{0U,UINT64_C(0x8000000000000000),UINT64_C(0x7ff8000000000042),UINT64_C(0xfff0000000000000)};
+ std::vector<PropertyCollectionRoot> roots;
+ for(size_t i=0;i<bits.size();++i)roots.push_back({i+1U,1U,{{1U,PropertyValue(std::bit_cast<double>(bits[i]))}}});
+ auto image=TypedPropertyBlock::encode(11U,roots);
+ TypedPropertyBlock::visitSelectedColumn(image,11U,1U,1U,[&](auto cells){
+  ASSERT_EQ(cells.size(),bits.size());
+  for(size_t i=0;i<cells.size();++i) {
+   ASSERT_TRUE(cells[i].primitive);EXPECT_EQ(cells[i].primitive->type,graph::PropertyType::DOUBLE);
+   EXPECT_EQ(cells[i].primitive->bits,bits[i]);
+  }
+ });
+ roots={
+  {1U,1U,{{1U,PropertyValue(std::vector<PropertyValue>{PropertyValue(7),PropertyValue("x")} )}}},
+  {2U,1U,{{1U,PropertyValue(std::string(9000,'q'))}}},
+  {3U,1U,{{1U,PropertyValue(false)}}},
+  {4U,1U,{{1U,PropertyValue{}}}},
+  {5U,1U,{}}};
+ image=TypedPropertyBlock::encode(11U,roots);
+ TypedPropertyBlock::visitSelectedColumn(image,11U,1U,1U,[&](auto cells){
+  ASSERT_EQ(cells.size(),roots.size());
+  EXPECT_FALSE(cells[0].primitive);EXPECT_FALSE(cells[0].complex.empty());
+  ASSERT_TRUE(cells[1].primitive);EXPECT_EQ(cells[1].primitive->text,std::string(9000,'q'));
+  EXPECT_EQ(borrowedRows(cells,1U),roots);
+ });
+}

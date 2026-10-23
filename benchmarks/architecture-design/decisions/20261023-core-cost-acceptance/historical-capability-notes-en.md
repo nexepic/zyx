@@ -1,0 +1,23 @@
+Original Native coordination now dispatches cold fields, merges hot/cold changes, plans affected-block splitting/group-directory relocation and batch-local new-value Immutable/manifest/content-index images; private candidates unconditionally stop before the first physical write.29 targeted cases,507 related cases in each experimental membership variant and154 default cases pass. Real Catalog/index/constraint source coverage, atomic physical installation, global demotion/owner lifecycle/inverse, whole-space admission and public lifecycle remain open; P7/progress90%. Evidence: `20261023-core-cost-native-cold-field-coordinator/`.
+
+
+Real Catalog/scalar-index/NOT NULL source preparation and the shared old-value-read fix are recorded in `20261023-core-cost-native-cold-derived-source/`:30 targeted cases,508 related cases in each experimental membership variant and154 default cases pass. A separate single-object control restoring the former old-value read falsely reports unchanged cold data missing; its deliberate failure is neither a current failure nor performance evidence. Public physical installation, other schema combinations and full lifecycle remain unaccepted; progress90%.
+
+
+Native whole-column demotion preparation, canonical-value proof for every member and original cold-directory authority authentication are recorded in `20261023-core-cost-cold-global-demotion/`:36 targeted cases,514 related cases in each experimental membership variant and154 default cases pass. Coverage includes Node/Edge, large values, merged thresholds, live propertyless groups and invalid-source/wrong-value refusal. Public publication and complete owner/inverse lifecycle stay closed; P7/progress90%.
+
+Cold inverse and existing large-cold reads under the writer: `20261023-core-cost-cold-inverse-coordinator/` records original-coordinator zero-write preparation, source-pin attachment repair and failure/refund/retry checks. Public cold publication remains closed; this does not accept actual public conversion, owner lifecycle or P7. Progress90%.
+
+Cold owner deletion/final-group cleanup and actual uniqueness sources: `20261023-core-cost-cold-owner-deletion/` covers original-coordinator zero-write preparation of actual Entity, fields/liveness/directories and support trees. Public installation, pending/new owners and P7 remain unaccepted; progress90%.
+
+Cold pending-owner fields/liveness: `20261023-core-cost-cold-pending-liveness/` verifies new cold roots, hot NULL, whole-column demotion and birth/deletion private images on actual63-owner sources. Actual sealed Entity creation/physical publication remains unconnected; no public-conversion/P7 acceptance, progress90%.
+
+Actual single-group Mode3 Native publication: `20261023-core-cost-cold-native-lifecycle/` records durable-fixture hot/cold mutation/demotion, birth/deletion/clearing/final groups/inverse, old pins, full integrity, actual indexes/constraints, A/B reopen and cancellation/refunds/retry. Generic unadapted/forward-conversion guards remain; fixture initialization is not public conversion or space adoption. Cross-group/shared-frame/full reclamation/relocation, whole-space admission and P7 remain open, progress90%.
+
+Actual shared-frame inverse/cold-value reclamation/field-pool relocation: `20261023-core-cost-cold-shared-lifecycle/` verifies namespace retention, original native pool contract, pin-protected capacity and release after draining. No forward public conversion/space adoption acceptance; cross-group batches, whole-space admission and P7 remain open, progress90%.
+
+### 2026-10-23 fixed-queue closeout checks
+
+Experimental 13/39 now supports cold mutations across Node/Edge groups sharing a FieldPage. Compatible hot plans and cold repacking share one private page set and publish atomically once, retaining the batch-wide 64 actual changed/migrated-owner bound. The 27 actual durable lifecycle cases include mixed births/deletions, logical API and rejection of two over-limit demotions. One-frame sequential scans use the existing bounded owned fallback; the 4096-byte full filter query now passes without raising capacity or weakening validation. Both experimental variants pass 564 checks each, default passes 154, and both full-query cache variants pass 2 necessary checks.
+
+Forward cold conversion/whole-target admission remains undelivered and its public entry remains closed; fixtures prove neither conversion nor performance adoption. Closeout opens no migration-protocol project. Final measurements, unmet conditions and source/library identities are in `benchmarks/architecture-design/decisions/20261023-core-cost-closeout/`; acceptance remains90%, with no Kuzu-objective completion claim.

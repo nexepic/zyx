@@ -22,6 +22,8 @@
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 
 namespace graph::storage {
+    class HybridPropertyReadContext;
+    class EntityPropertyLargeValueOwnershipScannerTestAccess;
 
 	class SlottedPagePool;
 	class RelocatableMetadataStore;
@@ -72,6 +74,10 @@ namespace graph::storage {
 												  LargeValueOwnershipScanSink &sink) const override;
 
 	private:
+        friend class EntityPropertyLargeValueOwnershipScannerTestAccess;
+        [[nodiscard]] Progress scanReachableAfterImpl(const MetadataSnapshotPin &snapshot, uint64_t afterLocationId,
+            size_t maximumLocations, size_t maximumMetadataPages, LargeValueOwnershipScanSink &sink,
+            const HybridPropertyReadContext *contextOverride) const;
 		SlottedPagePool &property_pages_;
 		RelocatableMetadataStore &metadata_;
 	};

@@ -49,11 +49,11 @@ TEST_F(HybridPropertyLargeOwnershipTest, MixedNativeAndRowOwnersAreScannedInOneS
     const auto pin = metadata_->openSnapshot(); const auto before = pin.superblock(); const auto epoch = io_->dataMutationEpoch();
     EntityPropertyLargeValueOwnershipScanner scanner(*slotted_pages_, *metadata_); OwnershipSink all;
     const auto complete = scanner.scanReachableAfter(pin, 0, 64, 4096, all);
-    EXPECT_TRUE(complete.exhausted); EXPECT_EQ(complete.locations_scanned, 5U); ASSERT_EQ(all.ids.size(), 5U);
+    EXPECT_TRUE(complete.exhausted); EXPECT_EQ(complete.locations_scanned, 6U); ASSERT_EQ(all.ids.size(), 5U);
     EXPECT_EQ(complete.last_scanned_location_id, (EntityPropertyKey{EDGE, 1}.directoryId()));
     EXPECT_GT(complete.metadata_pages_scanned, 0U); EXPECT_LE(complete.metadata_pages_scanned, 4096U);
     OwnershipSink tail; const auto afterFirst = scanner.scanReachableAfter(pin, EntityPropertyKey{NODE, 1}.directoryId(), 64, 4096, tail);
-    EXPECT_TRUE(afterFirst.exhausted); EXPECT_EQ(afterFirst.locations_scanned, 3U);
+    EXPECT_TRUE(afterFirst.exhausted); EXPECT_EQ(afterFirst.locations_scanned, 4U);
     EXPECT_EQ(tail.ids, std::vector<LargeValueId>(all.ids.begin() + 2, all.ids.end()));
     OwnershipSink edge; const auto afterRows = scanner.scanReachableAfter(pin, EntityPropertyKey{NODE, 65}.directoryId(), 64, 4096, edge);
     EXPECT_TRUE(afterRows.exhausted); EXPECT_EQ(afterRows.locations_scanned, 1U); ASSERT_EQ(edge.ids.size(), 1U); EXPECT_EQ(edge.ids[0], all.ids.back());
@@ -80,7 +80,7 @@ TEST_F(HybridPropertyLargeOwnershipTest, LogicalOwnerCursorCanResumeOnlyAfterAll
     OwnershipSink first; const auto partial = scanner.scanReachableAfter(pin, 0, 2, 4096, first);
     EXPECT_FALSE(partial.exhausted); EXPECT_EQ(partial.locations_scanned, 2U); EXPECT_EQ(partial.last_scanned_location_id, 1U); ASSERT_EQ(first.ids.size(), 2U);
     OwnershipSink rest; const auto complete = scanner.scanReachableAfter(pin, partial.last_scanned_location_id, 64, 4096, rest);
-    EXPECT_TRUE(complete.exhausted); EXPECT_EQ(rest.ids.size(), 3U); EXPECT_EQ(complete.locations_scanned, 3U);
+    EXPECT_TRUE(complete.exhausted); EXPECT_EQ(rest.ids.size(), 3U); EXPECT_EQ(complete.locations_scanned, 4U);
     HybridPropertyReadContext context(*slotted_pages_, *metadata_, pin);
     EXPECT_EQ(context.nextOwnerAfter(NODE, 0), std::optional(EntityPropertyKey{NODE, 1}));
     EXPECT_EQ(context.nextOwnerAfter(NODE, 1), std::optional(EntityPropertyKey{NODE, 2}));

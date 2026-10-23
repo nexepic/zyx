@@ -1,0 +1,105 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 48 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 48 tests from BufferPoolTest
+[ RUN      ] BufferPoolTest.KeepsDifferentGenerationsForOnePhysicalPageResident
+[       OK ] BufferPoolTest.KeepsDifferentGenerationsForOnePhysicalPageResident (0 ms)
+[ RUN      ] BufferPoolTest.ValidatesCapacityAndPinHandleState
+[       OK ] BufferPoolTest.ValidatesCapacityAndPinHandleState (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration
+[       OK ] BufferPoolTest.TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesPreserveGenerationAndPinSafety
+[       OK ] BufferPoolTest.TypedPageRangesPreserveGenerationAndPinSafety (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd
+[       OK ] BufferPoolTest.TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile
+[       OK ] BufferPoolTest.TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews
+[       OK ] BufferPoolTest.TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews (0 ms)
+[ RUN      ] BufferPoolTest.RefusesToEvictPinnedPageThenEvictsAfterUnpin
+[       OK ] BufferPoolTest.RefusesToEvictPinnedPageThenEvictsAfterUnpin (0 ms)
+[ RUN      ] BufferPoolTest.PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten
+[       OK ] BufferPoolTest.PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten (0 ms)
+[ RUN      ] BufferPoolTest.FullPageOverwriteAvoidsReadBeforeWrite
+[       OK ] BufferPoolTest.FullPageOverwriteAvoidsReadBeforeWrite (0 ms)
+[ RUN      ] BufferPoolTest.WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews
+[       OK ] BufferPoolTest.WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews (0 ms)
+[ RUN      ] BufferPoolTest.InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews
+[       OK ] BufferPoolTest.InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews (0 ms)
+[ RUN      ] BufferPoolTest.FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules
+[       OK ] BufferPoolTest.FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules (0 ms)
+[ RUN      ] BufferPoolTest.EvictionFlushesDirtyPagesBeforeReusingTheirFrames
+[       OK ] BufferPoolTest.EvictionFlushesDirtyPagesBeforeReusingTheirFrames (0 ms)
+[ RUN      ] BufferPoolTest.PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush
+[       OK ] BufferPoolTest.PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush (0 ms)
+[ RUN      ] BufferPoolTest.SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead
+[       OK ] BufferPoolTest.SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead (0 ms)
+[ RUN      ] BufferPoolTest.TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback
+[       OK ] BufferPoolTest.TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback (0 ms)
+[ RUN      ] BufferPoolTest.ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty
+[       OK ] BufferPoolTest.ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty (0 ms)
+[ RUN      ] BufferPoolTest.DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle
+[       OK ] BufferPoolTest.DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix
+[       OK ] BufferPoolTest.StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport
+[       OK ] BufferPoolTest.StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateNoOpKeepsCachedPagesResident
+[       OK ] BufferPoolTest.StorageIoTruncateNoOpKeepsCachedPagesResident (0 ms)
+[ RUN      ] BufferPoolTest.ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages
+[       OK ] BufferPoolTest.ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink
+[       OK ] BufferPoolTest.StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink (0 ms)
+[ RUN      ] BufferPoolTest.RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch
+[       OK ] BufferPoolTest.RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch (0 ms)
+[ RUN      ] BufferPoolTest.FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted
+[       OK ] BufferPoolTest.FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted (0 ms)
+[ RUN      ] BufferPoolTest.CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity
+[       OK ] BufferPoolTest.CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity (0 ms)
+[ RUN      ] BufferPoolTest.CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage
+[       OK ] BufferPoolTest.CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage (0 ms)
+[ RUN      ] BufferPoolTest.EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache
+[       OK ] BufferPoolTest.EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache (0 ms)
+[ RUN      ] BufferPoolTest.PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail
+[       OK ] BufferPoolTest.PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail (0 ms)
+[ RUN      ] BufferPoolTest.CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed
+[       OK ] BufferPoolTest.CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed (0 ms)
+[ RUN      ] BufferPoolTest.StorageIOForwardsAndRetainsTheCoordinatedCacheGrant
+[       OK ] BufferPoolTest.StorageIOForwardsAndRetainsTheCoordinatedCacheGrant (0 ms)
+[ RUN      ] BufferPoolTest.StorageIOCacheDenialLeavesNoPartiallyPublishedPage
+[       OK ] BufferPoolTest.StorageIOCacheDenialLeavesNoPartiallyPublishedPage (0 ms)
+[ RUN      ] BufferPoolTest.EvictsForMetadataPressureBeforeThePayloadOnlyCeiling
+[       OK ] BufferPoolTest.EvictsForMetadataPressureBeforeThePayloadOnlyCeiling (0 ms)
+[ RUN      ] BufferPoolTest.SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance
+[       OK ] BufferPoolTest.SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance (0 ms)
+[ RUN      ] BufferPoolTest.TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins
+[       OK ] BufferPoolTest.TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins (364 ms)
+[ RUN      ] BufferPoolTest.TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins
+[       OK ] BufferPoolTest.TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins (0 ms)
+[ RUN      ] BufferPoolTest.TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation
+[       OK ] BufferPoolTest.TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation (0 ms)
+[ RUN      ] BufferPoolTest.TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages
+[       OK ] BufferPoolTest.TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages (0 ms)
+[ RUN      ] BufferPoolTest.UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent
+[       OK ] BufferPoolTest.UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent (0 ms)
+[ RUN      ] BufferPoolTest.ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread
+[       OK ] BufferPoolTest.ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread (0 ms)
+[ RUN      ] BufferPoolTest.ControlRecordWritesValidateRangesAndProtectPinnedImages
+[       OK ] BufferPoolTest.ControlRecordWritesValidateRangesAndProtectPinnedImages (0 ms)
+[ RUN      ] BufferPoolTest.FailedControlRecordWriteLeavesNoDirtyCachedImageToOverwriteTheSurvivor
+[       OK ] BufferPoolTest.FailedControlRecordWriteLeavesNoDirtyCachedImageToOverwriteTheSurvivor (0 ms)
+[ RUN      ] BufferPoolTest.NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits
+[       OK ] BufferPoolTest.NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits (0 ms)
+[ RUN      ] BufferPoolTest.SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages
+[       OK ] BufferPoolTest.SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages (0 ms)
+[ RUN      ] BufferPoolTest.LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows
+[       OK ] BufferPoolTest.LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows (16 ms)
+[ RUN      ] BufferPoolTest.OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData
+[       OK ] BufferPoolTest.OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData (0 ms)
+[ RUN      ] BufferPoolTest.FailedFlushRetainsDirtyChainForAnExactRetry
+[       OK ] BufferPoolTest.FailedFlushRetainsDirtyChainForAnExactRetry (0 ms)
+[----------] 48 tests from BufferPoolTest (383 ms total)
+
+[----------] Global test environment tear-down
+[==========] 48 tests from 1 test suite ran. (383 ms total)
+[  PASSED  ] 48 tests.

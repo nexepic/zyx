@@ -1,0 +1,12 @@
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":0,"latency_ms":141.055441,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":1,"latency_ms":146.92276899999999,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":2,"latency_ms":146.906274,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":3,"latency_ms":144.37038100000001,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":4,"latency_ms":140.72838999999999,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":5,"latency_ms":141.911935,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":6,"latency_ms":144.68051800000001,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":7,"latency_ms":143.234138,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":8,"latency_ms":143.35044199999999,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":9,"latency_ms":142.57293200000001,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":10,"latency_ms":143.44804199999999,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}
+{"timing_benchmark":true,"case":"edge_batch_1000","iteration":11,"latency_ms":144.54802900000001,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}

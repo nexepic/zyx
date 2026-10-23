@@ -1,0 +1,71 @@
+{
+  "plan": "core-cost-20261022",
+  "progress_percent": 0,
+  "baseline_head": "5500a068d8038c50f06dee12712bc52b3250c12c",
+  "primary": [
+    "label_scan_filter",
+    "aggregation_count_by_group",
+    "multi_key_group",
+    "property_set",
+    "edge_batch_1000",
+    "fresh_import"
+  ],
+  "read_guards": [
+    "point_lookup_indexed",
+    "graph_full_point",
+    "graph_full_neighbors",
+    "one_hop_expand",
+    "two_hop_expand",
+    "all_nodes_property_filter"
+  ],
+  "write_guards": [
+    "property_noop",
+    "edge_create_delete"
+  ],
+  "special_guards": [
+    "large_selected",
+    "large_full",
+    "large_patch",
+    "skew_out",
+    "skew_both",
+    "skew_twohop"
+  ],
+  "scales": [
+    "medium",
+    "holdout"
+  ],
+  "rounds": 3,
+  "warmup": 3,
+  "iterations": 10,
+  "threads": 1,
+  "limits": {
+    "address_space_bytes": 6442450944,
+    "file_bytes": 2147483648,
+    "process_timeout_seconds": 1200
+  },
+  "ordering": [
+    [
+      "zyx",
+      "kuzu"
+    ],
+    [
+      "kuzu",
+      "zyx"
+    ],
+    [
+      "zyx",
+      "kuzu"
+    ]
+  ],
+  "copy_preflush": true,
+  "import_modes": [
+    "production_copy",
+    "equal_1000_row_commits"
+  ],
+  "preflight_required": true,
+  "prohibitions": [
+    "do not count preparation as progress",
+    "do not silently drop failed comparisons",
+    "do not mix traced timing with formal samples"
+  ]
+}

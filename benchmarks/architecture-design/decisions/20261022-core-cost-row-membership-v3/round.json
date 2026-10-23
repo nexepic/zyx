@@ -1,0 +1,54 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "checks": {
+    "hybrid": {
+      "tests": 66,
+      "failures": 0
+    },
+    "default": {
+      "tests": 57,
+      "failures": 0
+    },
+    "hybrid-lifecycle-legacy": {
+      "tests": 253,
+      "failures": 0
+    },
+    "hybrid-lifecycle-compact": {
+      "tests": 253,
+      "failures": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-row-membership-v3-hybrid-candidate/libzyx_core.a",
+      "profile": "13/39",
+      "sha256": "0ab2a53687ff8e2864b95d6272a8565826c132f4c02b18aeba619d3c58cf7668"
+    },
+    "default": {
+      "path": "/workspace/zyx-row-membership-v3-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "e896f5d65a94a8d69b1d1710773a24e978e6d584b7b98523cf18de9978b13cfc"
+    }
+  },
+  "implemented": [
+    "membership v3 hot locators and canonical cold owner bindings, exact total membership and overflow checks",
+    "new group mode permits cold-only and propertyless native owners",
+    "experimental13/39 rejects old37/35/33/32; default5/31 unchanged",
+    "private and borrowed same-page group/membership routing",
+    "cold block local private-page admission and borrowed decode with exact reference owner mask/count bounds",
+    "inline cold rows reject any globally hot token even for owners without its membership",
+    "quota/cancellation refusals refund decoded body before exposure"
+  ],
+  "not_implemented": [
+    "Native conversion and actual production selected/full/typed cold ROW routing; explicit new-mode refusal remains",
+    "actual whole-root LargeValue manifest/media/count/hot-token authentication",
+    "mutation/demotion/delete/inverse/reverse-integrity ownership lifecycle",
+    "mature whole allocation/migration bootstrap and final P7 matrix"
+  ],
+  "limits": "Same64owner/4096byte decoded body/1MiB conversion/shared account/CACHE. No new cache/index/backend. Page interfaces grant no publication capability.",
+  "performance_claim": null,
+  "lifecycle_scope": "Regression checks of existing column/extension native paths, plus new low-level membership/page interfaces. This is NOT cold ROW production lifecycle acceptance."
+}

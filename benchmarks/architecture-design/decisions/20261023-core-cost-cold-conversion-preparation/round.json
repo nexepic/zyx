@@ -1,0 +1,68 @@
+{
+  "recorded_at_utc": "2026-10-23T00:27:40.330967+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-preparation-initial-": {
+      "tests": 20,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-preparation-legacy-": {
+      "tests": 399,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-preparation-compact-": {
+      "tests": 399,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-preparation-initial-": {
+      "tests": 142,
+      "failures": 1,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 147,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-conversion-preparation-hybrid-candidate/libzyx_core.a",
+      "sha256": "db4d9a869b448ce6ec57a8d0bb2361092501bf9f0afded84ce20254900445171",
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-conversion-preparation-default-candidate/libzyx_core.a",
+      "sha256": "64cbf67e9cf3b281377b411cbbf2924af144377c6eef02599f86cf06cafb7f0a",
+      "format": "5/31"
+    }
+  },
+  "implemented": [
+    "Borrowed-entry canonical ROW and owner-neutral LargeValue encoding byte-identical to existing codecs, PMR output without whole-value-tree copies",
+    "Private explicit cold mode in existing conversion preparer with direct hot locators, exact cold masks/field totals, group/membership colocation and no per-field OwnerMap/ExtensionDirectory",
+    "RAW/existing-LZ4 bounded packing and RAW-safe prefix retry for incompressible rows; oversized single rows require same-batch whole-root resolver",
+    "Cold-only/propertyless preparation and cancellation/missing-resolver refunds, source root and physical allocation unchanged",
+    "Borrowed whole-root proposals reuse existing LargeFieldPreparation and content-index/candidate/source/ID contracts",
+    "Real ordinary ROW LargeValue, actual manifest dedup reuse and private cold binding; no independent write/file growth/epoch/root/ID change, future reference refusal",
+    "Optimization queue removes completed reading subtasks and focuses actual coordinator publication/mutation/lifecycle"
+  ],
+  "fixture_limit": "Private candidate images/proposals with actual canonical source ROW and actual existing manifest. No public mode3 producer, no actual new-value atomic publication or whole-database adoption claim.",
+  "retained_failures": [
+    "Initial test fixture used nonexistent PropertyValue::ListType; corrected to actual std::vector<PropertyValue>.",
+    "Initial default142case selection had141pass/1fail: test incorrectly treated valid Node typeId0 as invalid. It now usesUINT32_MAX and independently asserts original canonical codec rejection. No source owner guard changed."
+  ],
+  "not_accepted": [
+    "Actual Native production coordinator wiring of cold/mixed cohorts and atomic new whole-root data/manifest/content-index/descriptor publication",
+    "Compatible hot/cold mutation, demotion/delete/inverse and actual public-conversion reclamation/old-pin/retirement/fault/reopen lifecycle",
+    "Mature whole allocation and staged migration bootstrap",
+    "Final performance matrix and P7 acceptance"
+  ],
+  "performance_claim": null
+}

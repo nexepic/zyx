@@ -1,0 +1,537 @@
+{
+  "recorded_at_utc": "2026-10-23T10:50:50.443053+00:00",
+  "purpose": "Remove obsolete generated module-test LLVM raw coverage only; retain newest10 per known runner prefix. Current GTest reports, receipts, source snapshots, frozen libraries and all benchmark/CPU evidence retained. No coverage acceptance claim depends on these intermediate files.",
+  "removed_files": [
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-189260.profraw",
+      "bytes": 742536,
+      "mtime_ns": 1792737605719855484
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-188414.profraw",
+      "bytes": 740528,
+      "mtime_ns": 1792736619371127543
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-188345.profraw",
+      "bytes": 740528,
+      "mtime_ns": 1792736553603181898
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-188158.profraw",
+      "bytes": 740528,
+      "mtime_ns": 1792736376396705823
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-186108.profraw",
+      "bytes": 735472,
+      "mtime_ns": 1792732360347152450
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-186043.profraw",
+      "bytes": 735472,
+      "mtime_ns": 1792732323250682185
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-185949.profraw",
+      "bytes": 734824,
+      "mtime_ns": 1792732233645323009
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-185910.profraw",
+      "bytes": 734856,
+      "mtime_ns": 1792732148222890606
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-179740.profraw",
+      "bytes": 733648,
+      "mtime_ns": 1792729288189256734
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-179696.profraw",
+      "bytes": 733648,
+      "mtime_ns": 1792729195544099339
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-178736.profraw",
+      "bytes": 730160,
+      "mtime_ns": 1792727905025295872
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-178360.profraw",
+      "bytes": 730160,
+      "mtime_ns": 1792727804633907403
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-176655.profraw",
+      "bytes": 725440,
+      "mtime_ns": 1792726768779941981
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-176605.profraw",
+      "bytes": 725440,
+      "mtime_ns": 1792726715167480598
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-175627.profraw",
+      "bytes": 724208,
+      "mtime_ns": 1792725887296556547
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-175577.profraw",
+      "bytes": 724208,
+      "mtime_ns": 1792725797384538074
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-171526.profraw",
+      "bytes": 722264,
+      "mtime_ns": 1792723512712224196
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-171481.profraw",
+      "bytes": 722264,
+      "mtime_ns": 1792723464123981847
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-171099.profraw",
+      "bytes": 720088,
+      "mtime_ns": 1792723059516400395
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-171006.profraw",
+      "bytes": 720088,
+      "mtime_ns": 1792722993971303975
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-165820.profraw",
+      "bytes": 713664,
+      "mtime_ns": 1792721288762945335
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-165561.profraw",
+      "bytes": 713664,
+      "mtime_ns": 1792721086577043179
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-165477.profraw",
+      "bytes": 713632,
+      "mtime_ns": 1792720180334896335
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-165003.profraw",
+      "bytes": 711528,
+      "mtime_ns": 1792717855254784343
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164960.profraw",
+      "bytes": 711528,
+      "mtime_ns": 1792717741500913289
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164543.profraw",
+      "bytes": 691096,
+      "mtime_ns": 1792716684847770073
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164493.profraw",
+      "bytes": 691096,
+      "mtime_ns": 1792716607135285017
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164199.profraw",
+      "bytes": 690760,
+      "mtime_ns": 1792715979534884615
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164157.profraw",
+      "bytes": 690760,
+      "mtime_ns": 1792715892623217306
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-164114.profraw",
+      "bytes": 690760,
+      "mtime_ns": 1792715820092685593
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-163263.profraw",
+      "bytes": 598864,
+      "mtime_ns": 1792715137078684815
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-163183.profraw",
+      "bytes": 598864,
+      "mtime_ns": 1792715058826106743
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-163141.profraw",
+      "bytes": 598864,
+      "mtime_ns": 1792715012773165600
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-162167.profraw",
+      "bytes": 557288,
+      "mtime_ns": 1792713938322883998
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-162074.profraw",
+      "bytes": 557288,
+      "mtime_ns": 1792713849714260602
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-161814.profraw",
+      "bytes": 556216,
+      "mtime_ns": 1792713673034849453
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-161772.profraw",
+      "bytes": 556216,
+      "mtime_ns": 1792713644994500079
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-161057.profraw",
+      "bytes": 549512,
+      "mtime_ns": 1792713177686656776
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-160977.profraw",
+      "bytes": 549512,
+      "mtime_ns": 1792713134690391992
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-160871.profraw",
+      "bytes": 548408,
+      "mtime_ns": 1792713058698729319
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-160426.profraw",
+      "bytes": 542888,
+      "mtime_ns": 1792712789550342778
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-160387.profraw",
+      "bytes": 542888,
+      "mtime_ns": 1792712762905795504
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-160115.profraw",
+      "bytes": 542880,
+      "mtime_ns": 1792712626802503151
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-158166.profraw",
+      "bytes": 471752,
+      "mtime_ns": 1792711387347018319
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-158100.profraw",
+      "bytes": 471752,
+      "mtime_ns": 1792711309602626868
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-157845.profraw",
+      "bytes": 94128,
+      "mtime_ns": 1792711005193605051
+    },
+    {
+      "path": "/tmp/cold-row-ownership-hybrid-157478.profraw",
+      "bytes": 94096,
+      "mtime_ns": 1792710462489193971
+    },
+    {
+      "path": "/tmp/short-text-hybrid-177114.profraw",
+      "bytes": 20408,
+      "mtime_ns": 1792727103580371391
+    },
+    {
+      "path": "/tmp/short-text-hybrid-176604.profraw",
+      "bytes": 257416,
+      "mtime_ns": 1792726687123227520
+    },
+    {
+      "path": "/tmp/short-text-hybrid-175576.profraw",
+      "bytes": 257384,
+      "mtime_ns": 1792725768895351535
+    },
+    {
+      "path": "/tmp/short-text-hybrid-175575.profraw",
+      "bytes": 19808,
+      "mtime_ns": 1792725768214783913
+    },
+    {
+      "path": "/tmp/short-text-hybrid-171480.profraw",
+      "bytes": 257352,
+      "mtime_ns": 1792723435658046912
+    },
+    {
+      "path": "/tmp/short-text-hybrid-170937.profraw",
+      "bytes": 257288,
+      "mtime_ns": 1792722869632410497
+    },
+    {
+      "path": "/tmp/short-text-hybrid-165476.profraw",
+      "bytes": 257056,
+      "mtime_ns": 1792720179965456947
+    },
+    {
+      "path": "/tmp/short-text-hybrid-164959.profraw",
+      "bytes": 256312,
+      "mtime_ns": 1792717741100908054
+    },
+    {
+      "path": "/tmp/short-text-hybrid-164492.profraw",
+      "bytes": 244096,
+      "mtime_ns": 1792716587563158399
+    },
+    {
+      "path": "/tmp/short-text-hybrid-164113.profraw",
+      "bytes": 244096,
+      "mtime_ns": 1792715819770350737
+    },
+    {
+      "path": "/tmp/short-text-hybrid-163140.profraw",
+      "bytes": 218096,
+      "mtime_ns": 1792715012437656099
+    },
+    {
+      "path": "/tmp/short-text-hybrid-162918.profraw",
+      "bytes": 201088,
+      "mtime_ns": 1792714690964134635
+    },
+    {
+      "path": "/tmp/short-text-hybrid-162073.profraw",
+      "bytes": 179888,
+      "mtime_ns": 1792713826676428867
+    },
+    {
+      "path": "/tmp/short-text-hybrid-161771.profraw",
+      "bytes": 179888,
+      "mtime_ns": 1792713622286068938
+    },
+    {
+      "path": "/tmp/short-text-hybrid-160980.profraw",
+      "bytes": 179800,
+      "mtime_ns": 1792713112778241092
+    },
+    {
+      "path": "/tmp/short-text-hybrid-160406.profraw",
+      "bytes": 179800,
+      "mtime_ns": 1792712765703236014
+    },
+    {
+      "path": "/tmp/short-text-hybrid-158165.profraw",
+      "bytes": 125824,
+      "mtime_ns": 1792711370410385505
+    },
+    {
+      "path": "/tmp/short-text-hybrid-157844.profraw",
+      "bytes": 36592,
+      "mtime_ns": 1792711004975240790
+    },
+    {
+      "path": "/tmp/short-text-hybrid-157477.profraw",
+      "bytes": 36592,
+      "mtime_ns": 1792710462270011328
+    },
+    {
+      "path": "/tmp/short-text-hybrid-156139.profraw",
+      "bytes": 115840,
+      "mtime_ns": 1792708371057085360
+    },
+    {
+      "path": "/tmp/short-text-hybrid-155866.profraw",
+      "bytes": 40576,
+      "mtime_ns": 1792707893817694961
+    },
+    {
+      "path": "/tmp/short-text-hybrid-155727.profraw",
+      "bytes": 40576,
+      "mtime_ns": 1792707396425126901
+    },
+    {
+      "path": "/tmp/short-text-hybrid-154784.profraw",
+      "bytes": 30424,
+      "mtime_ns": 1792706320302199723
+    },
+    {
+      "path": "/tmp/short-text-hybrid-154604.profraw",
+      "bytes": 29672,
+      "mtime_ns": 1792706140886685530
+    },
+    {
+      "path": "/tmp/short-text-hybrid-153894.profraw",
+      "bytes": 78792,
+      "mtime_ns": 1792705501396631744
+    },
+    {
+      "path": "/tmp/short-text-hybrid-152378.profraw",
+      "bytes": 15976,
+      "mtime_ns": 1792704039576091769
+    },
+    {
+      "path": "/tmp/short-text-hybrid-152229.profraw",
+      "bytes": 11576,
+      "mtime_ns": 1792703567873166068
+    },
+    {
+      "path": "/tmp/short-text-hybrid-151027.profraw",
+      "bytes": 181520,
+      "mtime_ns": 1792700526096949410
+    },
+    {
+      "path": "/tmp/short-text-hybrid-150652.profraw",
+      "bytes": 181512,
+      "mtime_ns": 1792700187468825699
+    },
+    {
+      "path": "/tmp/short-text-hybrid-148730.profraw",
+      "bytes": 47944,
+      "mtime_ns": 1792698922788430436
+    },
+    {
+      "path": "/tmp/short-text-hybrid-148556.profraw",
+      "bytes": 48080,
+      "mtime_ns": 1792698777421032432
+    },
+    {
+      "path": "/tmp/short-text-hybrid-148544.profraw",
+      "bytes": 27312,
+      "mtime_ns": 1792698770274135198
+    },
+    {
+      "path": "/tmp/short-text-hybrid-148358.profraw",
+      "bytes": 47872,
+      "mtime_ns": 1792698598887675223
+    },
+    {
+      "path": "/tmp/short-text-hybrid-148098.profraw",
+      "bytes": 280296,
+      "mtime_ns": 1792698426433879449
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147923.profraw",
+      "bytes": 280296,
+      "mtime_ns": 1792698337064232342
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147804.profraw",
+      "bytes": 279880,
+      "mtime_ns": 1792698229197265008
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147540.profraw",
+      "bytes": 283784,
+      "mtime_ns": 1792698004475369164
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147504.profraw",
+      "bytes": 283760,
+      "mtime_ns": 1792697956418614932
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147442.profraw",
+      "bytes": 283760,
+      "mtime_ns": 1792697887357755209
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147395.profraw",
+      "bytes": 283760,
+      "mtime_ns": 1792697837622659722
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147327.profraw",
+      "bytes": 268976,
+      "mtime_ns": 1792697777237738273
+    },
+    {
+      "path": "/tmp/short-text-hybrid-147269.profraw",
+      "bytes": 268976,
+      "mtime_ns": 1792697733187994646
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146849.profraw",
+      "bytes": 268272,
+      "mtime_ns": 1792695338641357484
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146852.profraw",
+      "bytes": 104512,
+      "mtime_ns": 1792695324342838266
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146775.profraw",
+      "bytes": 267824,
+      "mtime_ns": 1792694972946740370
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146613.profraw",
+      "bytes": 265768,
+      "mtime_ns": 1792694481530212545
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146539.profraw",
+      "bytes": 265744,
+      "mtime_ns": 1792694129776523282
+    },
+    {
+      "path": "/tmp/short-text-hybrid-146486.profraw",
+      "bytes": 265560,
+      "mtime_ns": 1792693920146958900
+    },
+    {
+      "path": "/tmp/short-text-hybrid-145781.profraw",
+      "bytes": 262184,
+      "mtime_ns": 1792692489593222343
+    },
+    {
+      "path": "/tmp/short-text-hybrid-145627.profraw",
+      "bytes": 261952,
+      "mtime_ns": 1792692174804794300
+    },
+    {
+      "path": "/tmp/short-text-hybrid-145630.profraw",
+      "bytes": 104272,
+      "mtime_ns": 1792692160421489267
+    },
+    {
+      "path": "/tmp/short-text-hybrid-145385.profraw",
+      "bytes": 225840,
+      "mtime_ns": 1792691901872629928
+    },
+    {
+      "path": "/tmp/short-text-hybrid-145204.profraw",
+      "bytes": 225840,
+      "mtime_ns": 1792691659037786347
+    },
+    {
+      "path": "/tmp/short-text-hybrid-144686.profraw",
+      "bytes": 225904,
+      "mtime_ns": 1792691376134820126
+    }
+  ],
+  "kept_files": [
+    "/tmp/cold-row-ownership-hybrid-197525.profraw",
+    "/tmp/cold-row-ownership-hybrid-197318.profraw",
+    "/tmp/cold-row-ownership-hybrid-196018.profraw",
+    "/tmp/cold-row-ownership-hybrid-195938.profraw",
+    "/tmp/cold-row-ownership-hybrid-194977.profraw",
+    "/tmp/cold-row-ownership-hybrid-194910.profraw",
+    "/tmp/cold-row-ownership-hybrid-191546.profraw",
+    "/tmp/cold-row-ownership-hybrid-191520.profraw",
+    "/tmp/cold-row-ownership-hybrid-190431.profraw",
+    "/tmp/cold-row-ownership-hybrid-189346.profraw",
+    "/tmp/short-text-hybrid-197321.profraw",
+    "/tmp/short-text-hybrid-195941.profraw",
+    "/tmp/short-text-hybrid-194827.profraw",
+    "/tmp/short-text-hybrid-191519.profraw",
+    "/tmp/short-text-hybrid-189345.profraw",
+    "/tmp/short-text-hybrid-188413.profraw",
+    "/tmp/short-text-hybrid-186107.profraw",
+    "/tmp/short-text-hybrid-179695.profraw",
+    "/tmp/short-text-hybrid-178959.profraw",
+    "/tmp/short-text-hybrid-178337.profraw"
+  ],
+  "removed_logical_bytes": 39629880,
+  "available_before": 181514240,
+  "available_after": 181514240,
+  "observed_available_increase": 0
+}

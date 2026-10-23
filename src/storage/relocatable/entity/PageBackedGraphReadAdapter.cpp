@@ -522,7 +522,7 @@ namespace graph::storage {
 		std::span<const uint64_t> ids, std::span<const uint32_t> tokens,
 		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
 		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
-        const PropertyTextReadSink *texts) const {
+        const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches) const {
 		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct Property cells require a sink");
 		if (ids.size() > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyKey))
 			throw std::overflow_error("direct Property owner staging overflowed");
@@ -536,7 +536,7 @@ namespace graph::storage {
 			};
 		const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> emit = std::ref(emitValue);
 		active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
-			snapshot, keys, tokens, {}, true, admission, &emit, scalars, texts);
+			snapshot, keys, tokens, {}, true, admission, &emit, scalars, texts, batches);
 		debug::PerfTrace::addValue("native_graph.read.direct_property_batches", 1);
 	}
 

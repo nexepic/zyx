@@ -1,0 +1,84 @@
+{
+  "protocol": {
+    "reason": "Final original matrix has3 guard P95 exceedances with no P50 regression; verify stability with contemporaneous frozen-baseline controls. Do not replace original samples.",
+    "cases": [
+      "large_selected",
+      "large_patch",
+      "skew_twohop"
+    ],
+    "processes_per_engine_case": 3,
+    "warmups": 3,
+    "measurements": 30,
+    "order": [
+      [
+        "baseline",
+        "current"
+      ],
+      [
+        "current",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "current"
+      ]
+    ],
+    "threshold": 1.05,
+    "baseline_binary_sha256": "8105cad823b0ec19b448b797a09024b0625a71575d71c3aa062010867572b089",
+    "current_binary_sha256": "a3eea980ed24f9ea0a46669783eda71ba196c59bd9d8ea374215dca9756c1419",
+    "full_matrix_rerun": false
+  },
+  "all_oracles_passed": true,
+  "processes": 18,
+  "summary": [
+    {
+      "case": "large_selected",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 1.077419,
+        "p95_ms": 1.578526
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 0.9897279999999999,
+        "p95_ms": 1.059117
+      },
+      "p50_ratio": 0.9186101228955494,
+      "p95_ratio": 0.6709531550319728,
+      "within_5_percent": true
+    },
+    {
+      "case": "large_patch",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 4.5773945000000005,
+        "p95_ms": 5.121313
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 3.762123,
+        "p95_ms": 4.186533
+      },
+      "p50_ratio": 0.8218917989262231,
+      "p95_ratio": 0.817472589548813,
+      "within_5_percent": true
+    },
+    {
+      "case": "skew_twohop",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 0.949908,
+        "p95_ms": 1.015972
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 0.9312555,
+        "p95_ms": 0.993298
+      },
+      "p50_ratio": 0.9803638878712465,
+      "p95_ratio": 0.9776824558157113,
+      "within_5_percent": true
+    }
+  ],
+  "original_matrix_unchanged": true
+}

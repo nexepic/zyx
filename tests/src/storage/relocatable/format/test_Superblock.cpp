@@ -571,12 +571,14 @@ TEST(RelocatableSuperblockTest, CompactColumnMembershipFeatureRequiresNativeForm
 
 TEST(RelocatableSuperblockTest, IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration) {
     if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        EXPECT_EQ(RSS_FORMAT_VERSION, 7);
-        EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 33);
-        auto old = SuperblockCodec::encode(validSuperblock(7, 50));
-        LittleEndianCodec::writeU16(old, 4, 32); recalculateCrc(old);
-        expectFormatError([&] { static_cast<void>(SuperblockCodec::decode(old)); }, FormatError::FERR_UNSUPPORTED_VERSION);
-        EXPECT_THROW(SuperblockCodec::selectNewest(old, old), FormatException);
+        EXPECT_EQ(RSS_FORMAT_VERSION, 13);
+        EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 39);
+        for(const uint16_t version : {uint16_t(32),uint16_t(33),uint16_t(35),uint16_t(37)}) {
+            auto old = SuperblockCodec::encode(validSuperblock(7, 50));
+            LittleEndianCodec::writeU16(old, 4, version); recalculateCrc(old);
+            expectFormatError([&] { static_cast<void>(SuperblockCodec::decode(old)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+            EXPECT_THROW(SuperblockCodec::selectNewest(old, old), FormatException);
+        }
     } else {
         EXPECT_EQ(RSS_FORMAT_VERSION, 5); EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 31);
     }

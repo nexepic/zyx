@@ -1,0 +1,74 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *-RelocatableMetadataPagePoolTest.DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold:RelocatableMetadataPagePoolTest.RecoveryReclaimsDeferredUnpublishedFrames
+[==========] Running 29 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 20 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerStagesRelocatedAndRetiredReleasesAtomically (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRetainsSlotsVisibleToAnActiveSnapshot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsCorruptAndDuplicateQueueEntries (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsUnallocatedAndUnknownQueueEntries (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsQueueEntryForMissingCatalogSegment (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsObsoleteAndInconsistentRetiredMappings (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsThatDisagreeWithCatalog (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsRetiredQueueMappingsWithAnotherPhysicalSlot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsMismatchedDurableAndDuplicateReclamationInput (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput
+[       OK ] RelocatableMetadataStoreTest.CatalogRetireQueueReclaimerRejectsDuplicateLogicalReclamationInput (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementDirectlyValidatesQueueInsertionOrderingAndDurableDuplicates (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility
+[       OK ] RelocatableMetadataStoreTest.MetadataRetirementUsesSnapshotGenerationAndCatalogLocationForVisibility (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsInvalidLifecycleTransitions (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsAQueuedSlotThatNoLongerMatchesCatalog (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool
+[       OK ] RelocatableMetadataStoreTest.CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication (0 ms)
+[----------] 20 tests from RelocatableMetadataStoreTest (5 ms total)
+
+[----------] 4 tests from RelocatableMetadataPagePoolTest
+[ RUN      ] RelocatableMetadataPagePoolTest.BatchedAllocationsAlsoTriggerPublicationReclamation
+[       OK ] RelocatableMetadataPagePoolTest.BatchedAllocationsAlsoTriggerPublicationReclamation (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.DeferredReclamationAuthenticatesAndPreservesPinnedCatalogRoots
+[       OK ] RelocatableMetadataPagePoolTest.DeferredReclamationAuthenticatesAndPreservesPinnedCatalogRoots (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.DeferredCallStillRejectsFutureSnapshotBeforeThreshold
+[       OK ] RelocatableMetadataPagePoolTest.DeferredCallStillRejectsFutureSnapshotBeforeThreshold (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.LowFreeHeadroomReclaimsBeforeAllocationBatchThreshold
+[       OK ] RelocatableMetadataPagePoolTest.LowFreeHeadroomReclaimsBeforeAllocationBatchThreshold (0 ms)
+[----------] 4 tests from RelocatableMetadataPagePoolTest (0 ms total)
+
+[----------] 5 tests from HybridPropertyLayoutScaleTest
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners
+[       OK ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners (161 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners
+[       OK ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners (808 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners
+[       OK ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners (1459 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.PartialRetirementPublicationRetainsOldAllocationAndNativeValues
+[       OK ] HybridPropertyLayoutScaleTest.PartialRetirementPublicationRetainsOldAllocationAndNativeValues (14 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.CompleteRetirementPublicationRecoversNewAllocationAndNativeValues
+[       OK ] HybridPropertyLayoutScaleTest.CompleteRetirementPublicationRecoversNewAllocationAndNativeValues (13 ms)
+[----------] 5 tests from HybridPropertyLayoutScaleTest (2457 ms total)
+
+[----------] Global test environment tear-down
+[==========] 29 tests from 3 test suites ran. (2463 ms total)
+[  PASSED  ] 29 tests.

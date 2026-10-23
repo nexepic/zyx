@@ -126,6 +126,22 @@ public:
                     [&] { if (cancellation) cancellation->check(); });
             });
     }
+    // Same owner-neutral carrier and same private-batch proposal as prepareRoot,
+    // borrowing a filtered entry set rather than cloning the owning ROW tree.
+    [[nodiscard]] static HybridPropertyLargeFieldPreparation prepareRootBorrowed(RelocatableMetadataStore &metadata,
+        const MetadataSnapshotPin &snapshot, LargeValueStore &store, EntityPropertyKey owner,
+        std::span<const BorrowedPropertyCollectionRootEntry> entries, LargeValueId proposedId,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr) {
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native borrowed ROW preparation is disabled");
+        hybrid_property_detail::require(owner.isValid() && !entries.empty(), "native borrowed ROW requires its logical owner and fields");
+        return prepareEncoded(metadata, snapshot, store, owner, 0, proposedId, std::move(memory), {},
+            LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES, cancellation,
+            [&](std::pmr::memory_resource &resource) {
+                return EntityPropertyLargeValuePayloadCodec::encodeBorrowed(entries, resource,
+                    [&] { if (cancellation) cancellation->check(); });
+            });
+    }
     [[nodiscard]] bool reused() const noexcept { return state_->reused; }
     [[nodiscard]] size_t candidatesScanned() const noexcept { return state_->candidates; }
     [[nodiscard]] size_t newDataPages() const noexcept { return state_->data_pages; }

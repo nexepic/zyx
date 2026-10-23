@@ -1,0 +1,5 @@
+case,version,samples,p50_ms,p95_ms
+label_scan_filter,before,10,102.763632,108.387803
+label_scan_filter,after,10,100.154305,123.951892
+aggregation_count_by_group,before,10,103.957727,108.393922
+aggregation_count_by_group,after,10,100.567036,102.212068

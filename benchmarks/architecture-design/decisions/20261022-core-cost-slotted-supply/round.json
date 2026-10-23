@@ -1,0 +1,40 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "allocation_module_tests": 134,
+  "related_lifecycle_tests": 401,
+  "property_module_tests": 73,
+  "mechanism": {
+    "unrelated_directory_pages": [
+      32,
+      512,
+      4096
+    ],
+    "selected_frames": [
+      1,
+      1,
+      1
+    ],
+    "point_lookups": [
+      1,
+      1,
+      1
+    ],
+    "fallback_for_undecodable_orphan_owner_verified": true
+  },
+  "medium_p50_ms": {
+    "before": 37.411279,
+    "after": 35.503908
+  },
+  "medium_p95_ms": {
+    "before": 43.483558,
+    "after": 45.251245
+  },
+  "tail_improved": false,
+  "library_sha256": "249ccf2aba83e20a9e4df83d7b594d9f7bfc48916026fb2d71570b2b416e9003",
+  "retained_library": "/workspace/zyx-slotted-supply-candidate/libzyx_core.a",
+  "patch_sha256": "b623686f36e59f2a1a0b3d782f3769e2060e62df858a98e7b13630a49c3cf47f",
+  "scope": "bounded selected-pool owner discovery, exact current pin mapping, original live-page checks, authoritative fallback for invalid owner; no persistent format/header ABI/cache quota change; no commit/push without acceptance progress"
+}

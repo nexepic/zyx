@@ -31,6 +31,7 @@
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePage.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/metadata/StateRecord.hpp"
@@ -892,6 +893,41 @@ namespace graph::storage {
 			requireIntegrity(invalidRoot == 0U,
 							 "relocatable integrity scan found an Index Root Directory reference mismatch");
 		});
+
+
+        // Full integrity checks the derived summary against every authoritative
+        // live entity page. Ordinary writes validate only their accessed pages.
+        for (const auto kind : {EntityPageRecordKind::EPRK_NODE, EntityPageRecordKind::EPRK_EDGE}) {
+            const auto root = metadata_.locations_.findIndexRootOptional(superblock, EntityFreeSpaceIndex::indexId(kind));
+            if (!root) continue; // Legacy files have no summary until explicit initialization.
+            ScanMap<utils::OwnedVector<std::byte>, uint64_t> expected;
+            for (const auto &[id, scanned] : scannedPages) {
+                if (scanned.owner.kind != PageOwnerKind::POK_ENTITY) continue;
+                const auto header = EntityPage::open(scanned.owner, scanned.payload).header();
+                if (header.record_kind != kind || !header.live_count || header.live_count == header.slot_capacity) continue;
+                const auto key = EntityFreeSpaceIndex::entryKey(PageId(id), uint16_t(header.slot_capacity - header.live_count), kind);
+                expected.emplace(utils::OwnedVector<std::byte>(key.begin(), key.end()), 0U);
+            }
+            const uint64_t count = expected.size();
+            const auto generationKey = EntityFreeSpaceIndex::generationKey(), countKey = EntityFreeSpaceIndex::countKey();
+            const auto entries = scanIndexTree(scannedPages, *root, expected.size() + 3U, BTreeLeafValueLayout::BLVL_U64);
+            std::optional<uint64_t> generation, declaredCount;
+            for (const auto &entry : entries) {
+                if (std::ranges::equal(entry.key, generationKey)) generation = entry.value_or_child;
+                else if (std::ranges::equal(entry.key, countKey)) declaredCount = entry.value_or_child;
+                else {
+                    const auto found = expected.find(entry.key);
+                    requireIntegrity(found != expected.end() && entry.value_or_child == 1U,
+                        "relocatable integrity scan found an invalid entity free-space entry");
+                    expected.erase(found);
+                }
+            }
+            const auto entityRoot = EntityFreeSpaceIndex::entityRoot(superblock, kind);
+            requireIntegrity(generation && declaredCount && *declaredCount == count + 1U && expected.empty() &&
+                *generation && *generation - 1U <= superblock.generation.value() &&
+                (entityRoot.isValid() || count == 0U),
+                "relocatable integrity scan found an incomplete or stale entity free-space summary");
+        }
 
 		ScanMap<uint64_t, EntityPageLocation> nativeNodes;
 		ScanMap<uint64_t, EntityPageLocation> nativeEdges;

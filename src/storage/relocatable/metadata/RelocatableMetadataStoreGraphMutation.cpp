@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyPoolRoutes.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
@@ -357,6 +358,13 @@ namespace graph::storage {
             }
             if (request.conversion) {
                 const auto &conversion = *request.conversion;
+                if (conversion.cold_row_remainder && conversion.publish_candidate && !conversion.allocation_admission)
+                    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                        "native cold ROW publication requires whole-database allocation admission");
+                if (conversion.cold_row_remainder && (!conversion.compact_column_memberships ||
+                    conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID))
+                    throw FormatException(FormatError::FERR_INVALID_HEADER,
+                        "native cold ROW conversion requires compact forward groups");
                 const auto memory = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(conversion.memory);
                 constexpr size_t maximumConversionBytes = 1024U * 1024U;
                 if (!conversion.group_count || conversion.group_count > 8U ||
@@ -1003,6 +1011,18 @@ namespace graph::storage {
 						"native graph external private tail reservation is not the current complete file suffix");
 			}
 		}
+        uint64_t previousSummaryId = 0U;
+        for (const auto &fence : derivedState.entity_free_summary_fences) {
+            if (!isEntityFreeSpaceIndexId(fence.index_id) || fence.index_id <= previousSummaryId ||
+                fence.expected_entity_root != (fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ? current.node_entity_directory_root : current.edge_entity_directory_root) ||
+                std::ranges::count(derivedState.index_tree_mutations, fence.index_id, &NativeGraphIndexTreeMutation::index_id) != 1)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "free-space summary has a stale source or no unique index mutation");
+            previousSummaryId = fence.index_id;
+        }
+        for (const auto &tree : derivedState.index_tree_mutations)
+            if (isEntityFreeSpaceIndexId(tree.index_id) && std::ranges::count(derivedState.entity_free_summary_fences,
+                    tree.index_id, &NativeGraphEntityFreeSummaryFence::index_id) != 1)
+                throw FormatException(FormatError::FERR_INVALID_STATE, "reserved free-space mutation lacks its entity-root fence");
 		if (expectedMetadataGeneration.has_value() && current.generation != *expectedMetadataGeneration) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native graph metadata publication no longer matches its pinned generation");
@@ -2102,19 +2122,25 @@ namespace graph::storage {
 		collectErasedEntityProperties(erasedNodes, EntityPropertyOwnerKind::EPOK_NODE);
 		collectErasedEntityProperties(erasedEdges, EntityPropertyOwnerKind::EPOK_EDGE);
 		std::ranges::sort(erasedEntityProperties, {}, &EntityPropertyKey::directoryId);
+        // Only the sealed graph/field coordinator consumes this cold-aware
+        // source view. Generic mutation group lookup stays guarded elsewhere.
+        const auto topologyGroup = [&](EntityPropertyKey owner, const std::function<void(size_t)> &admission,
+            SlottedSlotReference *reference = nullptr) {
+            return topologyFields->findGroup(owner, admission, reference, true, true);
+        };
         std::array<EntityPropertyKey, 64> pendingNativeOwners{};
         size_t pendingNativeOwnerCount = 0;
         if (preservingNativeFields) {
             utils::OwnedHeapReservation boundary(utils::OwnedAllocationScope::owner());
             const auto independent = [&](EntityPropertyKey owner) {
-                if (topologyFields->groupRecord(owner, [&](size_t bytes) { boundary.set(bytes); }))
+                if (topologyGroup(owner, [&](size_t bytes) { boundary.set(bytes); }))
                     throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
                         "native group owner insertion/deletion/property mutation requires its field lifecycle coordinator");
                 boundary.set(0);
             };
             for (const auto &owner : hybridTopology->property_owners_) independent(owner);
             const auto inserted = [&](EntityPropertyKey owner) {
-                const auto group = topologyFields->groupRecord(owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
+                const auto group = topologyGroup(owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
                 if (!group) return;
                 if (pendingNativeOwnerCount == pendingNativeOwners.size() ||
                     (group->live & (UINT64_C(1) << hybridPropertySlotFor(owner))))
@@ -2136,13 +2162,13 @@ namespace graph::storage {
                 accountOwner(cell.owner);
                 const bool pending = std::ranges::find(std::span(pendingNativeOwners).first(pendingNativeOwnerCount), cell.owner) !=
                     std::span(pendingNativeOwners).first(pendingNativeOwnerCount).end();
-                const auto group = topologyFields->groupRecord(cell.owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
+                const auto group = topologyGroup(cell.owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
                 if (!cell.token || !group || (pending ? cell.erase : !(group->live & (UINT64_C(1) << hybridPropertySlotFor(cell.owner)))))
                     throw FormatException(FormatError::FERR_INVALID_STATE, "native graph field has no authenticated live or pending owner");
             }
             for (size_t i = 0; i < hybridTopology->owner_deletions_.size(); ++i) {
                 const auto owner = hybridTopology->owner_deletions_[i];
-                const auto group = topologyFields->groupRecord(owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
+                const auto group = topologyGroup(owner, [&](size_t bytes) { boundary.set(bytes); }); boundary.set(0);
                 const auto &erased = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? erasedNodes : erasedEdges;
                 if (!owner.isValid() || !std::ranges::binary_search(erased, owner.entity_id) || !group ||
                     !(group->live & (UINT64_C(1) << hybridPropertySlotFor(owner))) ||
@@ -2195,7 +2221,7 @@ namespace graph::storage {
         if (nativeFieldWork) {
             utils::OwnedAllocationScope pendingScope(pendingNativeMemory);
             SlottedSlotReference groupReference; utils::OwnedHeapReservation boundary(pendingNativeMemory);
-            if (!topologyFields->groupRecord(pendingNativeOwnerCount ? pendingNativeOwners[0] : !hybridTopology->field_changes_.empty() ?
+            if (!topologyGroup(pendingNativeOwnerCount ? pendingNativeOwners[0] : !hybridTopology->field_changes_.empty() ?
                 hybridTopology->field_changes_.front().owner : hybridTopology->owner_deletions_.front(), [&](size_t bytes) { boundary.set(bytes); }, &groupReference))
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native pending owner lost its source group");
             boundary.set(0);
@@ -2325,19 +2351,13 @@ namespace graph::storage {
                 }
                 HybridPropertyGroupConversion plan(conversion.memory, roots, conversion.owner_kind,
                     groupId, batch.generation(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, checkpoint);
-                if (conversion.group_count > 1U && (plan.columns().empty() ||
+                if (conversion.group_count > 1U && !conversion.cold_row_remainder && (plan.columns().empty() ||
                     std::ranges::any_of(plan.members(), [](const auto &member) { return member.source != HybridPropertySource::HPS_COLUMN; })))
                     throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native hybrid cohort requires compact pure-column groups");
                 debug::PerfTrace::addValue("native_graph.hybrid.source_classification_completed", 1);
                 // Directory sources retain their immutable final locator records,
                 // rather than borrow the ROW/planner or keep a second row copy.
-                const auto resolveLarge = [&](EntityPropertyKey owner, uint32_t token, const PropertyValue &value) {
-                    checkpoint();
-                    auto proposal = HybridPropertyLargeFieldPreparation::prepare(*this, source, *conversionLargeValues,
-                        owner, token, value, LargeValueId(batch.candidate().next_large_value_id), conversion.memory,
-                        {}, LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES,
-                        conversion.cancellation);
-                    debug::PerfTrace::addValue("native_graph.hybrid.large_field_proposals_prepared", 1);
+                const auto retainProposal = [&](HybridPropertyLargeFieldPreparation proposal) -> const HybridPropertyLargeFieldPreparation & {
                     const HybridPropertyLargeFieldPreparation *selected = &proposal;
                     // Content created earlier in this same private batch is absent
                     // from the published index. Compare the complete carrier bytes
@@ -2358,6 +2378,15 @@ namespace graph::storage {
                             throw FormatException(FormatError::FERR_INVALID_STATE, "native field value lost its batch ID sequence");
                         largeFields.push_back(std::move(proposal)); selected = &largeFields.back();
                     }
+                    return *selected;
+                };
+                const auto resolveLarge = [&](EntityPropertyKey owner, uint32_t token, const PropertyValue &value) {
+                    checkpoint();
+                    auto proposed = HybridPropertyLargeFieldPreparation::prepare(*this, source, *conversionLargeValues,
+                        owner, token, value, LargeValueId(batch.candidate().next_large_value_id), conversion.memory,
+                        {}, LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES, conversion.cancellation);
+                    debug::PerfTrace::addValue("native_graph.hybrid.large_field_proposals_prepared", 1);
+                    const auto *selected = &retainProposal(std::move(proposed));
                     const size_t encodedBytes = RSS_LARGE_VALUE_REF_HEADER_BYTES + selected->reference().media_type.size();
                     utils::OwnedHeapReservation encodingCredit(conversion.memory,
                         utils::detail::standardContainerProxyBytes() +
@@ -2368,9 +2397,29 @@ namespace graph::storage {
                     return HybridPropertyExtensionView::encodeReference(owner, token, batch.generation(), encoded,
                         RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *conversion.memory, std::ref(admitReference));
                 };
+                const auto resolveRoot = [&](EntityPropertyKey owner, std::span<const BorrowedPropertyCollectionRootEntry> entries) {
+                    checkpoint();
+                    const auto &proposal = retainProposal(HybridPropertyLargeFieldPreparation::prepareRootBorrowed(*this, source,
+                        *conversionLargeValues, owner, entries, LargeValueId(batch.candidate().next_large_value_id),
+                        conversion.memory, conversion.cancellation));
+                    debug::PerfTrace::addValue("native_graph.hybrid.large_root_proposals_prepared", 1);
+                    // The existing owner-keyed codec has two bounded standard
+                    // buffers; charge their full supported media/proxy overlap.
+                    constexpr size_t maximumReference = RSS_LARGE_VALUE_REF_HEADER_BYTES + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES;
+                    utils::OwnedHeapReservation credit(conversion.memory,
+                        2U * utils::detail::standardContainerProxyBytes() +
+                        utils::detail::standardAllocatorRequestBytes(maximumReference, alignof(std::byte)) +
+                        utils::detail::standardAllocatorRequestBytes(RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_HEADER_BYTES +
+                            maximumReference, alignof(std::byte)));
+                    const auto type = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
+                    const auto encoded = EntityPropertyLargeValueReferenceCodec::encode({owner.entity_id, type, proposal.reference()});
+                    return std::pmr::vector<std::byte>(encoded.begin(), encoded.end(), conversion.memory.get());
+                };
                 const HybridPropertyConversionPreparation::LargeFieldResolver largeResolver = std::ref(resolveLarge);
+                const HybridPropertyConversionPreparation::WholeRootResolver rootResolver = std::ref(resolveRoot);
                 return utils::shareOwned(std::unique_ptr<HybridPropertyConversionPreparation>(
-                    new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver, conversion.compact_column_memberships)));
+                    new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver,
+                        conversion.compact_column_memberships, conversion.cold_row_remainder, rootResolver)));
             }();
             if (!fields) fields = std::move(preparedGroup);
             else {
@@ -5160,6 +5209,15 @@ namespace graph::storage {
 		if (!insertedEdges.empty() || !erasedEdges.empty()) {
 			locations_.prepareReplaceEdgePageLocations(batch, insertedEdges, erasedEdges);
 		}
+        // A record kind has one published directory root per database generation.
+        // Verify that the marker's semantic generation names the actual result,
+        // rather than guessing a future physical root address in the planner.
+        for (const auto &fence : derivedState.entity_free_summary_fences) {
+            const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
+                batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
+            if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages))
+                throw FormatException(FormatError::FERR_INVALID_STATE, "free-space marker does not name the resulting entity directory");
+        }
 		std::vector<EntityPropertyKey> erasedProperties;
 		erasedProperties.reserve(explicitlyErasedEntityProperties.size() + erasedEntityProperties.size());
 		erasedProperties.insert(erasedProperties.end(), explicitlyErasedEntityProperties.begin(),
@@ -5168,6 +5226,20 @@ namespace graph::storage {
 		std::ranges::sort(upsertedEntityProperties, {},
 						  [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
 		std::ranges::sort(erasedProperties, {}, &EntityPropertyKey::directoryId);
+		// Validate duplicate writes before filtering unchanged routing identities.
+		// The replacement page and source fences have already been authenticated;
+		// values live behind PageDirectory, not in EntityPropertyDirectory.
+		if (std::ranges::adjacent_find(upsertedEntityProperties, {},
+				[](const EntityPropertyLocation &location) { return location.key.directoryId(); }) !=
+				upsertedEntityProperties.end()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE, "duplicate Entity Property publication");
+		}
+		std::erase_if(upsertedEntityProperties, [&](const EntityPropertyLocation &location) {
+			const auto existing = findExistingProperty(location.key);
+			if (!existing || *existing != location) return false;
+			debug::PerfTrace::addValue("native_graph.commit.unchanged_property_locations", 1);
+			return true;
+		});
 		if (!upsertedEntityProperties.empty() || !erasedProperties.empty()) {
 			locations_.prepareReplaceEntityProperties(batch, upsertedEntityProperties, erasedProperties);
 		}

@@ -1,0 +1,21 @@
+from pathlib import Path
+for lang in ['zh','en']:
+ b=Path('docs/apps/docs/content/docs')/lang/'zyx/architecture'
+ p=b/'optimization.mdx';s=p.read_text()
+ if lang=='zh':
+  a=s.index('当前实验 13／39 的读取、同步共享解码');z=s.index('下一步只完成同一 Native 协调器的实际发布：',a)
+  s=s[:a]+'当前实验 13／39 的已完成组件与证据集中见[存储规范](native-single-file-storage-plan)，不计作公开转换验收。'+s[z:]
+  s=s.replace('删除／属性清空／最后组清理／逆转换保持 NULL、缺失和实际大值语义。', '待提交新 owner／liveness 必须与 Entity Map 原子一致；删除／属性清空／最后组清理／逆转换保持 NULL、缺失和实际大值语义。',1)
+ else:
+  a=s.index('Current experimental13/39 reading, synchronous shared decoding');z=s.index('Next complete actual publication through that same Native coordinator:',a)
+  s=s[:a]+'Completed experimental13/39 components/evidence are centralized in the [storage specification](native-single-file-storage-plan), not counted as public-conversion acceptance. '+s[z:]
+  s=s.replace('retain NULL/missing/actual-LargeValue semantics through deletion, empty owners, final-group cleanup and inverse conversion.', 'publish pending-owner/liveness changes atomically with the Entity Map and retain NULL/missing/actual-LargeValue semantics through deletion, empty owners, final-group cleanup and inverse conversion.',1)
+ p.write_text(s)
+ p=b/'native-single-file-storage-plan.mdx';s=p.read_text()
+ if lang=='zh':
+  s=s.replace('兼容热更新的下一准备合同：','兼容热更新准备合同（受限私有计划已实现）：',1)
+  s+='\n\n兼容热准备与 pool 绑定证据见 `20261023-core-cost-cold-compatible-hot/`。原 ColumnDelta 的私有读取路径只交付已认证全局热列；公开 ColumnVisitor／groupRecord 仍拒绝 mode3 变更。兼容值／NULL／保持阈值的 presence 增减通过原 DemotionPreparation 更新必要页与精确总数，冷位置、字段数和原字节不变，不新增 selector。NaN／signed-zero 继续使用原逻辑相等规则。17 个单项兼容删除合并后降至 47 必须拒绝；16 个降至 48 可准备，并保持冷字段总数。类型不兼容、owner 删除、待提交 owner、冷 token 和实际降级继续不授予计划／发布权限。\n\n只有 FieldPageStore 认证的 clone 能给原 slot 瞬时来源证明；私有图像 clone 继承，普通 open／新建不能继承，统一 append／overwrite／erase 清除对应证明，insert 失败则清空证明以 fail closed。绑定仅跳过未变既有冷块的解压，其他／新／修改记录继续完整局部校验；位图不序列化、不新增缓存，holder 大小计原额度。坏冷 CRC 下热准备与可信 clone 绑定成功且字节不变，冷首次读取仍拒绝；同样字节经普通 open 后绑定必须拒绝。新 slot 与擦除后复用 slot 均不能继承证明。Edge 的缺失热成员插入 NULL 保持准确冷热总数、冷字节与绑定。所有准备／绑定仍无文件／根／ID 变化，真实 mode3 变更与发布保持关闭；冷更新、全局降级、owner liveness、删除／逆转换及实际公开生命周期尚待完成。此中间组件仅归档源码／报告及库指纹，关键前序冻结库保留，不重复复制中间二进制；无全量单测／性能基准，进度仍 90%。\n'
+ else:
+  s=s.replace('Next compatible-hot preparation contract:', 'Compatible-hot preparation contract (restricted private plans implemented):',1)
+  s+='\n\nCompatible-hot preparation/pool binding evidence is in `20261023-core-cost-cold-compatible-hot/`. The private ColumnDelta read path supplies authenticated globally hot columns only; public ColumnVisitor/groupRecord still refuse mode3 mutation. Original DemotionPreparation updates required pages/exact totals for compatible values/NULL/presence changes retaining the threshold, preserving cold locations/counts/bytes without selectors. Original NaN/signed-zero logical equality remains. Seventeen individually compatible removals merging to47 refuse; sixteen retaining48 prepare with preserved cold totals. Incompatible types, owner deletion/pending owners, cold tokens and actual demotion still gain no planning/publication authority.\n\nOnly FieldPageStore-authenticated clones mint transient original-slot proof. Private clones inherit it; ordinary open/new images cannot. Central append/overwrite/erase clear affected proof, and insertion failure clears proof to fail closed. Binding skips decompression only for unchanged existing cold records, fully validating other/new/modified records. The bitmap is neither serialized nor a cache; holder size uses original admission. Hot preparation/trusted binding preserve corrupt unvisited cold bytes, whose first cold read still refuses; ordinary reopening of identical bytes must refuse binding. Fresh/reused slots cannot inherit proof. Edge missing-hot NULL insertion preserves exact hot/cold totals/bindings/bytes. All preparation/binding leaves files/roots/IDs unchanged and actual mode3 mutation/publication closed. Cold updates/global demotion, pending-owner liveness, deletion/inverse and real public-conversion lifecycle remain pending. This intermediate component archives source/reports/library fingerprints without duplicating binaries; preceding key frozen libraries remain. No full suite/timing benchmark; progress stays90%.\n'
+ p.write_text(s)

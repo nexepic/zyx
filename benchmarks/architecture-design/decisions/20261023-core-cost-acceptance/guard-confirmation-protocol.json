@@ -1,0 +1,29 @@
+{
+  "reason": "Final original matrix has3 guard P95 exceedances with no P50 regression; verify stability with contemporaneous frozen-baseline controls. Do not replace original samples.",
+  "cases": [
+    "large_selected",
+    "large_patch",
+    "skew_twohop"
+  ],
+  "processes_per_engine_case": 3,
+  "warmups": 3,
+  "measurements": 30,
+  "order": [
+    [
+      "baseline",
+      "current"
+    ],
+    [
+      "current",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "current"
+    ]
+  ],
+  "threshold": 1.05,
+  "baseline_binary_sha256": "8105cad823b0ec19b448b797a09024b0625a71575d71c3aa062010867572b089",
+  "current_binary_sha256": "a3eea980ed24f9ea0a46669783eda71ba196c59bd9d8ea374215dca9756c1419",
+  "full_matrix_rerun": false
+}

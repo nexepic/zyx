@@ -1,0 +1,12 @@
+{
+  "units": [
+    "storage/relocatable/allocation/test_SlottedPagePool",
+    "storage/relocatable/allocation/test_SlottedPage",
+    "storage/relocatable/allocation/test_SharedPagePoolAllocator",
+    "storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults",
+    "storage/relocatable/allocation/test_SharedPagePool"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "a44b292a338829d463f35bba4dc0a6c74d93d4fec6f361d7c97e829ea5c16a50"
+}

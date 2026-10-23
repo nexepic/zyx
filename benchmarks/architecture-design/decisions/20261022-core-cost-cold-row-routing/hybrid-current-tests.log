@@ -1,0 +1,72 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = -HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots
+[==========] Running 28 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from HybridPropertyColdRowRoutingTest
+[ RUN      ] HybridPropertyColdRowRoutingTest.PointValuesPresenceCountsAndFullCollectionsShareExactHotColdAuthority
+[       OK ] HybridPropertyColdRowRoutingTest.PointValuesPresenceCountsAndFullCollectionsShareExactHotColdAuthority (3 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.WholeRootLargeValuesKeepTheSamePointEnumerationAndFullReadBoundary
+[       OK ] HybridPropertyColdRowRoutingTest.WholeRootLargeValuesKeepTheSamePointEnumerationAndFullReadBoundary (3 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.HotReadsDoNotTouchCorruptUnvisitedColdBlockAndColdReadsFailClosed
+[       OK ] HybridPropertyColdRowRoutingTest.HotReadsDoNotTouchCorruptUnvisitedColdBlockAndColdReadsFailClosed (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.CompetingOrdinaryRowStillRejectsEvenAnOtherwiseValidHotRead
+[       OK ] HybridPropertyColdRowRoutingTest.CompetingOrdinaryRowStillRejectsEvenAnOtherwiseValidHotRead (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.CompetingExplicitSelectorCannotOverrideAGroupGlobalMissingHotCell
+[       OK ] HybridPropertyColdRowRoutingTest.CompetingExplicitSelectorCannotOverrideAGroupGlobalMissingHotCell (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.ColdEnumerationRejectsGloballyHotTokenEvenWhereThatOwnerHasNoHotMembership
+[       OK ] HybridPropertyColdRowRoutingTest.ColdEnumerationRejectsGloballyHotTokenEvenWhereThatOwnerHasNoHotMembership (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.ColdRepresentationHandoffRunsBeforeDecodeAndLeaseRestoresParentOnFailure
+[       OK ] HybridPropertyColdRowRoutingTest.ColdRepresentationHandoffRunsBeforeDecodeAndLeaseRestoresParentOnFailure (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.GroupedHotRunsAuthenticateAllOwnersWithoutReadingAnyColdRoot
+[       OK ] HybridPropertyColdRowRoutingTest.GroupedHotRunsAuthenticateAllOwnersWithoutReadingAnyColdRoot (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.TypedColdTextBorrowAndMutationRefusalNeverMaterializeAnOwningValue
+[       OK ] HybridPropertyColdRowRoutingTest.TypedColdTextBorrowAndMutationRefusalNeverMaterializeAnOwningValue (1 ms)
+[----------] 9 tests from HybridPropertyColdRowRoutingTest (19 ms total)
+
+[----------] 8 tests from HybridPropertyColdRowInspectionTest
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues
+[       OK ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput
+[       OK ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges
+[       OK ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked
+[       OK ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure
+[       OK ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes
+[       OK ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership
+[       OK ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues
+[       OK ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues (0 ms)
+[----------] 8 tests from HybridPropertyColdRowInspectionTest (6 ms total)
+
+[----------] 11 tests from HybridPropertyDescriptorStoreTest
+[ RUN      ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged
+[       OK ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected
+[       OK ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting
+[       OK ] HybridPropertyDescriptorStoreTest.NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting (1 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity
+[       OK ] HybridPropertyDescriptorStoreTest.DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity (1 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot
+[       OK ] HybridPropertyDescriptorStoreTest.ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration
+[       OK ] HybridPropertyDescriptorStoreTest.EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration (2 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NonemptyUninstalledRootsRejectBeforeFrameAllocation
+[       OK ] HybridPropertyDescriptorStoreTest.NonemptyUninstalledRootsRejectBeforeFrameAllocation (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance
+[       OK ] HybridPropertyDescriptorStoreTest.DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen
+[       OK ] HybridPropertyDescriptorStoreTest.ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry
+[       OK ] HybridPropertyDescriptorStoreTest.SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState
+[       OK ] HybridPropertyDescriptorStoreTest.NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState (3 ms)
+[----------] 11 tests from HybridPropertyDescriptorStoreTest (11 ms total)
+
+[----------] Global test environment tear-down
+[==========] 28 tests from 3 test suites ran. (38 ms total)
+[  PASSED  ] 28 tests.

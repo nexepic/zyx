@@ -1,0 +1,35 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T20:27:47Z",
+  "time": "0.23s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T20:27:47Z",
+      "time": "0.229s",
+      "testsuite": [
+        {
+          "name": "ProductionMixedLongIdsPreserveFilterGroupingAndColdFieldLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T20:27:47Z",
+          "time": "0.229s",
+          "classname": "HybridPropertyQueryParityTest",
+          "mixed_row_steady_bytes": "1441792",
+          "mixed_native_steady_bytes": "2097152",
+          "mixed_native_directory_bytes": "524288"
+        }
+      ]
+    }
+  ]
+}

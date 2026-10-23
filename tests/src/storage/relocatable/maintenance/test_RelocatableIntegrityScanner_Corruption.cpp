@@ -175,9 +175,10 @@ namespace {
 		BTreePageStore trees(pages, *result.metadata);
 		NativeGraphWritePlannerOptions options;
 		options.first_slot = PhysicalSlotId(40U);
-		options.last_slot = PhysicalSlotId(42U);
+		// Entity/property/adjacency pools plus the two derived free-space trees.
+		options.last_slot = PhysicalSlotId(44U);
 		options.entity_pool_owner_id = 901U;
-		options.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(42U), 903U};
+		options.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(44U), 903U};
 		NativeGraphWritePlanner planner(*result.metadata, entities, labels, properties, trees, options);
 		NativeGraphWriteTransaction transaction = planner.beginTransaction();
 		const uint64_t nodeId = transaction.createNode(labelIds);

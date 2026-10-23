@@ -1,0 +1,79 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount:HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from HybridPropertyOrdinaryConversionTest
+[ RUN      ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:289: Failure
+Expected: (stats.pool_bytes) > (int64_t(rowPoolCount * RSS_SEGMENT_SIZE)), actual: 262144 vs 262144
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount (5 ms)
+[ RUN      ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1485: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type graph::query::execution::MaterializedByteLimitExceeded.
+  Actual: it throws nothing.
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1486: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 418
+  epoch
+    Which is: 313
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1486: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1497: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1499: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1500: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1497: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1499: Failure
+Value of: cancellation.prepared
+  Actual: false
+Expected: true
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1500: Failure
+Expected equality of these values:
+  metadata_->openSnapshot().superblock()
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+  before
+    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1502: Failure
+Expected: (io_->dataMutationEpoch()) > (beforeAttempt), actual: 418 vs 418
+
+/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/native-probe-baseline/source/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1506: Failure
+Expected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native column publication has a stale or foreign source fence".
+
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry (85 ms)
+[----------] 2 tests from HybridPropertyOrdinaryConversionTest (90 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (90 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount
+[  FAILED  ] HybridPropertyOrdinaryConversionTest.FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry
+
+ 2 FAILED TESTS

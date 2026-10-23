@@ -1,0 +1,9 @@
+# Batch-local unpublished cold-root carrier admission
+
+Accepted progress **90%**, P7 open. No full suite/timing/commit/push. Original format/quota/bounds unchanged. Source/reports/recipes/current library fingerprints retained without duplicating intermediate binaries.
+
+Cold preparation can borrow original immutable HybridPropertyLargeFieldPreparation candidates. An explicit target reference must use a reserved batch ID and match the full reference/database/source generation and owner-keyed envelope. Actual owned carrier payload length/directory/count/canonical values and global hot-token exclusion are checked before accepting it without reading an unpublished manifest. Owner-neutral payloads preserve cross-owner dedup and identical field/whole-root carrier reuse; proposal.token cannot invalidate an otherwise identical legal carrier. Existing SOURCE rows never use this proof: their original block-generation/pinned-manifest checks remain, preventing laundering old corruption.
+
+24 targeted cases pass. New cases use actual8193-byte root proposals, reject missing proof/unreserved IDs/hot-token conflicts, and preserve legal single-field carrier reuse as a whole root. Alternative failed batches are discarded, not retried. Files/roots/I/O epoch/source counters remain unchanged; accounts refund. Both experimental memberships pass500 related module cases, default153, no failures/skips.
+
+Actual Native dispatch must pass the same retained proposal holders to original immutable/manifest/content-index installation and atomic publication; this stage does not claim that integration. Global demotion, owner lifecycle/delete/inverse installation/retirement, public atomic conversion/full lifecycle, complete-space/staged-target bootstrap admission, remaining primary read costs and final P7 remain pending. No performance/adoption claim follows from these private preparation tests.

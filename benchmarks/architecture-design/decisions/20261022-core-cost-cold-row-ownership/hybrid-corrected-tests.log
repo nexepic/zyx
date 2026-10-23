@@ -1,0 +1,83 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 29 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from HybridPropertyColdRowOwnershipTest
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ForwardAndReverseAuditDistinctRawBlocksWithoutMaterializingValues
+[       OK ] HybridPropertyColdRowOwnershipTest.ForwardAndReverseAuditDistinctRawBlocksWithoutMaterializingValues (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ColdOnlyGroupsKeepExactOwnerAndPhysicalRecordOwnership
+[       OK ] HybridPropertyColdRowOwnershipTest.ColdOnlyGroupsKeepExactOwnerAndPhysicalRecordOwnership (3 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.EdgeNamespaceRawColdRecordsAndRealLargeRootsEnumerateTheirExactReferenceOnce
+[       OK ] HybridPropertyColdRowOwnershipTest.EdgeNamespaceRawColdRecordsAndRealLargeRootsEnumerateTheirExactReferenceOnce (5 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.IncorrectOwnerToBlockBindingCannotPassForwardOrReverseChecks
+[       OK ] HybridPropertyColdRowOwnershipTest.IncorrectOwnerToBlockBindingCannotPassForwardOrReverseChecks (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.GlobalColdCountIsSummedAcrossBlocksRatherThanTrustedFromLocalBounds
+[       OK ] HybridPropertyColdRowOwnershipTest.GlobalColdCountIsSummedAcrossBlocksRatherThanTrustedFromLocalBounds (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateColdRecordRequiresTheReversePhysicalPhase
+[       OK ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateColdRecordRequiresTheReversePhysicalPhase (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateMembershipDoesNotAcquireItsGroupsAuthority
+[       OK ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateMembershipDoesNotAcquireItsGroupsAuthority (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.CompleteAuditInspectsActualValuesBeyondCanonicalDirectoriesAndValidOuterChecksums
+[       OK ] HybridPropertyColdRowOwnershipTest.CompleteAuditInspectsActualValuesBeyondCanonicalDirectoriesAndValidOuterChecksums (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer
+/workspace/zyx/tests/include/storage/relocatable/property/HybridPropertyColdRowRoutingTestFixture.hpp:81: Failure
+Expected: (value_reference_.generation.value()) > (1U), actual: 1 vs 1
+
+unknown file: Failure
+C++ exception with description "hybrid descriptor has an invalid semantic identity" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdRowOwnershipTest.LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer (1 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ActualLargeStoreIsRequiredAndReferenceConsumerExceptionsDoNotReplayOrWrite
+[       OK ] HybridPropertyColdRowOwnershipTest.ActualLargeStoreIsRequiredAndReferenceConsumerExceptionsDoNotReplayOrWrite (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.QuotaAndCancellationRefuseWithoutLosingTemporaryOwnershipAndCanRetry
+[       OK ] HybridPropertyColdRowOwnershipTest.QuotaAndCancellationRefuseWithoutLosingTemporaryOwnershipAndCanRetry (4 ms)
+[----------] 11 tests from HybridPropertyColdRowOwnershipTest (44 ms total)
+
+[----------] 10 tests from HybridPropertyColdRowRoutingTest
+[ RUN      ] HybridPropertyColdRowRoutingTest.PointValuesPresenceCountsAndFullCollectionsShareExactHotColdAuthority
+[       OK ] HybridPropertyColdRowRoutingTest.PointValuesPresenceCountsAndFullCollectionsShareExactHotColdAuthority (2 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.WholeRootLargeValuesKeepTheSamePointEnumerationAndFullReadBoundary
+[       OK ] HybridPropertyColdRowRoutingTest.WholeRootLargeValuesKeepTheSamePointEnumerationAndFullReadBoundary (3 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.HotReadsDoNotTouchCorruptUnvisitedColdBlockAndColdReadsFailClosed
+[       OK ] HybridPropertyColdRowRoutingTest.HotReadsDoNotTouchCorruptUnvisitedColdBlockAndColdReadsFailClosed (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.CompetingOrdinaryRowStillRejectsEvenAnOtherwiseValidHotRead
+[       OK ] HybridPropertyColdRowRoutingTest.CompetingOrdinaryRowStillRejectsEvenAnOtherwiseValidHotRead (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.CompetingExplicitSelectorCannotOverrideAGroupGlobalMissingHotCell
+[       OK ] HybridPropertyColdRowRoutingTest.CompetingExplicitSelectorCannotOverrideAGroupGlobalMissingHotCell (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.ColdEnumerationRejectsGloballyHotTokenEvenWhereThatOwnerHasNoHotMembership
+[       OK ] HybridPropertyColdRowRoutingTest.ColdEnumerationRejectsGloballyHotTokenEvenWhereThatOwnerHasNoHotMembership (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.ColdRepresentationHandoffRunsBeforeDecodeAndLeaseRestoresParentOnFailure
+[       OK ] HybridPropertyColdRowRoutingTest.ColdRepresentationHandoffRunsBeforeDecodeAndLeaseRestoresParentOnFailure (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.GroupedHotRunsAuthenticateAllOwnersWithoutReadingAnyColdRoot
+[       OK ] HybridPropertyColdRowRoutingTest.GroupedHotRunsAuthenticateAllOwnersWithoutReadingAnyColdRoot (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.TypedColdTextBorrowAndMutationRefusalNeverMaterializeAnOwningValue
+[       OK ] HybridPropertyColdRowRoutingTest.TypedColdTextBorrowAndMutationRefusalNeverMaterializeAnOwningValue (1 ms)
+[ RUN      ] HybridPropertyColdRowRoutingTest.ScalarFallbackUsesMetadataPresenceAndNeverReadsAnUnrequestedColdRoot
+[       OK ] HybridPropertyColdRowRoutingTest.ScalarFallbackUsesMetadataPresenceAndNeverReadsAnUnrequestedColdRoot (1 ms)
+[----------] 10 tests from HybridPropertyColdRowRoutingTest (20 ms total)
+
+[----------] 8 tests from HybridPropertyColdRowInspectionTest
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues
+[       OK ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput
+[       OK ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges
+[       OK ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked
+[       OK ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure
+[       OK ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes
+[       OK ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership
+[       OK ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues
+[       OK ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues (0 ms)
+[----------] 8 tests from HybridPropertyColdRowInspectionTest (5 ms total)
+
+[----------] Global test environment tear-down
+[==========] 29 tests from 3 test suites ran. (71 ms total)
+[  PASSED  ] 28 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyColdRowOwnershipTest.LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer
+
+ 1 FAILED TEST

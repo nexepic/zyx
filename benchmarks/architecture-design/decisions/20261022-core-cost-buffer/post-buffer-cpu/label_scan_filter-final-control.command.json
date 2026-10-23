@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/post-buffer-cpu/cpu-probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx",
+    "/tmp/zyx-p7-cpu-label_scan_filter-control.zyx",
+    "label_scan_filter",
+    "0",
+    "32"
+  ],
+  "sampled": false,
+  "formal_benchmark": false,
+  "purpose": "post-buffer root-stage and exclusive leaf-PC CPU attribution, not latency acceptance",
+  "library_sha256": "caad9d6dbe0940c2e4cd96fa2623be94a345fbe2ab1657dafa90103180461be7",
+  "probe_sha256": "6ddede7d9b733e172a28f6d376250320e4b0f952a309442687147e33ba4f3f83"
+}

@@ -1,0 +1,69 @@
+{
+  "recorded_at_utc": "2026-10-23T02:38:34.796164+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-block-preparation-legacy-": {
+      "tests": 489,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-block-preparation-compact-": {
+      "tests": 489,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-initial-": {
+      "tests": 10,
+      "failures": 3,
+      "skipped": 0
+    },
+    "targeted-corrected-": {
+      "tests": 10,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-complete-": {
+      "tests": 13,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "748f8a30651eb71473486749b04f490fa05d5e3a34962ae4462551bbedef74de",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "c745e93cea13049844b2f7987df3c7199ba43b9fc966a4ff52138dd494a161e9",
+      "binary_preserved": false
+    }
+  },
+  "format": "experimental13/39, default5/31; unchanged",
+  "implemented": [
+    "Existing DemotionPreparation single-block complete-owner-root private preparation",
+    "Original source pin/batch/GroupDirectory/Entity Map/competing ROW/legacy selector and actual manifest authentication",
+    "Hot-token exclusion and inline canonical-value validation",
+    "At most two original FieldPageStore COW images, typed cold overwrite clearing source proof, exact matrix/group updates",
+    "Last cold row erase with live/propertyless owners retained",
+    "No file/root/I/O epoch/physical or logical ID changes; unrelated cold corruption not decoded"
+  ],
+  "initial_source_bug": "Target generation was incorrectly passed to published-snapshot inspector; original pin fence now authenticates existing LargeValues, without weakening checks/tests",
+  "remaining": [
+    "Block splitting, matrix growth relocation, GroupDirectory/cold-binding atomic updates",
+    "Merging hot/cold changes and same-batch new values",
+    "Token catalog/constraint/index and actual Native publication coordination",
+    "Owner liveness/demotion/delete/inverse and full public-conversion lifecycle",
+    "Whole-space admission and final P7 performance matrix"
+  ]
+}

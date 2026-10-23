@@ -1,0 +1,63 @@
+{
+  "recorded_at_utc": "2026-10-23T09:35:54.024076+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-owner-final-legacy-": {
+      "tests": 530,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-owner-final-compact-": {
+      "tests": 530,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 52,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "4b8463764e59477eb0b8edb55ea8aef18f08236aede9271cafad95460be03173",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "340df08f737167706ef57f80947124861a37faf82fabd9a74162959c7a2375b1",
+      "binary_preserved": false
+    }
+  },
+  "pre_fix": {
+    "tests": 50,
+    "failures": 1,
+    "assertions": 2,
+    "cause": "canonical constraint-key source used separate ROW routing; duplicate cold value reported stale support and deleted owner support-key removal omitted"
+  },
+  "implemented": [
+    "Private original Native coordinator uses actual Entity/adjacency/LabelSet deletion plans",
+    "Fold deleted-owner hot removals per source column with at most64 complete plans, preserving all demoted surviving fields",
+    "Repack actual cold roots before clearing liveness; reject omitted hot/cold removals, duplicates, foreign namespaces/groups",
+    "Surviving membership liveness and final-group/membership/GroupDirectory cleanup in one private batch",
+    "Canonical constraint keys share authenticated ReadContext and actual ROW fallback; actual uniqueness support tree rejection and deletion tests",
+    "Actual Edge64/no Node64, retained column/value, existing large root and quota refund/retry coverage"
+  ],
+  "remaining": [
+    "Actual cold public conversion/atomic installation",
+    "Pending/new-owner liveness, existing cross-group coordination and other schema combinations",
+    "Whole-space staged target admission and full public lifecycle",
+    "Remaining primary query costs and final P7"
+  ]
+}

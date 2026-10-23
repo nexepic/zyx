@@ -12,9 +12,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <map>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <unordered_map>
 
@@ -117,6 +119,9 @@ namespace graph::storage {
 
 		using PageQueue = std::pmr::list<BufferPoolPageKey>;
 		struct Entry {
+			BufferPoolPageKey key{};
+			Entry *dirty_previous = nullptr;
+			Entry *dirty_next = nullptr;
 			PageBytes bytes{};
 			size_t valid_bytes = 0U;
 			size_t pin_count = 0U;
@@ -139,6 +144,9 @@ namespace graph::storage {
 		void ensureCapacityLocked(size_t requiredBytes);
 		bool evictOneLocked(bool cleanOnly = false);
 		void flushEntryLocked(Entry &entry, uint64_t pageOffset);
+		void markDirtyLocked(Entry &entry) noexcept;
+		void requireUnpinnedRangeLocked(uint64_t begin, uint64_t end, bool rejectPrivate) const;
+		void eraseRangeLocked(uint64_t begin, uint64_t end, std::optional<uint64_t> keepGeneration = {});
 		void discardStaleGenerationsLocked(BufferPoolPageKey key);
 		void discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount);
 		void unpin(BufferPoolPageKey key) noexcept;
@@ -154,8 +162,16 @@ namespace graph::storage {
 		std::pmr::memory_resource *memory_;
 		mutable std::mutex mutex_;
 		std::pmr::unordered_map<BufferPoolPageKey, std::shared_ptr<Entry>, KeyHash> entries_;
+		struct OffsetOrder {
+			bool operator()(BufferPoolPageKey left, BufferPoolPageKey right) const noexcept {
+				return left.page_offset != right.page_offset ? left.page_offset < right.page_offset : left.generation < right.generation;
+			}
+		};
+		// Non-owning references share the primary map's lock and CACHE allocator.
+		std::pmr::map<BufferPoolPageKey, Entry *, OffsetOrder> offsets_;
 		PageQueue recent_;
 		PageQueue frequent_;
+		Entry *dirty_head_ = nullptr;
 		size_t resident_bytes_ = 0U;
 		size_t pinned_pages_ = 0U;
 		size_t dirty_pages_ = 0U;

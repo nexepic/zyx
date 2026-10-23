@@ -1,0 +1,3 @@
+case,version,samples,p50_ms,p95_ms
+edge_batch_1000,before,30,146.0971715,151.970087
+edge_batch_1000,after,30,66.59075899999999,74.954973

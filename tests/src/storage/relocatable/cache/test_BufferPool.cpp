@@ -7,6 +7,7 @@
  **/
 
 #include <algorithm>
+#include "graph/debug/PerfTrace.hpp"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -1076,3 +1077,83 @@ TEST_F(BufferPoolTest, SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPa
  EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{2U});
  EXPECT_EQ(pinned.bytes()[0], std::byte{3U});
 }
+
+TEST_F(BufferPoolTest, LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows) {
+    open(2048U);
+    const bool collected = graph::debug::PerfTrace::areValuesEnabled();
+    struct Restore {
+        bool enabled;
+        ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); }
+    } restore{collected};
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    for (const size_t pages : {32U, 512U, 2048U}) {
+        SCOPED_TRACE(pages);
+        pool_ = createPool(pages);
+        for (size_t page = 0U; page < pages; ++page) {
+            auto pin = pool_->pin({page * RSS_BUFFER_POOL_PAGE_BYTES, 1U});
+        }
+        graph::debug::PerfTrace::reset();
+        BufferPool::PageBytes replacement{}; replacement.fill(std::byte{0x57});
+        pool_->writePage({0U, 2U}, replacement);
+        pool_->flush();
+        const std::array control{std::byte{0x19}};
+        pool_->writeControlRecord({0U, 2U}, 8U, control);
+        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+        ASSERT_TRUE(counters.contains("storage.buffer_pool.generation_checked_entries"));
+        EXPECT_EQ(counters.at("storage.buffer_pool.generation_checked_entries").totalValue, 1);
+        EXPECT_EQ(counters.at("storage.buffer_pool.range_erase_visited_entries").totalValue, 2);
+        EXPECT_EQ(counters.at("storage.buffer_pool.range_checked_entries").totalValue, 1);
+        EXPECT_EQ(counters.at("storage.buffer_pool.flush_visited_entries").totalValue, 1);
+        EXPECT_EQ(pool_->stats().resident_bytes, (pages - 1U) * RSS_BUFFER_POOL_PAGE_BYTES);
+        EXPECT_EQ(diskByte(0U), std::byte{0x57});
+        EXPECT_EQ(diskByte(8U), std::byte{0x19});
+        RecordProperty("largest_clean_residency", static_cast<int>(pages));
+        const auto suffix = std::to_string(pages);
+        RecordProperty("generation_checks_" + suffix, std::to_string(counters.at("storage.buffer_pool.generation_checked_entries").totalValue));
+        RecordProperty("erase_visits_" + suffix, std::to_string(counters.at("storage.buffer_pool.range_erase_visited_entries").totalValue));
+        RecordProperty("range_checks_" + suffix, std::to_string(counters.at("storage.buffer_pool.range_checked_entries").totalValue));
+        RecordProperty("flush_visits_" + suffix, std::to_string(counters.at("storage.buffer_pool.flush_visited_entries").totalValue));
+    }
+}
+
+TEST_F(BufferPoolTest, OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData) {
+    open(3U); pool_ = createPool(3U);
+    BufferPool::PageBytes replacement{}; replacement.fill(std::byte{0x42});
+    pool_->writePage({0U, 1U}, replacement);
+    auto pin = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U});
+    const auto before = pool_->stats();
+    EXPECT_THROW(pool_->invalidateRange(RSS_BUFFER_POOL_PAGE_BYTES - 4U, 5U), std::logic_error);
+    EXPECT_EQ(pool_->stats().dirty_bytes, before.dirty_bytes);
+    EXPECT_EQ(pool_->stats().disk_write_bytes, before.disk_write_bytes);
+    EXPECT_EQ(diskByte(0U), std::byte{1});
+    // The exclusive end at the next page must not visit its pinned image.
+    EXPECT_NO_THROW(pool_->invalidateRange(RSS_BUFFER_POOL_PAGE_BYTES - 4U, 4U));
+    EXPECT_EQ(diskByte(0U), std::byte{0x42});
+    EXPECT_EQ(pin.bytes()[0U], std::byte{2});
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(BufferPoolTest, FailedFlushRetainsDirtyChainForAnExactRetry) {
+    open(3U); pool_ = createPool(3U);
+    BufferPool::PageBytes first{}, second{}; first.fill(std::byte{0x31}); second.fill(std::byte{0x63});
+    pool_->writePage({0U, 1U}, first);
+    pool_->writePage({RSS_BUFFER_POOL_PAGE_BYTES, 1U}, second);
+    bool failed = false;
+    {
+        StorageIO::ScopedNativeWriteHookForTesting shortWrite([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+            if (!failed) { failed = true; return portable_pwrite(fd, bytes, 8U, offset); }
+            return portable_pwrite(fd, bytes, count, offset);
+        });
+        EXPECT_THROW(pool_->flush(), std::system_error);
+    }
+    ASSERT_TRUE(failed);
+    EXPECT_EQ(pool_->stats().dirty_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_NO_THROW(pool_->flush());
+    EXPECT_EQ(pool_->stats().dirty_bytes, 0U);
+    EXPECT_EQ(diskByte(0U), std::byte{0x31});
+    EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{0x63});
+    const auto written = pool_->stats().disk_write_bytes;
+    EXPECT_NO_THROW(pool_->flush());
+    EXPECT_EQ(pool_->stats().disk_write_bytes, written);
+}
+#endif

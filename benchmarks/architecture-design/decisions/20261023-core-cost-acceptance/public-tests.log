@@ -1,0 +1,33 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 12 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 12 tests from HybridPropertyColdPublicConversionTest
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+[       OK ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate (113 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup
+[       OK ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup (26 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues
+[       OK ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues (133 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen
+[       OK ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen (30 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups
+[       OK ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups (135 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins
+[       OK ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins (125 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries
+[       OK ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries (124 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone
+[       OK ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone (126 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend
+[       OK ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend (128 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether
+[       OK ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether (89 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows
+[       OK ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows (14 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows
+[       OK ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows (160 ms)
+[----------] 12 tests from HybridPropertyColdPublicConversionTest (1209 ms total)
+
+[----------] Global test environment tear-down
+[==========] 12 tests from 1 test suite ran. (1209 ms total)
+[  PASSED  ] 12 tests.

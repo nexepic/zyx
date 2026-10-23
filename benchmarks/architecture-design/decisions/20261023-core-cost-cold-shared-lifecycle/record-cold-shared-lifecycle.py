@@ -1,0 +1,36 @@
+from pathlib import Path
+from datetime import datetime,timezone
+import subprocess,json,hashlib,shutil,tarfile
+r=Path('/workspace/zyx');raw=r/'benchmarks/architecture-design/results/20261022-core-cost';d=r/'benchmarks/architecture-design/decisions/20261023-core-cost-cold-shared-lifecycle';d.mkdir(exist_ok=True)
+sha=lambda p:hashlib.file_digest(p.open('rb'),'sha256').hexdigest();checks={};libs={}
+for profile,folder,stems,total,build in [('hybrid','cold-row-ownership-hybrid',['cold-shared-final-legacy-','cold-shared-final-compact-'],557,'zyx-build-core-hybrid'),('default','cold-row-ownership-default',[''],154,'zyx-build-core-candidate')]:
+ lib=Path('/workspace')/build/'libzyx_core.a';libs[profile]={'path':str(lib),'sha256':sha(lib),'binary_preserved':False};src=raw/folder
+ for stem in stems:
+  j=json.loads((src/(stem+'tests.json')).read_text());check={k:j.get(k,0) for k in ['tests','failures','skipped']};assert check=={'tests':total,'failures':0,'skipped':0};checks[profile+'-'+(stem or 'final')]=check
+  receipt=json.loads((src/(stem+'receipt.json')).read_text());assert receipt['library_sha256']==libs[profile]['sha256'] and receipt['returncode']==0
+  for name in ['tests.json','tests.log','receipt.json']:shutil.copy2(src/(stem+name),d/(profile+'-'+stem+name))
+ for name in ['compile.json','link.json']:shutil.copy2(src/name,d/(profile+'-'+name))
+src=raw/'cold-native-lifecycle-hybrid';stem='durable-shared-gc-relocation-final-';j=json.loads((src/(stem+'tests.json')).read_text());checks['targeted']={k:j.get(k,0) for k in ['tests','failures','skipped']};assert checks['targeted']=={'tests':20,'failures':0,'skipped':0}
+assert json.loads((src/(stem+'receipt.json')).read_text())['library_sha256']==libs['hybrid']['sha256']
+for name in ['tests.json','tests.log','receipt.json','compile.json','link.json']:
+ source=src/(stem+name) if name in ['tests.json','tests.log','receipt.json'] else src/name;shutil.copy2(source,d/('targeted-'+name))
+for stem,failures in [('durable-shared-gc-valid-',2),('durable-shared-gc-contracts-',1)]:
+ j=json.loads((src/(stem+'tests.json')).read_text());assert j['tests']==19 and j['failures']==failures
+ for name in ['tests.json','tests.log','receipt.json']:shutil.copy2(src/(stem+name),d/('pre-fix-'+stem+name))
+for name in ['test-cold-shared-field-source.py','complete-cold-shared-gc-tests.py','fix-cold-retained-pool-publication.py','test-cold-field-relocation-live-pins.py','update-cold-shared-lifecycle-docs.py','record-cold-shared-lifecycle.py','build-cold-native-lifecycle-hybrid-modules.py','run-cold-native-lifecycle-hybrid-modules.py','build-cold-compatible-hot-hybrid-modules.py','build-cold-compatible-hot-default-modules.py','run-cold-row-ownership-hybrid-modules.py','run-cold-row-ownership-default-modules.py']:shutil.copy2(Path('/tmp')/name,d/name)
+(d/'source.patch').write_bytes(subprocess.check_output(['git','diff','--binary'],cwd=r))
+names=subprocess.check_output(['git','ls-files','--others','--exclude-standard','include','src','tests','cmake'],cwd=r,text=True).splitlines()
+with tarfile.open(d/'additional-source.tar.gz','w:gz') as tar:
+ for name in names:tar.add(r/name,arcname=name)
+(d/'round.json').write_text(json.dumps({'recorded_at_utc':datetime.now(timezone.utc).isoformat(),'base_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=r,text=True).strip(),'progress_percent':90,'P7_accepted':False,'full_suite':False,'timing_benchmark':False,'commit_push':False,'checks':checks,'libraries':libs,'fixed':'Inverse dedicated retained Hybrid pool used ordinary pool validation; pass existing native validation only for an entire dedicated Hybrid append set','implemented':['Coherent actual Node/Edge groups sharing one logical FieldPage with independent directories and equal logical owner IDs','Actual Node-to-ROW inverse retains other namespace records/slots/generations/logical PageId and old pins','Actual cold value reachability retirement/current manifest-content-index removal, old-pin reads/capacity, release/reuse after drain','Actual shared field-pool relocation plus pin-protected durable retirement and eventual slot release','Ordinary readers and full integrity on committed durable fixtures'],'fixture_boundary':'Existing test byte seam initializes coherent durable source; no forward public conversion or space adoption proof. Missing explicit immutable store/obsolete Catalog purging in first19-case fixture report are setup mistakes, corrected through existing public contracts; actual retained-pool failure separately reproduced by later19-case report.','remaining':['Cross-group/mixed-namespace mutation batches','Public forward cold conversion and lifecycle on actually converted data','Whole-space/private staged target admission and full-data reachable conversion','4096-byte full query issue, remaining primary query costs and final P7']},indent=2)+'\n')
+(d/'README.md').write_text('''# Actual shared-frame retention, cold value reclamation and field relocation
+
+Progress90%, P7 open.20 targeted cases,557 related module checks per experimental membership variant,154 default checks pass with matching library identities. No full suite, timing matrix, commit or push. Exact cumulative source is source.patch plus additional-source.tar.gz against round.json base HEAD. Scripts include intermediate development attempts/corrections and are not a standalone final replay recipe. No duplicate intermediate binaries.
+
+A coherent durable fixture stores Node/Edge groups in the SAME logical FieldPage with equal owner IDs, independent columns/cold blocks/matrices/groups/directories and actual Entity/adjacency/type-count/Catalog state. Actual Node inverse removes its four records, retains the Edge group's four slots/generations/logical PageId and directory, and preserves both old snapshot namespaces. The original19-case report reproduces a real publication failure: Hybrid owners in the dedicated retained pool were sent to ordinary pool validation. Fix the existing call to use native validation only for a complete dedicated Hybrid append set; ordinary ROW packing stays separate. No broader authority or new publication bypass.
+
+Actual LargeValue reclaimer keeps the current cold value, logically retires the old carrier, preserves old-pin reads and capacity, then releases the physical slot or increases public free-frame capacity after pins drain. Actual shared field-pool relocation preserves both namespaces and logical routing; original durable retirement releases only after old pin drainage. Full integrity and ordinary readers verify each committed state. First fixture failures omitted the required immutable store for ownership verification and assumed a fully released obsolete Catalog entry still existed; fix through existing public interfaces, not private headers or weakened checks. Preserve both19-case reports, separating the later actual publication failure.
+
+These lifecycle operations use coherent test-initialized durable sources, not publicly converted data. Forward cold conversion/adoption stays closed. Remaining cross-group/mixed-namespace batches, forward conversion/lifecycle, whole-space staged target admission,4096-byte full queries/primary costs and P7 remain unaccepted.
+''')
+print(checks)

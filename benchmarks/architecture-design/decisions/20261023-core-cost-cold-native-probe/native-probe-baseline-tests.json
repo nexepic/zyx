@@ -1,0 +1,94 @@
+{
+  "tests": 2,
+  "failures": 2,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T00:43:51Z",
+  "time": "0.09s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyOrdinaryConversionTest",
+      "tests": 2,
+      "failures": 2,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T00:43:51Z",
+      "time": "0.09s",
+      "testsuite": [
+        {
+          "name": "CompleteBoundedDenseGroupPreparesAllDirectoryPlansWithinTheConversionAccount",
+          "file": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp",
+          "line": 270,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:43:51Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyOrdinaryConversionTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:289\nExpected: (stats.pool_bytes) > (int64_t(rowPoolCount * RSS_SEGMENT_SIZE)), actual: 262144 vs 262144\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "FieldMapPlanningQuotaAndBothCancellationBoundariesRefundForRetry",
+          "file": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp",
+          "line": 1475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T00:43:51Z",
+          "time": "0.085s",
+          "classname": "HybridPropertyOrdinaryConversionTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1485\nExpected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type graph::query::execution::MaterializedByteLimitExceeded.\n  Actual: it throws nothing.\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1486\nExpected equality of these values:\n  io_->dataMutationEpoch()\n    Which is: 418\n  epoch\n    Which is: 313\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1486\nExpected equality of these values:\n  metadata_->openSnapshot().superblock()\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n  before\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1497\nExpected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.\n  Actual: it throws graph::storage::FormatException with description \"native column publication has a stale or foreign source fence\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1499\nValue of: cancellation.prepared\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1500\nExpected equality of these values:\n  metadata_->openSnapshot().superblock()\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n  before\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1497\nExpected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) throws an exception of type PrivatePreparationCancelled.\n  Actual: it throws graph::storage::FormatException with description \"native column publication has a stale or foreign source fence\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1499\nValue of: cancellation.prepared\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1500\nExpected equality of these values:\n  metadata_->openSnapshot().superblock()\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 05-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 01-00 00-00 00-00 00-00 0A-B2 2E-53 54-7F 00-00 05-00 00-00 00-00 00-00 ... 0A-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n  before\n    Which is: 472-byte object <81-80 7F-7E 7D-7C 7B-7A 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 03-00 00-00 00-00 00-00 13-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 ... 07-00 00-00 00-00 00-00 09-00 00-00 00-00 00-00 32-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1502\nExpected: (io_->dataMutationEpoch()) > (beforeAttempt), actual: 418 vs 418\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/benchmarks\/architecture-design\/results\/20261022-core-cost\/native-probe-baseline\/source\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOrdinaryConversion.cpp:1506\nExpected: (void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)) doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"native column publication has a stale or foreign source fence\".\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 26 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 26 tests from HybridPropertyColdCompatibleHotTest
+[ RUN      ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard
+[       OK ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard (3 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals
+[       OK ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority
+[       OK ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion
+[       OK ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof
+[       OK ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness
+[       OK ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockInsertionOnExistingEdgePreservesEntityLivenessAndHotNull
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockInsertionOnExistingEdgePreservesEntityLivenessAndHotNull (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdOnlyClearRetainsPropertylessLiveOwners
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdOnlyClearRetainsPropertylessLiveOwners (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsCompetingOrdinaryRow
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsCompetingOrdinaryRow (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.SameBatchColdReplacementRetainsHotValueAndPresenceChangesOnSharedPage
+[       OK ] HybridPropertyColdCompatibleHotTest.SameBatchColdReplacementRetainsHotValueAndPresenceChangesOnSharedPage (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdGrowthSplitsAndRelocatesMatrixWithGroupDirectoryEdit
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdGrowthSplitsAndRelocatesMatrixWithGroupDirectoryEdit (17 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MultipleColdBlocksAndHotPresenceShareOneFinalMatrix
+[       OK ] HybridPropertyColdCompatibleHotTest.MultipleColdBlocksAndHotPresenceShareOneFinalMatrix (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FreshColdBlockInsertionRetainsExistingColdOwnersAndHotAuthority
+[       OK ] HybridPropertyColdCompatibleHotTest.FreshColdBlockInsertionRetainsExistingColdOwnersAndHotAuthority (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FirstColdFieldOnPropertylessLiveGroupNeedsNoFabricatedSourceBlock
+[       OK ] HybridPropertyColdCompatibleHotTest.FirstColdFieldOnPropertylessLiveGroupNeedsNoFabricatedSourceBlock (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsActualLargeNullAndPropertylessNodeRows
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsActualLargeNullAndPropertylessNodeRows (4 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionPreservesEdgeOwnerNamespaceAndExactCounts
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionPreservesEdgeOwnerNamespaceAndExactCounts (3 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsAllPropertylessLiveOwners
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsAllPropertylessLiveOwners (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRejectsAccessedCorruptionAndRefunds
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRejectsAccessedCorruptionAndRefunds (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdRootUsesSameBatchImmutableProposalWithoutReadingUnpublishedManifest
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdRootUsesSameBatchImmutableProposalWithoutReadingUnpublishedManifest (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdRootCarrierProofPreservesFieldRootDedupButRejectsHotTokenAndUnreservedIds
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdRootCarrierProofPreservesFieldRootDedupButRejectsHotTokenAndUnreservedIds (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPreparesCompatibleHotFieldsAndRefusesBeforePhysicalWrites
+unknown file: Failure
+C++ exception with description "Resource deadlock avoided" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPreparesCompatibleHotFieldsAndRefusesBeforePhysicalWrites (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPrivateSourceRejectsAnotherPinAndAccessedEntityConflict
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdCompatibleHot.cpp:694: Failure
+Expected: HybridPropertyNativeWriteTestAccess::prepare(*metadata_, otherPin, context, request) throws an exception of type FormatException.
+  Actual: it throws std::system_error with description "Resource deadlock avoided".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdCompatibleHot.cpp:695: Failure
+Expected: HybridPropertyNativeWriteTestAccess::prepare(*metadata_, pin, context, request) throws an exception of type FormatException.
+  Actual: it throws std::system_error with description "Resource deadlock avoided".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdCompatibleHot.cpp:697: Failure
+Expected equality of these values:
+  io_->dataMutationEpoch()
+    Which is: 473
+  epoch
+    Which is: 472
+
+[  FAILED  ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPrivateSourceRejectsAnotherPinAndAccessedEntityConflict (2 ms)
+[----------] 26 tests from HybridPropertyColdCompatibleHotTest (75 ms total)
+
+[----------] Global test environment tear-down
+[==========] 26 tests from 1 test suite ran. (75 ms total)
+[  PASSED  ] 24 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPreparesCompatibleHotFieldsAndRefusesBeforePhysicalWrites
+[  FAILED  ] HybridPropertyColdCompatibleHotTest.NativeCoordinatorPrivateSourceRejectsAnotherPinAndAccessedEntityConflict
+
+ 2 FAILED TESTS

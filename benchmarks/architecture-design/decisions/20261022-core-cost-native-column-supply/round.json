@@ -1,0 +1,38 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "tests": 28,
+  "timing_benchmark": false,
+  "representation": "existing TypedPropertyBlock and NativeColumnImageStore lab bytes; no new persistent format or production adoption",
+  "mechanism": {
+    "production_query_input_rows": 64,
+    "production_queries_per_source": 2,
+    "ROW_dense_selected_owner_roots": 128,
+    "ROW_sparse_selected_owner_roots": 120,
+    "column_supplies": 2,
+    "full_group_oracles": true,
+    "unordered_duplicate_gather_oracles": true
+  },
+  "space": {
+    "fixture_owners": 64,
+    "logical_root_and_payload_bytes": {
+      "dense": 1767,
+      "sparse": 1671
+    },
+    "ROW_only_fixture_steady_bytes": 655360,
+    "combined_fixture_steady_bytes": 1179648,
+    "combined_fixture_total_bytes": 1179648,
+    "file_growth_bytes": 13107200,
+    "caveat": "same fixture retains both representations; fixed data/manifest ranges include file holes; not a mature layout ratio or acceptance"
+  },
+  "limitations": [
+    "lab LargeValue carrier is not an adopted packed field-page layout",
+    "no final performance result",
+    "no acceptance of shared source-buffer admission or production entity/label/index routing"
+  ],
+  "library_sha256": "4fff39b06a03aeab7aed06f003cc8cf9ab69133b38408ef59fbf5fd83f55ab91",
+  "test_binary_sha256": "2cca33a63a7f1eb55b32fee5ed45b3089a1fb511c09aacffb4098a1ee99fdd2b",
+  "patch_sha256": "f1a29e0ebe5c18a0b3a1cea36f4ec77dde6846fcfe811369d6329220e4fca3a8",
+  "additional_source_sha256": "2707a54c7d683d1d7da531707ea1f4b3955774142e27f7390a9ecb9d89869f69"
+}

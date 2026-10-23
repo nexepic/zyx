@@ -1,0 +1,29 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from HybridPropertyColdCompatibleHotTest
+[ RUN      ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard
+[       OK ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals
+[       OK ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority
+[       OK ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion
+[       OK ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof
+[       OK ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness
+[       OK ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement (2 ms)
+[----------] 10 tests from HybridPropertyColdCompatibleHotTest (22 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (22 ms total)
+[  PASSED  ] 10 tests.

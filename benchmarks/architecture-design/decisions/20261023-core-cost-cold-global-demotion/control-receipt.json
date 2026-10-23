@@ -1,0 +1,12 @@
+{
+  "deliberate_control": true,
+  "difference": "only omit original cold-root group authentication at global hot-authority removal; override object precedes test object for weak inline selection",
+  "full_suite": false,
+  "timing_benchmark": false,
+  "progress_percent": 90,
+  "returncode": 1,
+  "header_sha256": "ec96b59a39d42bff7236ed9be5c97db462f05d4df600a9276590e7141c3049c6",
+  "binary_sha256": "0e6b8229d71aaa90068f39ada998a074565daffdce43932b6a89889ed6188ce3",
+  "library_sha256": "088081f432bb2a81a2d8665f1e9d044028502c9ae19189d4b28a9176646a775b",
+  "expected_failure": "bad former-hot token in a separate unrepacked cold owner reaches completed private preparation (frames > 0)"
+}

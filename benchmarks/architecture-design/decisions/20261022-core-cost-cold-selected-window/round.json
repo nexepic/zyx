@@ -1,0 +1,55 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-selected-initial-": {
+      "tests": 30,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-selected-legacy-": {
+      "tests": 361,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-selected-compact-": {
+      "tests": 361,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 119,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-selected-window-hybrid-candidate/libzyx_core.a",
+      "sha256": "2054b604b250c45ef681fb60d8e3f46b26f34043ff32a40c16f23e350d5b60f5",
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-selected-window-default-candidate/libzyx_core.a",
+      "sha256": "eadd1a598dd4f3e16bafc474037eaee89e9fdd5525ddd5c8f0823ec10f757281",
+      "format": "5/31"
+    }
+  },
+  "implemented": [
+    "Single-field typed cold selection shares one decoded block per consecutive same-reference run within original64owner window",
+    "Actual batch EntityMap/no competing ROW and explicit selector checks before output",
+    "Ordered stable output ordinals, root-presence missing vs NULL, synchronous text/scalar borrows and original complex owning codec",
+    "Declines admission only before producing; output failures including quota propagate with no replay",
+    "No new context cache, decoded body escapes or budget allowance"
+  ],
+  "work_evidence": "64 selected owners, two cold roots in one block, one cold block decode and64actual route checks, two texts and47root-present missing cells in original order. RAW Edge split blocks keep NULL separate from missing; actual LargeValue and quota failure after output covered.",
+  "not_accepted": [
+    "Multiple-field/exact-count window consolidation",
+    "Public mode3 conversion/mutation and full lifecycle including actual reclamation/old pins/retirement",
+    "Mature whole allocation, staged migration bootstrap, final P7 performance matrix"
+  ],
+  "performance_claim": null
+}

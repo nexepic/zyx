@@ -1,0 +1,55 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "timing_benchmark": false,
+  "full_suite": false,
+  "checks": {
+    "hybrid-grouped-full-tests.json": 181,
+    "hybrid-grouped-compact-tests.json": 181,
+    "default-tests.json": 35
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-group-runs-hybrid-candidate/libzyx_core.a",
+      "profile": "9/35",
+      "sha256": "c68b3aa68ad665d369580718dfd24cad6b955c71a9f2277e86477bb4a923ea94"
+    },
+    "default": {
+      "path": "/workspace/zyx-group-runs-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "171c3aed9f1d475b3fe2460430847fd54297266b1a85fa7f9dd162c48d58062b"
+    }
+  },
+  "contract": [
+    "compact single-field groups of at most 64 owners authenticate Entity and competing ROW with ordered metadata batches",
+    "full selected column authenticated once before synchronous typed runs; mixed extension authority remains checked",
+    "sparse members, NULL, embedded NUL, long extension fallback, demotion and old pins",
+    "source scratch admission may decline before output; consumer quota failure never replays output; cancellation before output"
+  ],
+  "quota_fixture_note": "4096-byte transient fallback test explicitly warms the separately owned existing read context; it does not establish a cold 4096-byte full-query contract",
+  "pending": [
+    "whole-dataset space/adoption admission",
+    "production read and lifecycle acceptance",
+    "final P7 performance matrix"
+  ],
+  "additional_checks": {
+    "production_filter_real_group": 1,
+    "narrow_space_case_with_preparation_counts": 1,
+    "expanded_compact_modules": 190,
+    "expanded_legacy_modules": 190
+  },
+  "space_case": {
+    "owners": 512,
+    "fields": [
+      "short text",
+      "integer"
+    ],
+    "row_steady_bytes": 917504,
+    "candidate_steady_bytes": 1179648,
+    "peak_allocated_bytes": 1310720,
+    "prepared_field_frames": 8,
+    "prepared_index_frames": 2,
+    "fresh_pool_bytes": 393216,
+    "admission": "refused; every ROW mapping and old pin preserved"
+  }
+}

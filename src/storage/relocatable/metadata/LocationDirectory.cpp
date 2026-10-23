@@ -533,11 +533,12 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] MetadataRadixPage readRadixForMutation(MetadataPageFile &pages, PhysicalPageRef reference,
-															 const MetadataWriteBatch &batch) {
+															 const MetadataWriteBatch &batch, bool resolveAll = true) {
 			const MetadataRadixPage unresolved = pages.readMetadataRadixUnresolved(reference);
 			if (!unresolved.logical_children_enabled) {
 				return pages.readMetadataRadix(reference, batch.candidate());
 			}
+			if (!resolveAll) return unresolved;
 			MetadataRadixPage page = unresolved;
 			const PageDirectoryBootstrap currentBootstrap =
 					pages.readPageDirectoryBootstrap(batch.current().page_directory_root);
@@ -557,11 +558,32 @@ namespace graph::storage {
 			return page;
 		}
 
+
+		void resolveMutationChild(MetadataRadixPage &page, uint32_t index,
+				const Superblock &superblock, MetadataPageFile &pages, const MetadataWriteBatch *batch) {
+			if (!page.logical_children_enabled || page.children[index].isValid() ||
+				!page.logical_children[index].isValid()) return;
+			const auto id = page.logical_children[index];
+			if (batch) {
+				const auto pending = batch->pendingMetadataPageRoute(id);
+				if (pending) page.children[index] = *pending;
+				else {
+					const auto bootstrap = pages.readPageDirectoryBootstrap(batch->current().page_directory_root);
+					page.children[index] = MetadataPageRouteDirectory(pages).find(
+							batch->current(), bootstrap.metadata_page_directory_root, id);
+				}
+			} else {
+				pages.resolveMetadataRadixChildren(page, superblock, std::span(&index, 1U),
+						std::span(&page.children[index], 1U));
+			}
+			debug::PerfTrace::addValue("native_graph.directory.mutation_child_route_resolutions", 1);
+		}
+
 		[[nodiscard]] std::unique_ptr<MutableNode> loadNode(MetadataPageFile &pages, PhysicalPageRef reference,
 															uint16_t level, MetadataDirectoryType type,
 															const Superblock &superblock,
 															const MetadataWriteBatch *batch = nullptr) {
-			CatalogRadixPage page = batch != nullptr ? readRadixForMutation(pages, reference, *batch)
+			CatalogRadixPage page = batch != nullptr ? readRadixForMutation(pages, reference, *batch, false)
 													 : pages.readMetadataRadix(reference, superblock);
 			if (page.kind != CatalogRadixPageKind::CRPK_INTERNAL || page.directory_type != type ||
 				page.level != level) {
@@ -627,6 +649,7 @@ namespace graph::storage {
 			node.page.committed_lsn = lsn;
 			const uint64_t ordinal = leafOrdinal(entry.logical_id);
 			const uint32_t index = CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.page.level);
+			resolveMutationChild(node.page, index, superblock, pages, &batch);
 			if (node.page.level == 0U) {
 				auto iterator = node.leaf_children.find(index);
 				if (iterator == node.leaf_children.end()) {
@@ -659,6 +682,7 @@ namespace graph::storage {
 			node.page.committed_lsn = lsn;
 			const uint64_t ordinal = leafOrdinal(logicalId);
 			const uint32_t index = CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.page.level);
+			resolveMutationChild(node.page, index, superblock, pages, batch);
 			if (node.page.level != 0U) {
 				auto iterator = node.node_children.find(index);
 				if (iterator == node.node_children.end()) {
@@ -702,6 +726,7 @@ namespace graph::storage {
 			if (entries.empty()) {
 				node.leaf_children.erase(iterator);
 				node.page.children[index] = {};
+				node.page.logical_children[index] = {};
 				return;
 			}
 			iterator->second->page.generation = generation;
@@ -811,20 +836,44 @@ namespace graph::storage {
 											PreparedFrameCursor *preparedFrames = nullptr,
 											PreparedPageWriter *preparedWriter = nullptr) {
 			node.page.kind = kind;
-			normalizePhysicalChildren(node.page);
+			// A published logical radix already authenticates stable child IDs.
+			// Retain untouched IDs instead of decoding every sibling to recover
+			// them again during final logicalization. Physical legacy pages retain
+			// the established conversion path.
+			const bool retainLogicalChildren = batch.candidate().usesPageDirectoryBootstrap();
+			if (retainLogicalChildren && !node.page.logical_children_enabled) {
+				// Newly created children already expose their IDs below. Only a
+				// legacy physical sibling needs one conversion read; every new COW
+				// internal page must be logical even below an already-logical parent.
+				for (size_t index = 0U; index < node.page.children.size(); ++index) {
+					if (node.page.children[index].isValid() && !node.leaf_children.contains(index) &&
+						!node.node_children.contains(index))
+						node.page.logical_children[index] = readLocationChildPageId(
+								pages, node.page.children[index], node.page.level != 0U);
+				}
+				node.page.logical_children_enabled = true;
+			}
+			if (!retainLogicalChildren) normalizePhysicalChildren(node.page);
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			if (node.page.level == 0U) {
 				for (auto &[index, leaf]: node.leaf_children) {
 					node.page.children[index] =
 							writeLeaf(*leaf, generation, lsn, pages, batch, preparedFrames, preparedWriter);
+					if (retainLogicalChildren) node.page.logical_children[index] = leaf->page.page_id;
 				}
 			} else {
 				for (auto &[index, child]: node.node_children) {
 					node.page.children[index] =
 							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch,
 									  preparedFrames, preparedWriter);
+					if (retainLogicalChildren) node.page.logical_children[index] = child->page.page_id;
 				}
+			}
+			if (retainLogicalChildren) {
+				node.page.children.fill({});
+				node.page.logical_children_resolved = false;
+				debug::PerfTrace::addValue("native_graph.directory.retained_logical_radix_pages", 1);
 			}
 			PhysicalPageRef reference;
 			{
@@ -847,9 +896,9 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] CatalogRadixPage readRoot(MetadataPageFile &pages, const Superblock &superblock,
-												MetadataDirectoryType type, const MetadataWriteBatch *batch = nullptr) {
+												MetadataDirectoryType type, const MetadataWriteBatch *batch = nullptr, bool resolveAll = true) {
 			const PhysicalPageRef reference = rootFor(pages, superblock, type, batch);
-			CatalogRadixPage root = batch != nullptr ? readRadixForMutation(pages, reference, *batch)
+			CatalogRadixPage root = batch != nullptr ? readRadixForMutation(pages, reference, *batch, resolveAll)
 													 : pages.readMetadataRadix(reference, superblock);
 			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != type) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -2019,7 +2068,7 @@ namespace graph::storage {
 			root = makeNode(directoryType, CatalogRadixPageKind::CRPK_ROOT, targetLevel, generation, lsn, batch);
 		} else {
 			root = std::make_unique<MutableNode>();
-			root->page = readRoot(pages_, current, directoryType, &batch);
+			root->page = readRoot(pages_, current, directoryType, &batch, false);
 			while (root->page.level < targetLevel) {
 				root->page.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 				root->page.generation = generation;
@@ -2120,7 +2169,7 @@ namespace graph::storage {
 							requiredRootLevel(entries.back().logical_id), generation, lsn, batch);
 		} else {
 			root = std::make_unique<MutableNode>();
-			root->page = readRoot(pages_, current, directoryType, &batch);
+			root->page = readRoot(pages_, current, directoryType, &batch, false);
 			const uint16_t targetLevel =
 					entries.empty() ? root->page.level : requiredRootLevel(entries.back().logical_id);
 			while (root->page.level < targetLevel) {

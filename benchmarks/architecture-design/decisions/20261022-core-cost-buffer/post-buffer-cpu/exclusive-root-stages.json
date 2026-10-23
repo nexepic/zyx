@@ -1,0 +1,101 @@
+{
+  "diagnostic_only": true,
+  "nested_stage_tags_do_not_override_the_active_root_stage": true,
+  "scope_includes_upstream-owned_callbacks_and_allocations": true,
+  "phases_are_mutually_exclusive_not_summed_nested_timers": true,
+  "cases": [
+    {
+      "case": "label_scan_filter",
+      "independent_samples": 831,
+      "weighted_ticks": 3273,
+      "root_stages": [
+        {
+          "stage": "executor/binding/remaining",
+          "independent_samples": 120,
+          "weighted_ticks": 470,
+          "weighted_percent": 14.35991445157348
+        },
+        {
+          "stage": "property batch provider and direct-column delivery",
+          "independent_samples": 389,
+          "weighted_ticks": 1529,
+          "weighted_percent": 46.71555148182096
+        },
+        {
+          "stage": "entity-label batch validation",
+          "independent_samples": 175,
+          "weighted_ticks": 696,
+          "weighted_percent": 21.264894592117322
+        },
+        {
+          "stage": "BTree range entry production",
+          "independent_samples": 147,
+          "weighted_ticks": 578,
+          "weighted_percent": 17.659639474488237
+        }
+      ]
+    },
+    {
+      "case": "edge_batch_1000",
+      "independent_samples": 424,
+      "weighted_ticks": 1681,
+      "root_stages": [
+        {
+          "stage": "executor/binding/remaining",
+          "independent_samples": 424,
+          "weighted_ticks": 1681,
+          "weighted_percent": 100.0
+        },
+        {
+          "stage": "property batch provider and direct-column delivery",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        },
+        {
+          "stage": "entity-label batch validation",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        },
+        {
+          "stage": "BTree range entry production",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        }
+      ]
+    },
+    {
+      "case": "property_set",
+      "independent_samples": 119,
+      "weighted_ticks": 408,
+      "root_stages": [
+        {
+          "stage": "executor/binding/remaining",
+          "independent_samples": 119,
+          "weighted_ticks": 408,
+          "weighted_percent": 100.0
+        },
+        {
+          "stage": "property batch provider and direct-column delivery",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        },
+        {
+          "stage": "entity-label batch validation",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        },
+        {
+          "stage": "BTree range entry production",
+          "independent_samples": 0,
+          "weighted_ticks": 0,
+          "weighted_percent": 0.0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid": {
+      "tests": 18,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default": {
+      "tests": 18,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "748f8a30651eb71473486749b04f490fa05d5e3a34962ae4462551bbedef74de",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "c745e93cea13049844b2f7987df3c7199ba43b9fc966a4ff52138dd494a161e9",
+      "binary_preserved": false
+    }
+  },
+  "actual_mutation_integration": false,
+  "remaining": [
+    "Affected-block splitting and member matrix/root binding planning",
+    "Actual manifest/token exclusion and source fence authentication in mutation coordinator",
+    "Atomic publication, deletion/demotion/inverse, full public-conversion lifecycle",
+    "Whole-space admission and final P7 performance matrix"
+  ]
+}

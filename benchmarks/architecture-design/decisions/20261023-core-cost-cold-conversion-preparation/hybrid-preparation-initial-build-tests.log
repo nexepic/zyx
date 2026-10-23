@@ -1,0 +1,141 @@
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:13:94: error: expected ')'
+   13 |         {5, PropertyValue(std::string(8193, 'x'))}, {7, PropertyValue(PropertyValue::ListType{
+      |                                                                                              ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:13:70: note: to match this '('
+   13 |         {5, PropertyValue(std::string(8193, 'x'))}, {7, PropertyValue(PropertyValue::ListType{
+      |                                                                      ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:13:71: error: no member named 'ListType' in 'graph::PropertyValue'; did you mean 'isctype'?
+   13 |         {5, PropertyValue(std::string(8193, 'x'))}, {7, PropertyValue(PropertyValue::ListType{
+      |                                                                       ^~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                       isctype
+/usr/include/ctype.h:135:12: note: 'isctype' declared here
+  135 | extern int isctype (int __c, int __mask) __THROW;
+      |            ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:13:86: warning: address of function 'isctype' will always evaluate to 'true' [-Wpointer-bool-conversion]
+   13 |         {5, PropertyValue(std::string(8193, 'x'))}, {7, PropertyValue(PropertyValue::ListType{
+      |                                                         ~~~~~~~~~~~~~                ^~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:13:86: note: prefix with the address-of operator to silence this warning
+   13 |         {5, PropertyValue(std::string(8193, 'x'))}, {7, PropertyValue(PropertyValue::ListType{
+      |                                                                                      ^
+      |                                                                                      &
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:55:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   55 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(0, graph::Node::typeId, entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:56:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   56 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(1, 0, entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:58:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   58 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(1, graph::Node::typeId, entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:59:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   59 |     EXPECT_THROW(EntityPropertyLargeValuePayloadCodec::encodeBorrowed(entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:61:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   61 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(1, graph::Node::typeId, entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:62:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   62 |     EXPECT_THROW(EntityPropertyLargeValuePayloadCodec::encodeBorrowed(entries, *memory), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:67:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   67 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(1, graph::Node::typeId, entries, *small), graph::query::execution::MaterializedByteLimitExceeded);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:68:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   68 |     EXPECT_THROW(EntityPropertyLargeValuePayloadCodec::encodeBorrowed(entries, *small), graph::query::execution::MaterializedByteLimitExceeded);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:72:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   72 |     EXPECT_THROW(EntityPropertyCollectionRootCodec::encodeBorrowed(1, graph::Node::typeId, entries, *memory, cancel), std::runtime_error);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootBorrowed.cpp:74:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   74 |     EXPECT_THROW(EntityPropertyLargeValuePayloadCodec::encodeBorrowed(entries, *memory, cancel), std::runtime_error);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+11 warnings and 2 errors generated.

@@ -1,0 +1,48 @@
+{
+  "full_suite": false,
+  "progress_percent": 90,
+  "implementation_checks_passed": true,
+  "performance_matrix_pending": true,
+  "checks": {
+    "public": {
+      "tests": 12,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "hybrid-legacy": {
+      "tests": 576,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "hybrid-compact": {
+      "tests": 576,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "default": {
+      "tests": 155,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a"
+    },
+    "oneframe": {
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a"
+    }
+  },
+  "whole_database_space": {
+    "row_steady_bytes": 1441792,
+    "candidate_steady_bytes": 1048576,
+    "saving_fraction": 0.2727272727272727,
+    "gate_fraction": 0.1,
+    "scope": "512 real ordinary ROW owners, five fields including long id and cold text; all8 groups prepared privately and switched together; this is not an allocation claim for medium/holdout",
+    "peak_limit_bytes": 33554432,
+    "conversion_budget_bytes": 1048576
+  },
+  "test_boundary": "Public12 cases use real ROW sources, no descriptor byte injection. Other27 fixture lifecycle cases remain supplemental. Default/experimental variants are reported separately. Initial public read-account failure occurred after successful conversion/admission; caller read scope was fixed, not storage validation."
+}

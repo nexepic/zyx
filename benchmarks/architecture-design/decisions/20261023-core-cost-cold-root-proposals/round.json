@@ -1,0 +1,56 @@
+{
+  "recorded_at_utc": "2026-10-23T04:24:57.332827+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-root-proposals-legacy-": {
+      "tests": 500,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-root-proposals-compact-": {
+      "tests": 500,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-cold-root-proposals-": {
+      "tests": 24,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "0a293c28acccbc836c7827b135f2050f53dc259515e6936f428b7966821e828c",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "ad0726cb0ba034c8e0b22d7016bed1da3fd417724ba9c207212876142c045895",
+      "binary_preserved": false
+    }
+  },
+  "implemented": [
+    "Original immutable-carrier proposal proof for explicitly changed unpublished cold roots",
+    "Reserved batch ID, full reference/database/source-generation/owner-envelope and actual payload length/directory/count/canonical-value checks",
+    "Global hot-token exclusion, preserve owner-neutral cross-owner and field/root carrier dedup",
+    "Existing source rows retain original-block-generation/pinned-manifest validation; no unpublished manifest read",
+    "Actual8193byte proposal, missing proof/unreserved ID/hot-token refusal, no source writes and account refunds"
+  ],
+  "remaining": [
+    "Actual Native dispatch feeding same proposal holders to original immutable/manifest/content-index installation",
+    "Global hot demotion, owner liveness/delete and actual inverse installation/retirement",
+    "Public atomic conversion/mutation/full lifecycle",
+    "Whole-space/staged-target bootstrap admission and remaining primary read costs",
+    "Final P7 performance matrix"
+  ]
+}

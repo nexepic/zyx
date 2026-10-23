@@ -138,7 +138,7 @@ TEST_F(HybridPropertyColumnReadReuseTest, FullEntityCursorRetainsOnlyItsChargedC
         if (key == "native_graph.hybrid.group_decodes") w.groups += value;
         if (key == "native_graph.hybrid.owner_route_checks") w.routes += value;
         if (key == "native_graph.hybrid.full_column_batches") w.batches += value;
-        if (key == "native_graph.hybrid.full_column_directory_walks") w.walks += value;
+        if (key == "native_graph.hybrid.full_column_locator_batches") w.walks += value;
     });
     {
         graph::utils::OwnedAllocationScope scope(retained);

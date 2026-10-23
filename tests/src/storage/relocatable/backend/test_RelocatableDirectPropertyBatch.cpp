@@ -185,3 +185,115 @@ TEST_F(RelocatableStorageBackendTest, NativeBorrowedViewsUseTypedSinksAndPreserv
     }
     EXPECT_EQ(budget.used(), 0U);
 }
+
+class RelocatablePropertyRunTest : public RelocatableStorageBackendTest, public ::testing::WithParamInterface<size_t> {};
+TEST_P(RelocatablePropertyRunTest, NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.buffer_pool_bytes = 64U * 1024U * 1024U;
+    RelocatableStorageBackend writer(options); writer.open();
+    std::vector<LogicalGraphNodeCreateRequest> inputs; std::vector<std::string> expected;
+    for (size_t i = 0U; i < 256U; ++i) {
+        expected.push_back(i % 11U == 0U ? std::string{} : i % 7U == 0U ? std::string("a\0b", 3U) : std::string(12U, char('a' + i % 20U)));
+        inputs.push_back({{"RunRead"}, {{"text", PropertyValue(expected.back())}, {"rank", PropertyValue(int64_t(i))}}});
+    }
+    const auto ids = writer.createLogicalNodes(inputs); ASSERT_EQ(ids.size(), expected.size());
+    options.buffer_pool_bytes = GetParam();
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    const std::array<std::string_view, 1U> textKey{"text"}, rankKey{"rank"};
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+    struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
+    graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    {
+        graph::query::execution::detail::DirectPropertyColumns columns(*old, ids.size(), 1U, budget);
+        columns.readGather(ids, textKey, [](size_t) {}, [] {});
+        for (size_t i = 0U; i < ids.size(); ++i)
+            EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(i)).data), expected[i]);
+    }
+    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+    if (GetParam() > RSS_PAGE_SIZE) {
+        ASSERT_TRUE(counters.contains("native_graph.read.property_text_runs"));
+        EXPECT_LT(counters.at("native_graph.read.property_text_runs").totalValue, ids.size() / 2U);
+        EXPECT_EQ(counters.at("native_graph.read.property_run_cells").totalValue, ids.size());
+    }
+    {
+        graph::query::execution::detail::DirectPropertyColumns columns(*old, ids.size(), 1U, budget);
+        columns.readGather(ids, rankKey, [](size_t) {}, [] {});
+        for (size_t i = 0U; i < ids.size(); ++i)
+            EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(i)).data), int64_t(i));
+    }
+    std::vector<std::array<std::string, 2U>> aliases(ids.size());
+    graph::storage::PropertyColumnBatchReadSinks aliasSinks;
+    aliasSinks.scalars = [](std::span<const size_t>, size_t, graph::PropertyType, std::span<const uint64_t>) {
+        ADD_FAILURE() << "unexpected scalar in text aliases";
+    };
+    aliasSinks.texts = [&](std::span<const size_t> rows, size_t column, std::span<const std::string_view> values) {
+        ASSERT_EQ(rows.size(), values.size()); ASSERT_LT(column, 2U);
+        for (size_t i = 0U; i < rows.size(); ++i) aliases.at(rows[i])[column] = values[i];
+    };
+    const std::array<std::string_view, 2U> aliasKeys{"text", "text"};
+    ASSERT_TRUE(old->tryReadNodePropertyColumnBatchesSortedWithAdmission(ids, aliasKeys,
+        [](size_t, size_t, std::optional<PropertyValue>) { ADD_FAILURE() << "unexpected owning alias"; },
+        aliasSinks, [](size_t) {}));
+    for (size_t i = 0U; i < ids.size(); ++i) {
+        EXPECT_EQ(aliases[i][0], expected[i]); EXPECT_EQ(aliases[i][1], expected[i]);
+    }
+    const auto copied = graph::debug::PerfTrace::snapshotAndReset();
+    if (GetParam() > RSS_PAGE_SIZE) {
+        ASSERT_TRUE(copied.contains("native_graph.read.property_selected_slot_copy_bytes"));
+        EXPECT_GT(copied.at("native_graph.read.property_selected_slot_copy_bytes").totalValue, 0);
+    }
+    graph::debug::PerfTrace::reset();
+    // Exercise the full consumer with the same bounded source cache.
+    {
+        auto borrowedBackend = std::shared_ptr<RelocatableStorageBackend>(&backend, [](RelocatableStorageBackend *) {});
+        graph::query::QueryEngine engine(borrowedBackend);
+        auto result = engine.execute("MATCH (n:RunRead) WHERE n.text='aaaaaaaaaaaa' RETURN count(n) AS rows");
+        ASSERT_EQ(result.rowCount(), 1U);
+        const auto count = std::count(expected.begin(), expected.end(), std::string(12U, 'a'));
+        EXPECT_EQ(result.getRows().front().at("rows").asPrimitive(), PropertyValue(int64_t(count)));
+        const auto production = graph::debug::PerfTrace::snapshotAndReset();
+        ASSERT_TRUE(production.contains("logical_plan.direct_property.run_batches"));
+        EXPECT_GT(production.at("logical_plan.direct_property.run_batches").totalValue, 0);
+        if (GetParam() > RSS_PAGE_SIZE) {
+            ASSERT_TRUE(production.contains("native_graph.read.property_text_runs"));
+            EXPECT_EQ(production.at("native_graph.read.property_run_cells").totalValue, ids.size());
+        }
+    }
+    writer.replaceLogicalNodeProperties({{ids.front(), {{"text", PropertyValue("changed")}, {"rank", PropertyValue(int64_t{-1})}}}});
+    auto current = backend.openLogicalGraphReadSnapshot();
+    for (const auto *snapshot : {old.get(), current.get()}) {
+        graph::query::execution::detail::DirectPropertyColumns columns(*snapshot, ids.size(), 1U, budget);
+        columns.readGather(ids, textKey, [](size_t) {}, [] {});
+        for (size_t i = 0U; i < ids.size(); ++i)
+            EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(i)).data),
+                snapshot == current.get() && i == 0U ? std::string("changed") : expected[i]);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+INSTANTIATE_TEST_SUITE_P(BufferModes, RelocatablePropertyRunTest, ::testing::Values(size_t{64U * 1024U * 1024U}, size_t{RSS_PAGE_SIZE}));
+
+TEST_F(RelocatableStorageBackendTest, PropertyRunsKeepComplexLargeValueNullAndMissingFallbacks) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const PropertyValue list(std::vector<PropertyValue>{PropertyValue(int64_t{7})});
+    const std::string large(9000U, 'L');
+    const auto ids = backend.createLogicalNodes({{{}, {{"value", PropertyValue("a")}}},
+        {{}, {{"value", list}}}, {{}, {{"value", PropertyValue(large)}}},
+        {{}, {{"value", PropertyValue()}}}, {{}, {}}, {{}, {{"value", PropertyValue(int64_t{3})}}}});
+    auto snapshot = backend.openLogicalGraphReadSnapshot();
+    const std::array<std::string_view, 1U> keys{"value"};
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    {
+        graph::query::execution::detail::DirectPropertyColumns columns(*snapshot, ids.size(), 1U, budget);
+        columns.readGather(ids, keys, [](size_t) {}, [] {});
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(0U)).data), "a");
+        EXPECT_EQ(*std::get<const PropertyValue *>(columns.cell(0U, columns.rowId(1U)).data), list);
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(2U)).data), large);
+        EXPECT_EQ(columns.cell(0U, columns.rowId(3U)).state, graph::query::execution::detail::ColumnCellState::CCS_NULL);
+        EXPECT_EQ(columns.cell(0U, columns.rowId(4U)).state, graph::query::execution::detail::ColumnCellState::CCS_MISSING);
+        EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(5U)).data), 3);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}

@@ -1,0 +1,15 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from HybridPropertyColdNativeLifecycleTest
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity (10 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity (11 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity (10 ms)
+[----------] 3 tests from HybridPropertyColdNativeLifecycleTest (31 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (31 ms total)
+[  PASSED  ] 3 tests.

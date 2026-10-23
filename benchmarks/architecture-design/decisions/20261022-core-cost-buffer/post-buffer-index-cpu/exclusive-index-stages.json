@@ -1,0 +1,27 @@
+{
+  "independent_samples": 714,
+  "weighted_ticks": 2824,
+  "stages": [
+    {
+      "id": 0,
+      "name": "other graph planning/publication",
+      "independent_samples": 298,
+      "weighted_ticks": 1178,
+      "percent": 41.713881019830026
+    },
+    {
+      "id": 4,
+      "name": "BTree overlay apply",
+      "independent_samples": 409,
+      "weighted_ticks": 1618,
+      "percent": 57.29461756373938
+    },
+    {
+      "id": 8,
+      "name": "BTree materialization after planning",
+      "independent_samples": 7,
+      "weighted_ticks": 28,
+      "percent": 0.9915014164305949
+    }
+  ]
+}

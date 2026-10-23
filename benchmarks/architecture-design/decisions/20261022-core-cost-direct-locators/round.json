@@ -1,0 +1,95 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "timing_benchmark": false,
+  "full_suite": false,
+  "checks": {
+    "hybrid-preflight-": {
+      "tests": 42,
+      "failures": 2
+    },
+    "hybrid-preflight-fixed-": {
+      "tests": 50,
+      "failures": 0
+    },
+    "hybrid-legacy-": {
+      "tests": 234,
+      "failures": 1
+    },
+    "hybrid-legacy-final-": {
+      "tests": 234,
+      "failures": 0
+    },
+    "hybrid-compact-final-": {
+      "tests": 234,
+      "failures": 0
+    },
+    "hybrid-real-shape-": {
+      "tests": 1,
+      "failures": 0
+    },
+    "hybrid-real-shape-legacy-": {
+      "tests": 1,
+      "failures": 0
+    },
+    "default-final": {
+      "tests": 62,
+      "failures": 0
+    }
+  },
+  "configurations": {
+    "legacy-final-": {
+      "ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS": "unset"
+    },
+    "compact-final-": {
+      "ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS": "1"
+    },
+    "real-shape-": {
+      "ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS": "1"
+    },
+    "real-shape-legacy-": {
+      "ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS": "unset"
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-direct-locators-hybrid-candidate/libzyx_core.a",
+      "profile": "11/37",
+      "sha256": "e20682a8e277a6a1bce9bab6451f0afd68a37ffb8a5e58daaa5f4c106a129009"
+    },
+    "default": {
+      "path": "/workspace/zyx-direct-locators-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "e2634fef6739dc474888accefdb7829479375d046c13af34805ae656e49340a4"
+    }
+  },
+  "new_persistent_contract": "membership version2 appends canonical 16-byte locators; compact columns have no FieldDirectory authority; default ROW unchanged, old experimental files rejected",
+  "semantics": [
+    "bound-only encoding, malformed locator rejection, selected token identity before values",
+    "co-located membership/group even at page tails; original noncompact cancellation/placement ordering retained",
+    "ordered grouped and full-window reads, absence insertion, compatible update, demotion/deletion/inverse conversion",
+    "all-field forward/reverse/orphan integrity and compact competing-tree rejection",
+    "actual-schema long-ID filter/real-group/cold lookup oracle and whole allocation"
+  ],
+  "space": {
+    "pure_4096_row": 2097152,
+    "pure_4096_candidate": 2097152,
+    "pure_4096_candidate_map_bytes": 131072,
+    "mixed_64_row": 1441792,
+    "mixed_64_candidate": 1966080,
+    "mixed_64_candidate_map_bytes": 393216,
+    "scope": "isolated module shapes, not mature dataset ratios or adoption"
+  },
+  "input_shape": "Every node in both actual input datasets retains a >7-byte ID string property; pure-column-only multi-group conversion cannot apply directly. See input-field-shapes.json.",
+  "retained_failures": [
+    "enumeration still required removed column tree; narrow authority checks adapted",
+    "noncompact preparation reordered cancellation before ID assignment; preserve original noncompact ordering instead of changing its test"
+  ],
+  "test_build_note": "Incremental raw module builds now validate compiler command and actual dependency-file mtimes, avoiding recompiling every module for any unrelated header edit.",
+  "pending": [
+    "specify hot columns plus existing ROW remainder authority/lifecycle before implementation",
+    "mature whole allocation and reachable conversion",
+    "remaining dominant primary read costs",
+    "final unified P7 performance acceptance"
+  ]
+}

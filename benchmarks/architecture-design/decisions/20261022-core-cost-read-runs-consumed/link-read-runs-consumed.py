@@ -1,0 +1,9 @@
+from pathlib import Path
+import json,subprocess,hashlib
+repo=Path('/workspace/zyx');root=repo/'benchmarks/architecture-design/results/20261022-core-cost';old=root/'read-runs-targeted';dest=root/'read-runs-consumed-targeted';dest.mkdir(exist_ok=True)
+b=json.loads((old/'build.json').read_text())['public'];link=[a.replace('--dependency-file='+str(old/'public-link.d'),'--dependency-file='+str(dest/'public-link.d')) for a in b['link']];link[link.index('-o')+1]=str(dest/'public-baseline')
+with (dest/'build.log').open('w') as log:subprocess.run(link,cwd=b['cwd'],stdout=log,stderr=subprocess.STDOUT,check=True)
+sha=lambda p:hashlib.file_digest(p.open('rb'),'sha256').hexdigest()
+(dest/'build.json').write_text(json.dumps({'public':{'compile':b['compile'],'link':link,'cwd':b['cwd'],'source_sha256':b['source_sha256'],'binary_sha256':sha(dest/'public-baseline'),'library_sha256':sha(Path('/workspace/zyx-build-core-candidate/libzyx_core.a')),'reused_observer_object':str(old/'public.o'),'reason':'current-header observer unchanged; only private LogicalPlanReadRuntime production consumer integration changed'}},indent=2)+'\n')
+s=Path('/tmp/run-read-runs-targeted-actual.py').read_text().replace("dest=root/'read-runs-targeted'","dest=root/'read-runs-consumed-targeted'").replace("'before':root/'buffer-targeted/public-baseline'","'before':root/'read-runs-targeted/public-baseline'").replace('/workspace/zyx-buffer-candidate/libzyx_core.a','/workspace/zyx-read-runs-unconsumed-candidate/libzyx_core.a').replace("'rounds':3","'rounds':1").replace("[['before','after'],['after','before'],['before','after']]","[['before','after']]").replace('sorted(values)[28]','sorted(values)[(len(values)*95+99)//100-1]').replace('ordered gather and synchronous single-field source runs','production scan consumption correction of synchronous source runs; one bounded diagnostic pair, not reliable final P95')
+Path('/tmp/run-read-runs-consumed.py').write_text(s)

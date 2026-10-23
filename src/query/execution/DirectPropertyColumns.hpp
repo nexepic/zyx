@@ -66,6 +66,58 @@ public:
         ConstructionAttempt attempt{failed_};
         if (sealed_ || failed_ || ids.size() != rows_ || keys.size() != columns_.size() || !admitSource)
             throw std::invalid_argument("direct gather shape/admission changed");
+        // Native scan batches already carry strictly increasing owner IDs.
+        // Preserve that identity mapping instead of sorting and constructing a
+        // duplicate-restoration permutation for every batch.
+        bool nondecreasing = true, strictlyIncreasing = true;
+        for (size_t i = 0U; i < rows_; ++i) {
+            guard();
+            if (ids[i] == 0U) throw std::invalid_argument("direct gather requires nonzero IDs");
+            if (i && ids[i] <= ids[i - 1U]) strictlyIncreasing = false;
+            if (i && ids[i] < ids[i - 1U]) nondecreasing = false;
+        }
+        if (strictlyIncreasing) {
+            const auto emitValue = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                if (row >= rows_ || column >= keys.size())
+                    throw std::invalid_argument("direct gather producer ordinal changed");
+                append(row, column, std::move(value), guard);
+            };
+            const auto emitScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+                if (row >= rows_ || column >= keys.size())
+                    throw std::invalid_argument("direct scalar producer ordinal changed");
+                appendScalar(row, column, type, bits, guard);
+            };
+            const auto emitText = [&](size_t row, size_t column, std::string_view text) {
+                if (row >= rows_ || column >= keys.size())
+                    throw std::invalid_argument("direct text producer ordinal changed");
+                appendText(row, column, text, guard);
+            };
+            if (immutable_identity_ && rows_ > 1U && keys.size() == 1U) {
+                bool emitted = false;
+                const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                    emitted = true; emitValue(row, column, std::move(value));
+                };
+                storage::PropertyColumnBatchReadSinks batches;
+                batches.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
+                        std::span<const uint64_t> bits) {
+                    emitted = true; appendScalarRun(rows, column, type, bits, guard);
+                };
+                batches.texts = [&](std::span<const size_t> rows, size_t column,
+                        std::span<const std::string_view> texts) {
+                    emitted = true; appendTextRun(rows, column, texts, guard);
+                };
+                if (snapshot_.tryReadNodePropertyColumnBatchesSortedWithAdmission(ids, keys,
+                        std::ref(owning), batches, admitSource)) {
+                    seal(); attempt.complete = true; return;
+                }
+                if (emitted) throw std::invalid_argument("unsupported Property batch emitted partial cells");
+            }
+            snapshot_.readNodePropertyCellsWithViewsSortedWithAdmission(ids, keys,
+                std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), admitSource);
+            seal();
+            attempt.complete = true;
+            return;
+        }
         std::pmr::vector<size_t> order(&memory_), starts(&memory_);
         std::pmr::vector<uint64_t> unique(&memory_);
         order.reserve(rows_); starts.reserve(rows_); unique.reserve(rows_);
@@ -73,7 +125,8 @@ public:
             guard(); if (ids[i] == 0U) throw std::invalid_argument("direct gather requires nonzero IDs");
             order.push_back(i);
         }
-        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { guard(); return ids[a] < ids[b]; });
+        if (!nondecreasing)
+            std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { guard(); return ids[a] < ids[b]; });
         for (size_t i = 0; i < rows_; ++i) {
             guard();
             if (unique.empty() || unique.back() != ids[order[i]]) { unique.push_back(ids[order[i]]); starts.push_back(i); }
@@ -103,6 +156,80 @@ public:
         snapshot_.readNodePropertyCellsWithViewsSortedWithAdmission(unique, keys,
             std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), admitSource);
         seal();
+        attempt.complete = true;
+    }
+
+    template<class Guard>
+    void appendScalarRun(std::span<const size_t> rows, size_t ordinal, PropertyType type,
+            std::span<const uint64_t> bits, Guard guard) {
+        ConstructionAttempt attempt{failed_};
+        guard(); validateSnapshot();
+        if (sealed_ || failed_ || rows.size() != bits.size() ||
+            rows.size() > storage::PropertyColumnBatchReadSinks::MAXIMUM_CELLS)
+            throw std::invalid_argument("invalid direct scalar run shape");
+        if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE && type != PropertyType::BOOLEAN &&
+            type != PropertyType::NULL_TYPE) throw std::invalid_argument("invalid direct scalar run type");
+        auto &c = columns_.at(ordinal);
+        if (type == PropertyType::INTEGER && c.integers.empty()) c.integers.resize(rows_);
+        if (type == PropertyType::DOUBLE && c.doubles.empty()) c.doubles.resize(rows_);
+        if (type == PropertyType::BOOLEAN && c.booleans.empty()) c.booleans.resize(rows_);
+        for (size_t i = 0U; i < rows.size(); ++i) {
+            if (!immutable_identity_ || (i & 15U) == 0U) guard();
+            if (!immutable_identity_) validateSnapshot();
+            const auto row = rows[i];
+            if (row >= rows_ || c.written[row] || (type == PropertyType::BOOLEAN && bits[i] > 1U) ||
+                (type == PropertyType::NULL_TYPE && bits[i] != 0U))
+                throw std::invalid_argument("invalid/duplicate direct scalar run cell");
+            if (type == PropertyType::INTEGER) c.integers[row] = std::bit_cast<int64_t>(bits[i]);
+            else if (type == PropertyType::DOUBLE) c.doubles[row] = std::bit_cast<double>(bits[i]);
+            else if (type == PropertyType::BOOLEAN) c.booleans[row] = bits[i] != 0U;
+            c.types[row] = type;
+            c.states[row] = type == PropertyType::NULL_TYPE ? ColumnCellState::CCS_NULL : ColumnCellState::CCS_VALUE;
+            c.written[row] = 1U;
+        }
+        attempt.complete = true;
+    }
+
+    template<class Guard>
+    void appendTextRun(std::span<const size_t> rows, size_t ordinal,
+            std::span<const std::string_view> texts, Guard guard) {
+        ConstructionAttempt attempt{failed_};
+        guard(); validateSnapshot();
+        if (sealed_ || failed_ || rows.size() != texts.size() ||
+            rows.size() > storage::PropertyColumnBatchReadSinks::MAXIMUM_CELLS)
+            throw std::invalid_argument("invalid direct text run shape");
+        auto &c = columns_.at(ordinal);
+        size_t bytes = c.bytes.size();
+        for (size_t i = 0U; i < texts.size(); ++i) {
+            if ((i & 3U) == 0U) guard();
+            if (rows[i] >= rows_ || c.written[rows[i]])
+                throw std::invalid_argument("invalid direct text run cell");
+            if (texts[i].size() > c.bytes.max_size() - bytes)
+                throw std::overflow_error("direct text run size overflowed");
+            bytes += texts[i].size();
+        }
+        if (c.texts.empty()) c.texts.resize(rows_);
+        size_t shortStrings = 0U;
+        for (size_t i = 0U; i < texts.size(); ++i) {
+            const auto row = rows[i]; const auto text = texts[i];
+            if (!immutable_identity_) { guard(); validateSnapshot(); }
+            if (c.written[row]) throw std::invalid_argument("duplicate direct text run cell");
+            const size_t offset = c.bytes.size();
+            if (text.size() <= 64U) {
+                if ((shortStrings++ & 3U) == 0U) guard();
+                if (!text.empty()) c.bytes.insert(c.bytes.end(), text.begin(), text.end());
+            } else {
+                // Long values retain the existing <=256-byte copy boundary.
+                for (size_t begin = 0U; begin < text.size();) {
+                    guard(); const size_t count = (std::min)(size_t{256U}, text.size() - begin);
+                    c.bytes.insert(c.bytes.end(), text.begin() + begin, text.begin() + begin + count);
+                    begin += count;
+                }
+                shortStrings = 0U;
+            }
+            c.texts[row] = {offset, text.size()};
+            c.types[row] = PropertyType::STRING; c.states[row] = ColumnCellState::CCS_VALUE; c.written[row] = 1U;
+        }
         attempt.complete = true;
     }
 

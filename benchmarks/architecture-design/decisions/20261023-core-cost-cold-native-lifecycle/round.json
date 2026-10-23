@@ -1,0 +1,104 @@
+{
+  "recorded_at_utc": "2026-10-23T11:13:40.765941+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-native-final-legacy-": {
+      "tests": 554,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-native-final-compact-": {
+      "tests": 554,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 17,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "e9a2e182a77737fc9c43a2cedf938462d9ae33cb24eb70a5f26ffd1572d1417a",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "9103e9fbc02074e4a0898ff80718ac798d43dbf32281dda4d063723c84a1573b",
+      "binary_preserved": false
+    }
+  },
+  "intermediate_reports": {
+    "durable-source-initial-": {
+      "tests": 3,
+      "failures": 0,
+      "explanation": "Initial actual durable fixture read/integrity"
+    },
+    "durable-publication-initial-": {
+      "tests": 6,
+      "failures": 3,
+      "explanation": "Tests omitted caller read account after actual publication"
+    },
+    "durable-publication-accounted-": {
+      "tests": 6,
+      "failures": 0,
+      "explanation": "Caller read account supplied"
+    },
+    "durable-native-birth-initial-": {
+      "tests": 8,
+      "failures": 2,
+      "explanation": "Lower transaction lacked sealed logical creation authority; Node fixture lacked LargeValue-aware root store"
+    },
+    "durable-native-birth-stages-": {
+      "tests": 8,
+      "failures": 2,
+      "explanation": "Lower transaction still lacked sealed graph authority; generic failure cleanup attempted reconciliation"
+    },
+    "durable-native-sealed-birth-": {
+      "tests": 8,
+      "failures": 0,
+      "explanation": "Backend-equivalent logical executor/read-only LargeValue-aware sources plus authenticated cold-aware membership probes"
+    },
+    "durable-native-completion-initial-": {
+      "tests": 12,
+      "failures": 3,
+      "explanation": "Missing caller account for mixed reads; artificial future physical epoch99 violated existing retirement contract"
+    },
+    "durable-native-contracts-": {
+      "tests": 12,
+      "failures": 0,
+      "explanation": "Caller account and initial epoch1 fixture; retirement guards unchanged"
+    },
+    "durable-native-fault-schema-initial-": {
+      "tests": 16,
+      "failures": 0,
+      "explanation": "Actual A/B/reopen/cancel/retry and scalar/unique/required constraints"
+    }
+  },
+  "implemented": [
+    "Actual durable Mode3 source through adapted original Native metadata/sealed graph coordinators; private source entries still refuse before I/O",
+    "Single-group hot/cold mutations, full demotion, leased Entity creation, propertyless Edge/adjacency/type count, mixed birth/deletion, clearing, final-group removal and complete large ROW inverse",
+    "Read-only ownerLiveness probes authenticate actual Entity/competing ROW without cold decoding or mutation authority",
+    "Actual scalar/unique support updates and required/unique refusal preserve source roots/epoch",
+    "Partial/complete inactive A/B reopen and cancellation after private writes with refund/retry; old pins and full integrity"
+  ],
+  "fixture_boundary": "Coherent durable source initialized with existing test byte seam before test-observed pins; not public conversion/adoption or proof of forward data-before-root/space admission. Epoch1 follows existing Catalog/Retire Queue contract; read-only epoch99 fixtures unchanged by default.",
+  "remaining": [
+    "Cross-group/mixed-namespace coordination and actual shared-field-frame inverse retention",
+    "Full reclamation/relocation and actual public forward cold conversion lifecycle",
+    "Whole-space private staged-target admission and reachable full-data conversion",
+    "4096-byte full query issue, remaining primary query costs and final P7"
+  ]
+}

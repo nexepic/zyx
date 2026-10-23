@@ -1,0 +1,31 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLayoutScaleTest.*
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from HybridPropertyLayoutScaleTest
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners (12 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners (95 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners (94 ms)
+[----------] 3 tests from HybridPropertyLayoutScaleTest (202 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (202 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt512Owners
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedPinnedNarrowLayoutCensusAt4096Owners
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedDrainedNarrowLayoutCensusAt4096Owners
+
+ 3 FAILED TESTS

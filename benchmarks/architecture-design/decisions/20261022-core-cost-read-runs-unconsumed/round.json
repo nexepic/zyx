@@ -1,0 +1,13 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "typed_tests": 271,
+  "related_lifecycle_tests": 404,
+  "full_suite": false,
+  "purpose": "retained unsuccessful integration measurement; new runs wired only into gather helper, primary scan still used old cell interface; no substantive gain and no performance acceptance",
+  "oracles": "all completed samples pass",
+  "library_sha256": "3b4bc009fe023316aa527ce9e5208206e245f58adc974acdac9075dbb1bd1f21",
+  "retained_library": "/workspace/zyx-read-runs-unconsumed-candidate/libzyx_core.a",
+  "patch_sha256": "a35d9786f7bc7829d7537e3cc310f75440bb8958f6aa1087fdeb96d080726db5",
+  "primary_consumer_omission": "LogicalPlanReadRuntime.cpp direct node-scan preparation called readNodePropertyCellsWithViewsSortedWithAdmission rather than new run interface"
+}

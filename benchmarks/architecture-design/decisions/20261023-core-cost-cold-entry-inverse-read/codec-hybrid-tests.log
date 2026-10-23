@@ -1,0 +1,52 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 20 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 15 tests from HybridPropertyColdRowBlockTest
+[ RUN      ] HybridPropertyColdRowBlockTest.RawSparseOwnersRetainNullTextBytesAndExactScalarBitsForBothNamespaces
+[       OK ] HybridPropertyColdRowBlockTest.RawSparseOwnersRetainNullTextBytesAndExactScalarBitsForBothNamespaces (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.ActualLongIdsUseBoundedBlocksAndCompressionCanReduceNativeFrameCount
+[       OK ] HybridPropertyColdRowBlockTest.ActualLongIdsUseBoundedBlocksAndCompressionCanReduceNativeFrameCount (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.BoundsAndStoredCrcFailBeforeAllocatingDecompressionStorage
+[       OK ] HybridPropertyColdRowBlockTest.BoundsAndStoredCrcFailBeforeAllocatingDecompressionStorage (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.ChecksummedMalformedDirectoriesOwnersAndCanonicalRowsNeverEscape
+[       OK ] HybridPropertyColdRowBlockTest.ChecksummedMalformedDirectoriesOwnersAndCanonicalRowsNeverEscape (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.EncoderRejectsForeignNoncanonicalAndOversizedSourcesWithoutRetainedAllocations
+[       OK ] HybridPropertyColdRowBlockTest.EncoderRejectsForeignNoncanonicalAndOversizedSourcesWithoutRetainedAllocations (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.CancellationAfterScratchAllocationRefundsBothEncoderAndDecoder
+[       OK ] HybridPropertyColdRowBlockTest.CancellationAfterScratchAllocationRefundsBothEncoderAndDecoder (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.LargeRootReferencesRemainReferencesAndRequireStorageAuthenticationLater
+[       OK ] HybridPropertyColdRowBlockTest.LargeRootReferencesRemainReferencesAndRequireStorageAuthenticationLater (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.EncodedOutputRetainsItsAccountUntilTheLastOwnedBufferDies
+[       OK ] HybridPropertyColdRowBlockTest.EncodedOutputRetainsItsAccountUntilTheLastOwnedBufferDies (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackChangesOneOwnerPreservingOtherCanonicalBytesInBothNamespaces
+[       OK ] HybridPropertyColdRowBlockTest.RepackChangesOneOwnerPreservingOtherCanonicalBytesInBothNamespaces (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackDeletesLastRowAndCanInsertMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyColdRowBlockTest.RepackDeletesLastRowAndCanInsertMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackCannotLaunderFutureReferenceByReplacingOrDeletingItsOwner
+[       OK ] HybridPropertyColdRowBlockTest.RepackCannotLaunderFutureReferenceByReplacingOrDeletingItsOwner (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackRejectsDuplicateAndInvalidRemovalAndRefundsAfterCancellation
+[       OK ] HybridPropertyColdRowBlockTest.RepackRejectsDuplicateAndInvalidRemovalAndRefundsAfterCancellation (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackOversizeAndQuotaRefuseWithoutPublishingPartialRows
+[       OK ] HybridPropertyColdRowBlockTest.RepackOversizeAndQuotaRefuseWithoutPublishingPartialRows (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.RepackBlocksSplitsGrowthWithoutChangingCanonicalRowsOrSource
+[       OK ] HybridPropertyColdRowBlockTest.RepackBlocksSplitsGrowthWithoutChangingCanonicalRowsOrSource (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.FreshBlocksRequireCanonicalIdentityAndCannotRemoveMissingRows
+[       OK ] HybridPropertyColdRowBlockTest.FreshBlocksRequireCanonicalIdentityAndCannotRemoveMissingRows (0 ms)
+[----------] 15 tests from HybridPropertyColdRowBlockTest (0 ms total)
+
+[----------] 5 tests from HybridPropertyColdRowBindingsTest
+[ RUN      ] HybridPropertyColdRowBindingsTest.SharedBlocksUseGroupedMasksAndDistinctBlocksStayWithin1024Bytes
+[       OK ] HybridPropertyColdRowBindingsTest.SharedBlocksUseGroupedMasksAndDistinctBlocksStayWithin1024Bytes (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.TiesChooseDenseAndSparseOwnersKeepExactSlotGenerations
+[       OK ] HybridPropertyColdRowBindingsTest.TiesChooseDenseAndSparseOwnersKeepExactSlotGenerations (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.UnboundAndHiddenLocationsRefuseBeforeWritingAnyBytes
+[       OK ] HybridPropertyColdRowBindingsTest.UnboundAndHiddenLocationsRefuseBeforeWritingAnyBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.GroupedMasksMustBeDisjointCompleteOrderedAndCanonical
+[       OK ] HybridPropertyColdRowBindingsTest.GroupedMasksMustBeDisjointCompleteOrderedAndCanonical (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.DecoderRejectsBadWidthsReservedBitsInvalidReferencesAndNonminimalForms
+[       OK ] HybridPropertyColdRowBindingsTest.DecoderRejectsBadWidthsReservedBitsInvalidReferencesAndNonminimalForms (0 ms)
+[----------] 5 tests from HybridPropertyColdRowBindingsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 2 test suites ran. (1 ms total)
+[  PASSED  ] 20 tests.

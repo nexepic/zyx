@@ -1,0 +1,38 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyColdNativeLifecycleTest
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness
+RECONCILIATION THROW: native physical reconciliation requires an immutable LargeValue or content-index pool
+/tmp/trace-cold-reconcile.so + 0x124d __cxa_throw
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x288283 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0xb90e9 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0xf11f1 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0xf3de9 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x135017 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x36648 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x573f97 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x560326 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x5604b5 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x560b8f 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x569e1c 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x574657 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x560542 
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x2a3e4 
+/lib/x86_64-linux-gnu/libc.so.6 + 0x29ca8 
+/lib/x86_64-linux-gnu/libc.so.6 + 0x29d65 __libc_start_main
+benchmarks/architecture-design/results/20261022-core-cost/cold-native-lifecycle-hybrid/module-tests + 0x2a821 
+unknown file: Failure
+C++ exception with description "native physical reconciliation requires an immutable LargeValue or content-index pool" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness (4 ms)
+[----------] 1 test from HybridPropertyColdNativeLifecycleTest (4 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (4 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness
+
+ 1 FAILED TEST

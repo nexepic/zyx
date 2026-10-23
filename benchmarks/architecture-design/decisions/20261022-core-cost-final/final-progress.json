@@ -1,0 +1,334 @@
+{
+  "completed_processes": 47,
+  "results": [
+    {
+      "scale": "medium",
+      "family": "scan",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "scan",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "retrieval",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "retrieval",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_set",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_set",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_batch_1000",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_batch_1000",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_noop",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_noop",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_create_delete",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_create_delete",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "import-production",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "import-production",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "import-equal-reopened",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "scan",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "scan",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "retrieval",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "retrieval",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_set",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_set",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_batch_1000",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_batch_1000",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_noop",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_noop",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_create_delete",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_create_delete",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "import-production",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "import-production",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "holdout",
+      "family": "import-equal-reopened",
+      "engine": "kuzu",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "large",
+      "family": "special-read",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "large",
+      "family": "large_patch",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "skew",
+      "family": "special-read",
+      "engine": "zyx",
+      "round": 1,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "scan",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "scan",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "retrieval",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "retrieval",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_set",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_set",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_batch_1000",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_batch_1000",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_noop",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "property_noop",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_create_delete",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_create_delete",
+      "engine": "zyx",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "import-production",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    },
+    {
+      "scale": "medium",
+      "family": "import-equal-reopened",
+      "engine": "kuzu",
+      "round": 2,
+      "status": "passed"
+    }
+  ]
+}

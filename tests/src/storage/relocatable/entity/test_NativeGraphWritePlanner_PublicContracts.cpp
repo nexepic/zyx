@@ -17,8 +17,11 @@
 
 #include <gtest/gtest.h>
 
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
 
@@ -871,4 +874,110 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, MoveAssignmentAbandonsTheRepl
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_THROW(static_cast<void>(entities_->readNode(snapshot, abandonedNodeId)), FormatException);
 	EXPECT_EQ(entities_->readNode(snapshot, committedNodeId), NodeEntityRecord{});
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsPublicMutationOfFreeSpaceSummaryNamespace) {
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    auto tx = planner.beginTransaction();
+    for (const auto id : {RSS_NODE_FREE_SPACE_INDEX_ID, RSS_EDGE_FREE_SPACE_INDEX_ID}) {
+        EXPECT_THROW(tx.stageScalarIndexUpsert(*btree_pages_, id, {}, 1U), FormatException);
+        EXPECT_THROW(tx.stageScalarIndexErase(*btree_pages_, id, {}), FormatException);
+        EXPECT_THROW(tx.stageScalarIndexCreate(*btree_pages_, id, {}), FormatException);
+        EXPECT_THROW(tx.stageScalarIndexDrop(*btree_pages_, id, 1U), FormatException);
+    }
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, MissingFreeSpaceCandidateFailsIntegrityAndColdInsertion) {
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    auto tx = planner.beginTransaction();
+    const auto node = tx.createNode(std::array<uint64_t, 0U>{});
+    ASSERT_TRUE(tx.commit().committed());
+    auto snapshot = metadata_->openSnapshot();
+    const auto location = metadata_->findNodePageLocation(snapshot, node);
+    const auto key = EntityFreeSpaceIndex::entryKey(location.page_id,
+        uint16_t(EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE) - 1U), EntityPageRecordKind::EPRK_NODE);
+    const auto lsn = LogSequenceNumber(snapshot.superblock().checkpoint_lsn.value() + 1U);
+    snapshot.release();
+    ASSERT_TRUE(btree_pages_->erase(RSS_NODE_FREE_SPACE_INDEX_ID, key, lsn));
+    EXPECT_THROW((void)RelocatableIntegrityScanner(io_, *metadata_).scan(), FormatException);
+    NativeGraphWritePlanner cold(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+    auto insertion = cold.beginTransaction();
+    (void)insertion.createNode(std::array<uint64_t, 0U>{});
+    EXPECT_THROW((void)insertion.commit(), FormatException);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, EdgeEndpointReadsDoNotRewriteNodePagesButLabelChangesDo) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto seed = planner.beginTransaction();
+	const auto source = seed.createNode(std::array<uint64_t, 0U>{});
+	const auto target = seed.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(seed.commit().committed());
+	auto old = metadata_->openSnapshot();
+	const auto nodeLocation = metadata_->findNodePageLocation(old, source);
+	const auto physical = metadata_->findPageLocation(old, nodeLocation.page_id);
+	auto create = planner.beginTransaction();
+	const auto edge = create.createEdge(source, target, 7U);
+	const auto loop = create.createEdge(source, source, 8U);
+	ASSERT_TRUE(create.commit().committed());
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findNodePageLocation(current, source), nodeLocation);
+	EXPECT_EQ(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
+	EXPECT_EQ(entities_->readEdge(current, edge).target_node_id, target);
+	EXPECT_EQ(entities_->readEdge(current, loop).target_node_id, source);
+	auto inspect = planner.beginTransaction();
+	EXPECT_EQ(inspect.collectIncidentEdgeIds(source, 4U).size(), 2U);
+	inspect.rollback();
+	current.release();
+	auto erase = planner.beginTransaction();
+	erase.eraseEdge(edge); erase.eraseEdge(loop);
+	ASSERT_TRUE(erase.commit().committed());
+	current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
+	current.release();
+	auto relabel = planner.beginTransaction();
+	static_cast<void>(relabel.createEdge(source, target, 9U));
+	relabel.replaceNodeLabels(source, std::array<uint64_t, 1U>{42U});
+	ASSERT_TRUE(relabel.commit().committed());
+	current = metadata_->openSnapshot();
+	EXPECT_NE(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
+	EXPECT_EQ(entities_->readNode(old, source), NodeEntityRecord{});
+	EXPECT_EQ(entities_->readNode(current, source).inline_label_ids.front(), 42U);
+	old.release(); current.release();
+	reopenNativeStores();
+	auto reopened = metadata_->openSnapshot();
+	EXPECT_EQ(entities_->readNode(reopened, source).inline_label_ids.front(), 42U);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, PropertyOnlyCommitDoesNotDiscoverOrQueryUnrelatedEntityPools) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto seed = planner.beginTransaction();
+	const auto node = seed.createNode(std::array<uint64_t, 0U>{});
+	seed.replaceNodeProperty({node, Node::typeId, {{1U, graph::PropertyValue(int64_t{1})}}});
+	ASSERT_TRUE(seed.commit().committed());
+	auto old = metadata_->openSnapshot();
+	const auto nodePage = metadata_->findNodePageLocation(old, node).page_id;
+	const auto physical = metadata_->findPageLocation(old, nodePage);
+	const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, node};
+	const auto propertyLocation = metadata_->findEntityPropertyLocation(old, propertyKey);
+	const auto propertyPhysical = metadata_->findPageLocation(old, propertyLocation.page_id);
+	auto update = planner.beginTransaction();
+	update.replaceNodeProperty({node, Node::typeId, {{1U, graph::PropertyValue(int64_t{2})}}});
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
+	graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	ASSERT_TRUE(update.commit().committed());
+	const auto values = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(values.contains("native_graph.commit.entity_pool_discoveries"));
+	EXPECT_FALSE(values.contains("native_graph.commit.entity_pool_capacity_queries"));
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findPageLocation(current, nodePage), physical);
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, propertyKey), propertyLocation);
+	EXPECT_EQ(current.superblock().entity_property_directory_root, old.superblock().entity_property_directory_root);
+	EXPECT_NE(metadata_->findPageLocation(current, propertyLocation.page_id), propertyPhysical);
+	ASSERT_TRUE(values.contains("native_graph.commit.unchanged_property_locations"));
+	EXPECT_EQ(values.at("native_graph.commit.unchanged_property_locations").totalValue, 1);
+	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,
+			graph::PropertyValue(int64_t{1}));
+	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,
+			graph::PropertyValue(int64_t{2}));
 }

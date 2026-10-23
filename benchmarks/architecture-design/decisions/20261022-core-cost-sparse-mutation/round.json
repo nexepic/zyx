@@ -1,0 +1,31 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "directory_module_tests": 235,
+  "related_lifecycle_tests": 401,
+  "mechanism": {
+    "branches": [
+      3,
+      31,
+      90
+    ],
+    "location_child_route_resolutions": [
+      1,
+      1,
+      1
+    ],
+    "catalog_child_route_resolutions": [
+      1,
+      1,
+      1
+    ],
+    "sparse_erase_keeps_unresolved_siblings": true
+  },
+  "formal_performance_measurement": false,
+  "library_sha256": "19fe1be3fcf8a3626fd04ae51085748d7e8b2ca4c636a68c8425803f69f58680",
+  "retained_library": "/workspace/zyx-sparse-mutation-candidate/libzyx_core.a",
+  "patch_sha256": "272429eade4a523ccbf21090b2f590df27e89ad230d6a817f1bb566b3b04cac3",
+  "scope": "resolve only touched logical children for ordinary point mutation/erase; append loaders retain full-resolution behavior, physical legacy path unchanged; no persistent format/header ABI/cache quota change; no commit/push without acceptance progress"
+}

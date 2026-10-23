@@ -1,0 +1,78 @@
+{
+  "recorded_at_utc": "2026-10-23T04:02:13.713809+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-entry-inverse-legacy-": {
+      "tests": 498,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-entry-inverse-compact-": {
+      "tests": 498,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-fresh-cold-": {
+      "tests": 18,
+      "failures": 1,
+      "skipped": 0
+    },
+    "targeted-fresh-cold-corrected-": {
+      "tests": 18,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-cold-inverse-projection-": {
+      "tests": 22,
+      "failures": 0,
+      "skipped": 0
+    },
+    "codec-hybrid": {
+      "tests": 20,
+      "failures": 0,
+      "skipped": 0
+    },
+    "codec-default": {
+      "tests": 20,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "0a293c28acccbc836c7827b135f2050f53dc259515e6936f428b7966821e828c",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "ad0726cb0ba034c8e0b22d7016bed1da3fd417724ba9c207212876142c045895",
+      "binary_preserved": false
+    }
+  },
+  "implemented": [
+    "Canonical empty source for fresh private byte preparation with no fabricated source page or nonexistent-row removal",
+    "Fresh roots require actual live owners without another cold authority, retaining other hot/cold owners and exact totals",
+    "First cold field on a propertyless live group through existing batch private IDs/PageImages",
+    "Existing inverse RowPreparation read-only lookup supports cold roots with original Entity/owner/value/budget authentication",
+    "Original public groupRecord guard remains; inverse publisher explicitly retains it before projection",
+    "Actual8193byte LargeValue, NULL/missing/propertyless/Node/Edge and corrupt CRC refund coverage"
+  ],
+  "initial_fixture_correction": "hasFields returns optional<bool>; engaged false must compare equal optional(false), not EXPECT_FALSE(optional). Reading implementation unchanged; failed raw evidence retained.",
+  "remaining": [
+    "Actual Native field dispatch and same-batch new values",
+    "Global demotion, owner liveness/delete and actual inverse install/retirement",
+    "Public atomic conversion/mutation/reopen/fault/integrity/old-pin lifecycle",
+    "Whole-space/staged-target bootstrap admission and remaining primary read costs",
+    "Final P7 performance matrix"
+  ]
+}

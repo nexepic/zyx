@@ -1,0 +1,12 @@
+START label_scan_filter control
+FINISH label_scan_filter control # user_cpu_seconds 3.198963000 system_cpu_seconds 0.147016000 wall_seconds 3.346439990 samples 0
+START label_scan_filter sampled
+FINISH label_scan_filter sampled # user_cpu_seconds 3.216002000 system_cpu_seconds 0.134872000 wall_seconds 3.351206668 samples 831
+START edge_batch_1000 control
+FINISH edge_batch_1000 control # user_cpu_seconds 2.223247000 system_cpu_seconds 0.062884000 wall_seconds 2.286399246 samples 0
+START edge_batch_1000 sampled
+FINISH edge_batch_1000 sampled # user_cpu_seconds 2.185282000 system_cpu_seconds 0.062741000 wall_seconds 2.248247509 samples 558
+START property_set control
+FINISH property_set control # user_cpu_seconds 1.015938000 system_cpu_seconds 0.082483000 wall_seconds 1.098411879 samples 0
+START property_set sampled
+FINISH property_set sampled # user_cpu_seconds 1.114665000 system_cpu_seconds 0.089747000 wall_seconds 1.204469238 samples 286

@@ -1,0 +1,122 @@
+{
+  "timing_benchmark": false,
+  "source": "apps/compare_benchmark/main.cpp",
+  "source_sha256": "d84e207cdfc6cd98dd2477b5a21727bba126aa5793536ec329faaa71e6626c67",
+  "short_text_limit_bytes": 7,
+  "datasets": {
+    "medium": {
+      "tables": {
+        "users": {
+          "rows": 100000,
+          "sha256": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+          "text_fields": {
+            "id": {
+              "count": 100000,
+              "min_bytes": 11,
+              "max_bytes": 11,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 100000
+            },
+            "country": {
+              "count": 100000,
+              "min_bytes": 2,
+              "max_bytes": 2,
+              "at_most_7_bytes": 100000,
+              "above_7_bytes": 0
+            }
+          }
+        },
+        "posts": {
+          "rows": 120000,
+          "sha256": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+          "text_fields": {
+            "id": {
+              "count": 120000,
+              "min_bytes": 11,
+              "max_bytes": 11,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 120000
+            }
+          }
+        },
+        "tags": {
+          "rows": 5000,
+          "sha256": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+          "text_fields": {
+            "id": {
+              "count": 5000,
+              "min_bytes": 10,
+              "max_bytes": 10,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 5000
+            }
+          }
+        }
+      },
+      "nodes": 225000,
+      "nodes_with_long_id": 225000,
+      "every_node_has_long_id": true,
+      "pure_column_cohort_eligible": false,
+      "dense_id_full_group_estimate": 3515,
+      "dense_id_groups_including_tail_estimate": 3516,
+      "group_estimate_note": "Arithmetic estimate only under consecutive IDs; persisted ID leases/gaps were not inspected. Ineligibility follows from every node retaining a long ID, independently of group placement."
+    },
+    "holdout": {
+      "tables": {
+        "users": {
+          "rows": 73000,
+          "sha256": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41",
+          "text_fields": {
+            "id": {
+              "count": 73000,
+              "min_bytes": 11,
+              "max_bytes": 11,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 73000
+            },
+            "country": {
+              "count": 73000,
+              "min_bytes": 2,
+              "max_bytes": 2,
+              "at_most_7_bytes": 73000,
+              "above_7_bytes": 0
+            }
+          }
+        },
+        "posts": {
+          "rows": 87000,
+          "sha256": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+          "text_fields": {
+            "id": {
+              "count": 87000,
+              "min_bytes": 11,
+              "max_bytes": 11,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 87000
+            }
+          }
+        },
+        "tags": {
+          "rows": 3000,
+          "sha256": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+          "text_fields": {
+            "id": {
+              "count": 3000,
+              "min_bytes": 10,
+              "max_bytes": 10,
+              "at_most_7_bytes": 0,
+              "above_7_bytes": 3000
+            }
+          }
+        }
+      },
+      "nodes": 163000,
+      "nodes_with_long_id": 163000,
+      "every_node_has_long_id": true,
+      "pure_column_cohort_eligible": false,
+      "dense_id_full_group_estimate": 2546,
+      "dense_id_groups_including_tail_estimate": 2547,
+      "group_estimate_note": "Arithmetic estimate only under consecutive IDs; persisted ID leases/gaps were not inspected. Ineligibility follows from every node retaining a long ID, independently of group placement."
+    }
+  }
+}

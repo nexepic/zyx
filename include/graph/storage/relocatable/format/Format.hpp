@@ -44,7 +44,7 @@ namespace graph::storage {
 	constexpr uint64_t RSS_FIRST_ALLOCATABLE_SEGMENT_ID = RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN + 1U;
 	constexpr uint32_t RSS_PAGE_POOL_FIRST_DATA_FRAME = 1;
 	constexpr uint32_t RSS_PAGE_POOL_DATA_FRAME_COUNT = RSS_SEGMENT_SIZE / RSS_PAGE_SIZE - 1U;
-	constexpr uint16_t RSS_FORMAT_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 7 : 5;
+	constexpr uint16_t RSS_FORMAT_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 13 : 5;
 	constexpr uint32_t RSS_SEGMENT_MAGIC = 0x4758595AU; // Little-endian bytes: ZYXG
 	constexpr uint32_t RSS_ENVELOPE_BYTES = 64;
 	// The 16-bit envelope field is constrained to the largest 8-byte-aligned value.

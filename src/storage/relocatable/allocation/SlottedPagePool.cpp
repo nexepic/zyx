@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 
+#include <array>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -18,6 +19,9 @@ namespace graph::storage {
 	SlottedPagePool::SlottedPagePool(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
 									 SharedPagePoolOpenMode openMode) :
 		pool_(std::move(io), metadata, openMode), metadata_(metadata) {}
+
+    SlottedPagePool::SlottedPagePool(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+        const MetadataSnapshotPin &snapshot) : pool_(std::move(io), metadata, snapshot), metadata_(metadata) {}
 
 	std::optional<SlottedPagePoolAllocation>
 	SlottedPagePool::allocateEmptyPage(const SlottedPagePoolAllocationRequest &request, PhysicalSlotId firstSlot,
@@ -574,7 +578,52 @@ namespace graph::storage {
 		PoolFreeSpaceIndex rebuilt;
 		rebuilt.metadata_generation = snapshot.superblock().generation;
         const CatalogEntry pool = metadata_.findCatalog(snapshot, segmentId);
-		for (const PageLocation &location: metadata_.findPageLocationsForSegment(snapshot, segmentId)) {
+		// A pool contains at most 31 data frames. Discover its current pages from
+		// authenticated owner IDs and point mappings instead of filtering a scan
+		// of every Page Directory entry in the database.
+		const auto header = pool_.readPoolHeader(pool);
+		std::array<PageLocation, RSS_PAGE_POOL_DATA_FRAME_COUNT> candidates{};
+		std::array<PageOwnerKind, RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U> ownerKinds{};
+		size_t candidateCount = 0U;
+		bool authenticatedOwners = true;
+		for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
+			if (!SharedPagePoolFrameMap::isAllocated(header, frame)) continue;
+			debug::PerfTrace::addValue("storage.slotted.free_index.pool_frames", 1);
+			PageOwnerHeader owner;
+			try {
+				owner = pool_.readPageOwner(pool, frame);
+			} catch (const FormatException &) {
+				// An unreachable failed private write need not contain a valid owner.
+				// Only the authoritative directory can distinguish that case from
+				// a damaged live frame. Do not silently omit an undecodable owner.
+				authenticatedOwners = false;
+				break;
+			}
+			if (owner.generation != pool.generation) {
+				authenticatedOwners = false;
+				break;
+			}
+			debug::PerfTrace::addValue("storage.slotted.free_index.metadata_point_lookups", 1);
+			const auto location = metadata_.findPageLocationOptional(snapshot, owner.page_id);
+			// Old pins, retired COW frames and cross-pool moves can share an owner
+			// ID. Only the exact frame selected by this snapshot is a candidate.
+			if (!location || location->segment_id != pool.segment_id || location->page_index != frame) continue;
+			if (location->generation != pool.generation) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"slotted free-space candidate has a stale pool generation");
+			}
+			candidates[candidateCount++] = *location;
+			ownerKinds[frame] = owner.kind;
+		}
+		std::vector<PageLocation> authoritative;
+		std::span<const PageLocation> current(candidates.data(), candidateCount);
+		if (!authenticatedOwners) {
+			debug::PerfTrace::addValue("storage.slotted.free_index.directory_fallbacks", 1);
+			authoritative = metadata_.findPageLocationsForSegment(snapshot, segmentId);
+			current = authoritative;
+		}
+		debug::PerfTrace::addValue("storage.slotted.free_index.live_candidate_pages", current.size());
+		for (const PageLocation &location: current) {
 			if (location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES) {
 				throw FormatException(
 						FormatError::FERR_INVALID_STATE,
@@ -585,7 +634,8 @@ namespace graph::storage {
             // as ordinary slotted allocation capacity.
             const bool native = RSS_HYBRID_PROPERTY_FORMAT_ENABLED &&
                 pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
-                pool_.readPageOwner(pool, location.page_index).kind == PageOwnerKind::POK_HYBRID_PROPERTY;
+                (authenticatedOwners ? ownerKinds[location.page_index] : pool_.readPageOwner(pool, location.page_index).kind)
+						== PageOwnerKind::POK_HYBRID_PROPERTY;
             const SharedPagePoolContents contents = pool_.readKnownLocation(
                 snapshot, pool, location, BufferPoolReadHint::BPRH_NORMAL, native);
 			const PageOwnerKind ownerKind = contents.owner.kind;

@@ -24,6 +24,9 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
@@ -611,4 +614,180 @@ TEST_F(PropertyPagePoolPackingTest, RecoversFreshPropertyCowPoolAfterInactiveSup
 				  .segment_id,
 			  sourcePool.segment_id);
 	recovered.release();
+}
+
+TEST_F(PropertyPagePoolPackingTest, NewOwnerBatchPreparesSourceOnceAndPacksOverflowWithoutChangingOldSnapshot) {
+	std::vector<uint64_t> nodeIds;
+	for (uint64_t id = 1001U; id <= 1033U; ++id) nodeIds.push_back(id);
+	const auto initial = sizedRoot(1001U, 3U, 2500U, 'a');
+	static_cast<void>(publishInitial(nodeIds, std::span(&initial, 1U)));
+	auto old = metadata_->openSnapshot();
+	std::vector<PropertyCollectionRoot> roots;
+	for (uint64_t id = 1002U; id <= 1032U; ++id)
+		roots.push_back(sizedRoot(id, 3U, 64U + (id % 3U) * 16U, 'b'));
+	roots.push_back({1033U, graph::Node::typeId, {}});
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const auto plans = properties_->planEntityRootReplacements(old, roots, propertyOptions());
+	const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(counters.contains("native_graph.write.property_batch_prepared_source_pages"));
+	EXPECT_EQ(counters.at("native_graph.write.property_batch_prepared_source_pages").totalValue, 1);
+	EXPECT_EQ(counters.at("native_graph.write.property_plan_replacement_images").totalValue, 1);
+	EXPECT_GT(counters.at("native_graph.write.property_batch_capacity_overflows").totalValue, 0);
+	size_t inserted = 0U, replacements = 0U, overflow = 0U;
+	for (const auto &plan : plans) {
+		if (plan.page_replacement) {
+			++replacements;
+			EXPECT_FALSE(plan.page_replacement->upserted_properties.empty());
+			inserted += plan.page_replacement->upserted_properties.size();
+		} else if (plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED) {
+			++overflow;
+		}
+	}
+	EXPECT_EQ(replacements, 1U);
+	EXPECT_GT(inserted, 1U);
+	EXPECT_EQ(inserted + overflow, roots.size() - 1U);
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans, *properties_,
+			propertyOptions(), LogSequenceNumber(3U)));
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, 1001U}), initial);
+	for (const auto &root : roots) {
+		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, root.owner_entity_id};
+		EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(old, key).has_value());
+		if (root.entries.empty()) EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(current, key).has_value());
+		else EXPECT_EQ(properties_->readEntity(current, key), root);
+	}
+	old.release(); current.release();
+	properties_.reset(); pages_.reset(); entities_.reset(); metadata_.reset();
+	metadata_ = RelocatableMetadataStore::open(io_);
+	entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
+	pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
+	properties_ = std::make_unique<PropertyCollectionRootStore>(*pages_, *metadata_);
+	auto reopened = metadata_->openSnapshot();
+	for (const auto &root : roots) if (!root.entries.empty())
+		EXPECT_EQ(properties_->readEntity(reopened, {EntityPropertyOwnerKind::EPOK_NODE, root.owner_entity_id}), root);
+}
+
+TEST_F(PropertyPagePoolPackingTest, InlineBatchAdmissionRefusalLeavesSourceUnchangedAndCanRetry) {
+	const std::array<uint64_t, 3U> ids{1001U, 1002U, 1003U};
+	const auto initial = sizedRoot(1001U, 3U, 2500U, 'a');
+	static_cast<void>(publishInitial(ids, std::span(&initial, 1U)));
+	auto snapshot = metadata_->openSnapshot();
+	const auto before = snapshot.superblock();
+	const auto epoch = io_->dataMutationEpoch();
+	const std::array roots{sizedRoot(1002U, 3U, 64U, 'b'), sizedRoot(1003U, 3U, 128U, 'c')};
+	auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+	{
+		graph::utils::OwnedAllocationScope scope(memory);
+		EXPECT_THROW(static_cast<void>(properties_->planEntityRootReplacements(snapshot, roots, propertyOptions())), graph::query::execution::MaterializedByteLimitExceeded);
+	}
+	EXPECT_EQ(memory->used(), 0U);
+	EXPECT_EQ(io_->dataMutationEpoch(), epoch);
+	EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+	const auto retry = properties_->planEntityRootReplacements(snapshot, roots, propertyOptions());
+	ASSERT_EQ(retry.size(), 1U);
+	ASSERT_TRUE(retry.front().page_replacement.has_value());
+	EXPECT_EQ(retry.front().page_replacement->upserted_properties.size(), 2U);
+	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, 1001U}), initial);
+}
+
+TEST_F(PropertyPagePoolPackingTest, ValueOverwriteKeepsRoutingIdentityWhileCowVersionsBytes) {
+	const std::array<uint64_t, 2U> ids{1001U, 1002U};
+	const std::array initial{sizedRoot(ids[0], 3U, 500U, 'a'), sizedRoot(ids[1], 3U, 500U, 'b')};
+	static_cast<void>(publishInitial(ids, initial));
+	auto old = metadata_->openSnapshot();
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, ids[0]};
+	const auto location = metadata_->findEntityPropertyLocation(old, key);
+	const auto physical = metadata_->findPageLocation(old, location.page_id);
+	const auto directory = old.superblock().entity_property_directory_root;
+	const std::array changed{sizedRoot(ids[0], 3U, 900U, 'c'), sizedRoot(ids[1], 3U, 300U, 'd')};
+	const auto plans = properties_->planEntityRootReplacements(old, changed, propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans,
+			*properties_, propertyOptions(), LogSequenceNumber(3U)));
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, key), location);
+	EXPECT_EQ(current.superblock().entity_property_directory_root, directory);
+	EXPECT_NE(metadata_->findPageLocation(current, location.page_id), physical);
+	for (size_t i = 0; i < ids.size(); ++i) {
+		const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, ids[i]};
+		EXPECT_EQ(properties_->readEntity(old, owner), initial[i]);
+		EXPECT_EQ(properties_->readEntity(current, owner), changed[i]);
+	}
+	current.release(); old.release();
+	properties_.reset(); pages_.reset(); entities_.reset(); metadata_.reset();
+	metadata_ = RelocatableMetadataStore::open(io_);
+	pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
+	properties_ = std::make_unique<PropertyCollectionRootStore>(*pages_, *metadata_);
+	auto reopened = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(reopened, key), location);
+	EXPECT_EQ(properties_->readEntity(reopened, key), changed.front());
+}
+
+TEST_F(PropertyPagePoolPackingTest, CombinedOwnerGrowthRelocatesOnlyOverflowAndPreservesOldPin) {
+	const std::array<uint64_t, 3U> ids{1001U, 1002U, 1003U};
+	const std::array initial{sizedRoot(ids[0], 3U, 500U, 'a'), sizedRoot(ids[1], 3U, 500U, 'b'),
+			sizedRoot(ids[2], 3U, 500U, 'c')};
+	static_cast<void>(publishInitial(ids, initial));
+	auto old = metadata_->openSnapshot();
+	const EntityPropertyKey first{EntityPropertyOwnerKind::EPOK_NODE, ids[0]};
+	const auto location = metadata_->findEntityPropertyLocation(old, first);
+	for (auto id : ids) EXPECT_EQ(metadata_->findEntityPropertyLocation(old,
+			{EntityPropertyOwnerKind::EPOK_NODE, id}).page_id, location.page_id);
+	// Each replacement fits against the source snapshot; their combined growth does not.
+	const std::array changed{sizedRoot(ids[0], 3U, 1500U, 'd'), sizedRoot(ids[1], 3U, 1500U, 'e'),
+			sizedRoot(ids[2], 3U, 1500U, 'f')};
+	const auto plans = properties_->planEntityRootReplacements(old, changed, propertyOptions());
+	ASSERT_GT(plans.size(), 1U);
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans,
+			*properties_, propertyOptions(), LogSequenceNumber(3U)));
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, first), location);
+	bool relocated = false;
+	for (size_t i = 0; i < ids.size(); ++i) {
+		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, ids[i]};
+		relocated |= metadata_->findEntityPropertyLocation(current, key).page_id != location.page_id;
+		EXPECT_EQ(properties_->readEntity(old, key), initial[i]);
+		EXPECT_EQ(properties_->readEntity(current, key), changed[i]);
+	}
+	EXPECT_TRUE(relocated);
+}
+
+TEST_F(PropertyPagePoolPackingTest, StableOverwriteIdentityDoesNotAllowStalePlansOrDeleteReuseAba) {
+	const std::array<uint64_t, 2U> ids{1001U, 1002U};
+	const std::array initial{sizedRoot(ids[0], 3U, 500U, 'a'), sizedRoot(ids[1], 3U, 500U, 'b')};
+	static_cast<void>(publishInitial(ids, initial));
+	auto old = metadata_->openSnapshot();
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, ids[0]};
+	const auto location = metadata_->findEntityPropertyLocation(old, key);
+	const std::array changed{sizedRoot(ids[0], 3U, 500U, 'c')};
+	const auto stale = properties_->planEntityRootReplacements(old, changed, propertyOptions());
+	const std::array other{sizedRoot(ids[0], 3U, 500U, 'd')};
+	const auto accepted = properties_->planEntityRootReplacements(old, other, propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, accepted,
+			*properties_, propertyOptions(), LogSequenceNumber(3U)));
+	auto updated = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(updated, key), location);
+	EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(updated, {}, {}, {}, stale,
+			*properties_, propertyOptions(), LogSequenceNumber(4U))), FormatException);
+	EXPECT_EQ(properties_->readEntity(updated, key), other.front());
+	const std::array removed{PropertyCollectionRoot{ids[0], graph::Node::typeId, {}}};
+	const auto erasePlans = properties_->planEntityRootReplacements(updated, removed, propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(updated, {}, {}, {}, erasePlans,
+			*properties_, propertyOptions(), LogSequenceNumber(4U)));
+	auto empty = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(empty, key));
+	const auto inserted = properties_->planEntityRootReplacements(empty, changed, propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(empty, {}, {}, {}, inserted,
+			*properties_, propertyOptions(), LogSequenceNumber(5U)));
+	auto current = metadata_->openSnapshot();
+	const auto reused = metadata_->findEntityPropertyLocation(current, key);
+	EXPECT_EQ(reused.page_id, location.page_id);
+	EXPECT_EQ(reused.slot_id, location.slot_id);
+	EXPECT_GT(reused.slot_generation, location.slot_generation);
+	EXPECT_EQ(properties_->readEntity(old, key), initial.front());
+	EXPECT_EQ(properties_->readEntity(updated, key), other.front());
+	EXPECT_EQ(properties_->readEntity(current, key), changed.front());
 }

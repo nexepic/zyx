@@ -1,0 +1,12 @@
+{
+  "identical_failures": true,
+  "tests": [
+    "DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold",
+    "RecoveryReclaimsDeferredUnpublishedFrames"
+  ],
+  "assertion_counts": {
+    "DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold": 992,
+    "RecoveryReclaimsDeferredUnpublishedFrames": 1
+  },
+  "counted_as_passing": false
+}
