@@ -1,0 +1,14 @@
+{
+  "S1": "accepted_design",
+  "progress_percent": 15,
+  "checks": [
+    "scan size matches production 512",
+    "cache/metadata/conversion/maintenance/file limits bounded by S0",
+    "two candidates and common consumers",
+    "B wire gate before any durable write",
+    "explicit first-read/construction and fallback accounting",
+    "updates/visibility/ownership/recovery specified",
+    "no performance or implementation claim"
+  ],
+  "S2_accepted": false
+}
