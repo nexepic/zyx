@@ -1,0 +1,53 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 22 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 22 tests from HybridPropertyColdCompatibleHotTest
+[ RUN      ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard
+[       OK ] HybridPropertyColdCompatibleHotTest.CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals
+[       OK ] HybridPropertyColdCompatibleHotTest.MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority
+[       OK ] HybridPropertyColdCompatibleHotTest.NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion
+[       OK ] HybridPropertyColdCompatibleHotTest.MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof
+[       OK ] HybridPropertyColdCompatibleHotTest.FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness
+[       OK ] HybridPropertyColdCompatibleHotTest.ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockInsertionOnExistingEdgePreservesEntityLivenessAndHotNull
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockInsertionOnExistingEdgePreservesEntityLivenessAndHotNull (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdOnlyClearRetainsPropertylessLiveOwners
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdOnlyClearRetainsPropertylessLiveOwners (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsCompetingOrdinaryRow
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdBlockPreparationRejectsCompetingOrdinaryRow (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.SameBatchColdReplacementRetainsHotValueAndPresenceChangesOnSharedPage
+[       OK ] HybridPropertyColdCompatibleHotTest.SameBatchColdReplacementRetainsHotValueAndPresenceChangesOnSharedPage (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdGrowthSplitsAndRelocatesMatrixWithGroupDirectoryEdit
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdGrowthSplitsAndRelocatesMatrixWithGroupDirectoryEdit (16 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.MultipleColdBlocksAndHotPresenceShareOneFinalMatrix
+[       OK ] HybridPropertyColdCompatibleHotTest.MultipleColdBlocksAndHotPresenceShareOneFinalMatrix (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FreshColdBlockInsertionRetainsExistingColdOwnersAndHotAuthority
+[       OK ] HybridPropertyColdCompatibleHotTest.FreshColdBlockInsertionRetainsExistingColdOwnersAndHotAuthority (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.FirstColdFieldOnPropertylessLiveGroupNeedsNoFabricatedSourceBlock
+[       OK ] HybridPropertyColdCompatibleHotTest.FirstColdFieldOnPropertylessLiveGroupNeedsNoFabricatedSourceBlock (1 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsActualLargeNullAndPropertylessNodeRows
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsActualLargeNullAndPropertylessNodeRows (4 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionPreservesEdgeOwnerNamespaceAndExactCounts
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionPreservesEdgeOwnerNamespaceAndExactCounts (3 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsAllPropertylessLiveOwners
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRetainsAllPropertylessLiveOwners (2 ms)
+[ RUN      ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRejectsAccessedCorruptionAndRefunds
+[       OK ] HybridPropertyColdCompatibleHotTest.ColdInverseProjectionRejectsAccessedCorruptionAndRefunds (1 ms)
+[----------] 22 tests from HybridPropertyColdCompatibleHotTest (64 ms total)
+
+[----------] Global test environment tear-down
+[==========] 22 tests from 1 test suite ran. (64 ms total)
+[  PASSED  ] 22 tests.

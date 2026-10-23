@@ -1,0 +1,56 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "index_module_tests": 142,
+  "related_lifecycle_module_tests": 399,
+  "mechanism": {
+    "middle_upserts_merged": 527,
+    "source_entries_copied": 3027,
+    "cumulative_admitted_bytes": 1488880,
+    "buffer_count_ceiling": 64,
+    "buffer_key_byte_ceiling": 16384
+  },
+  "medium_targeted_p50_ms": {
+    "before": 146.0971715,
+    "after": 66.590759
+  },
+  "medium_targeted_p95_ms": {
+    "before": 151.970087,
+    "after": 74.954973
+  },
+  "formal_full_matrix": false,
+  "kuzu_objective_met": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "sources": {
+    "docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx": "172bd33a1529466ef74d01a3ad766c30c5f84df886551ff78e635f1f718ceb5f",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "7ab7172a92ab765dd8347d94301f4cd9eaa5c9d17e9731e1f0e418b7fb1eec6b",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx": "22fa0cf93c2fa5c36bc7ab8e4926f32a9b5e361206c6507f475b0ea63b244d05",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "9a77db5f1fe3d1e23d4564e96de6455bf00a40c8ae335d360910ded0f86231d7",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "12fac90232d4f6a2879fd6492f5500079d3cfff25a501a5521bea608562416d1",
+    "include/graph/storage/relocatable/cache/BufferPool.hpp": "39dfbf7f6d082efca094b1e59a2e7988ad0b9033853e81edc00f3fd0a2ddcabe",
+    "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "61d3fdf3502e8f12c2529a5e3b57e78c5cccba7f865c0a6a56c2520c931941d9",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "d96a07b700a279195287df5d596e199cd0201f49d5080dcc3e320e288be2f0fe",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "67ad0c866e7c20fa87425957b186698491e5a3a1efa5cb9ad8f1d9a42f346c95",
+    "src/storage/relocatable/cache/BufferPool.cpp": "15506d07aafdb2d65d854943334536d8f8a55540c9e3389fac441a0b1ba23072",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "079b1cfb395d35209dcf76866743bfe8662a15b38c19571c5396e7b5e5d80455",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "b2a992f7cde1092d1180adc9e1c786faafb30b42010a1a956dbaca42148542d8",
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "0e1a069094a6c0c752056b049e91c7844be798e2f9c95c6168d7ef4a57a6674b",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "d8d8e95e2d2bbc97585a9f89feae845f390141db7290f227560de14cf789573a",
+    "tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp": "6519eba9b10b0f22f091ebe044388ccb49ad2bf611ccba2589660cc89e93d031",
+    "tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp": "8e2e8a5d368d51802e5fbe16de71c11855d7de5bb0bc03578f8112efaa1d25b8",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "906bd3fe0f22c4fceb637c96567d302f7c1028285907c6cb41ba1db4ee1ecd2c",
+    "tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp": "1826fbf03f77108c0d90061ef0e24cb3c5814e6588c9831fb8d9ac3f8ff9962e",
+    "tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp": "c07eddb542faac05adf321eec2ef4a5caf5119bd002220b7d59c9cb5beddfe25",
+    "tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp": "52e534c51c0f6b2a1b36d1f2796c271c5047367512cffbc6703646acb2d69ab5",
+    "include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp": "59439b5dcfc2211693cd13e8073664e71a3d7a4725cb997b29a161c2b7d3ac3d"
+  },
+  "release_library_sha256": "1b13a155335187ae60eb34ed9055b195b51e130bdc2ce2ad56df0fd6e03874ed",
+  "retained_archive": "/workspace/zyx-btree-batch-candidate/libzyx_core.a",
+  "source_patch_sha256": "0a439bf8475ce393241961c0d4aeb3fc349f66a2b025fd60ba24f1992012727b",
+  "notes": [
+    "source owns buffered keys; duplicate-key statement order and erase barriers preserved",
+    "existing ordered-tail append fast path retained",
+    "no persistent format/cache-capacity change; no commit/push because accepted progress did not increase"
+  ]
+}

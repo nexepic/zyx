@@ -1,0 +1,1480 @@
+{
+  "tests": 142,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T14:08:01Z",
+  "time": "5.023s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableBTreePageStoreTest",
+      "tests": 86,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T14:08:01Z",
+      "time": "4.248s",
+      "testsuite": [
+        {
+          "name": "CachedAppendSizePreservesMixedWritesAndOldSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreAppendSize.cpp",
+          "line": 13,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.03s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreAppendSize.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.027s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreAppendSize.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.215s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "VirtualInternalChildrenReserveTheirPersistedVarintWidth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreAppendSize.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.018s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "OrderedOverlayAppendDoesNotCopyEveryExistingLeafKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreOverlayCosts.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.012s",
+          "classname": "RelocatableBTreePageStoreTest",
+          "cumulative_admitted_bytes": "901164"
+        },
+        {
+          "name": "OverlayLeafRedistributionDoesNotMaterializeEveryCandidateSplit",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreOverlayCosts.cpp",
+          "line": 65,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:01Z",
+          "time": "0.163s",
+          "classname": "RelocatableBTreePageStoreTest",
+          "packed_page_decodes": "16"
+        },
+        {
+          "name": "LargeValueCleanupPreservesMappedIndexRootsAndReclaimsOnlyOrphanPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreOverlayCosts.cpp",
+          "line": 127,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "MiddleUpsertBatchesCopyLeavesPerGroupAndKeepOldPinsAndDuplicateValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreOverlayCosts.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.763s",
+          "classname": "RelocatableBTreePageStoreTest",
+          "merged_upserts": "527",
+          "copied_source_entries": "3027",
+          "cumulative_admitted_bytes": "1488880"
+        },
+        {
+          "name": "BufferedDuplicatesAcrossSixtyFourEntryBoundariesRespectEraseBarriers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreOverlayCosts.cpp",
+          "line": 226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.077s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "CollapsesATransactionLocalSplitBackToOneEmptyStableRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsASiblingLinkedLeafAsTheOverlayRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 339,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsACyclicTreeWithAnInconsistentRevisitedLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayKeyThatCannotFitInAnyLeafPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 438,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:02Z",
+          "time": "0.078s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:03Z",
+          "time": "1.275s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnEmptySplitOverlayIntoOneFreshRootPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 583,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsASharedChildDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 629,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAZeroLeafPayloadDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 722,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.013s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 767,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "MergesAnEmptyRightLeafThroughTheTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 833,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 901,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.012s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 984,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1033,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1091,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1168,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.011s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansAndPreparesAStableRootLeafReplacementForAnExistingKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1266,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1344,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1428,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1474,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayEraseForAnAbsentScalarKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1538,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1587,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1625,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.079s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1715,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1831,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.011s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1905,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.072s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 19,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:04Z",
+          "time": "0.416s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 67,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.114s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DenselyRematerializesALargeTransactionOverlayBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.154s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 143,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.076s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.072s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "MergesAnEmptyLeftLeafThroughTheTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 337,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 401,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 488,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 546,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 603,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOversizedInternalOverlayMerge",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 661,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnInvalidInitialPageLocationBeforePreparingANewPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 746,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlayStress.cpp",
+          "line": 764,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "AtomicallyMaterializesNewTreePagesAndSwitchesTheIndexRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 72,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 138,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 203,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 323,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DoesNotPublishAnIncompleteTreeFactoryBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 461,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInvalidTreeRequestsAndFactoryPageIdentities",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 484,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsOversizedBatchesAndNonIndexPoolsBeforeMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 514,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAtomicTreeBatchWhenThePoolLacksEnoughFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 546,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.063s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RecoversAnInterruptedAtomicTreePublicationFromTheWal",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 581,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DiscardsTreeFramesWhenTheWalPublicationHeaderWasNotDurable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "BindsInitialLeafValuesAfterTheMetadataBatchAssignsPageIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 649,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PublishesAndReplacesKeyOnlyFreshTreesThroughTheNativeTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 718,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 792,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 849,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 900,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInvalidRetirementAndFreshTreePlanningContracts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 983,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1013,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsRootLeafWithPersistedSiblingLinkBeforeErasing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1033,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansRootLeafRetirementAndRejectsTamperedPreparationBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1062,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "TraversesEveryInternalTreePageWhenPlanningRetirement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1085,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.007s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnUnroutedInternalChildDuringTreeRetirementPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1190,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsACyclicInternalTreeDuringRetirementPlanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStore_AtomicTree.cpp",
+          "line": 1219,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableBTreeIndexTest",
+      "tests": 21,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T14:08:05Z",
+      "time": "0.186s",
+      "testsuite": [
+        {
+          "name": "FindsAndScansOneSnapshotPinnedLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ScanChecksCancellationBeforeReturningPartialResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "TraversesInternalSeparatorsAndLeafSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "StreamsBoundedOrderedSourcesFromIndependentCursors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 402,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.03s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsMissingChildrenAndBrokenLeafLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 472,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 493,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "DescendsMultipleInternalLevelsWithinSeparatorRanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.019s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAChildOwnedByAnotherIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAChildAtTheWrongLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsRootLeafSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 596,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsNonreciprocalLeafLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 616,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAnEmptyNonRootLeafReachedThroughASiblingLink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 638,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsReciprocalSiblingOutsideTheRoutedLeafSequence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 662,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.01s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsCyclicLeafChains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 689,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsUnorderedLeafChains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 711,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsLeafKeysOutsideTheirSeparatorRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 733,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.008s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsALeftLeafKeyAtItsExclusiveUpperSeparator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 755,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:05Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAnInternalSeparatorOutsideItsParentRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreeIndexTest"
+        }
+      ]
+    },
+    {
+      "name": "BTreeIndexScanCacheTest",
+      "tests": 16,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T14:08:06Z",
+      "time": "0.266s",
+      "testsuite": [
+        {
+          "name": "KeepsRoutingPagesResidentAndStreamsLeafChainTransiently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.017s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RejectsAnInvalidReadHintBeforeResolvingThePageRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeCursorChecksCancellationBeforeOpeningStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 272,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.017s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "PointLookupReusesAuthenticatedLeafEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 318,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.019s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "CursorStateDenialPrecedesRootIoAndRefundsItsAttempt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 396,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 427,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.016s",
+          "classname": "BTreeIndexScanCacheTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableScalarIndexTreeReachabilityReclaimerTest",
+      "tests": 19,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T14:08:06Z",
+      "time": "0.322s",
+      "testsuite": [
+        {
+          "name": "RetiresDroppedAndOrphanedTreesWithoutBreakingPinnedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 343,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.032s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "DoesNotPartiallyRetireAnObsoleteTreeWhenMetadataPublicationIsInterrupted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 377,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.026s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsUnknownSealedRootsAndInvalidBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.004s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetainsActiveConstraintSupportTreeAndRetiresDroppedOrOrphanedRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 422,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.024s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetainsTombstonedVectorMappingUntilItsVisibleManifestIsRetired",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 447,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.034s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsEveryZeroScanBoundAndAnInvalidCheckpointLsn",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.002s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetainsANonUniqueConstraintWithoutASupportTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 491,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.006s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetainsNodeKeySupportTreesAndRejectsMissingOrUnneededConstraintSupportTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 501,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.03s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsAnActiveVectorRootWithoutItsVisibleManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 518,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.009s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsAnIncompleteVisibleVectorManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 526,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.004s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsAVisibleVectorManifestWhoseMappingRootWasReplaced",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.018s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "EnforcesVectorManifestAndIndexRootScanBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.038s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "EnforcesRetirementAndTreePageBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 570,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.027s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsAnOversizedMultiLevelTreeBeforeRetiringAnyRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 586,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.011s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetiresEveryPageOfAnOrphanedMultiLevelTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 595,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.015s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RetiresABTreeFromASharedIndexPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 609,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.01s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "ReleasesRetiredTreeFramesOnlyAfterPinnedSnapshotsDrain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 620,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.012s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RejectsABTreeWithOneChildReferencedTwice",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 644,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.009s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        },
+        {
+          "name": "RequiresEveryCollaboratorToUseTheSameMetadataStore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_ScalarIndexTreeReachabilityReclaimer.cpp",
+          "line": 651,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T14:08:06Z",
+          "time": "0.003s",
+          "classname": "RelocatableScalarIndexTreeReachabilityReclaimerTest"
+        }
+      ]
+    }
+  ]
+}

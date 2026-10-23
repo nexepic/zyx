@@ -1,0 +1,125 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyColumnMembershipTest.*:HybridPropertyPageImageTest.*:RelocatableSuperblockTest.*:HybridPropertyColumnReadReuseTest.*:HybridPropertyInlineMutationTest.PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins:HybridPropertyQueryParityTest.ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns
+[==========] Running 50 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from HybridPropertyColumnMembershipTest
+[ RUN      ] HybridPropertyColumnMembershipTest.RoundTripsBothWordWidthsAndOnlyEnumeratesActualFields
+[       OK ] HybridPropertyColumnMembershipTest.RoundTripsBothWordWidthsAndOnlyEnumeratesActualFields (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.OnlyBoundCanonicalLocatorsCanBeEncodedAndDecoded
+[       OK ] HybridPropertyColumnMembershipTest.OnlyBoundCanonicalLocatorsCanBeEncodedAndDecoded (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.EnumerationHonorsBoundsCancellationAndOwnerDomain
+[       OK ] HybridPropertyColumnMembershipTest.EnumerationHonorsBoundsCancellationAndOwnerDomain (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RejectsWrongIdentityVersionLengthsAndReservedFields
+[       OK ] HybridPropertyColumnMembershipTest.RejectsWrongIdentityVersionLengthsAndReservedFields (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RejectsSemanticallyCorruptMasksEvenWithCorrectDeclaredCounts
+[       OK ] HybridPropertyColumnMembershipTest.RejectsSemanticallyCorruptMasksEvenWithCorrectDeclaredCounts (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.CommonCompleteOwnersProveEligibilityButDoNotHideNoncanonicalBits
+[       OK ] HybridPropertyColumnMembershipTest.CommonCompleteOwnersProveEligibilityButDoNotHideNoncanonicalBits (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ComplementaryPartialOwnersStillRequireExactPerColumnEligibility
+[       OK ] HybridPropertyColumnMembershipTest.ComplementaryPartialOwnersStillRequireExactPerColumnEligibility (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ValidatesFinalGroupDomainAndDeadOwnerMasks
+[       OK ] HybridPropertyColumnMembershipTest.ValidatesFinalGroupDomainAndDeadOwnerMasks (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ConstructionRejectsContradictorySourceColumnsBeforeEncoding
+[       OK ] HybridPropertyColumnMembershipTest.ConstructionRejectsContradictorySourceColumnsBeforeEncoding (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RemovingOrdinalsAcrossWordBoundaryPreservesOtherFieldsAndZeroesUnusedBits
+[       OK ] HybridPropertyColumnMembershipTest.RemovingOrdinalsAcrossWordBoundaryPreservesOtherFieldsAndZeroesUnusedBits (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.PresenceReplacementTouchesOnlyItsOrdinalAndRefusesDemotionOrDeadSlots
+[       OK ] HybridPropertyColumnMembershipTest.PresenceReplacementTouchesOnlyItsOrdinalAndRefusesDemotionOrDeadSlots (0 ms)
+[----------] 11 tests from HybridPropertyColumnMembershipTest (1 ms total)
+
+[----------] 8 tests from HybridPropertyColumnReadReuseTest
+[ RUN      ] HybridPropertyColumnReadReuseTest.SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource
+[       OK ] HybridPropertyColumnReadReuseTest.SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource (5 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction
+[       OK ] HybridPropertyColumnReadReuseTest.ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction (4 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner
+[       OK ] HybridPropertyColumnReadReuseTest.OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner (3 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits
+[       OK ] HybridPropertyColumnReadReuseTest.WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits (4 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullEntityCursorRetainsOnlyItsChargedColumnWindowAcrossOwnersAndMoves
+[       OK ] HybridPropertyColumnReadReuseTest.FullEntityCursorRetainsOnlyItsChargedColumnWindowAcrossOwnersAndMoves (9 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.CachedScalarOwnsSelectedBitsAcrossReentrantEvictionAndResize
+[       OK ] HybridPropertyColumnReadReuseTest.CachedScalarOwnsSelectedBitsAcrossReentrantEvictionAndResize (3 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullColumnAdmissionOwnsCellsAcrossReentryAndRejectsBeforeSlots
+[       OK ] HybridPropertyColumnReadReuseTest.FullColumnAdmissionOwnsCellsAcrossReentryAndRejectsBeforeSlots (6 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullColumnCollectionPreservesNullBooleanAndDoubleBits
+[       OK ] HybridPropertyColumnReadReuseTest.FullColumnCollectionPreservesNullBooleanAndDoubleBits (3 ms)
+[----------] 8 tests from HybridPropertyColumnReadReuseTest (41 ms total)
+
+[----------] 14 tests from HybridPropertyPageImageTest
+[ RUN      ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration
+[       OK ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots
+[       OK ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource
+[       OK ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration
+[       OK ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot
+[       OK ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource
+[       OK ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount
+[       OK ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords
+[       OK ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators
+[       OK ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity
+[       OK ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership
+[       OK ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.CompactMembershipSharesAFrameAndSourceCopyRetainsItsOldOwnerBits
+[       OK ] HybridPropertyPageImageTest.CompactMembershipSharesAFrameAndSourceCopyRetainsItsOldOwnerBits (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.DirectColumnLocatorMustAuthenticateTheSelectedTokenBeforeReturningValues
+[       OK ] HybridPropertyPageImageTest.DirectColumnLocatorMustAuthenticateTheSelectedTokenBeforeReturningValues (0 ms)
+[----------] 14 tests from HybridPropertyPageImageTest (1 ms total)
+
+[----------] 1 test from HybridPropertyInlineMutationTest
+[ RUN      ] HybridPropertyInlineMutationTest.PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins
+[       OK ] HybridPropertyInlineMutationTest.PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins (111 ms)
+[----------] 1 test from HybridPropertyInlineMutationTest (111 ms total)
+
+[----------] 1 test from HybridPropertyQueryParityTest
+[ RUN      ] HybridPropertyQueryParityTest.ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns
+[       OK ] HybridPropertyQueryParityTest.ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns (64 ms)
+[----------] 1 test from HybridPropertyQueryParityTest (64 ms total)
+
+[----------] 15 tests from RelocatableSuperblockTest
+[ RUN      ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips
+[       OK ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages
+[       OK ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages (5 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (123 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor
+[       OK ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor (0 ms)
+[ RUN      ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary
+[       OK ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration
+[       OK ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag
+[       OK ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationDoesNotSerializeOrChecksum
+[       OK ] RelocatableSuperblockTest.DescriptorValidationDoesNotSerializeOrChecksum (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationRejectsEveryMalformedRoot
+[       OK ] RelocatableSuperblockTest.DescriptorValidationRejectsEveryMalformedRoot (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationPreservesLifecycleAndReserveFences
+[       OK ] RelocatableSuperblockTest.DescriptorValidationPreservesLifecycleAndReserveFences (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues
+[       OK ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes
+[       OK ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain
+[       OK ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain (0 ms)
+[ RUN      ] RelocatableSuperblockTest.CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor
+[       OK ] RelocatableSuperblockTest.CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor (0 ms)
+[ RUN      ] RelocatableSuperblockTest.IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration
+[       OK ] RelocatableSuperblockTest.IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration (0 ms)
+[----------] 15 tests from RelocatableSuperblockTest (129 ms total)
+
+[----------] Global test environment tear-down
+[==========] 50 tests from 6 test suites ran. (350 ms total)
+[  PASSED  ] 50 tests.

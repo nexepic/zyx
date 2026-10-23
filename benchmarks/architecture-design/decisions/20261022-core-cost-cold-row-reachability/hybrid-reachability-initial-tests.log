@@ -1,0 +1,88 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyColdRowOwnershipTest.*:HybridPropertyLargeOwnershipTest.*
+[==========] Running 25 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyLargeOwnershipTest
+[ RUN      ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats
+[       OK ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats (1 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.MixedNativeAndRowOwnersAreScannedInOneStableLogicalOrder
+[       OK ] HybridPropertyLargeOwnershipTest.MixedNativeAndRowOwnersAreScannedInOneStableLogicalOrder (10 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.OwnerAndDirectoryBudgetsNeverClaimAnIncompleteNativeScanIsExhausted
+[       OK ] HybridPropertyLargeOwnershipTest.OwnerAndDirectoryBudgetsNeverClaimAnIncompleteNativeScanIsExhausted (8 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.LogicalOwnerCursorCanResumeOnlyAfterAllMembershipsOfOneOwner
+[       OK ] HybridPropertyLargeOwnershipTest.LogicalOwnerCursorCanResumeOnlyAfterAllMembershipsOfOneOwner (7 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.CompleteNativeOwnershipProofRetiresOnlyOrphansAndPreservesPinnedValues
+[       OK ] HybridPropertyLargeOwnershipTest.CompleteNativeOwnershipProofRetiresOnlyOrphansAndPreservesPinnedValues (48 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.NativeReclamationRecoverySelectsCompleteOldOrNewRoutes
+[       OK ] HybridPropertyLargeOwnershipTest.NativeReclamationRecoverySelectsCompleteOldOrNewRoutes (47 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.RemovingAllNativeLargeFieldsReleasesOnlyUnpinnedImmutablePools
+[       OK ] HybridPropertyLargeOwnershipTest.RemovingAllNativeLargeFieldsReleasesOnlyUnpinnedImmutablePools (31 ms)
+[ RUN      ] HybridPropertyLargeOwnershipTest.ConcurrentNativePublicationInvalidatesTheWholeOwnershipProof
+[       OK ] HybridPropertyLargeOwnershipTest.ConcurrentNativePublicationInvalidatesTheWholeOwnershipProof (29 ms)
+[----------] 8 tests from HybridPropertyLargeOwnershipTest (185 ms total)
+
+[----------] 17 tests from HybridPropertyColdRowOwnershipTest
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ForwardAndReverseAuditDistinctRawBlocksWithoutMaterializingValues
+[       OK ] HybridPropertyColdRowOwnershipTest.ForwardAndReverseAuditDistinctRawBlocksWithoutMaterializingValues (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ColdOnlyGroupsKeepExactOwnerAndPhysicalRecordOwnership
+[       OK ] HybridPropertyColdRowOwnershipTest.ColdOnlyGroupsKeepExactOwnerAndPhysicalRecordOwnership (3 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.EdgeNamespaceRawColdRecordsAndRealLargeRootsEnumerateTheirExactReferenceOnce
+[       OK ] HybridPropertyColdRowOwnershipTest.EdgeNamespaceRawColdRecordsAndRealLargeRootsEnumerateTheirExactReferenceOnce (5 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.IncorrectOwnerToBlockBindingCannotPassForwardOrReverseChecks
+[       OK ] HybridPropertyColdRowOwnershipTest.IncorrectOwnerToBlockBindingCannotPassForwardOrReverseChecks (3 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.GlobalColdCountIsSummedAcrossBlocksRatherThanTrustedFromLocalBounds
+[       OK ] HybridPropertyColdRowOwnershipTest.GlobalColdCountIsSummedAcrossBlocksRatherThanTrustedFromLocalBounds (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateColdRecordRequiresTheReversePhysicalPhase
+[       OK ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateColdRecordRequiresTheReversePhysicalPhase (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateMembershipDoesNotAcquireItsGroupsAuthority
+[       OK ] HybridPropertyColdRowOwnershipTest.UnreferencedDuplicateMembershipDoesNotAcquireItsGroupsAuthority (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.CompleteAuditInspectsActualValuesBeyondCanonicalDirectoriesAndValidOuterChecksums
+[       OK ] HybridPropertyColdRowOwnershipTest.CompleteAuditInspectsActualValuesBeyondCanonicalDirectoriesAndValidOuterChecksums (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer
+[       OK ] HybridPropertyColdRowOwnershipTest.LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ActualLargeStoreIsRequiredAndReferenceConsumerExceptionsDoNotReplayOrWrite
+[       OK ] HybridPropertyColdRowOwnershipTest.ActualLargeStoreIsRequiredAndReferenceConsumerExceptionsDoNotReplayOrWrite (5 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.QuotaAndCancellationRefuseWithoutLosingTemporaryOwnershipAndCanRetry
+[       OK ] HybridPropertyColdRowOwnershipTest.QuotaAndCancellationRefuseWithoutLosingTemporaryOwnershipAndCanRetry (4 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ReferenceMarkingBorrowsOneWholeRootWithoutFieldMaterialization
+[       OK ] HybridPropertyColdRowOwnershipTest.ReferenceMarkingBorrowsOneWholeRootWithoutFieldMaterialization (2 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ReferenceMarkingRejectsFutureBlockReferenceBeforeCallingSink
+[       OK ] HybridPropertyColdRowOwnershipTest.ReferenceMarkingRejectsFutureBlockReferenceBeforeCallingSink (2 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ReferenceSinkFailureDoesNotReplayAndReleasesItsWindow
+[       OK ] HybridPropertyColdRowOwnershipTest.ReferenceSinkFailureDoesNotReplayAndReleasesItsWindow (2 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ScannerResumesAfterOneWholeRootAndOneReferenceFreeBoundary
+[       OK ] HybridPropertyColdRowOwnershipTest.ScannerResumesAfterOneWholeRootAndOneReferenceFreeBoundary (2 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ScannerAdvancesInlineColdOnlyEdgeGroupWithoutFieldEnumeration
+[       OK ] HybridPropertyColdRowOwnershipTest.ScannerAdvancesInlineColdOnlyEdgeGroupWithoutFieldEnumeration (2 ms)
+[ RUN      ] HybridPropertyColdRowOwnershipTest.ScannerCannotGrantExhaustionWhenMetadataOrOwnerBudgetIsAbsent
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdRowOwnership.cpp:237: Failure
+Expected equality of these values:
+  result.locations_scanned
+    Which is: 1
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdRowOwnership.cpp:237: Failure
+Expected equality of these values:
+  result.last_scanned_location_id
+    Which is: 1
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdRowOwnership.cpp:242: Failure
+Expected equality of these values:
+  sink.calls
+    Which is: 1
+  0U
+    Which is: 0
+
+[  FAILED  ] HybridPropertyColdRowOwnershipTest.ScannerCannotGrantExhaustionWhenMetadataOrOwnerBudgetIsAbsent (2 ms)
+[----------] 17 tests from HybridPropertyColdRowOwnershipTest (64 ms total)
+
+[----------] Global test environment tear-down
+[==========] 25 tests from 2 test suites ran. (250 ms total)
+[  PASSED  ] 24 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyColdRowOwnershipTest.ScannerCannotGrantExhaustionWhenMetadataOrOwnerBudgetIsAbsent
+
+ 1 FAILED TEST

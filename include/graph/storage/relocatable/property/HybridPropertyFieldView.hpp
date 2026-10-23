@@ -4,7 +4,10 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/core/Node.hpp"
+#include "graph/core/Edge.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyColumnMembership.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyColdRowBlock.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 
 namespace graph::storage {
@@ -34,14 +37,58 @@ public:
     }
     [[nodiscard]] HybridPropertyColumnMembership readColumnMembership(const SlottedSlotReference &reference,
         const HybridPropertyGroupRecord &group, Generation descriptorGeneration) const {
-        hybrid_property_detail::require(group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP &&
+        hybrid_property_detail::require(group.usesColumnMembership() &&
             group.column_membership == reference, "column membership slot does not belong to its group");
         return HybridPropertyColumnMembership::decode(page_.read(reference), group, descriptorGeneration, visible_generation_);
+    }
+    // The returned body is the caller's one accounted ROW representation, not
+    // a cache. Whole-root LargeValue references still require the existing
+    // storage layer's actual manifest/media/content admission before use.
+    [[nodiscard]] HybridPropertyColdRowBlock::Decoded readColdRows(const SlottedSlotReference &reference,
+        const HybridPropertyGroupRecord &group, const HybridPropertyColumnMembership &matrix,
+        Generation descriptorGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
+        const CancellationCheckpoint *cancellation = nullptr) const {
+        return decodeColdRows(page_.read(reference), reference, group, matrix, descriptorGeneration,
+            visible_generation_, std::move(memory), cancellation);
+    }
+    // Physical auditing already owns the exact authenticated slot bytes. Share
+    // the same binding/owner/count checks without opening a second ROW body.
+    [[nodiscard]] static HybridPropertyColdRowBlock::Decoded decodeColdRows(std::span<const std::byte> bytes,
+        const SlottedSlotReference &reference, const HybridPropertyGroupRecord &group,
+        const HybridPropertyColumnMembership &matrix, Generation descriptorGeneration, Generation visibleGeneration,
+        std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr) {
+        matrix.validateInGroup(group, descriptorGeneration, visibleGeneration);
+        hybrid_property_detail::require(group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER,
+            "cold ROW block has no ROW-remainder group");
+        uint64_t expected = 0;
+        for (unsigned slot = 0; slot < 64; ++slot)
+            if ((matrix.cold_rows.owners & (UINT64_C(1) << slot)) && matrix.cold_rows.roots[slot] == reference)
+                expected |= UINT64_C(1) << slot;
+        hybrid_property_detail::require(expected != 0, "cold ROW slot has no group-owned locator");
+        auto block = HybridPropertyColdRowBlock::decode(bytes, group.owner_kind, group.group_id,
+            group.semantic_generation, std::move(memory), cancellation);
+        const auto remainingOwners = unsigned(std::popcount(matrix.cold_rows.owners & ~expected));
+        hybrid_property_detail::require(block.owners == expected && block.fields <= matrix.cold_fields &&
+            (remainingOwners ? matrix.cold_fields - block.fields >= remainingOwners : block.fields == matrix.cold_fields),
+            "cold ROW block disagrees with its membership mask or field count");
+        if (matrix.column_count) for (unsigned slot = 0; slot < 64; ++slot) {
+            const auto row = block.row(slot);
+            if (!row || row->large_value_reference) continue;
+            if (cancellation) cancellation->check();
+            EntityPropertyCollectionRootCodec::visitSelectedEncoded(row->root,
+                (group.group_id - 1U) * 64U + slot + 1U,
+                group.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId,
+                std::span(matrix.tokens).first(matrix.column_count),
+                [](size_t, std::optional<std::span<const std::byte>> value) {
+                    hybrid_property_detail::require(!value, "cold ROW contains a group-owned hot token");
+                }, nullptr, cancellation);
+        }
+        return block;
     }
     [[nodiscard]] HybridPropertyGroupRecord readGroup(const SlottedSlotReference &reference,
         EntityPropertyOwnerKind kind, uint64_t group, Generation descriptorGeneration) const {
         const auto result = HybridPropertyGroupRecord::decode(page_.read(reference), kind, group, descriptorGeneration, visible_generation_);
-        hybrid_property_detail::require(result.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+        hybrid_property_detail::require(!result.usesColumnMembership() ||
             (result.column_membership.page_id == reference.page_id && result.column_membership.slot_id != reference.slot_id),
             "compact group and membership must share one page with distinct slots");
         return result;

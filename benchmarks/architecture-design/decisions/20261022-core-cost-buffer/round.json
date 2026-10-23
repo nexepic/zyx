@@ -1,0 +1,75 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "related_module_tests": 399,
+  "scaling_mechanism": {
+    "residency_pages": [
+      32,
+      512,
+      2048
+    ],
+    "generation_checks": [
+      1,
+      1,
+      1
+    ],
+    "range_checks": [
+      1,
+      1,
+      1
+    ],
+    "erase_visits": [
+      2,
+      2,
+      2
+    ],
+    "flush_visits": [
+      1,
+      1,
+      1
+    ],
+    "complexity": "O(log N + affected resident entries); flush O(dirty entries)"
+  },
+  "medium_targeted_p50_ms": {
+    "property_set": {
+      "before": 23.6543385,
+      "after": 11.140631
+    },
+    "edge_batch_1000": {
+      "before": 194.9731735,
+      "after": 148.2714105
+    }
+  },
+  "formal_full_matrix": false,
+  "kuzu_objective_met": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "sources": {
+    "docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx": "172bd33a1529466ef74d01a3ad766c30c5f84df886551ff78e635f1f718ceb5f",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "c412d48c0e276a40e12325404abbceb7e20b4d1c80a7195aa819015ee52017ce",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx": "22fa0cf93c2fa5c36bc7ab8e4926f32a9b5e361206c6507f475b0ea63b244d05",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "b34d9380f12e58724464f4752793b6fbb0d9ebe446dd5165eb8a442c3c5d3420",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "12fac90232d4f6a2879fd6492f5500079d3cfff25a501a5521bea608562416d1",
+    "include/graph/storage/relocatable/cache/BufferPool.hpp": "39dfbf7f6d082efca094b1e59a2e7988ad0b9033853e81edc00f3fd0a2ddcabe",
+    "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "61d3fdf3502e8f12c2529a5e3b57e78c5cccba7f865c0a6a56c2520c931941d9",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "d96a07b700a279195287df5d596e199cd0201f49d5080dcc3e320e288be2f0fe",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "67ad0c866e7c20fa87425957b186698491e5a3a1efa5cb9ad8f1d9a42f346c95",
+    "src/storage/relocatable/cache/BufferPool.cpp": "15506d07aafdb2d65d854943334536d8f8a55540c9e3389fac441a0b1ba23072",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "079b1cfb395d35209dcf76866743bfe8662a15b38c19571c5396e7b5e5d80455",
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "0e1a069094a6c0c752056b049e91c7844be798e2f9c95c6168d7ef4a57a6674b",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "d8d8e95e2d2bbc97585a9f89feae845f390141db7290f227560de14cf789573a",
+    "tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp": "6519eba9b10b0f22f091ebe044388ccb49ad2bf611ccba2589660cc89e93d031",
+    "tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp": "8e2e8a5d368d51802e5fbe16de71c11855d7de5bb0bc03578f8112efaa1d25b8",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "906bd3fe0f22c4fceb637c96567d302f7c1028285907c6cb41ba1db4ee1ecd2c",
+    "tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp": "1826fbf03f77108c0d90061ef0e24cb3c5814e6588c9831fb8d9ac3f8ff9962e",
+    "tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp": "52e534c51c0f6b2a1b36d1f2796c271c5047367512cffbc6703646acb2d69ab5",
+    "include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp": "59439b5dcfc2211693cd13e8073664e71a3d7a4725cb997b29a161c2b7d3ac3d"
+  },
+  "release_library_sha256": "caad9d6dbe0940c2e4cd96fa2623be94a345fbe2ab1657dafa90103180461be7",
+  "retained_archive": "/workspace/zyx-buffer-candidate/libzyx_core.a",
+  "source_patch_sha256": "001a8d101f7296531c78bf89f5292b7f0bdca0e6348d50f97167af07489ddcf9",
+  "notes": [
+    "all index/queue/entry allocations remain under the same CACHE grant; payload ceiling unchanged",
+    "read and residual write gaps remain; no commit/push because accepted progress did not increase"
+  ]
+}

@@ -1,0 +1,246 @@
+{
+  "tests": 20,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T11:42:39Z",
+  "time": "0.287s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdNativeLifecycleTest",
+      "tests": 20,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T11:42:39Z",
+      "time": "0.287s",
+      "testsuite": [
+        {
+          "name": "ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.015s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 211,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 278,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ReadOnlyGroupProbesDistinguishPendingAndLiveWithoutColdDecoding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualMixedBirthAndDeletionPublishesOnlyNewEntityAndCompleteColdRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 312,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.017s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualFinalGroupDeletionRemovesAllEntityAndFieldAuthorityTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 331,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualInversePublishesCompleteLargeRowsAndPreservesOldColdSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 347,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.007s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "PartialInactiveRootFaultReopensOnlyOriginalColdValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 371,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "CompleteInactiveRootFaultReopensCompleteColdValueAndManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 374,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "CancellationAfterPrivateWritePreservesOldRootRefundsAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 377,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualColdIndexesAndUniqueRequiredConstraintsPublishTogetherOrRefuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 403,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.021s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualPropertyClearKeepsLiveOwnerAndRemovesAllItsHotAndColdFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 437,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualInverseRetainsOtherNamespaceOnTheSameLogicalFieldFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 458,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.017s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        },
+        {
+          "name": "ActualColdValueReclamationPreservesLiveValueAndPinnedOldCarrierThenReusesFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 493,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.017s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready",
+          "gc_stage": "checked"
+        },
+        {
+          "name": "ActualSharedColdFieldRelocationPreservesBothKindsAndReleasesOnlyAfterOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 545,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T11:42:39Z",
+          "time": "0.019s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "fixture_stage": "ready"
+        }
+      ]
+    }
+  ]
+}

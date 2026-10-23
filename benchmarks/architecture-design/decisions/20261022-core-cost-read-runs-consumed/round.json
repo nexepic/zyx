@@ -1,0 +1,22 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "typed_tests": 271,
+  "related_lifecycle_tests": 404,
+  "lifecycle_scope": "404 run includes new API; primary scan consumer correction additionally verified in latest 271 typed tests",
+  "retained_library": "/workspace/zyx-read-runs-consumed-candidate/libzyx_core.a",
+  "library_sha256": "1e0680c61fa63163d7e404a61ddfb64e43cf82ed26781c27969fcd9e1c92b4ee",
+  "patch_sha256": "cc1a2a776967b72334e35fcf31050033700c25c8a145e013c2dfd85da25fd4cb",
+  "primary_scan_run_batches": 196,
+  "typed_text_cells": 100000,
+  "run_cells": 97652,
+  "owner_field_selections": 100000,
+  "performance_conclusion": "only about 2-3 percent improvement in one bounded medium pair; not qualitative and not final P95 or Kuzu acceptance",
+  "known_limit": "4096-byte cache full QueryEngine scan cannot evict pinned pages; reproduced before primary run integration; typed source/copy lifecycle passes at this limit",
+  "untracked_engine_source": {
+    "path": "include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp",
+    "sha256": "59439b5dcfc2211693cd13e8073664e71a3d7a4725cb997b29a161c2b7d3ac3d",
+    "archive": "additional-source.tar.gz"
+  }
+}

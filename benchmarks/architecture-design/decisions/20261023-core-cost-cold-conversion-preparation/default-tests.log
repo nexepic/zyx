@@ -1,0 +1,351 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 147 tests from 17 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from HybridPropertyLargeFieldPreparationTest
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.SingleFieldEncoderPreservesExistingWireBytesAndRefunds
+[       OK ] HybridPropertyLargeFieldPreparationTest.SingleFieldEncoderPreservesExistingWireBytesAndRefunds (0 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.ProposalOwnsPayloadWithoutPublishingOrConsumingIdentity
+[       OK ] HybridPropertyLargeFieldPreparationTest.ProposalOwnsPayloadWithoutPublishingOrConsumingIdentity (0 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.SharedContentReusesIdentityAndDifferentTokenDoesNot
+[       OK ] HybridPropertyLargeFieldPreparationTest.SharedContentReusesIdentityAndDifferentTokenDoesNot (0 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput
+[       OK ] HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput (2 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing
+[       OK ] HybridPropertyLargeFieldPreparationTest.BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing (0 ms)
+[----------] 5 tests from HybridPropertyLargeFieldPreparationTest (3 ms total)
+
+[----------] 4 tests from RelocatableBorrowedPropertyRootTest
+[ RUN      ] RelocatableBorrowedPropertyRootTest.CanonicalNodeAndEdgeBytesMatchExistingCodecWithoutCloningSourceValues
+[       OK ] RelocatableBorrowedPropertyRootTest.CanonicalNodeAndEdgeBytesMatchExistingCodecWithoutCloningSourceValues (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.OwnerNeutralLargeBytesMatchExistingCanonicalPayloadForNestedValues
+[       OK ] RelocatableBorrowedPropertyRootTest.OwnerNeutralLargeBytesMatchExistingCanonicalPayloadForNestedValues (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.EmptyCanonicalRootsAndInvalidOwnersPointersOrOrderRetainExistingContract
+[       OK ] RelocatableBorrowedPropertyRootTest.EmptyCanonicalRootsAndInvalidOwnersPointersOrOrderRetainExistingContract (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.QuotaAndCancellationAfterAllocationReleaseBothOutputAndCanonicalWorkspace
+[       OK ] RelocatableBorrowedPropertyRootTest.QuotaAndCancellationAfterAllocationReleaseBothOutputAndCanonicalWorkspace (0 ms)
+[----------] 4 tests from RelocatableBorrowedPropertyRootTest (0 ms total)
+
+[----------] 16 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues
+[       OK ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode
+[       OK ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence
+[       OK ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads (3 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes
+[       OK ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation (3 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry
+[       OK ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission
+[       OK ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry (0 ms)
+[----------] 16 tests from RelocatablePropertyCollectionRootTest (7 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes (0 ms)
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest (0 ms total)
+
+[----------] 1 test from HybridPropertyLargeOwnershipTest
+[ RUN      ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats
+[       OK ] HybridPropertyLargeOwnershipTest.RowScannerRetainsItsOriginalRecordCursorInBothFormats (1 ms)
+[----------] 1 test from HybridPropertyLargeOwnershipTest (1 ms total)
+
+[----------] 1 test from LargeValueOwnershipScanSinkTest
+[ RUN      ] LargeValueOwnershipScanSinkTest.VirtualDestructorIsSafe
+[       OK ] LargeValueOwnershipScanSinkTest.VirtualDestructorIsSafe (0 ms)
+[----------] 1 test from LargeValueOwnershipScanSinkTest (0 ms total)
+
+[----------] 46 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsOverlappingManifestDataPageRanges
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsOverlappingManifestDataPageRanges (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues (25 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner
+[       OK ] RelocatableMetadataStoreTest.LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRouteOutsideStatePage
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRouteOutsideStatePage (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetirementBudgetBeforePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetirementBudgetBeforePublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerBatchesPoolLifecyclePublications
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerBatchesPoolLifecyclePublications (14 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValuePoolBatchReleaseWaitsForPinnedReaders
+[       OK ] RelocatableMetadataStoreTest.LargeValuePoolBatchReleaseWaitsForPinnedReaders (15 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot
+[       OK ] RelocatableMetadataStoreTest.RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement
+[       OK ] RelocatableMetadataStoreTest.LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement (88 ms)
+[----------] 46 tests from RelocatableMetadataStoreTest (200 ms total)
+
+[----------] 3 tests from LargeValueMaintenanceJournalCodecTest
+[ RUN      ] LargeValueMaintenanceJournalCodecTest.RoundTripsEachValidDurablePhase
+[       OK ] LargeValueMaintenanceJournalCodecTest.RoundTripsEachValidDurablePhase (0 ms)
+[ RUN      ] LargeValueMaintenanceJournalCodecTest.RejectsInvalidInMemoryEvidenceBeforeItCanBePersisted
+[       OK ] LargeValueMaintenanceJournalCodecTest.RejectsInvalidInMemoryEvidenceBeforeItCanBePersisted (0 ms)
+[ RUN      ] LargeValueMaintenanceJournalCodecTest.RejectsDamagedAndNoncanonicalDurableRecords
+[       OK ] LargeValueMaintenanceJournalCodecTest.RejectsDamagedAndNoncanonicalDurableRecords (0 ms)
+[----------] 3 tests from LargeValueMaintenanceJournalCodecTest (0 ms total)
+
+[----------] 8 tests from HybridPropertyColdRowInspectionTest
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues
+[       OK ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput
+[       OK ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges
+[       OK ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked
+[       OK ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure
+[       OK ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes
+[       OK ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership
+[       OK ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues
+[       OK ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues (0 ms)
+[----------] 8 tests from HybridPropertyColdRowInspectionTest (5 ms total)
+
+[----------] 3 tests from HybridPropertyDescriptorStoreTest
+[ RUN      ] HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots
+[       OK ] HybridPropertyDescriptorStoreTest.DefaultFormatCannotPublishCandidateRoots (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged
+[       OK ] HybridPropertyDescriptorStoreTest.FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged (0 ms)
+[ RUN      ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected
+[       OK ] HybridPropertyDescriptorStoreTest.OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected (0 ms)
+[----------] 3 tests from HybridPropertyDescriptorStoreTest (0 ms total)
+
+[----------] 13 tests from HybridPropertyColumnMembershipTest
+[ RUN      ] HybridPropertyColumnMembershipTest.RoundTripsBothWordWidthsAndOnlyEnumeratesActualFields
+[       OK ] HybridPropertyColumnMembershipTest.RoundTripsBothWordWidthsAndOnlyEnumeratesActualFields (1 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.OnlyBoundCanonicalLocatorsCanBeEncodedAndDecoded
+[       OK ] HybridPropertyColumnMembershipTest.OnlyBoundCanonicalLocatorsCanBeEncodedAndDecoded (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.EnumerationHonorsBoundsCancellationAndOwnerDomain
+[       OK ] HybridPropertyColumnMembershipTest.EnumerationHonorsBoundsCancellationAndOwnerDomain (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RejectsWrongIdentityVersionLengthsAndReservedFields
+[       OK ] HybridPropertyColumnMembershipTest.RejectsWrongIdentityVersionLengthsAndReservedFields (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RejectsSemanticallyCorruptMasksEvenWithCorrectDeclaredCounts
+[       OK ] HybridPropertyColumnMembershipTest.RejectsSemanticallyCorruptMasksEvenWithCorrectDeclaredCounts (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.CommonCompleteOwnersProveEligibilityButDoNotHideNoncanonicalBits
+[       OK ] HybridPropertyColumnMembershipTest.CommonCompleteOwnersProveEligibilityButDoNotHideNoncanonicalBits (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ComplementaryPartialOwnersStillRequireExactPerColumnEligibility
+[       OK ] HybridPropertyColumnMembershipTest.ComplementaryPartialOwnersStillRequireExactPerColumnEligibility (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ValidatesFinalGroupDomainAndDeadOwnerMasks
+[       OK ] HybridPropertyColumnMembershipTest.ValidatesFinalGroupDomainAndDeadOwnerMasks (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ConstructionRejectsContradictorySourceColumnsBeforeEncoding
+[       OK ] HybridPropertyColumnMembershipTest.ConstructionRejectsContradictorySourceColumnsBeforeEncoding (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RemovingOrdinalsAcrossWordBoundaryPreservesOtherFieldsAndZeroesUnusedBits
+[       OK ] HybridPropertyColumnMembershipTest.RemovingOrdinalsAcrossWordBoundaryPreservesOtherFieldsAndZeroesUnusedBits (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.PresenceReplacementTouchesOnlyItsOrdinalAndRefusesDemotionOrDeadSlots
+[       OK ] HybridPropertyColumnMembershipTest.PresenceReplacementTouchesOnlyItsOrdinalAndRefusesDemotionOrDeadSlots (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.RowRemainderCombinesHotColumnsWithCanonicalColdBlockLocations
+[       OK ] HybridPropertyColumnMembershipTest.RowRemainderCombinesHotColumnsWithCanonicalColdBlockLocations (0 ms)
+[ RUN      ] HybridPropertyColumnMembershipTest.ColdOnlyAndPropertylessNativeOwnersRetainTheirGroupAfterLastColumnRemoval
+[       OK ] HybridPropertyColumnMembershipTest.ColdOnlyAndPropertylessNativeOwnersRetainTheirGroupAfterLastColumnRemoval (0 ms)
+[----------] 13 tests from HybridPropertyColumnMembershipTest (3 ms total)
+
+[----------] 15 tests from HybridPropertyPageImageTest
+[ RUN      ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration
+[       OK ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots
+[       OK ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource
+[       OK ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration
+[       OK ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot
+[       OK ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource
+[       OK ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount
+[       OK ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords
+[       OK ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators
+[       OK ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity
+[       OK ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership
+[       OK ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.CompactMembershipSharesAFrameAndSourceCopyRetainsItsOldOwnerBits
+[       OK ] HybridPropertyPageImageTest.CompactMembershipSharesAFrameAndSourceCopyRetainsItsOldOwnerBits (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.DirectColumnLocatorMustAuthenticateTheSelectedTokenBeforeReturningValues
+[       OK ] HybridPropertyPageImageTest.DirectColumnLocatorMustAuthenticateTheSelectedTokenBeforeReturningValues (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.RowRemainderModeKeepsSamePageMembershipThroughCloneReplaceAndReopen
+[       OK ] HybridPropertyPageImageTest.RowRemainderModeKeepsSamePageMembershipThroughCloneReplaceAndReopen (0 ms)
+[----------] 15 tests from HybridPropertyPageImageTest (1 ms total)
+
+[----------] 4 tests from HybridPropertyPageBindingTest
+[ RUN      ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat
+[       OK ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal
+[       OK ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.RowRemainderGroupUsesAuthenticatedSamePageMembershipInBorrowedView
+[       OK ] HybridPropertyPageBindingTest.RowRemainderGroupUsesAuthenticatedSamePageMembershipInBorrowedView (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.ColdRowsValidateGroupOwnedMaskGlobalHotAuthorityAndAccountBeforeExposure
+[       OK ] HybridPropertyPageBindingTest.ColdRowsValidateGroupOwnedMaskGlobalHotAuthorityAndAccountBeforeExposure (0 ms)
+[----------] 4 tests from HybridPropertyPageBindingTest (0 ms total)
+
+[----------] 1 test from HybridPropertyPublicationGuardTest
+[ RUN      ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation
+[       OK ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation (0 ms)
+[----------] 1 test from HybridPropertyPublicationGuardTest (0 ms total)
+
+[----------] 1 test from HybridPropertyPhysicalReaderTest
+[ RUN      ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit
+[       OK ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit (0 ms)
+[----------] 1 test from HybridPropertyPhysicalReaderTest (0 ms total)
+
+[----------] 8 tests from HybridPropertyRecordsTest
+[ RUN      ] HybridPropertyRecordsTest.CanonicalPrimitiveLayoutsPreserveRawBitsAndNullVersusMissing
+[       OK ] HybridPropertyRecordsTest.CanonicalPrimitiveLayoutsPreserveRawBitsAndNullVersusMissing (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.NativeIdDomainRejectsZeroOverflowAndFinalGroupPhantomSlot
+[       OK ] HybridPropertyRecordsTest.NativeIdDomainRejectsZeroOverflowAndFinalGroupPhantomSlot (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.GroupCountUsesWireRangeWhileConversionKeepsItsSeparateWorkBound
+[       OK ] HybridPropertyRecordsTest.GroupCountUsesWireRangeWhileConversionKeepsItsSeparateWorkBound (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.RetainedColumnsAllowBirthAndDeathOnlyOnAbsentCells
+[       OK ] HybridPropertyRecordsTest.RetainedColumnsAllowBirthAndDeathOnlyOnAbsentCells (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.CorrectBytesDoNotAuthorizeWrongGroupTokenKindTypeOrGeneration
+[       OK ] HybridPropertyRecordsTest.CorrectBytesDoNotAuthorizeWrongGroupTokenKindTypeOrGeneration (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.MalformedHeadersMasksCountsAndNoncanonicalPayloadFailClosed
+[       OK ] HybridPropertyRecordsTest.MalformedHeadersMasksCountsAndNoncanonicalPayloadFailClosed (0 ms)
+[ RUN      ] HybridPropertyRecordsTest.EveryTruncatedWidthAndOversizedRecordRejectWithoutReadingOutsideInput
+[       OK ] HybridPropertyRecordsTest.EveryTruncatedWidthAndOversizedRecordRejectWithoutReadingOutsideInput (1 ms)
+[ RUN      ] HybridPropertyRecordsTest.ShortTextWordsAreCanonicalByteValuesAcrossNullAndMissingMasks
+[       OK ] HybridPropertyRecordsTest.ShortTextWordsAreCanonicalByteValuesAcrossNullAndMissingMasks (0 ms)
+[----------] 8 tests from HybridPropertyRecordsTest (1 ms total)
+
+[----------] 15 tests from RelocatableSuperblockTest
+[ RUN      ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips
+[       OK ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages
+[       OK ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages (4 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (120 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor
+[       OK ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor (0 ms)
+[ RUN      ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary
+[       OK ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration
+[       OK ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag
+[       OK ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationDoesNotSerializeOrChecksum
+[       OK ] RelocatableSuperblockTest.DescriptorValidationDoesNotSerializeOrChecksum (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationRejectsEveryMalformedRoot
+[       OK ] RelocatableSuperblockTest.DescriptorValidationRejectsEveryMalformedRoot (0 ms)
+[ RUN      ] RelocatableSuperblockTest.DescriptorValidationPreservesLifecycleAndReserveFences
+[       OK ] RelocatableSuperblockTest.DescriptorValidationPreservesLifecycleAndReserveFences (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues
+[       OK ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes
+[       OK ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain
+[       OK ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain (0 ms)
+[ RUN      ] RelocatableSuperblockTest.CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor
+[       OK ] RelocatableSuperblockTest.CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor (0 ms)
+[ RUN      ] RelocatableSuperblockTest.IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration
+[       OK ] RelocatableSuperblockTest.IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration (0 ms)
+[----------] 15 tests from RelocatableSuperblockTest (126 ms total)
+
+[----------] Global test environment tear-down
+[==========] 147 tests from 17 test suites ran. (354 ms total)
+[  PASSED  ] 147 tests.

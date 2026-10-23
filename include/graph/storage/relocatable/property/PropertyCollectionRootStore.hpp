@@ -215,7 +215,10 @@ namespace graph::storage {
             std::span<std::optional<size_t>> counts, const CancellationCheckpoint *cancellation,
             const SelectedPropertyReadAdmission *admission = nullptr,
             const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
-            const PropertyScalarReadSink *scalars = nullptr) const;
+            const PropertyScalarReadSink *scalars = nullptr,
+            const PropertyTextReadSink *texts = nullptr,
+            const PropertyColumnBatchReadSinks *batches = nullptr,
+            const std::function<void()> *beforeColdRead = nullptr) const;
 
 		[[nodiscard]] PropertyCollectionRoot decodeEntityRoot(const MetadataSnapshotPin &snapshot,
 															  const EntityPropertyKey &key,
@@ -296,7 +299,8 @@ namespace graph::storage {
 				std::span<std::optional<PropertyCollectionRootEntry>> results,
 				bool columnBatch = true, const SelectedPropertyReadAdmission *admission = nullptr,
 				const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
-            const PropertyScalarReadSink *scalars = nullptr, const PropertyTextReadSink *texts = nullptr);
+            const PropertyScalarReadSink *scalars = nullptr, const PropertyTextReadSink *texts = nullptr,
+            const PropertyColumnBatchReadSinks *batches = nullptr);
 		// Cursor-preserving counterpart used by indexed candidate streams. It keeps
 		// the owner-directory route across adjacent batches while returning the
 		// selected values and root counts required by the same validation pass.

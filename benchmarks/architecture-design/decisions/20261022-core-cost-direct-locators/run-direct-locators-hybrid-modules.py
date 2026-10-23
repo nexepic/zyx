@@ -1,0 +1,12 @@
+from pathlib import Path
+import subprocess,json,os,hashlib,shlex
+r=Path('/workspace/zyx');d=r/'benchmarks/architecture-design/results/20261022-core-cost/direct-locators-hybrid'
+cmd=shlex.split(Path('/tmp/short-text-storageio-compile.txt').read_text());cmd.insert(1,'-DZYX_ENABLE_STORAGE_TEST_HOOKS=1');obj=d/'storageio-test-hooks.o'
+for flag in ['-o','-MT','-MF']:cmd[cmd.index(flag)+1]=str(obj)+('.d' if flag=='-MF' else '')
+with (d/'test-hook-build.log').open('w') as log:subprocess.run(cmd,cwd='/workspace/zyx-build-core-hybrid',stdout=log,stderr=subprocess.STDOUT,check=True)
+stem=os.environ.get('ZYX_TEST_OUTPUT_PREFIX','');test_filter=os.environ.get('ZYX_TEST_FILTER','*')
+args=json.loads((d/'link.json').read_text());args.insert(args.index('/workspace/zyx-build-core-hybrid/libzyx_core.a'),str(obj))
+with (d/'link.log').open('w') as log:subprocess.run(args,cwd=r/'buildDir',stdout=log,stderr=subprocess.STDOUT,check=True)
+with (d/(stem+'tests.log')).open('w') as log:p=subprocess.run([str(d/'module-tests'),'--gtest_filter='+test_filter,'--gtest_output=json:'+str(d/(stem+'tests.json'))],env=dict(os.environ,LLVM_PROFILE_FILE='/tmp/direct-locators-hybrid-%p.profraw'),stdout=log,stderr=subprocess.STDOUT)
+sha=lambda p:hashlib.file_digest(p.open('rb'),'sha256').hexdigest()
+(d/(stem+'receipt.json')).write_text(json.dumps({'full_suite':False,'test_filter':test_filter,'returncode':p.returncode,'library_sha256':sha(Path('/workspace/zyx-build-core-hybrid/libzyx_core.a')),'experimental_profile':'11/37','progress_percent':90,'test_hook_compile':cmd,'link':args,'test_hook_source_sha256':sha(r/'src/storage/StorageIO.cpp'),'test_hook_purpose':'current StorageIO implementation with native syscall fault-injection seams; no production algorithm change or timing claim'},indent=2)+'\n');print(p.returncode);raise SystemExit(p.returncode)

@@ -30,6 +30,7 @@
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
 #include "graph/storage/relocatable/maintenance/LargeValueMaintenanceJournal.hpp"
 #include <algorithm>
 #include <bit>
@@ -92,7 +93,8 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &sourceValues,
     EntityPageStore &sourceEntities, EntityLabelSetStore &sourceLabels, HybridPropertyPoolPlacement &placement,
     const NativeHybridVectorPublication *hybridVectors, const NativeHybridTopologyPublication *hybridTopology,
-    std::span<const NativeGraphLargeValueMutation> jointValues) {
+    std::span<const NativeGraphLargeValueMutation> jointValues,
+    HybridPropertyReadContext *preparationSource) {
     const auto &current = source.superblock();
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
@@ -125,7 +127,21 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         schemaDefinitions = std::move(schemaState.indexes);
         constraintDefinitions = std::move(schemaState.constraints);
     }
-    HybridPropertyReadContext context(io_, sourcePages, *this, source, request.cancellation);
+    // A private laboratory source can exercise the original coordinator up to
+    // its physical-write boundary. It grants no publication authority and must
+    // retain this exact pin/store/file; normal callers always use durableSource.
+    HybridPropertyReadContext durableSource(io_, sourcePages, *this, source, request.cancellation);
+    auto &context = preparationSource ? *preparationSource : durableSource;
+    require(!preparationSource || (context.usesSnapshot(source) && &context.metadata_ == this &&
+        context.source_io_ == io_ && !hybridVectors && !hybridTopology && jointValues.empty() &&
+        request.pending_owner_additions.empty()),
+        "native private field preparation has a foreign source or unsupported compound work");
+    const auto sourceGroupFor = [&](EntityPropertyKey owner, const std::function<void(size_t)> &admission,
+        SlottedSlotReference *reference = nullptr) {
+        // This coordinator consumes complete cold field/liveness plans. The
+        // generic groupRecord guard remains for unadapted mutation consumers.
+        return context.findGroup(owner, admission, reference, true, true);
+    };
 #if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     // The field planner and private page-image preparation share the same
     // authenticated source pin and pool reader. Reopening either boundary
@@ -145,6 +161,9 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     struct InlineChange { const NativeHybridPropertyColumnReplacement *replacement; SlottedSlotReference reference; bool insert = false; };
     utils::OwnedVector<InlineChange> inlineChanges{utils::OwnedPmrAllocator<InlineChange>(request.memory)};
     inlineChanges.reserve(replacements.size());
+    utils::OwnedVector<const NativeHybridPropertyColumnReplacement *> coldChanges{
+        utils::OwnedPmrAllocator<const NativeHybridPropertyColumnReplacement *>(request.memory)};
+
     std::optional<HybridPropertyGroupRecord> sourceGroup;
     bool multipleGroups = false;
     SlottedSlotReference groupReference;
@@ -153,7 +172,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     const auto admitReference = [&](size_t bytes) { referenceCredit.set(bytes); };
     if (!request.pending_owner_additions.empty() || !replacements.empty()) {
         const auto owner = !request.pending_owner_additions.empty() ? request.pending_owner_additions.front() : replacements.front().owner;
-        sourceGroup = context.groupRecord(owner, std::ref(admit), &groupReference);
+        sourceGroup = sourceGroupFor(owner, std::ref(admit), &groupReference);
         boundary.set(0); require(bool(sourceGroup), "native field work has no installed source group");
     }
     SystemCatalog propertyTokens(sourceTrees, *this);
@@ -182,7 +201,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             }
         }
     }
-    struct EntityImage { EntityPage page; uint64_t owner_id; };
+    struct EntityImage { EntityPage page; uint64_t owner_id; uint16_t source_free = 0; };
     utils::OwnedHeapReservation entityCredit(request.memory);
     utils::OwnedVector<EntityImage> entityImages{utils::OwnedPmrAllocator<EntityImage>(request.memory)};
     struct LabelImage { SlottedPage page; uint64_t owner_id; };
@@ -310,6 +329,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                 const auto contents = entityPools.read(source, location.page_id);
                 require(contents.owner.kind == PageOwnerKind::POK_ENTITY, "native owner deletion has a foreign Entity page");
                 entityImages.push_back({EntityPage::open(contents.owner, contents.payload), contents.owner.owner_id}); image = std::prev(entityImages.end());
+                image->source_free=uint16_t(image->page.header().slot_capacity-image->page.header().live_count);
             }
             image->page.erase(location.slot_id, location.slot_generation, owner.entity_id);
             if (nodes) erasedNodes.push_back(owner.entity_id); else erasedEdges.push_back(owner.entity_id);
@@ -318,7 +338,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         std::sort(erasedAdjacency.begin(), erasedAdjacency.end());
     }
     if (!request.owner_deletions.empty()) {
-        sourceGroup = context.groupRecord(request.owner_deletions.front(), std::ref(admit), &groupReference);
+        sourceGroup = sourceGroupFor(request.owner_deletions.front(), std::ref(admit), &groupReference);
         boundary.set(0); require(bool(sourceGroup), "native owner deletion has no installed source group");
     }
     deltas.reserve(replacements.size()); changes.reserve(replacements.size());
@@ -333,7 +353,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                 require(previous.owner != replacement.owner || previous.token != replacement.token,
                     "native field mutation repeats an owner/token");
             }
-            const auto group = context.groupRecord(replacement.owner, std::ref(admit)); boundary.set(0);
+            const auto group = sourceGroupFor(replacement.owner, std::ref(admit)); boundary.set(0);
             require(bool(group), "native field mutation has no source group");
             if (sourceGroup && *group != *sourceGroup) {
                 multipleGroups = true;
@@ -353,16 +373,33 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         PropertyValue scalar;
         const auto &value = replacement.propertyValue(scalar);
         if (std::ranges::find(request.pending_owner_additions, replacement.owner) != request.pending_owner_additions.end()) {
+            if (sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER &&
+                !context.columnMembership(*sourceGroup).ordinal(replacement.token)) {
+                require(!replacement.erase, "pending cold fields cannot erase an absent source value");
+                coldChanges.push_back(&replacement); continue;
+            }
             require(!replacement.erase && std::ranges::find(request.pending_owner_additions, replacement.owner) != request.pending_owner_additions.end(),
                 "native creation field does not name a declared pending owner");
             auto insertion = HybridPropertyColumnDelta::planPendingOwnerColumnMember(context, source, replacement.owner,
-                replacement.token, batch.generation(), request.memory, value);
+                replacement.token, batch.generation(), request.memory, value,
+                sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER);
             if (insertion) deltas.push_back(std::move(*insertion));
             else inlineChanges.push_back({&replacement, {}, true});
             continue;
         }
+        if (sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER) {
+            const auto page = fields.read(source, sourceGroup->column_membership.page_id);
+            const auto matrix = page.view().readColumnMembership(sourceGroup->column_membership, *sourceGroup,
+                descriptor.semantic_generation);
+            if (!std::binary_search(matrix.tokens.begin(), matrix.tokens.begin() + matrix.column_count, replacement.token)) {
+                require(request.field_lifecycle, "cold fields require explicit lifecycle coordination");
+                coldChanges.push_back(&replacement); continue;
+            }
+        }
         auto delta = HybridPropertyColumnDelta::planExistingColumn(context, source, replacement.owner,
-            replacement.token, batch.generation(), request.memory, replacement.erase ? nullptr : &value);
+            replacement.token, batch.generation(), request.memory, replacement.erase ? nullptr : &value, false,
+            RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, bool(preparationSource) ||
+                sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER);
         if (delta) { deltas.push_back(std::move(*delta)); continue; }
         require(request.field_lifecycle, "native column replacement does not name an existing column member");
         const auto route = context.visitField(replacement.owner, replacement.token, [](const auto &) {}, [](const auto &) {},
@@ -372,7 +409,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                 "native field insertion requires a live owner");
             if (replacement.erase) continue;
             auto insertion = HybridPropertyColumnDelta::planMissingColumnMember(context, source, replacement.owner,
-                replacement.token, batch.generation(), request.memory, value);
+                replacement.token, batch.generation(), request.memory, value, bool(preparationSource));
             if (insertion) deltas.push_back(std::move(*insertion));
             else inlineChanges.push_back({&replacement, {}, true});
             continue;
@@ -413,6 +450,54 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         if (unchanged) continue;
         inlineChanges.push_back({&replacement, ref});
     }
+    struct ColdSourceGroup { HybridPropertyGroupRecord source; SlottedSlotReference reference; };
+    utils::OwnedVector<ColdSourceGroup> coldSourceGroups{utils::OwnedPmrAllocator<ColdSourceGroup>(request.memory)};
+    const auto collectGroup = [&](EntityPropertyKey owner) {
+        SlottedSlotReference reference;
+        const auto group = sourceGroupFor(owner, std::ref(admit), &reference); boundary.set(0);
+        require(bool(group), "native batch lost an authenticated source group");
+        const auto found = std::ranges::find_if(coldSourceGroups, [&](const auto &entry) {
+            return entry.source.owner_kind == group->owner_kind && entry.source.group_id == group->group_id;
+        });
+        if (found == coldSourceGroups.end()) coldSourceGroups.push_back({*group, reference});
+        else require(found->source == *group && found->reference == reference, "native batch source group fences disagree");
+    };
+    for (const auto &cell : replacements) collectGroup(cell.owner);
+    for (const auto owner : request.owner_deletions) collectGroup(owner);
+    for (const auto owner : request.pending_owner_additions) collectGroup(owner);
+    const bool anyColdGroup = std::ranges::any_of(coldSourceGroups, [](const auto &entry) {
+        return entry.source.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER;
+    });
+    require(!anyColdGroup || std::ranges::all_of(coldSourceGroups, [](const auto &entry) {
+        return entry.source.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER;
+    }), "native batch cannot mix unadapted and cold group lifecycles");
+    multipleGroups = coldSourceGroups.size() > 1;
+    const bool coldDeletion = anyColdGroup && !request.owner_deletions.empty();
+    if (coldDeletion) {
+        // Fold removals immediately per column: at most64 full column plans,
+        // never4096 simultaneous source-based images or borrowed temporaries.
+        for (const auto owner : request.owner_deletions) {
+            const auto group = sourceGroupFor(owner, std::ref(admit)); boundary.set(0);
+            require(bool(group), "cold owner deletion lost its source group");
+            const auto matrix = context.columnMembership(*group);
+            for (unsigned i = 0; i < matrix.column_count; ++i) {
+                const auto token = matrix.tokens[i]; if (!matrix.contains(owner, token)) continue;
+                auto removal = HybridPropertyColumnDelta::planExistingColumn(context, source, owner, token,
+                    batch.generation(), request.memory, nullptr, false, RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, true);
+                require(bool(removal), "cold owner deletion lost its original column member");
+                const auto prior = std::find_if(deltas.begin(), deltas.end(), [&](const auto &plan) {
+                    return plan.columnReference() == removal->columnReference();
+                });
+                if (prior == deltas.end()) deltas.push_back(std::move(*removal));
+                else {
+                    const std::array<const HybridPropertyColumnDelta *, 2> input{&*prior, &*removal};
+                    *prior = HybridPropertyColumnDelta::mergeExistingColumnChanges(input, request.memory,
+                        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, request.cancellation, true,
+                        !request.pending_owner_additions.empty());
+                }
+            }
+        }
+    }
     for (const auto &delta : deltas) changes.push_back(&delta);
     utils::OwnedVector<HybridPropertyLargeFieldPreparation> largeFields{
         utils::OwnedPmrAllocator<HybridPropertyLargeFieldPreparation>(request.memory)};
@@ -442,6 +527,32 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     };
     const HybridPropertyDemotionPreparation::LargeFieldResolver largeResolver = std::ref(resolveLarge);
     utils::OwnedVector<HybridPropertyColumnDelta> merged{utils::OwnedPmrAllocator<HybridPropertyColumnDelta>(request.memory)};
+    bool coldPlansMerged = false;
+    utils::OwnedVector<const HybridPropertyColumnDelta *> demotions{
+        utils::OwnedPmrAllocator<const HybridPropertyColumnDelta *>(request.memory)};
+    const bool coldPending = anyColdGroup &&
+        !request.pending_owner_additions.empty();
+    if (sourceGroup && sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER &&
+        request.field_lifecycle) {
+        std::sort(changes.begin(), changes.end(), [](auto *left, auto *right) {
+            return left->columnReference() < right->columnReference();
+        });
+        merged.reserve(changes.size());
+        for (size_t begin = 0; begin < changes.size();) {
+            size_t end = begin + 1;
+            while (end < changes.size() && changes[end]->columnReference() == changes[begin]->columnReference()) ++end;
+            merged.push_back(HybridPropertyColumnDelta::mergeExistingColumnChanges(
+                std::span(changes).subspan(begin, end - begin), request.memory,
+                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, request.cancellation, true, coldPending));
+            begin = end;
+        }
+        changes.clear();
+        for (const auto &delta : merged) {
+            changes.push_back(&delta);
+            if (delta.action() == HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD) demotions.push_back(&delta);
+        }
+        coldPlansMerged = true;
+    }
     std::optional<HybridPropertyColumnWritePreparation> compatible;
     std::optional<HybridPropertyDemotionPreparation> lifecycle;
     const bool onlyCompatibleColumns = multipleGroups && request.pending_owner_additions.empty() &&
@@ -450,7 +561,204 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             return change->action() != HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD &&
                 !effects.memberships && !effects.columns && !effects.clear_live && !effects.set_live;
         });
-    if (onlyCompatibleColumns) {
+    if (!coldChanges.empty() || !demotions.empty() || coldDeletion || coldPending) {
+        require(anyColdGroup && inlineChanges.empty(), "cold field preparation requires authenticated cold source groups");
+        if (!coldPlansMerged) {
+        std::sort(changes.begin(), changes.end(), [](auto *left, auto *right) {
+            return left->columnReference() < right->columnReference();
+        });
+        merged.reserve(changes.size());
+        for (size_t begin = 0; begin < changes.size();) {
+            size_t end = begin + 1;
+            while (end < changes.size() && changes[end]->columnReference() == changes[begin]->columnReference()) ++end;
+            merged.push_back(HybridPropertyColumnDelta::mergeExistingColumnChanges(
+                std::span(changes).subspan(begin, end - begin), request.memory,
+                RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, request.cancellation));
+            begin = end;
+        }
+        changes.clear(); for (const auto &delta : merged) changes.push_back(&delta);
+        }
+        require(changes.size() <= 64U, "cold batch exceeds its original column-plan bound");
+        utils::OwnedVector<const HybridPropertyColumnDelta *> compatibleHot{
+            utils::OwnedPmrAllocator<const HybridPropertyColumnDelta *>(request.memory)};
+        for (const auto *plan : changes)
+            if (plan->action() != HybridPropertyColumnDelta::Action::HCD_DEMOTE_FIELD) compatibleHot.push_back(plan);
+        if (coldPending) lifecycle.emplace(HybridPropertyDemotionPreparation::preparePendingOwners(batch, context,
+            source, fields, compatibleHot, request.pending_owner_additions, request.memory, request.cancellation, {}, true));
+        else if (!compatibleHot.empty()) lifecycle.emplace(HybridPropertyDemotionPreparation(batch, source, fields,
+            compatibleHot, request.memory, request.cancellation, {}, false, {}, true));
+        else { lifecycle.emplace(HybridPropertyDemotionPreparation(request.memory)); lifecycle->group_ = *sourceGroup; }
+        utils::OwnedVector<EntityPropertyKey> affectedOwners{utils::OwnedPmrAllocator<EntityPropertyKey>(request.memory)};
+        const auto affect = [&](EntityPropertyKey owner) {
+            if (std::ranges::find(affectedOwners, owner) == affectedOwners.end()) {
+                require(affectedOwners.size() < 64U, "cold batch exceeds64 actual changed or migrated owners");
+                affectedOwners.push_back(owner);
+            }
+        };
+        for (const auto &cell : replacements) affect(cell.owner);
+        size_t emittedMemberships = 0;
+        for (const auto &work : coldSourceGroups) {
+        const auto sourceGroup = std::optional(work.source);
+        const auto sameGroup = [&](EntityPropertyKey owner) { return owner.owner_kind == work.source.owner_kind &&
+            hybridPropertyGroupFor(owner) == work.source.group_id; };
+        const auto matrix = context.columnMembership(work.source);
+        utils::OwnedVector<const HybridPropertyColumnDelta *> groupDemotions{
+            utils::OwnedPmrAllocator<const HybridPropertyColumnDelta *>(request.memory)};
+        for (const auto *plan : demotions) if (sameGroup(plan->owner())) {
+            groupDemotions.push_back(plan);
+            for (const auto &cell : plan->demotedCells()) if (cell.kind != HybridPropertyColumnDelta::CellKind::HCC_MISSING)
+                require(++emittedMemberships <= 4096U, "cold batch exceeds4096 emitted demotion memberships");
+        }
+        utils::OwnedVector<EntityPropertyKey> groupDeleted{utils::OwnedPmrAllocator<EntityPropertyKey>(request.memory)},
+            groupPending{utils::OwnedPmrAllocator<EntityPropertyKey>(request.memory)};
+        for (const auto owner : request.owner_deletions) if (sameGroup(owner)) groupDeleted.push_back(owner);
+        for (const auto owner : request.pending_owner_additions) if (sameGroup(owner)) groupPending.push_back(owner);
+        auto finalHot = matrix;
+        uint64_t coldOwners = 0, structuralOwners = 0;
+        for (const auto *cell : coldChanges) if (sameGroup(cell->owner)) coldOwners |= UINT64_C(1) << hybridPropertySlotFor(cell->owner);
+        for (const auto *plan : groupDemotions) {
+            finalHot.eraseColumn(plan->sourceColumn().identity.token);
+            structuralOwners |= plan->sourceColumn().presence;
+            for (unsigned slot = 0; slot < 64; ++slot)
+                if (plan->demotedCells()[slot].kind != HybridPropertyColumnDelta::CellKind::HCC_MISSING)
+                    structuralOwners |= UINT64_C(1) << slot;
+        }
+        uint64_t deletedOwners = 0;
+        for (const auto owner : groupDeleted)
+            deletedOwners |= UINT64_C(1) << hybridPropertySlotFor(owner);
+        uint64_t pendingOwners = 0;
+        for (const auto owner : groupPending)
+            pendingOwners |= UINT64_C(1) << hybridPropertySlotFor(owner);
+        coldOwners |= structuralOwners | deletedOwners | pendingOwners;
+        for (unsigned slot = 0; slot < 64; ++slot) if (coldOwners & (UINT64_C(1) << slot))
+            affect({work.source.owner_kind, (work.source.group_id - 1U) * 64U + slot + 1U});
+        struct PreparedRow { EntityPropertyKey owner; SlottedSlotReference reference; HybridColdRowInput row; };
+        utils::OwnedVector<std::pmr::vector<std::byte>> roots{
+            utils::OwnedPmrAllocator<std::pmr::vector<std::byte>>(request.memory)};
+        utils::OwnedVector<PreparedRow> rows{utils::OwnedPmrAllocator<PreparedRow>(request.memory)};
+        roots.reserve(64); rows.reserve(64);
+        const std::function<void()> checkpoint = std::ref(check);
+        const uint32_t ownerType = sourceGroup->owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
+        for (unsigned slot = 0; slot < 64; ++slot) {
+            const auto ownerBit = UINT64_C(1) << slot;
+            if (!(coldOwners & ownerBit)) continue;
+            check(); const EntityPropertyKey owner{sourceGroup->owner_kind, (sourceGroup->group_id - 1U) * 64U + slot + 1U};
+            utils::OwnedHeapReservation decodeCredit(request.memory);
+            struct DecodeOwner { utils::OwnedHeapReservation &credit; const std::function<void()> &check; } decodeOwner{decodeCredit, checkpoint};
+            property_decode::AllocationScope decoding(&decodeOwner, [](void *p, size_t bytes) {
+                auto &credit = static_cast<DecodeOwner *>(p)->credit;
+                credit.set(utils::detail::addStandardHeapBytes(credit.bytes(), bytes));
+            }, [](void *p) { static_cast<DecodeOwner *>(p)->check(); });
+            auto collection = HybridPropertyValueReader::readCollection(context, source, owner, ownerType, &sourceValues);
+            require(collection.routed, "cold native field lost its authenticated collection");
+            utils::OwnedVector<BorrowedPropertyCollectionRootEntry> entries{
+                utils::OwnedPmrAllocator<BorrowedPropertyCollectionRootEntry>(request.memory)};
+            if (collection.value) for (const auto &entry : collection.value->entries) {
+                if (!std::binary_search(finalHot.tokens.begin(), finalHot.tokens.begin() + finalHot.column_count, entry.key_token))
+                    entries.push_back({entry.key_token, &entry.value});
+            }
+            utils::OwnedVector<PropertyValue> scalars{utils::OwnedPmrAllocator<PropertyValue>(request.memory)};
+            scalars.reserve(replacements.size()); bool changed = bool(structuralOwners & ownerBit);
+            for (const auto &cell : replacements) {
+                if (cell.owner != owner || std::binary_search(finalHot.tokens.begin(),
+                    finalHot.tokens.begin() + finalHot.column_count, cell.token)) continue;
+                check();
+                auto found = std::lower_bound(entries.begin(), entries.end(), cell.token,
+                    [](const auto &entry, uint32_t token) { return entry.key_token < token; });
+                if (cell.erase) {
+                    if (found != entries.end() && found->key_token == cell.token) { entries.erase(found); changed = true; }
+                    continue;
+                }
+                scalars.emplace_back(); const auto &value = cell.propertyValue(scalars.back());
+                if (found != entries.end() && found->key_token == cell.token) {
+                    if (*found->value == value) continue;
+                    found->value = &value;
+                } else entries.insert(found, {cell.token, &value});
+                changed = true;
+            }
+            if (deletedOwners & ownerBit) { entries.clear(); changed = true; }
+            if (!changed || (entries.empty() && !(matrix.cold_rows.owners & ownerBit))) continue;
+            require(entries.size() <= UINT32_MAX, "cold field count overflows its original envelope");
+            std::pmr::vector<std::byte> encoded(request.memory.get()); bool large = false;
+            if (!entries.empty()) {
+                const auto bytes = EntityPropertyCollectionRootCodec::encodedSizeBorrowed(owner.entity_id, ownerType, entries, checkpoint);
+                large = bytes > HybridPropertyColdRowBlock::MAX_UNCOMPRESSED_BYTES - HybridPropertyColdRowBlock::DIRECTORY_ENTRY_BYTES;
+                if (!large) {
+                    encoded = EntityPropertyCollectionRootCodec::encodeBorrowed(owner.entity_id, ownerType, entries, *request.memory, checkpoint);
+                    if (bytes > HybridPropertyColdRowBlock::MAX_STORED_BYTES - HybridPropertyColdRowBlock::DIRECTORY_ENTRY_BYTES) {
+                        const std::array<HybridColdRowInput, 1> probe{{{uint8_t(hybridPropertySlotFor(owner)),
+                            uint32_t(entries.size()), false, encoded}}};
+                        try { static_cast<void>(HybridPropertyColdRowBlock::encode(owner.owner_kind, sourceGroup->group_id,
+                            batch.generation(), probe, request.memory)); }
+                        catch (const std::length_error &) { large = true; }
+                    }
+                }
+                if (large) {
+                    auto proposal = HybridPropertyLargeFieldPreparation::prepareRootBorrowed(*this, source, sourceValues,
+                        owner, entries, LargeValueId(batch.candidate().next_large_value_id), request.memory, request.cancellation);
+                    const HybridPropertyLargeFieldPreparation *selected = &proposal;
+                    if (!proposal.reused()) {
+                        for (const auto &previous : largeFields) if (std::ranges::equal(previous.payload(), proposal.payload())) {
+                            selected = &previous; break;
+                        }
+                        if (selected == &proposal) {
+                            require(batch.allocateLargeValueId() == proposal.reference().value_id,
+                                "cold native root lost its batch-local identity sequence");
+                            largeFields.push_back(std::move(proposal)); selected = &largeFields.back();
+                        }
+                    }
+                    constexpr size_t maximumReference = RSS_LARGE_VALUE_REF_HEADER_BYTES + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES;
+                    utils::OwnedHeapReservation referenceCredit(request.memory,
+                        2U * utils::detail::standardContainerProxyBytes() +
+                        utils::detail::standardAllocatorRequestBytes(maximumReference, alignof(std::byte)) +
+                        utils::detail::standardAllocatorRequestBytes(RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_HEADER_BYTES +
+                            maximumReference, alignof(std::byte)));
+                    const EntityPropertyLargeValueReference reference{owner.entity_id, ownerType, selected->reference()};
+                    const auto bytes = EntityPropertyLargeValueReferenceCodec::encode(reference);
+                    encoded.assign(bytes.begin(), bytes.end());
+                }
+            }
+            roots.push_back(std::move(encoded));
+            rows.push_back({owner, matrix.cold_rows.roots[hybridPropertySlotFor(owner)],
+                {uint8_t(hybridPropertySlotFor(owner)), uint32_t(entries.size()), large, roots.back()}});
+        }
+        std::sort(rows.begin(), rows.end(), [](const auto &left, const auto &right) {
+            return left.reference < right.reference || (left.reference == right.reference && left.owner.entity_id < right.owner.entity_id);
+        });
+        utils::OwnedVector<HybridColdRowInput> inputs{utils::OwnedPmrAllocator<HybridColdRowInput>(request.memory)};
+        utils::OwnedVector<HybridPropertyDemotionPreparation::ColdBlockChange> blocks{
+            utils::OwnedPmrAllocator<HybridPropertyDemotionPreparation::ColdBlockChange>(request.memory)};
+        inputs.reserve(rows.size()); blocks.reserve(rows.size());
+        for (size_t begin = 0; begin < rows.size();) {
+            size_t end = begin + 1; while (end < rows.size() && rows[end].reference == rows[begin].reference) ++end;
+            const auto offset = inputs.size();
+            for (size_t i = begin; i < end; ++i) inputs.push_back(rows[i].row);
+            blocks.push_back({rows[begin].owner, rows[begin].reference, std::span(inputs).subspan(offset, end - begin)});
+            begin = end;
+        }
+        if (!blocks.empty() || !groupDemotions.empty() || !groupDeleted.empty() || !groupPending.empty()) {
+            HybridPropertyDemotionPreparation local(request.memory);
+            local.pages_ = std::move(lifecycle->pages_);
+            const auto image = std::ranges::find_if(local.pages_, [&](const auto &page) { return page.pageId() == work.reference.page_id; });
+            local.group_ = image == local.pages_.end() ? work.source : image->readGroup(work.reference,
+                work.source.owner_kind, work.source.group_id, batch.generation());
+            local = HybridPropertyDemotionPreparation::prepareColdBlocksImpl(batch, context, blocks, request.memory,
+                {}, &sourceValues, request.cancellation, largeFields, groupDemotions, groupDeleted, groupPending, std::move(local));
+            lifecycle->pages_ = std::move(local.pages_);
+            auto &upserts = lifecycle->groupsFor(work.source.owner_kind);
+            upserts.insert(upserts.end(), local.groups_.begin(), local.groups_.end());
+            auto &erased = lifecycle->erasedGroupsFor(work.source.owner_kind);
+            erased.insert(erased.end(), local.erased_groups_.begin(), local.erased_groups_.end());
+            if (lifecycle->group_.owner_kind == work.source.owner_kind && lifecycle->group_.group_id == work.source.group_id) {
+                lifecycle->group_ = local.group_; lifecycle->group_erased_ = local.group_erased_;
+            }
+        }
+        }
+        for (const auto kind : {EntityPropertyOwnerKind::EPOK_NODE, EntityPropertyOwnerKind::EPOK_EDGE}) {
+            auto &upserts = lifecycle->groupsFor(kind); auto &erased = lifecycle->erasedGroupsFor(kind);
+            std::ranges::sort(upserts, {}, &HybridPropertyGroupDirectoryMap::Entry::key); std::ranges::sort(erased);
+        }
+    } else if (onlyCompatibleColumns) {
         // This existing preparer authenticates all source groups/columns and
         // clones each shared page once. Derived keys below still cover the
         // complete original replacement span in this single metadata batch.
@@ -459,6 +767,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         lifecycle.emplace(HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, source, fields,
             request.owner_deletions, request.memory, request.cancellation, changes, largeResolver, request.pending_owner_additions));
     } else if (!request.pending_owner_additions.empty()) {
+        if (!coldPlansMerged) {
         std::sort(changes.begin(), changes.end(), [](auto *a, auto *b) { return a->columnReference() < b->columnReference(); });
         merged.reserve(changes.size());
         for (size_t begin = 0; begin < changes.size();) {
@@ -470,9 +779,11 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             begin = end;
         }
         changes.clear(); for (const auto &delta : merged) changes.push_back(&delta);
+        }
         lifecycle.emplace(HybridPropertyDemotionPreparation::preparePendingOwners(batch, context, source, fields,
             changes, request.pending_owner_additions, request.memory, request.cancellation, largeResolver));
     } else if (request.field_lifecycle) {
+        if (!coldPlansMerged) {
         std::sort(changes.begin(), changes.end(), [](auto *a, auto *b) { return a->columnReference() < b->columnReference(); });
         merged.reserve(changes.size());
         for (size_t begin = 0; begin < changes.size();) {
@@ -484,6 +795,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             begin = end;
         }
         changes.clear(); for (const auto &delta : merged) changes.push_back(&delta);
+        }
         if (!changes.empty()) {
             if (multipleGroups) lifecycle.emplace(HybridPropertyDemotionPreparation::prepareGroups(
                 batch, source, fields, changes, request.memory, request.cancellation, largeResolver));
@@ -587,7 +899,8 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     if (lifecycle) for (const auto kind : {EntityPropertyOwnerKind::EPOK_NODE, EntityPropertyOwnerKind::EPOK_EDGE}) {
         const bool erasedAnyGroup = !lifecycle->erasedGroups(kind).empty();
         if (lifecycle->owners(kind).empty() && lifecycle->erasedOwners(kind).empty() && lifecycle->extensions(kind).empty() &&
-            lifecycle->erasedColumns(kind).empty() && lifecycle->erasedExtensions(kind).empty() && !erasedAnyGroup &&
+            lifecycle->erasedColumns(kind).empty() && lifecycle->erasedExtensions(kind).empty() &&
+            lifecycle->groups(kind).empty() && !erasedAnyGroup &&
             !(kind == EntityPropertyOwnerKind::EPOK_EDGE && !erasedAdjacency.empty())) continue;
         const size_t base = kind == EntityPropertyOwnerKind::EPOK_NODE ? 0U : 4U;
         const auto prepareDirectory = [&]<class Map>(size_t role, std::span<const typename Map::Entry> upserts,
@@ -719,7 +1032,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(1, {}, lifecycle->erasedColumns(kind));
         prepareDirectory.template operator()<HybridPropertyOwnerMap>(0, lifecycle->owners(kind), lifecycle->erasedOwners(kind));
         prepareDirectory.template operator()<HybridPropertyFieldDirectoryMap>(2, lifecycle->extensions(kind), lifecycle->erasedExtensions(kind));
-        prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, {}, lifecycle->erasedGroups(kind));
+        prepareDirectory.template operator()<HybridPropertyGroupDirectoryMap>(3, lifecycle->groups(kind), lifecycle->erasedGroups(kind));
         if (kind == EntityPropertyOwnerKind::EPOK_EDGE && !erasedAdjacency.empty()) prepareDirectory.template operator()<AdjacencySet>(0, {}, erasedAdjacency, true);
     }
     // Prepare derived scalar keys from this fenced source and final cells.
@@ -728,7 +1041,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     // The sealed logical graph writer already prepares all new-owner derived
     // transitions. Re-reading an absent source Entity here would be invalid;
     // this branch must not prepare competing scalar/constraint/count roots.
-    if (!hybridTopology && request.pending_owner_additions.empty() && ((hasCatalog && !request.owner_deletions.empty()) || !constraintDefinitions.empty() || std::ranges::any_of(schemaDefinitions, [](const auto &definition) {
+    if (!hybridTopology && request.pending_owner_additions.empty() && (!entityImages.empty() || (hasCatalog && !request.owner_deletions.empty()) || !constraintDefinitions.empty() || std::ranges::any_of(schemaDefinitions, [](const auto &definition) {
             return definition.kind == IndexDefinitionKind::IDK_PROPERTY || definition.kind == IndexDefinitionKind::IDK_COMPOSITE ||
                 definition.kind == IndexDefinitionKind::IDK_VECTOR;
         }))) {
@@ -778,8 +1091,15 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             }
             const auto oldValue = [&](uint32_t token) -> const PropertyValue * {
                 check(); auto found = oldValues.find(token);
-                if (found == oldValues.end())
-                    found = oldValues.emplace(token, roots.readEntityPropertyOptional(source, owner, token)).first;
+                if (found == oldValues.end()) {
+                    // Derived indexes and constraints must read the same
+                    // authenticated Native source as field preparation. A ROW
+                    // owner in a joint publication retains its original route.
+                    auto selected = HybridPropertyValueReader::read(context, source, owner, token, &sourceValues);
+                    auto previous = selected.route == HybridPropertyReadContext::FieldRoute::HFR_ROW ?
+                        roots.readEntityPropertyOptional(source, owner, token) : std::move(selected.value);
+                    found = oldValues.emplace(token, std::move(previous)).first;
+                }
                 return found->second ? &found->second->value : nullptr;
             };
             const auto newValue = [&](uint32_t token) -> const PropertyValue * {
@@ -912,7 +1232,9 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                     replacement = true; if (!cell.erase) value = &cell.propertyValue(scratch[i]); break;
                 }
                 if (token && !replacement) {
-                    old[i] = roots.readEntityPropertyOptional(source, owner, *token);
+                    auto selected = HybridPropertyValueReader::read(context, source, owner, *token, &sourceValues);
+                    old[i] = selected.route == HybridPropertyReadContext::FieldRoute::HFR_ROW ?
+                        roots.readEntityPropertyOptional(source, owner, *token) : std::move(selected.value);
                     if (old[i]) value = &old[i]->value;
                 }
                 if (!value || value->getType() == PropertyType::NULL_TYPE) return std::nullopt;
@@ -994,17 +1316,53 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                 }
             }
         }
+        // This coordinator prepares Entity deletions outside the ordinary graph
+        // page planner. Keep its existing derived free-space summaries coherent
+        // from the authenticated source/final page images, in the same commit.
+        for(const auto kind : {EntityPageRecordKind::EPRK_NODE,EntityPageRecordKind::EPRK_EDGE}) {
+            if(std::ranges::none_of(entityImages,[&](const auto &image){return image.page.header().record_kind==kind;}))continue;
+            const auto proof=EntityFreeSpaceIndex::readProof(*this,sourceTrees,source,kind);
+            if(!proof)continue; // old files retain explicit rebuild/fallback semantics
+            const auto index=EntityFreeSpaceIndex::indexId(kind);
+            BTreeIndex summary(index,sourceTrees,*this);
+            uint64_t count=proof->free_pages;
+            const auto appendSummary=[&](const auto &key,bool erase,uint64_t value=1U){
+                check();require(operations.size()<8192U,"native free-space deltas exceed their operation bound");
+                operations.push_back({index,value,erase,utils::OwnedVector<std::byte>(key.begin(),key.end(),
+                    utils::OwnedPmrAllocator<std::byte>(request.memory))});
+            };
+            for(const auto &image:entityImages) {
+                const auto &header=image.page.header();if(header.record_kind!=kind)continue;
+                if(image.source_free) {
+                    const auto key=EntityFreeSpaceIndex::entryKey(header.page_id,image.source_free,kind);
+                    require(count && summary.find(source,key)==std::optional<uint64_t>(1U),
+                        "native deletion free-space summary disagrees with its source page");
+                    appendSummary(key,true);--count;
+                }
+                const auto free=uint16_t(header.slot_capacity-header.live_count);
+                if(free && header.live_count) {
+                    require(count<UINT64_MAX-1U,"native free-space count marker overflow");
+                    appendSummary(EntityFreeSpaceIndex::entryKey(header.page_id,free,kind),false);++count;
+                }
+            }
+            // An already stale proof stays stale; no unrelated branch census or
+            // hidden rebuild may be inferred from validating the changed pages.
+            const auto generation=proof->fresh?batch.generation().value():proof->directory_generation;
+            require(generation<UINT64_MAX,"native free-space generation marker overflow");
+            appendSummary(EntityFreeSpaceIndex::generationKey(),false,generation+1U);
+            appendSummary(EntityFreeSpaceIndex::countKey(),false,count+1U);
+        }
         std::sort(operations.begin(), operations.end(), [](const auto &a, const auto &b) {
             if (a.index != b.index) return a.index < b.index;
             return a.erase != b.erase ? a.erase > b.erase : a.owner < b.owner;
         });
-        const auto start = indexImages.size(); size_t constraintImages = 0, catalogImages = 0;
+        const auto start = indexImages.size(); size_t constraintImages = 0, catalogImages = 0, freeSummaryImages = 0;
         for (size_t first = 0; first < operations.size();) {
             size_t last = first + 1; while (last < operations.size() && operations[last].index == operations[first].index) ++last;
             const auto index = operations[first].index; const auto groupStart = indexImages.size();
             const auto definition = std::ranges::find(scalar.definitions(), index, &IndexDefinition::index_id);
             const auto constraint = std::ranges::find(constraintDefinitions, index, &ConstraintDefinition::constraint_id);
-            require(index == RSS_SYSTEM_CATALOG_INDEX_ID || definition != scalar.definitions().end() || constraint != constraintDefinitions.end(),
+            require(index == RSS_SYSTEM_CATALOG_INDEX_ID || isEntityFreeSpaceIndexId(index) || definition != scalar.definitions().end() || constraint != constraintDefinitions.end(),
                 "native derived preparation lost its authenticated definition");
             utils::OwnedHeapReservation wireCredit(request.memory, 16384U);
             const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> operationSource =
@@ -1016,7 +1374,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                     }
                 };
             const std::function<void(BTreePage)> imageSink = [&](BTreePage page) { check(); indexImages.push_back(std::move(page)); };
-            auto plan = index == RSS_SYSTEM_CATALOG_INDEX_ID ?
+            auto plan = (index == RSS_SYSTEM_CATALOG_INDEX_ID || isEntityFreeSpaceIndexId(index)) ?
                 sourceTrees.planNativeDerivedIndexImages(source, index, last - first, operationSource, request.memory, imageSink, request.cancellation) :
                 definition != scalar.definitions().end() ?
                 sourceTrees.planNativeScalarIndexImages(source, *definition, last - first, operationSource, request.memory, imageSink, request.cancellation) :
@@ -1057,11 +1415,13 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             changedRoots.push_back({index, root, generation});
             if (constraint != constraintDefinitions.end()) constraintImages += indexImages.size() - groupStart;
             if (index == RSS_SYSTEM_CATALOG_INDEX_ID) catalogImages += indexImages.size() - groupStart;
+            if (isEntityFreeSpaceIndexId(index)) freeSummaryImages += indexImages.size() - groupStart;
             first = last;
         }
-        debug::PerfTrace::addValue("native_graph.hybrid.private_scalar_index_images", int64_t(indexImages.size() - start - constraintImages - catalogImages));
+        debug::PerfTrace::addValue("native_graph.hybrid.private_scalar_index_images", int64_t(indexImages.size() - start - constraintImages - catalogImages - freeSummaryImages));
         debug::PerfTrace::addValue("native_graph.hybrid.private_constraint_index_images", int64_t(constraintImages));
         debug::PerfTrace::addValue("native_graph.hybrid.private_catalog_index_images", int64_t(catalogImages));
+        debug::PerfTrace::addValue("native_graph.hybrid.private_entity_free_summary_index_images", int64_t(freeSummaryImages));
     }
     debug::PerfTrace::addValue("native_graph.hybrid.private_map_images", int64_t(indexImages.size()));
     check();
@@ -1172,6 +1532,13 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         }
         if (!detached || placement.destination(pool->segment_id)) { pool = oldPools.erase(pool); continue; }
         batch.reserveDataSlot(pool->physical_slot); pool->state = SegmentState::SGS_RETIRED; ++pool;
+    }
+    if (preparationSource) {
+        debug::PerfTrace::addValue("native_graph.hybrid.private_field_coordinator_frames", int64_t(fieldImages.size()));
+        debug::PerfTrace::addValue("native_graph.hybrid.private_field_coordinator_directories", int64_t(indexImages.size()));
+        check();
+        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+            "native field coordinator preparation completed; private source cannot publish");
     }
     const auto writeImages = [&]<class Images>(Images &images, bool native, std::span<const PlacementRun> runs) {
         constexpr bool fixedEntity = std::is_same_v<typename Images::value_type, EntityImage>;
@@ -1569,7 +1936,7 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
     const NativeGraphHybridPropertyConversion &conversion, EntityPageStore &entities,
     SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &largeValues,
-    const MetadataPublishOptions &options) {
+    const MetadataPublishOptions &options, HybridPropertyReadContext *preparationSource) {
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto &current = batch.current();
     require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && source.superblock() == current && snapshots_.owns(source) &&
@@ -1581,7 +1948,15 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     check();
     auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
     const size_t base = conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? 0U : 4U;
-    HybridPropertyReadContext context(io_, sourcePages, *this, source, conversion.cancellation);
+    HybridPropertyReadContext durableSource(io_, sourcePages, *this, source, conversion.cancellation);
+    auto &context = preparationSource ? *preparationSource : durableSource;
+    require(!preparationSource || (context.usesSnapshot(source) && &context.metadata_ == this &&
+        context.source_io_ == io_ && !conversion.publish_candidate && context.descriptor_),
+        "private inverse requires its exact source pin/file and cannot publish");
+    if (preparationSource) descriptor = *context.descriptor_;
+    // The complete projection and source census below authenticate cold inverse
+    // ownership. Generic groupRecord remains guarded for unadapted consumers;
+    // a private candidate still unconditionally refuses before physical I/O.
     HybridPropertyRowPreparation projection(context, source, *this, entities, conversion.owner_kind,
         conversion.group_id, conversion.memory, &largeValues, conversion.cancellation);
     const auto group = projection.sourceGroup();
@@ -1592,9 +1967,12 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Key> columnKeys{utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Key>(conversion.memory)};
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Key> extensionKeys{utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Key>(conversion.memory)};
     utils::OwnedVector<SlottedSlotReference> references{utils::OwnedPmrAllocator<SlottedSlotReference>(conversion.memory)};
-    if (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) ownerKeys.reserve(group.memberships);
+    if (!group.usesColumnMembership()) ownerKeys.reserve(group.memberships);
     columnKeys.reserve(group.columns);
-    references.reserve(group.columns + 2U);
+    references.reserve(group.columns + 2U + (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER ? 64U : 0U));
+    std::optional<HybridPropertyColumnMembership> sourceMatrix;
+    std::array<const PropertyCollectionRoot *, 64> projected{};
+    for (const auto &row : projection.rows()) projected[hybridPropertySlotFor({conversion.owner_kind, row.owner_entity_id})] = &row;
     const auto groupBinding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source,
         static_cast<HybridPropertyRootOrdinal>(base + 3));
     HybridPropertyGroupDirectoryMap groups(groupBinding.root.index_id, sourceTrees, *this, groupBinding);
@@ -1602,32 +1980,84 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     const auto sourceGroup = groups.find(source, groupKey, std::ref(admit), conversion.cancellation); boundary.set(0);
     require(bool(sourceGroup), "inverse selected group has no exact directory locator");
     references.push_back(HybridPropertyDirectoryCodec::decodeLocator(*sourceGroup));
-    if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+    if (group.usesColumnMembership()) {
         const auto matrixPage = sourceFields.read(source, group.column_membership.page_id);
-        static_cast<void>(matrixPage.view().readColumnMembership(group.column_membership, group, descriptor.semantic_generation));
+        sourceMatrix = matrixPage.view().readColumnMembership(group.column_membership, group, descriptor.semantic_generation);
         references.push_back(group.column_membership);
     }
+    const auto selectedSource = [&](EntityPropertyKey owner, uint32_t token,
+        const std::function<void(size_t)> &admission) -> std::optional<HybridPropertySource> {
+        if (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER)
+            return context.selector(group, owner, token, admission);
+        require(sourceMatrix && owner.owner_kind == group.owner_kind && hybridPropertyGroupFor(owner) == group.group_id,
+            "cold inverse selection escaped its authenticated group");
+        const auto *row = projected[hybridPropertySlotFor(owner)];
+        if (!row) return {};
+        const auto field = std::lower_bound(row->entries.begin(), row->entries.end(), token,
+            [](const auto &entry, uint32_t selected) { return entry.key_token < selected; });
+        if (field == row->entries.end() || field->key_token != token) return {};
+        if (sourceMatrix->ordinal(token)) return sourceMatrix->contains(owner, token) ?
+            std::optional(HybridPropertySource::HPS_COLUMN) : std::nullopt;
+        return (sourceMatrix->cold_rows.owners & (UINT64_C(1) << hybridPropertySlotFor(owner))) ?
+            std::optional(HybridPropertySource::HPS_COLD_ROW) : std::nullopt;
+    };
+    if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER)
+        for (unsigned slot = 0; slot < 64; ++slot) {
+            const EntityPropertyKey owner{conversion.owner_kind, (conversion.group_id - 1U) * 64U + slot + 1U};
+            if (!owner.isValid()) continue;
+            context.requireNoLegacySelector(owner, admit); boundary.set(0);
+        }
     size_t actualMemberships = 0;
     for (const auto &row : projection.rows()) for (const auto &field : row.entries) {
         const EntityPropertyKey owner{conversion.owner_kind, row.owner_entity_id};
-        const auto selected = context.selector(group, owner, field.key_token, std::ref(admit)); boundary.set(0);
+        const auto selected = selectedSource(owner, field.key_token, std::ref(admit)); boundary.set(0);
         require(bool(selected), "inverse projected field has no source selector");
         ++actualMemberships;
-        if (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP || *selected == HybridPropertySource::HPS_EXTENSION)
+        if (!group.usesColumnMembership() || *selected == HybridPropertySource::HPS_EXTENSION)
             ownerKeys.push_back(HybridPropertyDirectoryCodec::ownerKey(owner, field.key_token));
     }
     require(actualMemberships == group.memberships, "inverse selected group lost actual memberships");
     uint64_t bodyMemberships = 0;
+    size_t directColumnCount = 0;
     const auto selector = [&](EntityPropertyKey owner, uint32_t token, HybridPropertySource expected) {
         utils::OwnedHeapReservation selectorBoundary(conversion.memory);
-        const auto value = context.selector(group, owner, token, [&](size_t bytes) { selectorBoundary.set(bytes); });
+        const auto value = selectedSource(owner, token, [&](size_t bytes) { selectorBoundary.set(bytes); });
         require(value && *value == expected, "inverse selected body has no exact authoritative selector");
     };
+    if (group.usesColumnMembership()) {
+        const auto matrixPage = sourceFields.read(source, group.column_membership.page_id);
+        const auto matrix = matrixPage.view().readColumnMembership(group.column_membership, group, descriptor.semantic_generation);
+        for (size_t i = 0; i < matrix.column_count; ++i) {
+            check(); const auto reference = matrix.columnLocator(matrix.tokens[i]);
+            const auto page = sourceFields.read(source, reference.page_id);
+            const auto column = page.view().readColumn(reference, group, matrix.tokens[i], descriptor.semantic_generation);
+            require(column.presence == matrix.presence(matrix.tokens[i]), "inverse compact column contradicts membership presence");
+            for (unsigned slot = 0; slot < RSS_HYBRID_GROUP_CAPACITY; ++slot)
+                if (column.presence & (UINT64_C(1) << slot)) selector({conversion.owner_kind,
+                    (conversion.group_id - 1U) * RSS_HYBRID_GROUP_CAPACITY + slot + 1U}, matrix.tokens[i], HybridPropertySource::HPS_COLUMN);
+            bodyMemberships += std::popcount(column.presence); ++directColumnCount; references.push_back(reference);
+        }
+    }
+    if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER) {
+        uint64_t seen = 0;
+        for (unsigned slot = 0; slot < 64; ++slot) {
+            const auto bit = UINT64_C(1) << slot;
+            if (!(sourceMatrix->cold_rows.owners & bit) || (seen & bit)) continue;
+            const auto reference = sourceMatrix->cold_rows.roots[slot];
+            context.withColdBlock(group, *sourceMatrix, reference, [&](const auto &block, const auto &) {
+                seen |= block.owners; bodyMemberships += block.fields;
+            });
+            references.push_back(reference);
+        }
+        require(seen == sourceMatrix->cold_rows.owners, "inverse cold source census lost actual owners");
+    }
     if (descriptor.roots[base + 1].page_id.isValid()) {
         const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source, static_cast<HybridPropertyRootOrdinal>(base + 1));
         HybridPropertyFieldDirectoryMap map(binding.root.index_id, sourceTrees, *this, binding);
         require(map.visitPrefix(source, groupKey, group.columns + 1U, [&](const auto &entry) {
-            check(); require(columnKeys.size() < group.columns, "inverse selected group has excess columns");
+            check(); require(!group.usesColumnMembership(),
+                "inverse compact group has a competing column directory");
+            require(columnKeys.size() < group.columns, "inverse selected group has excess columns");
             const auto field = HybridPropertyDirectoryCodec::decodeColumnKey(entry.key);
             require(field.group == conversion.group_id, "inverse column escaped its group prefix");
             const auto reference = HybridPropertyDirectoryCodec::decodeLocator(entry.value);
@@ -1640,7 +2070,7 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
             columnKeys.push_back(entry.key); references.push_back(reference); return true;
         }, std::ref(admit), conversion.cancellation), "inverse selected column scan was incomplete"); boundary.set(0);
     }
-    require(columnKeys.size() == group.columns, "inverse selected column census differs from group counts");
+    require(columnKeys.size() + directColumnCount == group.columns, "inverse selected column census differs from group counts");
     if (descriptor.roots[base + 2].page_id.isValid()) {
         const auto binding = HybridPropertyDirectoryCodec::bindRoot(descriptor, source, static_cast<HybridPropertyRootOrdinal>(base + 2));
         HybridPropertyFieldDirectoryMap map(binding.root.index_id, sourceTrees, *this, binding);
@@ -1662,14 +2092,32 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     utils::OwnedVector<PageId> fieldIds{utils::OwnedPmrAllocator<PageId>(conversion.memory)};
     for (const auto &reference : references) fieldIds.push_back(reference.page_id);
     std::sort(fieldIds.begin(), fieldIds.end()); fieldIds.erase(std::unique(fieldIds.begin(), fieldIds.end()), fieldIds.end());
-    for (const auto id : fieldIds) {
-        check(); const auto records = HybridPropertyDirectoryIntegrity::verifyPageOwnership(context, source, id, conversion.memory, &largeValues);
-        require(records == size_t(std::count_if(references.begin(), references.end(), [&](const auto &ref) { return ref.page_id == id; })),
-            "inverse selected field page contains records outside its dedicated group");
-    }
+    // A converted cohort can pack records from several groups into one page.
+    // Authenticate the complete source page, then remove only this group's
+    // slots in a private COW image. Other groups retain their logical locators
+    // and old snapshots retain the original physical page.
+    utils::OwnedVector<HybridPropertyPageImage> retainedFields{
+        utils::OwnedPmrAllocator<HybridPropertyPageImage>(conversion.memory)};
     utils::OwnedVector<uint64_t> retiredIds{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
     utils::OwnedVector<uint64_t> supersededIds{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
-    for (const auto id : fieldIds) { retiredIds.push_back(id.value()); supersededIds.push_back(id.value()); }
+    for (const auto id : fieldIds) {
+        check();
+        const auto records = HybridPropertyDirectoryIntegrity::verifyPageOwnership(context, source, id, conversion.memory, &largeValues);
+        const auto selected = size_t(std::count_if(references.begin(), references.end(),
+            [&](const auto &ref) { return ref.page_id == id; }));
+        require(records >= selected, "inverse selected page has fewer records than its selected locators");
+        // Erasing also proves distinct, live slot generations; a duplicate
+        // locator must fail rather than making a page look fully detached.
+        auto image = sourceFields.cloneForMutation(source, id, batch.generation(), conversion.memory);
+        for (const auto &reference : references) if (reference.page_id == id) {
+            check(); image.erase(reference);
+        }
+        require(image.liveSlotCount() == records - selected,
+            "inverse selected page census disagrees with private slot removal");
+        supersededIds.push_back(id.value());
+        if (image.liveSlotCount()) retainedFields.push_back(std::move(image));
+        else retiredIds.push_back(id.value());
+    }
     utils::OwnedVector<uint64_t> erasedRoots{utils::OwnedPmrAllocator<uint64_t>(conversion.memory)};
     utils::OwnedVector<IndexRootLocation> changedRoots{utils::OwnedPmrAllocator<IndexRootLocation>(conversion.memory)};
     utils::OwnedVector<HybridPropertyDirectoryPreparation::Image> directoryImages{
@@ -1755,6 +2203,23 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
             const auto bytes = EntityPropertyCollectionRootCodec::encode(row);
             require(bytes.size() == encodedSize, "inverse ROW encoder size disagrees with preflight");
             encoded.assign(bytes.begin(), bytes.end());
+        } else if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER) {
+            const EntityPropertyKey owner{conversion.owner_kind, row.owner_entity_id};
+            const auto slot = hybridPropertySlotFor(owner);
+            const bool hasHot = std::ranges::any_of(sourceMatrix->owners[slot], [](uint64_t word) { return word != 0; });
+            if (!hasHot && (sourceMatrix->cold_rows.owners & (UINT64_C(1) << slot)))
+                context.withColdBlock(group, *sourceMatrix, sourceMatrix->cold_rows.roots[slot],
+                    [&](const auto &block, const auto &) {
+                        const auto cold = block.row(slot);
+                        require(cold && cold->field_count == row.entries.size(), "inverse complete cold root lost its actual fields");
+                        if (!cold->large_value_reference) return;
+                        HybridPropertyColdRowInspection inspection(source, *cold, owner, block.semantic_generation,
+                            std::span(sourceMatrix->tokens).first(sourceMatrix->column_count), conversion.memory,
+                            &largeValues, conversion.cancellation);
+                        require(bool(inspection.reference()), "inverse complete cold carrier has no authenticated reference");
+                        const auto bytes = EntityPropertyLargeValueReferenceCodec::encode(*inspection.reference());
+                        encoded.assign(bytes.begin(), bytes.end());
+                    });
         } else if (row.entries.size() == 1) {
             utils::OwnedHeapReservation referenceCredit(conversion.memory);
             const auto referenceAdmission = [&](size_t bytes) { referenceCredit.set(bytes); };
@@ -1802,6 +2267,25 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
         auto &image = images.back(); const auto slot = image.page.insert(encoded);
         image.location.free_bytes = image.page.stats().contiguous_free_bytes;
         properties.push_back({{conversion.owner_kind, row.owner_entity_id}, slot.page_id, slot.slot_id, slot.generation});
+    }
+    // Allocate preserved hybrid frames only after ROW packing, so the two
+    // layouts never share a packing cursor or an owner-kind header.
+    std::optional<CatalogEntry> retainedPool;
+    size_t retainedPoolFrames = 0;
+    for (auto &field : retainedFields) {
+        check();
+        if (!retainedPool || retainedPoolFrames == RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+            retainedPool = newPool(SegmentKind::SGK_PROPERTY_PAGE_POOL, conversion.field_pool_owner_id);
+            retainedPoolFrames = 0;
+        }
+        const auto pool = *retainedPool;
+        const auto id = field.pageId();
+        const PageOwnerHeader owner{id, pool.owner_id, PageOwnerKind::POK_HYBRID_PROPERTY, 0,
+            RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
+        auto page = std::move(field).bindPrivateOwner(owner, pool, batch.checkpointLsn());
+        const auto freeBytes = page.stats().contiguous_free_bytes;
+        images.push_back({pool, {id, pool.segment_id, uint16_t(RSS_PAGE_POOL_FIRST_DATA_FRAME + retainedPoolFrames++),
+            pool.generation, freeBytes}, std::move(page)});
     }
     encodingScratch.set(0);
     HybridPropertyImmutablePreparation immutableImages(batch, largeValues, largeRows, conversion.memory, newPool, check);
@@ -1857,7 +2341,7 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
             if (image.pool.segment_id != pool.segment_id) continue;
             check(); const auto bytes = image.page.serializeOwned(conversion.memory);
             SharedPagePoolPreparedAppend append;
-            append.owner = {image.location.page_id, pool.owner_id, PageOwnerKind::POK_PROPERTY, 0,
+            append.owner = {image.location.page_id, pool.owner_id, image.page.ownerKind(), 0,
                 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
             append.payload.assign(bytes.begin(), bytes.end()); append.free_bytes = image.location.free_bytes;
             appends.push_back(std::move(append)); auto location = image.location; location.page_index = 0; locations.push_back(location);
@@ -1879,7 +2363,15 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
             append.payload.assign(frame.payload.begin(), frame.payload.end()); appends.push_back(std::move(append));
             auto location = frame.location; location.page_index = 0; locations.push_back(location);
         }
-        SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool, appends, locations, batch.checkpointLsn());
+        // Retained unrelated groups use their dedicated Hybrid pool cursor,
+        // separate from the new ordinary ROW frames. Authenticate that complete
+        // pool as Hybrid; passing the ordinary writer rejects its real owners.
+        const bool native = !appends.empty() && appends.front().owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY;
+        require(!native || (pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+            std::ranges::all_of(appends, [](const auto &append) { return append.owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY; })),
+            "inverse retained Hybrid pool contains unrelated frame kinds");
+        SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool, appends, locations,
+            batch.checkpointLsn(), 0, native);
         for (const auto &location : locations) published.push_back(location);
     }
     for (const auto &pool : newPools) allocator_.prepareSetAllocated(batch, pool.physical_slot, true);

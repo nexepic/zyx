@@ -1,0 +1,83 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "timing_benchmark": false,
+  "full_suite": false,
+  "checks": {
+    "hybrid-initial-": {
+      "tests": 8,
+      "failures": 1
+    },
+    "hybrid-compact-directory-": {
+      "tests": 8,
+      "failures": 1
+    },
+    "hybrid-sized-directory-": {
+      "tests": 8,
+      "failures": 0
+    },
+    "hybrid-bindings-": {
+      "tests": 13,
+      "failures": 0
+    },
+    "hybrid-no-lz4-": {
+      "tests": 13,
+      "failures": 0
+    },
+    "default-final": {
+      "tests": 13,
+      "failures": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-row-codec-hybrid-candidate/libzyx_core.a",
+      "profile": "11/37",
+      "sha256": "6061794d4d51ab9a47222b03839e13c015d96624d9cda226c284fde352b05bdb"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-row-codec-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "37350724b60313afb08773fd05c849e81918cd44865d99108152dd2532bbc8cb"
+    }
+  },
+  "integration_status": "Byte/value codecs only. No native page-image admission, group mode, conversion, mutation, read/integrity routing or persistent format13/39 enabled. Current formats remain11/37 and5/31.",
+  "geometry": {
+    "owners": 64,
+    "schema": "actual-shape 11-byte long IDs plus three hypothetical existing hot columns",
+    "cold_stored_bytes": 1361,
+    "future_slotted_payload_bytes": 4013,
+    "page_payload_limit": 4032,
+    "includes": "actual canonical ROW and cold-block bytes, actual minimum-width binding codec, future membership/group/column/slot geometry",
+    "not_proven": [
+      "actual persisted whole page",
+      "mature whole allocation",
+      "query latency"
+    ]
+  },
+  "bounds": {
+    "rows_per_block": 64,
+    "uncompressed_bytes": 4096,
+    "binding_max_bytes": 1024,
+    "conversion_account_unchanged": true,
+    "cache_unchanged": true
+  },
+  "contracts": [
+    "deduplicated 4-byte row-end directory derives owners from masks and inline counts from actual ROW headers; LargeValue rows retain explicit u32 count and existing reference",
+    "stored and uncompressed CRC, exact decompression and declared bounds before buffer exposure",
+    "canonical sparse/dense binding representation, tie chooses dense, complete disjoint masks and exact slot generations",
+    "LargeValue structural reference is not actual manifest/media/count/content authentication"
+  ],
+  "no_lz4_scope": "Cold codec and tests compiled with ZYX_HAS_LZ4=0; rest of existing archive unchanged, not a complete engine build without LZ4",
+  "retained_failures": [
+    "12-byte directory geometry4237 exceeds4032: remove duplicated metadata, do not enlarge page",
+    "assuming all64 canonical roots fit one4096-byte decoded block was false; partition using actual encoded byte sizes, preserving bound"
+  ],
+  "pending": [
+    "integrate membership v3/group mode in a new13/39 candidate",
+    "cold ROW/LargeValue selected/full/typed reads, conversion and writes through existing coordinator",
+    "full ownership, old pins, fault/retirement/inverse lifecycle",
+    "actual mature space and private migration bootstrap",
+    "final P7 performance matrix"
+  ]
+}

@@ -304,6 +304,8 @@ set(ZYX_NATIVE_STORAGE_SOURCES
     "${ZYX_SOURCE_ROOT}/storage/relocatable/property/LargeValue.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/property/LargeValueStore.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/property/PropertyCollectionRoot.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/relocatable/property/HybridPropertyColdRowBlock.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/relocatable/property/HybridPropertyColdRowInspection.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/property/PropertyCollectionRootStore.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/property/PropertyValueCodec.cpp"
     "${ZYX_SOURCE_ROOT}/storage/relocatable/schema/ConstraintDefinition.cpp"

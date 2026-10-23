@@ -1,0 +1,62 @@
+{
+  "recorded_at_utc": "2026-10-23T09:55:39.584177+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-pending-final-legacy-": {
+      "tests": 537,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-pending-final-compact-": {
+      "tests": 537,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 59,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "ed0e061bbe58a43577ea6d2d04d02249281cdfdea2a3115c92916588da1e3490",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "0d2691e72444b153e4868655b73628f38c92aa52aa12bc5c8b9b645bd84b9254",
+      "binary_preserved": false
+    }
+  },
+  "pre_fix": {
+    "tests": 59,
+    "failures": 1,
+    "cause": "old merge liveness guard rejected mixed birth/deletion; separate explicit pending-merge preparation option added; default guard retained"
+  },
+  "implemented": [
+    "Actual63-Node/Edge source fixture with actual entity64 absent and coherent live/column/cold masks",
+    "Explicit preparation-only pending hot/NULL insertion and propertyless liveness, default guards retained",
+    "One private COW group merges pending liveness, compatible hot plans, new cold roots and full canonical demotion",
+    "Mixed deletion of all63 original owners plus birth of owner64 retains only new complete cold root and correct group liveness",
+    "Immutable source Entity absence, namespaces, group, no competing ROW/legacy selector, canonical target checks and refunds",
+    "Private candidate/pending fields alone still rejected by original coordinator without sealed Entity creation proof"
+  ],
+  "remaining": [
+    "Actual sealed Native Entity creation coordination and cross-group coordination",
+    "Actual cold public conversion/atomic installation and remaining schema combinations",
+    "Whole-space staged target admission and full public lifecycle",
+    "Remaining primary query costs and final P7"
+  ]
+}

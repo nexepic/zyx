@@ -1,0 +1,58 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "checks": {
+    "hybrid": 29,
+    "default": 24
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-layout-scale-hybrid-candidate/libzyx_core.a",
+      "sha256": "4b8c5f3084bc9cb34930f4bf2ceb6b64bec00c5d7dcb60cd830fd6ff23bfed92",
+      "profile": "9/35"
+    },
+    "default": {
+      "path": "/workspace/zyx-layout-scale-default-candidate/libzyx_core.a",
+      "sha256": "4d3d2e67953a4ae3d9249718aeca08c2bbb2981fd234caba9cb65f2647472b2d",
+      "profile": "5/31"
+    }
+  },
+  "baseline_exclusions": {
+    "tests": 2,
+    "receipt": "frozen-retire-checks-receipt.json",
+    "reason": "unchanged delayed-reclaim assertions fail the same way on pre-round frozen library; never counted as passing"
+  },
+  "space": {
+    "4096_drained": {
+      "row_steady": 2097152,
+      "native_steady": 2228224,
+      "row_property": 655360,
+      "native_property": 393216,
+      "native_maps": 262144,
+      "row_metadata": 524288,
+      "native_metadata": 655360,
+      "completed_groups": 64
+    },
+    "4096_pinned": {
+      "completed_groups": 30,
+      "capacity_refusal_group": 31,
+      "destination_range": [
+        40,
+        80
+      ],
+      "final_steady": 2490368,
+      "final_total": 6291456,
+      "complete_layout": false
+    }
+  },
+  "maintenance_change": "Only existing durable retire-queue records may use hybrid begin-write/publication admission; original snapshot/Catalog/allocator checks retained, no field retirement discovery or descriptor mutation; generic writes remain rejected",
+  "accounting": "Conversion/census <=1MiB; full integrity uses unchanged default maintenance allowance 8MiB. No raised production quota.",
+  "fault_fixture_correction": "Original fixture uses fstream with invalid native descriptors, so syscall hooks cannot intercept publication. Final tests use existing portable BootstrapPublishFailpoint for partial/complete A/B; seed an explicit retired Catalog segment to guarantee queue work.",
+  "pending": [
+    "remove redundant field/group positioning costs with explicit persistent identity/byte contract before implementation",
+    "actual medium/holdout full allocation and reachable conversion",
+    "complete production performance acceptance"
+  ]
+}

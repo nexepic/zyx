@@ -1,0 +1,642 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *-LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop
+[==========] Running 271 tests from 31 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from CountAccumulatorTest
+[ RUN      ] CountAccumulatorTest.AllNullValues
+[       OK ] CountAccumulatorTest.AllNullValues (0 ms)
+[ RUN      ] CountAccumulatorTest.MixedNullAndNonNull
+[       OK ] CountAccumulatorTest.MixedNullAndNonNull (0 ms)
+[ RUN      ] CountAccumulatorTest.CountsRowsWithoutMaterializingInputValue
+[       OK ] CountAccumulatorTest.CountsRowsWithoutMaterializingInputValue (0 ms)
+[ RUN      ] CountAccumulatorTest.NoUpdates
+[       OK ] CountAccumulatorTest.NoUpdates (0 ms)
+[ RUN      ] CountAccumulatorTest.CloneEmpty
+[       OK ] CountAccumulatorTest.CloneEmpty (0 ms)
+[ RUN      ] CountAccumulatorTest.ResetClearsRowsAndNonNullValues
+[       OK ] CountAccumulatorTest.ResetClearsRowsAndNonNullValues (0 ms)
+[ RUN      ] CountAccumulatorTest.MergesPartialCountsAndRejectsOverflowWithoutChangingTheCount
+[       OK ] CountAccumulatorTest.MergesPartialCountsAndRejectsOverflowWithoutChangingTheCount (0 ms)
+[----------] 7 tests from CountAccumulatorTest (0 ms total)
+
+[----------] 2 tests from LogicalAggregateAccumulatorBaseTest
+[ RUN      ] LogicalAggregateAccumulatorBaseTest.DefaultRowUpdateDelegatesToTheValueUpdateContract
+[       OK ] LogicalAggregateAccumulatorBaseTest.DefaultRowUpdateDelegatesToTheValueUpdateContract (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorBaseTest.DestructiveFinalizationResetsScalarState
+[       OK ] LogicalAggregateAccumulatorBaseTest.DestructiveFinalizationResetsScalarState (0 ms)
+[----------] 2 tests from LogicalAggregateAccumulatorBaseTest (0 ms total)
+
+[----------] 11 tests from SumAccumulatorTest
+[ RUN      ] SumAccumulatorTest.OnlyDoubleValues
+[       OK ] SumAccumulatorTest.OnlyDoubleValues (0 ms)
+[ RUN      ] SumAccumulatorTest.OnlyIntegerValues
+[       OK ] SumAccumulatorTest.OnlyIntegerValues (0 ms)
+[ RUN      ] SumAccumulatorTest.MixedIntAndDouble
+[       OK ] SumAccumulatorTest.MixedIntAndDouble (0 ms)
+[ RUN      ] SumAccumulatorTest.WithNullValues
+[       OK ] SumAccumulatorTest.WithNullValues (0 ms)
+[ RUN      ] SumAccumulatorTest.RejectsNonNumericValues
+[       OK ] SumAccumulatorTest.RejectsNonNumericValues (0 ms)
+[ RUN      ] SumAccumulatorTest.PositiveOverflowKeepsThePriorValueAndAllowsFurtherUpdates
+[       OK ] SumAccumulatorTest.PositiveOverflowKeepsThePriorValueAndAllowsFurtherUpdates (0 ms)
+[ RUN      ] SumAccumulatorTest.NegativeOverflowKeepsThePriorValueAndResetRestoresAnEmptyState
+[       OK ] SumAccumulatorTest.NegativeOverflowKeepsThePriorValueAndResetRestoresAnEmptyState (0 ms)
+[ RUN      ] SumAccumulatorTest.OppositeSignIntegerExtremesRemainExact
+[       OK ] SumAccumulatorTest.OppositeSignIntegerExtremesRemainExact (0 ms)
+[ RUN      ] SumAccumulatorTest.FloatingInputDoesNotSilentlyMaskIntegerOverflow
+[       OK ] SumAccumulatorTest.FloatingInputDoesNotSilentlyMaskIntegerOverflow (0 ms)
+[ RUN      ] SumAccumulatorTest.CloneMixed
+[       OK ] SumAccumulatorTest.CloneMixed (0 ms)
+[ RUN      ] SumAccumulatorTest.ResetClearsAllFlags
+[       OK ] SumAccumulatorTest.ResetClearsAllFlags (0 ms)
+[----------] 11 tests from SumAccumulatorTest (0 ms total)
+
+[----------] 7 tests from AvgAccumulatorTest
+[ RUN      ] AvgAccumulatorTest.OnlyIntegers
+[       OK ] AvgAccumulatorTest.OnlyIntegers (0 ms)
+[ RUN      ] AvgAccumulatorTest.OnlyDoubles
+[       OK ] AvgAccumulatorTest.OnlyDoubles (0 ms)
+[ RUN      ] AvgAccumulatorTest.MixedIntAndDouble
+[       OK ] AvgAccumulatorTest.MixedIntAndDouble (0 ms)
+[ RUN      ] AvgAccumulatorTest.WithNullValues
+[       OK ] AvgAccumulatorTest.WithNullValues (0 ms)
+[ RUN      ] AvgAccumulatorTest.RejectsNonNumericValues
+[       OK ] AvgAccumulatorTest.RejectsNonNumericValues (0 ms)
+[ RUN      ] AvgAccumulatorTest.EmptyReturnsNull
+[       OK ] AvgAccumulatorTest.EmptyReturnsNull (0 ms)
+[ RUN      ] AvgAccumulatorTest.CloneAndResetKeepIndependentRunningState
+[       OK ] AvgAccumulatorTest.CloneAndResetKeepIndependentRunningState (0 ms)
+[----------] 7 tests from AvgAccumulatorTest (0 ms total)
+
+[----------] 8 tests from MinAccumulatorTest
+[ RUN      ] MinAccumulatorTest.SingleValue
+[       OK ] MinAccumulatorTest.SingleValue (0 ms)
+[ RUN      ] MinAccumulatorTest.SecondValueIsSmaller
+[       OK ] MinAccumulatorTest.SecondValueIsSmaller (0 ms)
+[ RUN      ] MinAccumulatorTest.SecondValueIsLarger
+[       OK ] MinAccumulatorTest.SecondValueIsLarger (0 ms)
+[ RUN      ] MinAccumulatorTest.SecondValueIsEqual
+[       OK ] MinAccumulatorTest.SecondValueIsEqual (0 ms)
+[ RUN      ] MinAccumulatorTest.NullValuesSkipped
+[       OK ] MinAccumulatorTest.NullValuesSkipped (0 ms)
+[ RUN      ] MinAccumulatorTest.EmptyReturnsNull
+[       OK ] MinAccumulatorTest.EmptyReturnsNull (0 ms)
+[ RUN      ] MinAccumulatorTest.DoubleValues_DecreasingThenIncreasing
+[       OK ] MinAccumulatorTest.DoubleValues_DecreasingThenIncreasing (0 ms)
+[ RUN      ] MinAccumulatorTest.CloneAndResetPreserveIndependentMinimum
+[       OK ] MinAccumulatorTest.CloneAndResetPreserveIndependentMinimum (0 ms)
+[----------] 8 tests from MinAccumulatorTest (0 ms total)
+
+[----------] 9 tests from MaxAccumulatorTest
+[ RUN      ] MaxAccumulatorTest.SingleValue
+[       OK ] MaxAccumulatorTest.SingleValue (0 ms)
+[ RUN      ] MaxAccumulatorTest.SecondValueIsLarger
+[       OK ] MaxAccumulatorTest.SecondValueIsLarger (0 ms)
+[ RUN      ] MaxAccumulatorTest.SecondValueIsSmaller
+[       OK ] MaxAccumulatorTest.SecondValueIsSmaller (0 ms)
+[ RUN      ] MaxAccumulatorTest.SecondValueIsEqual
+[       OK ] MaxAccumulatorTest.SecondValueIsEqual (0 ms)
+[ RUN      ] MaxAccumulatorTest.NullValuesSkipped
+[       OK ] MaxAccumulatorTest.NullValuesSkipped (0 ms)
+[ RUN      ] MaxAccumulatorTest.EmptyReturnsNull
+[       OK ] MaxAccumulatorTest.EmptyReturnsNull (0 ms)
+[ RUN      ] MaxAccumulatorTest.DoubleValues_IncreasingThenDecreasing
+[       OK ] MaxAccumulatorTest.DoubleValues_IncreasingThenDecreasing (0 ms)
+[ RUN      ] MaxAccumulatorTest.MultipleIncreasingValues
+[       OK ] MaxAccumulatorTest.MultipleIncreasingValues (0 ms)
+[ RUN      ] MaxAccumulatorTest.CloneAndResetPreserveIndependentMaximum
+[       OK ] MaxAccumulatorTest.CloneAndResetPreserveIndependentMaximum (0 ms)
+[----------] 9 tests from MaxAccumulatorTest (0 ms total)
+
+[----------] 7 tests from CollectAccumulatorTest
+[ RUN      ] CollectAccumulatorTest.EmptyCollect
+[       OK ] CollectAccumulatorTest.EmptyCollect (0 ms)
+[ RUN      ] CollectAccumulatorTest.SingleValue
+[       OK ] CollectAccumulatorTest.SingleValue (0 ms)
+[ RUN      ] CollectAccumulatorTest.MultipleValues
+[       OK ] CollectAccumulatorTest.MultipleValues (0 ms)
+[ RUN      ] CollectAccumulatorTest.IgnoresNullValues
+[       OK ] CollectAccumulatorTest.IgnoresNullValues (0 ms)
+[ RUN      ] CollectAccumulatorTest.MixedTypes
+[       OK ] CollectAccumulatorTest.MixedTypes (0 ms)
+[ RUN      ] CollectAccumulatorTest.ClonePreservesValues
+[       OK ] CollectAccumulatorTest.ClonePreservesValues (0 ms)
+[ RUN      ] CollectAccumulatorTest.ResetClearsValues
+[       OK ] CollectAccumulatorTest.ResetClearsValues (0 ms)
+[----------] 7 tests from CollectAccumulatorTest (0 ms total)
+
+[----------] 4 tests from CreateAccumulatorTest
+[ RUN      ] CreateAccumulatorTest.AllKnownTypes
+[       OK ] CreateAccumulatorTest.AllKnownTypes (0 ms)
+[ RUN      ] CreateAccumulatorTest.InvalidTypeReturnsNull
+[       OK ] CreateAccumulatorTest.InvalidTypeReturnsNull (0 ms)
+[ RUN      ] CreateAccumulatorTest.RejectsInvalidPercentilesBeforeAccumulationCanIndexOutOfBounds
+[       OK ] CreateAccumulatorTest.RejectsInvalidPercentilesBeforeAccumulationCanIndexOutOfBounds (0 ms)
+[ RUN      ] CreateAccumulatorTest.ObjectAdmissionRunsBeforeCreationAndPropagatesRejection
+[       OK ] CreateAccumulatorTest.ObjectAdmissionRunsBeforeCreationAndPropagatesRejection (0 ms)
+[----------] 4 tests from CreateAccumulatorTest (0 ms total)
+
+[----------] 4 tests from CountDistinctAccumulatorTest
+[ RUN      ] CountDistinctAccumulatorTest.ResetClearsSeenSet
+[       OK ] CountDistinctAccumulatorTest.ResetClearsSeenSet (0 ms)
+[ RUN      ] CountDistinctAccumulatorTest.ClonePreservesState
+[       OK ] CountDistinctAccumulatorTest.ClonePreservesState (0 ms)
+[ RUN      ] CountDistinctAccumulatorTest.NullUpdateSkipped
+[       OK ] CountDistinctAccumulatorTest.NullUpdateSkipped (0 ms)
+[ RUN      ] CountDistinctAccumulatorTest.DistinguishesValuesWithoutStringifying
+[       OK ] CountDistinctAccumulatorTest.DistinguishesValuesWithoutStringifying (0 ms)
+[----------] 4 tests from CountDistinctAccumulatorTest (0 ms total)
+
+[----------] 7 tests from CollectDistinctAccumulatorTest
+[ RUN      ] CollectDistinctAccumulatorTest.ResetClearsAll
+[       OK ] CollectDistinctAccumulatorTest.ResetClearsAll (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.ClonePreservesState
+[       OK ] CollectDistinctAccumulatorTest.ClonePreservesState (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.KeepsTypedDistinctValuesWithSameText
+[       OK ] CollectDistinctAccumulatorTest.KeepsTypedDistinctValuesWithSameText (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.IgnoresNullValues
+[       OK ] CollectDistinctAccumulatorTest.IgnoresNullValues (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.AdmissionRejectionAndCancellationPermitRetry
+[       OK ] CollectDistinctAccumulatorTest.AdmissionRejectionAndCancellationPermitRetry (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.StringAdmissionChargesBothRetainedCopiesAndSkipsDuplicates
+[       OK ] CollectDistinctAccumulatorTest.StringAdmissionChargesBothRetainedCopiesAndSkipsDuplicates (0 ms)
+[ RUN      ] CollectDistinctAccumulatorTest.RetainedAccountingIncludesBothSparseMapBucketArrays
+[       OK ] CollectDistinctAccumulatorTest.RetainedAccountingIncludesBothSparseMapBucketArrays (0 ms)
+[----------] 7 tests from CollectDistinctAccumulatorTest (0 ms total)
+
+[----------] 5 tests from StDevAccumulatorTest
+[ RUN      ] StDevAccumulatorTest.ResetClearsState
+[       OK ] StDevAccumulatorTest.ResetClearsState (0 ms)
+[ RUN      ] StDevAccumulatorTest.ClonePreservesState
+[       OK ] StDevAccumulatorTest.ClonePreservesState (0 ms)
+[ RUN      ] StDevAccumulatorTest.NullUpdateSkipped
+[       OK ] StDevAccumulatorTest.NullUpdateSkipped (0 ms)
+[ RUN      ] StDevAccumulatorTest.DoubleUpdateCoveredBranch
+[       OK ] StDevAccumulatorTest.DoubleUpdateCoveredBranch (0 ms)
+[ RUN      ] StDevAccumulatorTest.StDevPopulation_CloneAndReset
+[       OK ] StDevAccumulatorTest.StDevPopulation_CloneAndReset (0 ms)
+[----------] 5 tests from StDevAccumulatorTest (0 ms total)
+
+[----------] 2 tests from PercentileDiscAccumulatorTest
+[ RUN      ] PercentileDiscAccumulatorTest.ResetClearsValues
+[       OK ] PercentileDiscAccumulatorTest.ResetClearsValues (0 ms)
+[ RUN      ] PercentileDiscAccumulatorTest.ClonePreservesValues
+[       OK ] PercentileDiscAccumulatorTest.ClonePreservesValues (0 ms)
+[----------] 2 tests from PercentileDiscAccumulatorTest (0 ms total)
+
+[----------] 6 tests from PercentileContAccumulatorTest
+[ RUN      ] PercentileContAccumulatorTest.ResetClearsValues
+[       OK ] PercentileContAccumulatorTest.ResetClearsValues (0 ms)
+[ RUN      ] PercentileContAccumulatorTest.ClonePreservesValues
+[       OK ] PercentileContAccumulatorTest.ClonePreservesValues (0 ms)
+[ RUN      ] PercentileContAccumulatorTest.NullUpdateSkipped
+[       OK ] PercentileContAccumulatorTest.NullUpdateSkipped (0 ms)
+[ RUN      ] PercentileContAccumulatorTest.DoubleUpdateCoveredBranch
+[       OK ] PercentileContAccumulatorTest.DoubleUpdateCoveredBranch (0 ms)
+[ RUN      ] PercentileContAccumulatorTest.SingleElementReturnsSelf
+[       OK ] PercentileContAccumulatorTest.SingleElementReturnsSelf (0 ms)
+[ RUN      ] PercentileContAccumulatorTest.RejectsStringType
+[       OK ] PercentileContAccumulatorTest.RejectsStringType (0 ms)
+[----------] 6 tests from PercentileContAccumulatorTest (0 ms total)
+
+[----------] 10 tests from LogicalAggregateAccumulatorTest
+[ RUN      ] LogicalAggregateAccumulatorTest.CalculatesSampleAndPopulationStandardDeviationForTheCanonicalDataset
+[       OK ] LogicalAggregateAccumulatorTest.CalculatesSampleAndPopulationStandardDeviationForTheCanonicalDataset (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.CalculatesDiscretePercentileAtBothBoundsAndAtTheMedian
+[       OK ] LogicalAggregateAccumulatorTest.CalculatesDiscretePercentileAtBothBoundsAndAtTheMedian (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.InterpolatesContinuousPercentilesAtFractionalRanks
+[       OK ] LogicalAggregateAccumulatorTest.InterpolatesContinuousPercentilesAtFractionalRanks (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.PreservesSingleValuePopulationAndExactContinuousPercentileSemantics
+[       OK ] LogicalAggregateAccumulatorTest.PreservesSingleValuePopulationAndExactContinuousPercentileSemantics (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.TakesOwnedPayloadResultsAndSupportsReuse
+[       OK ] LogicalAggregateAccumulatorTest.TakesOwnedPayloadResultsAndSupportsReuse (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.DestructivePercentilesMatchSnapshotsReleaseCapacityAndSupportReuse
+[       OK ] LogicalAggregateAccumulatorTest.DestructivePercentilesMatchSnapshotsReleaseCapacityAndSupportReuse (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.PercentileArrayGrowthUsesSharedAdmissionAndPreservesStateOnRejection
+[       OK ] LogicalAggregateAccumulatorTest.PercentileArrayGrowthUsesSharedAdmissionAndPreservesStateOnRejection (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.PayloadAdmissionRejectsBeforeMutatingCollectMinAndMax
+[       OK ] LogicalAggregateAccumulatorTest.PayloadAdmissionRejectsBeforeMutatingCollectMinAndMax (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.AdmittedExtremaReplacementPreservesExistingValueOnRejection
+[       OK ] LogicalAggregateAccumulatorTest.AdmittedExtremaReplacementPreservesExistingValueOnRejection (0 ms)
+[ RUN      ] LogicalAggregateAccumulatorTest.CollectCancellationDuringNestedCopyPreservesExistingState
+[       OK ] LogicalAggregateAccumulatorTest.CollectCancellationDuringNestedCopyPreservesExistingState (0 ms)
+[----------] 10 tests from LogicalAggregateAccumulatorTest (0 ms total)
+
+[----------] 4 tests from BoundNodeScanBatchTest
+[ RUN      ] BoundNodeScanBatchTest.TypedFilterAndEntityColumnsPreserveNullOrderAndDuplicates
+[       OK ] BoundNodeScanBatchTest.TypedFilterAndEntityColumnsPreserveNullOrderAndDuplicates (0 ms)
+[ RUN      ] BoundNodeScanBatchTest.MixedTypeFallbackMatchesOriginalScalarVariantOrdering
+[       OK ] BoundNodeScanBatchTest.MixedTypeFallbackMatchesOriginalScalarVariantOrdering (0 ms)
+[ RUN      ] BoundNodeScanBatchTest.CancellationAtEveryPreparationCheckpointRefundsAllBatchMemory
+[       OK ] BoundNodeScanBatchTest.CancellationAtEveryPreparationCheckpointRefundsAllBatchMemory (0 ms)
+[ RUN      ] BoundNodeScanBatchTest.MalformedSourcesAndChangedSchemaAreRejectedBeforeConsumerEffects
+[       OK ] BoundNodeScanBatchTest.MalformedSourcesAndChangedSchemaAreRejectedBeforeConsumerEffects (0 ms)
+[----------] 4 tests from BoundNodeScanBatchTest (0 ms total)
+
+[----------] 11 tests from DirectPropertyColumnsTest
+[ RUN      ] DirectPropertyColumnsTest.ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence
+[       OK ] DirectPropertyColumnsTest.ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.RejectsDuplicateCellsForeignRowsAndChangedSnapshots
+[       OK ] DirectPropertyColumnsTest.RejectsDuplicateCellsForeignRowsAndChangedSnapshots (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.PressureAndCancellationDiscardPrivateConstructionAndRefund
+[       OK ] DirectPropertyColumnsTest.PressureAndCancellationDiscardPrivateConstructionAndRefund (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.StringAndMixedTypePredicatesMatchLegacyScalarOrdering
+[       OK ] DirectPropertyColumnsTest.StringAndMixedTypePredicatesMatchLegacyScalarOrdering (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.RawScalarsPreserveIeeeBitsNullAndBudgetWithoutValueDecode
+[       OK ] DirectPropertyColumnsTest.RawScalarsPreserveIeeeBitsNullAndBudgetWithoutValueDecode (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.ScalarGatherRestoresDuplicateIdsAndUsesOwningFallbackForOtherReaders
+[       OK ] DirectPropertyColumnsTest.ScalarGatherRestoresDuplicateIdsAndUsesOwningFallbackForOtherReaders (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.OrderedGatherUsesLinearWorkAndRestoresSortedDuplicatesWithoutSorting
+[       OK ] DirectPropertyColumnsTest.OrderedGatherUsesLinearWorkAndRestoresSortedDuplicatesWithoutSorting (2 ms)
+[ RUN      ] DirectPropertyColumnsTest.SynchronousRunsOwnTextAndPreserveScalarBitsNullAndMissing
+[       OK ] DirectPropertyColumnsTest.SynchronousRunsOwnTextAndPreserveScalarBitsNullAndMissing (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.InvalidOrUnsupportedPartialRunsCannotSealAndRefundTheirBudget
+[       OK ] DirectPropertyColumnsTest.InvalidOrUnsupportedPartialRunsCannotSealAndRefundTheirBudget (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.ImmutableLegacySourceFallsBackBeforeAnyRunOutput
+[       OK ] DirectPropertyColumnsTest.ImmutableLegacySourceFallsBackBeforeAnyRunOutput (0 ms)
+[ RUN      ] DirectPropertyColumnsTest.RunArenaDenialAndMidCopyCancellationCannotExposePartialColumns
+[       OK ] DirectPropertyColumnsTest.RunArenaDenialAndMidCopyCancellationCannotExposePartialColumns (0 ms)
+[----------] 11 tests from DirectPropertyColumnsTest (3 ms total)
+
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows
+[       OK ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath
+[       OK ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch
+[       OK ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery
+[       OK ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates
+[       OK ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates (12 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure
+[       OK ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics
+[       OK ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn
+[       OK ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure (0 ms)
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest (23 ms total)
+
+[----------] 10 tests from LogicalPlanDirectColumnAggregateTest
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.CompleteTupleGroupingDistinctAndNumericStateMatchLegacy
+[       OK ] LogicalPlanDirectColumnAggregateTest.CompleteTupleGroupingDistinctAndNumericStateMatchLegacy (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.StringAndNumericPredicatesFeedGroupedCountsWithoutRows
+[       OK ] LogicalPlanDirectColumnAggregateTest.StringAndNumericPredicatesFeedGroupedCountsWithoutRows (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.DistinctPreservesTypesNullAndEmbeddedStringBytes
+[       OK ] LogicalPlanDirectColumnAggregateTest.DistinctPreservesTypesNullAndEmbeddedStringBytes (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics
+[       OK ] LogicalPlanDirectColumnAggregateTest.EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.AccumulationPreservesPhysicalScanOrder
+[       OK ] LogicalPlanDirectColumnAggregateTest.AccumulationPreservesPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks
+[       OK ] LogicalPlanDirectColumnAggregateTest.SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput
+[       OK ] LogicalPlanDirectColumnAggregateTest.PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput (2 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics
+[       OK ] LogicalPlanDirectColumnAggregateTest.ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics (6 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.GuardAdmissionTypedExceptionDuringProductionIsNeverRetried
+[       OK ] LogicalPlanDirectColumnAggregateTest.GuardAdmissionTypedExceptionDuringProductionIsNeverRetried (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay
+[       OK ] LogicalPlanDirectColumnAggregateTest.PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay (0 ms)
+[----------] 10 tests from LogicalPlanDirectColumnAggregateTest (12 ms total)
+
+[----------] 4 tests from LogicalPlanDirectEdgeRuntimeTest
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsPreserveEscapedCachesAndBagOrder
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsPreserveEscapedCachesAndBagOrder (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsKeepNullAndMissingPredicateSemantics
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsKeepNullAndMissingPredicateSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinFilterPushdownPreservesScalarBagNullsAndEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinFilterPushdownPreservesScalarBagNullsAndEarlyStop (5 ms)
+[----------] 4 tests from LogicalPlanDirectEdgeRuntimeTest (9 ms total)
+
+[----------] 3 tests from RelocatableBorrowedPropertyTest
+[ RUN      ] RelocatableBorrowedPropertyTest.BorrowsPrimitiveBitsAndExactTextWithoutOwningValues
+[       OK ] RelocatableBorrowedPropertyTest.BorrowsPrimitiveBitsAndExactTextWithoutOwningValues (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyTest.RejectsMalformedPrimitivesInsteadOfBypassingTheCodec
+[       OK ] RelocatableBorrowedPropertyTest.RejectsMalformedPrimitivesInsteadOfBypassingTheCodec (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyTest.ValidatesOwnerAndWholeDirectoryBeforePublishingSelectedBorrow
+[       OK ] RelocatableBorrowedPropertyTest.ValidatesOwnerAndWholeDirectoryBeforePublishingSelectedBorrow (0 ms)
+[----------] 3 tests from RelocatableBorrowedPropertyTest (0 ms total)
+
+[----------] 13 tests from RelocatablePropertyValueInspectionTest
+[ RUN      ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue
+[       OK ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission
+[       OK ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation
+[       OK ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation (2 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RangeInspectionMatchesBorrowedShapeWithBoundedLongKeyComparisons
+[       OK ] RelocatablePropertyValueInspectionTest.RangeInspectionMatchesBorrowedShapeWithBoundedLongKeyComparisons (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RangeValidationRejectsTheSameSingleBitMutationsAndAllTruncations
+[       OK ] RelocatablePropertyValueInspectionTest.RangeValidationRejectsTheSameSingleBitMutationsAndAllTruncations (3 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RangeInspectionPropagatesReaderAndCancellationFailures
+[       OK ] RelocatablePropertyValueInspectionTest.RangeInspectionPropagatesReaderAndCancellationFailures (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime
+[       OK ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime (2 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints
+[       OK ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens
+[       OK ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation
+[       OK ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation (1 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget
+[       OK ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget (1 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial
+[       OK ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor
+[       OK ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor (1 ms)
+[----------] 13 tests from RelocatablePropertyValueInspectionTest (14 ms total)
+
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount
+[       OK ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip
+[       OK ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip (7 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting (2 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload (0 ms)
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest (9 ms total)
+
+[----------] 16 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues
+[       OK ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode
+[       OK ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence
+[       OK ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads (5 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes
+[       OK ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation (5 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry
+[       OK ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission
+[       OK ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry (0 ms)
+[----------] 16 tests from RelocatablePropertyCollectionRootTest (11 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes (0 ms)
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest (0 ms total)
+
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots (2 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains
+[       OK ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains (4 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState
+[       OK ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads (23 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity (23 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads (13 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing (3 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit (12 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots (10 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage (9 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot
+[       OK ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot (7 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp
+[       OK ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource (10 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove (7 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically (15 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources (9 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans (2 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations
+[       OK ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks (33 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode
+[       OK ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode (29 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries
+[       OK ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission
+[       OK ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission (22 ms)
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest (304 ms total)
+
+[----------] 21 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (6 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (5 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges
+[       OK ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges (4 ms)
+[----------] 21 tests from PropertyCollectionRootStoreCacheTest (88 ms total)
+
+[----------] 5 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots
+[       OK ] RelocatableStorageBackendTest.DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots (87 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches
+[       OK ] RelocatableStorageBackendTest.NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches (156 ms)
+[ RUN      ] RelocatableStorageBackendTest.DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth
+[       OK ] RelocatableStorageBackendTest.DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth (518 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks
+[       OK ] RelocatableStorageBackendTest.NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks (46 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyRunsKeepComplexLargeValueNullAndMissingFallbacks
+[       OK ] RelocatableStorageBackendTest.PropertyRunsKeepComplexLargeValueNullAndMissingFallbacks (44 ms)
+[----------] 5 tests from RelocatableStorageBackendTest (852 ms total)
+
+[----------] 10 tests from BatchEnvelopeTest
+[ RUN      ] BatchEnvelopeTest.PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates
+[       OK ] BatchEnvelopeTest.PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates (0 ms)
+[ RUN      ] BatchEnvelopeTest.RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms
+[       OK ] BatchEnvelopeTest.RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms (0 ms)
+[ RUN      ] BatchEnvelopeTest.InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix
+[       OK ] BatchEnvelopeTest.InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix (0 ms)
+[ RUN      ] BatchEnvelopeTest.EntityAppendRollbackAndReaderEpochChangesRejectStaleValues
+[       OK ] BatchEnvelopeTest.EntityAppendRollbackAndReaderEpochChangesRejectStaleValues (0 ms)
+[ RUN      ] BatchEnvelopeTest.LegacyNumericBridgeExplicitlyDeclinesExactPresence
+[       OK ] BatchEnvelopeTest.LegacyNumericBridgeExplicitlyDeclinesExactPresence (0 ms)
+[ RUN      ] BatchEnvelopeTest.EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission
+[       OK ] BatchEnvelopeTest.EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners
+[       OK ] BatchEnvelopeTest.DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries
+[       OK ] BatchEnvelopeTest.DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget
+[       OK ] BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget (1 ms)
+[ RUN      ] BatchEnvelopeTest.ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects
+[       OK ] BatchEnvelopeTest.ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects (0 ms)
+[----------] 10 tests from BatchEnvelopeTest (2 ms total)
+
+[----------] 11 tests from BoundNodeColumnPredicatesTest
+[ RUN      ] BoundNodeColumnPredicatesTest.BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys
+[       OK ] BoundNodeColumnPredicatesTest.BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.UnboundedRangesStillRejectMissingAndNullValues
+[       OK ] BoundNodeColumnPredicatesTest.UnboundedRangesStillRejectMissingAndNullValues (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.MixedNumericTypesUseExistingVariantOrderingWithoutCoercion
+[       OK ] BoundNodeColumnPredicatesTest.MixedNumericTypesUseExistingVariantOrderingWithoutCoercion (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.InvalidBindingsAndAllocationFailureRefundAllMetadata
+[       OK ] BoundNodeColumnPredicatesTest.InvalidBindingsAndAllocationFailureRefundAllMetadata (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected
+[       OK ] BoundNodeColumnPredicatesTest.CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults
+[       OK ] BoundNodeColumnPredicatesTest.RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution
+[       OK ] BoundNodeColumnPredicatesTest.RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity
+[       OK ] BoundNodeColumnPredicatesTest.ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair
+[       OK ] BoundNodeColumnPredicatesTest.MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.ReusedPlanHandlesNullParametersAndChangingPropertyTypes
+[       OK ] BoundNodeColumnPredicatesTest.ReusedPlanHandlesNullParametersAndChangingPropertyTypes (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget
+[       OK ] BoundNodeColumnPredicatesTest.RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget (5 ms)
+[----------] 11 tests from BoundNodeColumnPredicatesTest (6 ms total)
+
+[----------] 5 tests from BoundExpressionInputsTest
+[ RUN      ] BoundExpressionInputsTest.NestedReferencesUseSlotsAndShareAuthenticatedPropertyDescriptors
+[       OK ] BoundExpressionInputsTest.NestedReferencesUseSlotsAndShareAuthenticatedPropertyDescriptors (0 ms)
+[ RUN      ] BoundExpressionInputsTest.ProjectedPropertyTextWinsAndLocalShadowingRemainsADeclaredScopeAdapter
+[       OK ] BoundExpressionInputsTest.ProjectedPropertyTextWinsAndLocalShadowingRemainsADeclaredScopeAdapter (1 ms)
+[ RUN      ] BoundExpressionInputsTest.UnknownNamesRemainDeferredAndReaderChangesRejectPropertyUse
+[       OK ] BoundExpressionInputsTest.UnknownNamesRemainDeferredAndReaderChangesRejectPropertyUse (1 ms)
+[ RUN      ] BoundExpressionInputsTest.ConstructionCancellationRefundsEverythingExceptTheExistingProgram
+[       OK ] BoundExpressionInputsTest.ConstructionCancellationRefundsEverythingExceptTheExistingProgram (0 ms)
+[ RUN      ] BoundExpressionInputsTest.ParameterDescriptorsRebindValuesAndRejectAnotherContextOrInputOwner
+[       OK ] BoundExpressionInputsTest.ParameterDescriptorsRebindValuesAndRejectAnotherContextOrInputOwner (0 ms)
+[----------] 5 tests from BoundExpressionInputsTest (5 ms total)
+
+[----------] 2 tests from BufferModes/RelocatablePropertyRunTest
+[ RUN      ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/0
+[       OK ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/0 (94 ms)
+[ RUN      ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/1
+[       OK ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/1 (79 ms)
+[----------] 2 tests from BufferModes/RelocatablePropertyRunTest (174 ms total)
+
+[----------] Global test environment tear-down
+[==========] 271 tests from 31 test suites ran. (1520 ms total)
+[  PASSED  ] 271 tests.

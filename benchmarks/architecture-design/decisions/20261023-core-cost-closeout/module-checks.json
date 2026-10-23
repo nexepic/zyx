@@ -1,0 +1,34 @@
+{
+  "full_suite": false,
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-legacy": {
+      "tests": 564,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b652e2ff0e84c5b50e44f37e3863e1bd3d63c4f9c37eeadd04fee949c2dce73c"
+    },
+    "hybrid-compact": {
+      "tests": 564,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b652e2ff0e84c5b50e44f37e3863e1bd3d63c4f9c37eeadd04fee949c2dce73c"
+    },
+    "default": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "9d998ef445b23dd142db953852cb870fee06e2cbb922b92c0ee973738a837a2e"
+    },
+    "oneframe": {
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "9d998ef445b23dd142db953852cb870fee06e2cbb922b92c0ee973738a837a2e"
+    }
+  },
+  "cross_group": "All27 actual lifecycle cases are included in each564-case experimental module report. Covers both kinds sharing a FieldPage; hot/cold/demotion, logical API, birth/delete, old pins and whole64-owner refusal. No forward conversion/adoption claim.",
+  "oneframe": "Actual full filter query failed at4096-byte cache before fix; now both4096 and64MiB pass, including typed source/read-after-write/old pin checks. Sequential one-frame reads use the original bounded owned fallback, without changing capacity or validation."
+}

@@ -1,0 +1,215 @@
+{
+  "tests": 18,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T02:19:02Z",
+  "time": "0s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdRowBlockTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T02:19:02Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "RawSparseOwnersRetainNullTextBytesAndExactScalarBitsForBothNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "ActualLongIdsUseBoundedBlocksAndCompressionCanReduceNativeFrameCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest",
+          "cold_encoded_bytes": "1361",
+          "candidate_slotted_payload_bytes": "4013"
+        },
+        {
+          "name": "BoundsAndStoredCrcFailBeforeAllocatingDecompressionStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "ChecksummedMalformedDirectoriesOwnersAndCanonicalRowsNeverEscape",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 133,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "EncoderRejectsForeignNoncanonicalAndOversizedSourcesWithoutRetainedAllocations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "CancellationAfterScratchAllocationRefundsBothEncoderAndDecoder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "LargeRootReferencesRemainReferencesAndRequireStorageAuthenticationLater",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "EncodedOutputRetainsItsAccountUntilTheLastOwnedBufferDies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 206,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "RepackChangesOneOwnerPreservingOtherCanonicalBytesInBothNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "RepackDeletesLastRowAndCanInsertMissingOwnerWithoutChangingSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 319,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "RepackCannotLaunderFutureReferenceByReplacingOrDeletingItsOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 335,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "RepackRejectsDuplicateAndInvalidRemovalAndRefundsAfterCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 357,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        },
+        {
+          "name": "RepackOversizeAndQuotaRefuseWithoutPublishingPartialRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 377,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBlockTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyColdRowBindingsTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T02:19:02Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "SharedBlocksUseGroupedMasksAndDistinctBlocksStayWithin1024Bytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 214,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBindingsTest"
+        },
+        {
+          "name": "TiesChooseDenseAndSparseOwnersKeepExactSlotGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBindingsTest"
+        },
+        {
+          "name": "UnboundAndHiddenLocationsRefuseBeforeWritingAnyBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 240,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBindingsTest"
+        },
+        {
+          "name": "GroupedMasksMustBeDisjointCompleteOrderedAndCanonical",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBindingsTest"
+        },
+        {
+          "name": "DecoderRejectsBadWidthsReservedBitsInvalidReferencesAndNonminimalForms",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowBlock.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:19:02Z",
+          "time": "0s",
+          "classname": "HybridPropertyColdRowBindingsTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "recorded_at_utc": "2026-10-23T06:48:42.733073+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-native-cold-derived-legacy-": {
+      "tests": 508,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-native-cold-derived-compact-": {
+      "tests": 508,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-native-cold-schema-": {
+      "tests": 30,
+      "failures": 1,
+      "skipped": 0
+    },
+    "targeted-native-cold-schema-stage-": {
+      "tests": 1,
+      "failures": 1,
+      "skipped": 0
+    },
+    "targeted-native-cold-schema-stage2-": {
+      "tests": 1,
+      "failures": 1,
+      "skipped": 0
+    },
+    "targeted-native-cold-schema-create-": {
+      "tests": 1,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-native-cold-derived-target-": {
+      "tests": 30,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "d0031fd521bb48befd57e90e09177924e3fd4419c680588163482b2f1bb434b9",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "d465f4ee4336af1f9165f8d3508843bb8f58a6c07ac5368bf0fae64f586ba222",
+      "binary_preserved": false
+    }
+  },
+  "deliberate_before_fix_control": {
+    "tests": 1,
+    "failures": 1,
+    "difference": "only restore former roots.readEntityPropertyOptional old-value route in original Native coordinator, compiled with same core flags as an overriding object",
+    "current_source_passes_same_case": true
+  },
+  "remaining": [
+    "Other schema combinations and atomic physical installation",
+    "Global demotion/owner/delete/liveness/final-group/inverse lifecycle",
+    "Whole-space/staged-target bootstrap and full public-conversion lifecycle",
+    "Remaining primary query costs and final P7 matrix"
+  ]
+}

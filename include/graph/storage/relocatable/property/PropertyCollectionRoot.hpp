@@ -65,6 +65,13 @@ namespace graph::storage {
 		bool operator==(const PropertyCollectionRootEntry &) const = default;
 	};
 
+    // A synchronous encoding view over authenticated, immutable source values.
+    // The source values and supplied output account must outlive encoding.
+    struct BorrowedPropertyCollectionRootEntry {
+        uint32_t key_token = 0;
+        const PropertyValue *value = nullptr;
+    };
+
 	// A root records one owner's tokenized Property collection. Its keys are
 	// database-local Property tokens, never unbounded string copies.
 	struct PropertyCollectionRoot {
@@ -91,6 +98,11 @@ namespace graph::storage {
 	class EntityPropertyCollectionRootCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const PropertyCollectionRoot &root);
+        [[nodiscard]] static size_t encodedSizeBorrowed(uint64_t owner, uint32_t ownerType,
+            std::span<const BorrowedPropertyCollectionRootEntry> entries, const std::function<void()> &checkpoint = {});
+        [[nodiscard]] static std::pmr::vector<std::byte> encodeBorrowed(uint64_t owner, uint32_t ownerType,
+            std::span<const BorrowedPropertyCollectionRootEntry> entries, std::pmr::memory_resource &memory,
+            const std::function<void()> &checkpoint = {});
 		[[nodiscard]] static PropertyCollectionRoot decode(std::span<const std::byte> bytes,
 				const SelectedPropertyReadAdmission *admission = nullptr,
 				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
@@ -143,6 +155,9 @@ namespace graph::storage {
 	class EntityPropertyLargeValuePayloadCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(std::span<const PropertyCollectionRootEntry> entries);
+        [[nodiscard]] static std::pmr::vector<std::byte> encodeBorrowed(
+            std::span<const BorrowedPropertyCollectionRootEntry> entries, std::pmr::memory_resource &memory,
+            const std::function<void()> &checkpoint = {});
         // Identical version-3 owner-neutral bytes without whole-payload standard
         // vector copies. Entries must already be strictly ordered; canonical
         // nested-map workspace and output use the supplied resource.

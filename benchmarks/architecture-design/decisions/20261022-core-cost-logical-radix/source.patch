@@ -1,0 +1,2492 @@
+diff --git a/docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx b/docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx
+index b53f11ee..d3d7a81f 100644
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx
+@@ -1002,3 +1002,15 @@ Eight native transaction contracts pass, plus one low-grant and one public integ
+ R5 selects canonical key-only with bounded primary reuse. Covering/shared segments are not automatically adopted; see `20261021-r52-final-path-selection/`. R3/R5 timing/protection admission remains pending.
+ 
+ **R7.1 accepted;16/24(66.7%).** `20261021-r71-final-candidate/` freezes the full source delta, before/after binaries and static engines, build options, selected modules and complete-scale correctness. Medium retains19original successes plus the repaired failed case, holdout20/20, with mixed binary provenance explicit. Both8MiB physical-read-only graph/index audits and six raw/optimized plans per input pass. Secondary-index inputs add two DDL and four affected semantic contracts per input(12/12); preserve the initial zero-row DDL oracle error, correct the expected Index created result, and do not repeat successful DDL. Generic8MiB integrity refusal is still not a pass. Linux/selected modules only; no full suite or new formal timing window. Commit/push on accepted progress growth, then continue the single final read/write/resource/steady-state/Kuzu campaign.
++
++### Page free-space summary candidate contract (P7, not accepted)
++
++Reuse the existing U64 B+Tree layout and reserve Node/Edge IndexIds `0x8000000000000040` / `0x8000000000000041`; ordinary index CRUD must reject them. Version 1 uses five-byte marker keys `00 46 53 01 00` (directory semantic generation plus one) and `00 46 53 01 01` (partially occupied page count plus one). Candidate keys contain `01`, big-endian `uint16(65535-free_slots)`, and the complete big-endian `uint64(PageId)`, with payload one. Only live partially occupied pages appear. Unknown versions, missing markers and malformed keys are rejected. Existing page encodings and file format versions remain unchanged.
++
++The source fence retains the exact `PhysicalPageRef`; publication checks equality with the current entity directory root and verifies that the target root generation equals the summary marker. Each publication of an entity directory uses a unique commit generation. Physical relocation that changes this generation safely invalidates the fast path; ordinary writes fall back and explicit rebuild can rebind it. An empty directory requires zero candidates. Actual candidates still authenticate current mappings, page identities and free slots. Ordinary writes validate accessed paths; full integrity enumerates authoritative entity pages and checks every candidate, count and source generation, detecting omissions, duplicates and orphans. A stale proof is accepted by full integrity only when all authoritative contents still agree.
++
++Legacy files without summaries retain their existing path: open and ordinary writes must not hide full initialization. Explicit `rebuildNativeEntityFreeSpaceSummaries` scans and rebuilds under existing write budgets, cancellation checks, shared publication coordination and atomic transactions. Failure retains the original roots. A new empty directory can initialize its summary atomically with its first normal write. Report initialization time, resources and file growth separately from subsequent write gains.
++
++The BufferPool local-invalidation candidate preserves hash point lookup and 2Q, adding a non-owning offset/generation ordered index under the same CACHE account. Primary/index registration and rollback share one lock. Local/range invalidation costs O(log N + R), with R the overlapping resident entries; precheck all affected pins/private pages before removal or writeback. An intrusive chain inside resident entries tracks dirty pages, making flush O(D) without scanning clean pages or allocating when marking dirty. Index/chain metadata remains within the original cache quota and payload capacity; admission still safely evicts or rejects. This changes runtime structures, not persisted page formats.
++
++Under the bootstrap layout, ordinary LocationDirectory/Catalog COW emits existing-version logical child IDs directly: unchanged children retain IDs authenticated in their parent; changed children use their batch-known page IDs; deletion clears the ID. Newly created internal nodes must also use logical children, even beneath an already-logical parent. Legacy physical children keep their established conversion contract. Final logicalization is idempotent for logical candidates, without a second parent image or sibling reads to recover IDs. Accessed-path authentication, route registration, old pins and fault atomicity remain; no persisted page version changes. Damage on unvisited branches is detected on access or full integrity.
+diff --git a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+index 798327bc..a8c02f6e 100644
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+@@ -51,7 +51,7 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together
+ | P4 | Cost-selected label/candidate scans | 15% | Accepted |
+ | P5 | Directly typed batches from storage through filtering/aggregation | 20% | Accepted |
+ | P6 | Bulk import reusing the new commit path | 5% | Accepted |
+-| P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Core gap in progress; final matrix not run |
++| P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Candidate rejected; core attribution continues |
+ 
+ Freeze weights after P0. Award an item's weight only after production integration, its mechanism evidence, and necessary tests all pass. Designs, prototypes, cache-hit rates, and lines of code earn no progress. Progress cannot exceed 90% before P7 passes; gap reports, failed candidates, and archives cannot earn the last 10%. Rewriting this document does not increase implementation progress.
+ 
+@@ -114,15 +114,22 @@ Evidence `20261022-core-cost-import/`: 262 module tests pass. Three aligned 65-r
+ 
+ ## 9. P7: Material improvement and final objectives
+ 
+-### 9.0 Known core gap before final freezing
++### 9.0 Current implementation queue
+ 
+-Cold insertion still enumerates the Entity Map to find holes: the medium 1000-node diagnostic visits 225000 mappings. Negative caching fixes repeated continuous-import discovery only. **Remove this known population-dependent work before starting the final matrix; do not hide it through warming or moving work outside timing.**
++The candidate still fails P7. `20261022-core-cost-final/` retains 47 successful measurement processes and explicitly unrun cases; it is not a complete acceptance matrix. Subsequent medium targeted results are SET 23.65→11.14 ms and 1000-edge writes 146.10→66.59 ms; equivalent Kuzu edge writes are about 4.9 ms. All gates remain unchanged and progress stays 90%.
+ 
+-Next implement a durable page-level free-space summary using existing B+Tree/atomic publication, without another backend or WAL. Locate candidates by record kind, free slots and complete PageId. Distinguish complete empty state from missing/stale state. Completeness binds exact entity-directory roots, not counts, addresses alone or hashes. Reserve an internal namespace and reject user index CRUD. The summary is derived; allocation still authenticates current directories, page identity and actual slots.
++**Work only on the dominant commit-preparation cost now.** Exclusive CPU stages attribute about 65.7% of 1000-edge CPU to graph commit preparation and 21.0% to metadata publication; SET shares are about 40.7%/48.9%. B+Tree apply has fallen from its earlier dominant share. Do not keep polishing its minor paths.
+ 
+-First establish when candidate directory roots become available in the coordinator. Publish summaries, fences, entities/properties/indexes, allocation and retirement in one A/B change. Maintain creation, deletion, relocation and empty-page retirement. Explicit old-file initialization/rebuild must record one-time time, memory, space and failure state; silently migrating at open/ordinary writes is not constant cost. Incomplete initialization cannot certify absence. Reuse existing bounded batches or reject over-budget input. Any necessary new wire format still requires a prior storage-spec revision and no silent reinterpretation.
++Property batch planning accounts for 33.5% of edge-write CPU. Pure new inline-owner batches now authenticate/prepare each actual source page once, branch on actual slot capacity for overflow, and emit one page image; existing-owner/mixed/LargeValue batches retain their established path. The 72 property-module and 399 related lifecycle tests pass. Paired medium P50 is 68.45→56.23 ms (30 samples/version), still short of Kuzu; evidence is in `20261022-core-cost-property-batch/`.
+ 
+-Acceptance includes cold reopen with fixed k and growing populations, complete empty summaries, sparse holes, type separation, old pins, faults/cancellation, corrupt/missing index entries and file growth. Full integrity checks derived summaries against authoritative pages. Prototypes/initialization earn no extra progress; P7 retains its final all-gates weight.
++1. Exclusive stages attribute 27.6% of edge-write CPU to preparing existing entity mutations for read-only endpoints. Only existing Nodes with actual label changes or deletion now require COW; endpoint reads, conflict checks, adjacency and Edge writes remain. All 400 related lifecycle and 73 property tests pass. Paired medium edge P50 is 55.38→40.28 ms, P95 62.51→44.85 ms; P7 still fails. Evidence: `20261022-core-cost-endpoint-cow/`.
++2. Entity-pool discovery and frame capacity checks are now demand-driven: a property-only commit performs neither entity-pool discovery nor capacity queries. All 401 related lifecycle and 73 property tests pass. Paired medium SET P50 is 11.40→8.26 ms, P95 13.31→10.13 ms; evidence: `20261022-core-cost-lazy-capacity/`. Focus next on metadata publication: the preceding frozen stage attributes 18.6% of edge CPU to source/directory validation and 10.6% to final publication; SET final publication is 36.7%. Establish the actual repeated-decode/source-validation chain before changing its dominant cost. Preserve accessed-page validation, full integrity, atomic publication, original accounts and bounds.
++
++3. LocationDirectory/Catalog now retain logical child IDs directly, avoiding sibling-leaf ID recovery and a second parent COW image. With 3/31/90 sibling branches, a single Location update decodes one leaf and Catalog two. All 234 directory and 401 lifecycle tests pass. Paired medium SET P50 is 8.12→5.76 ms and edge writes 41.51→39.14 ms; P7 still fails. Evidence: `20261022-core-cost-logical-radix/`. Next address property placement supply amplification: `SlottedPagePool::buildFreeSpaceIndex` filters a full Page Directory scan by segment. Derive candidate IDs from at most 31 owner frames in the selected pool, authenticating each current snapshot mapping; retain safe fallback for old pins/orphans/bad owners and full integrity. Unauthenticated owner headers must not grant candidate completeness.
++
++4. After write mechanisms/modules and targeted failed-scenario checks pass, continue the read storage-supply chain. Current read stages are about 46.7% property provision/direct-column delivery, 21.3% entity-label validation and 17.7% B+Tree candidate production, with 100000 per-owner field selections remaining. Apply P5 representation/lifecycle gates to this population work. Any new persisted layout requires a prior storage-spec revision and complete production consumption/lifecycle validation. Do not expand into another backend, WAL or vector work.
++
++Preserve the new contracts: free-space summaries bind directory generation and exact publication-source fences, missing/stale proofs safely fall back, legacy initialization is explicit with separate costs, and full integrity compares authoritative pages; directory relocation that changes generation invalidates the proof. BufferPool offset lookup/dirty chains retain CACHE quotas and atomic registration/refund under one lock, with O(log N + R) invalidation and O(D) flush. Overlay UPSERT buffers own keys and stay within 64 operations/16 KiB, preserve equal-key last-write semantics/ERASE barriers and the existing ordered-tail path. Details/tests are in `20261022-core-cost-buffer/`, `20261022-core-cost-btree-batch/` and the [storage specification](native-single-file-storage-plan); these contracts earn no additional progress weight.
+ 
+ ### 9.1 Measurement windows and acceptance
+ 
+diff --git a/docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx b/docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx
+index c312875d..907fbf0f 100644
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx
+@@ -998,3 +998,15 @@ R5.1协议／完整生命周期原型的字节、故障检测与资源合同见`
+ R5最终候选选择canonical key-only树与有界主记录复用，覆盖／共享分段不自动生产采用；完整理由见`20261021-r52-final-path-selection/`。R3／R5的最终时延和保护准入仍未提前验收。
+ 
+ **R7.1已验收，总进度16/24（66.7%）。** 最终源delta、before／after二进制与静态引擎库、构建选项及必要模块／完整规模正确性冻结在`20261021-r71-final-candidate/`。medium原19项加修复后的失败项、holdout20项均保持正确，按不同二进制来源记录；两套图索引8MiB只读核验及各6项原始／优化计划对照通过。secondary-index输入另完成每套2次DDL及4个受影响语义合同（12/12）；DDL的实际返回为“Index created”，初始零行oracle错误已单列保留，没有重复已成功DDL。通用完整性扫描的8MiB资源拒绝仍明确不是通过。仅Linux／必要模块，无全库单测。尚未启动新的正式计时窗口。按用户规则，进度增长后提交并推送，随后继续R7统一读写／资源／稳态／Kuzu验收。
++
++### 页级空闲摘要候选合同（P7，尚未验收）
++
++复用既有 U64 B+Tree 布局，预留 Node/Edge IndexId `0x8000000000000040`／`0x8000000000000041`；普通索引 CRUD 不得修改。版本 1 的五字节标记键为 `00 46 53 01 00`（目录语义 generation 加一）和 `00 46 53 01 01`（部分占用页数加一）。候选键为 `01`、大端 `uint16(65535-free_slots)`、大端完整 `uint64(PageId)`，值为一；仅记录有活记录且未满的页。未知版本、缺失标记或非法键拒绝解释，不升级文件格式版本或改变原有页编码。
++
++源证明保留精确 `PhysicalPageRef`，发布端核对它与当前实体目录根完全相等，并核对目标目录根的 generation 等于摘要标记。每种实体目录每次发布使用唯一提交 generation；物理搬迁改变该代际时摘要安全失效，普通写回退，显式重建可重新绑定。空目录要求候选数为零。实际候选仍核对当前映射、页身份及真实空槽数。普通写只验证访问路径；完整 integrity 枚举权威实体页，逐项核对候选、计数和源代际，发现漏项、重复及孤儿；代际过期的摘要也必须与全部权威页一致才通过。
++
++旧文件没有摘要时继续原路径，禁止打开或普通写暗中全量初始化。显式 `rebuildNativeEntityFreeSpaceSummaries` 在既有写预算、取消检查、共享发布锁及原子事务内扫描并重建；失败保留原根，不发布部分摘要。新空目录可随首次正常写原子建立摘要。初始化时间、资源及文件增长必须单列，不能混入后续普通写收益。
++
++BufferPool 的局部写失效候选保留原哈希点查及 2Q，在同一 CACHE 账户内增加按物理偏移/代际排序的非拥有索引；主表与索引同锁登记/回滚。局部及范围失效为 O(log N + R)，其中 R 为实际重叠驻留项；预检所有受影响 pin/private 页后才删除或写回。脏页以 resident Entry 内嵌链跟踪，flush 为 O(D)，不扫描所有 clean 页，也不在标脏时分配。新增索引/链元数据继续计入原缓存额度，不增加 payload 容量；额度不足仍安全驱逐或拒绝。这是运行时数据结构调整，不改变持久页格式。
++
++在 bootstrap 布局下，LocationDirectory 与 Catalog 的普通 COW 直接输出既有版本的逻辑子页 ID：未修改子项保留父页中已认证的 ID，修改子项使用本批已知的子页 ID，删除清空对应 ID。新建内部节点也必须使用逻辑子项，不能因父节点已逻辑化而留下新的物理子树。旧物理子项仍按原合同转换；最终逻辑化入口对已逻辑化候选幂等，不再分配第二份父页或读取兄弟页找回 ID。保留实际路径认证、route 注册、旧 pin 与故障原子性，不改变持久页版本；未访问分支由首次访问或完整 integrity 检出。
+diff --git a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+index 1cfd9e06..a6d8a330 100644
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+@@ -51,7 +51,7 @@ P1–P4 已验收的机制不再是待办。独立 CPU 归因见 `benchmarks/arc
+ | P4 | 成本选择的标签/候选扫描 | 15% | 已验收 |
+ | P5 | 存储到过滤/聚合的直接类型化批 | 20% | 已验收 |
+ | P6 | 复用新提交路径的批量导入 | 5% | 已验收 |
+-| P7 | 完整生命周期、正式性能与 Kuzu 目标验收 | 10% | 核心缺口处理中；正式矩阵未运行 |
++| P7 | 完整生命周期、正式性能与 Kuzu 目标验收 | 10% | 候选未达门槛；继续定位核心成本 |
+ 
+ 权重在 P0 后冻结。只有生产路径接入、该项机制证据和必要测试全部通过，才能一次性获得其权重；设计、原型、缓存命中率或代码行数不计进度。P7 未通过最多 90%，不得把最终差距报告、失败候选或归档算成剩余 10%。文档重写不增加实施进度。
+ 
+@@ -114,15 +114,22 @@ P6 复用现有公开批接口、区间 ID、按页实体/属性写入、有序
+ 
+ ## 9. P7：实质收益与最终目标
+ 
+-### 9.0 正式冻结前必须解决的已知核心缺口
++### 9.0 当前唯一实施队列
+ 
+-冷打开的首次实体插入仍通过 Entity Map 枚举全部实体来寻找空闲页；medium 的 1000 节点诊断访问 225000 条映射。负缓存只解决连续导入的重复扫描，不能解决重开后的成本。**先消除此已知总量工作，再启动最终矩阵；不能用内存预热或挪到计时外掩盖。**
++当前候选仍未通过 P7。被否决候选的 47 个成功测量进程及明确未运行项保存在 `20261022-core-cost-final/`；这不是完整验收矩阵。后续两个核心改动的 medium 定向结果为：SET 23.65→11.14 ms，千边 146.10→66.59 ms；同口径 Kuzu 千边约 4.9 ms。所有门槛保持不变，进度仍为 90%。
+ 
+-下一步聚焦持久的页级空闲摘要，复用已有 B+Tree/原子批发布，不替换 backend 或引入 WAL。以记录类型、空槽数及完整 PageId 定位候选，区分“完整且为空”和“缺失/过期”；完整性证明绑定精确实体目录根，不能仅比较计数、物理地址或哈希。预留内部 namespace，禁止用户索引 CRUD 改写。摘要是派生结构，实际分配仍认证当前目录、页身份与真实槽位。
++**现在只推进提交准备的主成本。** 最新互斥 CPU 阶段采样把千边约 65.7% 归于图提交准备、21.0% 归于元数据发布；SET 约为 40.7%／48.9%。B+Tree apply 已从先前的主要成本下降，接下来不继续优化它的边角。
+ 
+-关键步骤：先落实候选目录根在提交协调器中的生成时点，确保摘要、根 fence、实体/属性/索引、分配与退休在同一个 A/B 发布；新增、删除、页搬迁及空页退休均维护摘要。旧文件的初始化/重建必须明确记录一次性时间、内存、空间和失败状态，不能在普通写入/open 中静默执行全库迁移再称作常数成本。初始化不完整时不能信任负结果；超预算采用已有有界批机制或明确拒绝。新格式若确有必要仍先修订存储规范，禁止悄悄重解释旧字节。
++属性批规划已确认占千边 CPU 的 33.5%。全新内联 owner 批次现按真实来源页认证和准备一次、按实际槽位容量直接分流溢出、只输出一份页映像；已有 owner／混合／LargeValue 保留原路径。72 项属性模块与 399 项相关生命周期测试通过，medium 配对定向 P50 为 68.45→56.23 ms（30 样本／版本），仍未满足 Kuzu 门槛；证据保存在 `20261022-core-cost-property-batch/`。
+ 
+-验收至少包括冷重开后固定 k、总实体规模增长、完整空摘要、稀疏空洞、类型区分、旧 pin、故障/取消、索引损坏/漏项及文件增长；完整 integrity 检查派生结构与权威页一致。原型或初始化本身不增加进度，P7 权重仍只在全部最终门槛通过后获得。
++1. 剩余准备阶段已细分：只读端点的实体修改准备占千边 CPU 27.6%，现已仅对真正标签修改或删除的已有 Node 规划 COW；端点读取、冲突校验、邻接与 Edge 写入保留。400 项相关生命周期和 73 项属性模块测试通过；medium 配对千边 P50 55.38→40.28 ms、P95 62.51→44.85 ms，仍未通过 P7。证据见 `20261022-core-cost-endpoint-cow/`。
++2. 全实体池容量预查已改为按实际需求发现池和验证帧容量，属性单项提交不再触发任何实体池发现／容量查询；401 项相关生命周期与 73 项属性测试通过。medium 配对 SET P50 11.40→8.26 ms、P95 13.31→10.13 ms；证据见 `20261022-core-cost-lazy-capacity/`。继续聚焦元数据发布：上一冻结阶段千边来源／目录验证占 CPU 18.6%、最终发布 10.6%；SET 最终发布占 36.7%。核实重复解码及来源验证的实际调用链，再修改主成本；保持实际访问页校验、完整 integrity、原子发布、原账户及界限。
++
++3. LocationDirectory／Catalog 已直接保留逻辑子页 ID，避免丢弃后再读兄弟叶页找回和二次父页 COW。3／31／90 个分支时单项 Location 更新均解码 1 个叶页、Catalog 均 2 个；234 项目录及 401 项生命周期测试通过。medium 配对 SET P50 8.12→5.76 ms，千边 41.51→39.14 ms，仍未通过 P7；证据见 `20261022-core-cost-logical-radix/`。接下来处理属性选页中的全目录供给放大：`SlottedPagePool::buildFreeSpaceIndex` 调用按 segment 过滤的全 Page Directory 扫描。改为从所选池的最多 31 个帧 owner 提取候选 ID，并对当前快照映射逐项认证；旧 pin／孤儿／坏 owner 明确保留安全回退和完整 integrity，不得把无法认证的头部当作完整候选集。
++
++4. 上述写路径通过机制/模块及对应失败场景的定向复验后，再推进读取的存储供给链。现有读取阶段为属性批提供及入列约 46.7%、实体标签验证约 21.3%、B+Tree 候选输出约 17.7%；字段仍有 100000 次逐 owner 选读。按 P5 已规定的表示/生命周期门槛处理这些总量工作，采用新持久布局前先修订存储规范并验证完整生产消费，禁止同时展开其他 backend、WAL 或向量工作。
++
++已实现的新合同必须保留：页级空闲摘要绑定目录根代际及发布源 fence，缺失/过期安全回退，旧文件只能显式初始化并单列成本，完整 integrity 核对权威页；物理搬迁改变代际会使摘要失效。BufferPool 的偏移定位和脏链使用原 CACHE 账户与同锁登记/退款，局部失效为 O(log N + R)、flush 为 O(D)。Overlay UPSERT 暂存不超过 64 项／16 KiB，拥有输入键，等键最后写入生效、ERASE 为屏障，保留原尾追加路径。实现细节与测试证据见 `20261022-core-cost-buffer/`、`20261022-core-cost-btree-batch/` 和[存储规范](native-single-file-storage-plan)；这些合同不构成额外进度权重。
+ 
+ ### 9.1 性能窗口与准入
+ 
+diff --git a/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp b/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
+index fbbc1442..c08b6aec 100644
+--- a/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
++++ b/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
+@@ -271,6 +271,8 @@ namespace graph::storage {
+ 		// Builds missing global label/type member trees in one native publication.
+ 		// Existing definitions/roots are reused; no implicit rebuild on reopen.
+ 		void rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint = {});
++        // Explicit initialization/repair for legacy files; never hidden in open or an ordinary write.
++        void rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint = {});
+ 		[[nodiscard]] std::vector<uint64_t> ensureLogicalMembershipIndexes(
+ 				const std::function<void()> &checkpoint = {});
+ 		[[nodiscard]] std::vector<uint64_t>
+diff --git a/include/graph/storage/relocatable/cache/BufferPool.hpp b/include/graph/storage/relocatable/cache/BufferPool.hpp
+index 65788b8c..4ae0a5c8 100644
+--- a/include/graph/storage/relocatable/cache/BufferPool.hpp
++++ b/include/graph/storage/relocatable/cache/BufferPool.hpp
+@@ -12,9 +12,11 @@
+ #include <cstddef>
+ #include <cstdint>
+ #include <list>
++#include <map>
+ #include <memory>
+ #include <memory_resource>
+ #include <mutex>
++#include <optional>
+ #include <span>
+ #include <unordered_map>
+ 
+@@ -117,6 +119,9 @@ namespace graph::storage {
+ 
+ 		using PageQueue = std::pmr::list<BufferPoolPageKey>;
+ 		struct Entry {
++			BufferPoolPageKey key{};
++			Entry *dirty_previous = nullptr;
++			Entry *dirty_next = nullptr;
+ 			PageBytes bytes{};
+ 			size_t valid_bytes = 0U;
+ 			size_t pin_count = 0U;
+@@ -139,6 +144,9 @@ namespace graph::storage {
+ 		void ensureCapacityLocked(size_t requiredBytes);
+ 		bool evictOneLocked(bool cleanOnly = false);
+ 		void flushEntryLocked(Entry &entry, uint64_t pageOffset);
++		void markDirtyLocked(Entry &entry) noexcept;
++		void requireUnpinnedRangeLocked(uint64_t begin, uint64_t end, bool rejectPrivate) const;
++		void eraseRangeLocked(uint64_t begin, uint64_t end, std::optional<uint64_t> keepGeneration = {});
+ 		void discardStaleGenerationsLocked(BufferPoolPageKey key);
+ 		void discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount);
+ 		void unpin(BufferPoolPageKey key) noexcept;
+@@ -154,8 +162,16 @@ namespace graph::storage {
+ 		std::pmr::memory_resource *memory_;
+ 		mutable std::mutex mutex_;
+ 		std::pmr::unordered_map<BufferPoolPageKey, std::shared_ptr<Entry>, KeyHash> entries_;
++		struct OffsetOrder {
++			bool operator()(BufferPoolPageKey left, BufferPoolPageKey right) const noexcept {
++				return left.page_offset != right.page_offset ? left.page_offset < right.page_offset : left.generation < right.generation;
++			}
++		};
++		// Non-owning references share the primary map's lock and CACHE allocator.
++		std::pmr::map<BufferPoolPageKey, Entry *, OffsetOrder> offsets_;
+ 		PageQueue recent_;
+ 		PageQueue frequent_;
++		Entry *dirty_head_ = nullptr;
+ 		size_t resident_bytes_ = 0U;
+ 		size_t pinned_pages_ = 0U;
+ 		size_t dirty_pages_ = 0U;
+diff --git a/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp b/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp
+index 30233aef..64031cdd 100644
+--- a/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp
++++ b/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp
+@@ -361,6 +361,8 @@ namespace graph::storage {
+         // ordinary graph work while native groups are active.
+         bool native_graph_coordinated_ = false;
+         bool native_schema_coordinated_ = false;
++        bool rebuild_entity_free_summaries_ = false;
++        std::function<void()> free_summary_checkpoint_;
+ 		std::vector<NativeGraphLogicalIdLeaseRange> node_id_ranges_;
+ 		std::vector<NativeGraphLogicalIdLeaseRange> edge_id_ranges_;
+ 		std::map<uint64_t, NodeChange> nodes_;
+@@ -382,6 +384,7 @@ namespace graph::storage {
+         std::optional<utils::OwnedHeapReservation> hybrid_catalog_credit_;
+         std::optional<utils::OwnedVector<uint32_t>> hybrid_catalog_tokens_;
+         void adoptHybridPropertyCatalog(NativeGraphWriteTransaction &&catalog, utils::OwnedHeapReservation &&credit);
++        std::unique_ptr<utils::OwnedHeapReservation> free_summary_credit_;
+ 		std::vector<StagedScalarIndexMutation> scalar_index_mutations_;
+ 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;
+         struct StagedHybridVectors {
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index b287d4ab..dd37d575 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -872,10 +872,17 @@ namespace graph::storage {
+ 			std::function<std::vector<std::byte>(const NativeGraphPrivateSegmentSet &, size_t)>;
+ 	using NativeGraphPrivateSegmentPreparer =
+ 			std::function<void(const NativeGraphPrivateSegmentSet &, const NativeGraphPrivateSegmentReader &)>;
++    struct NativeGraphEntityFreeSummaryFence {
++        uint64_t index_id = 0U;
++        PhysicalPageRef expected_entity_root{};
++        Generation target_directory_generation{};
++        uint64_t free_pages = 0U;
++    };
+ 	struct NativeGraphDerivedStateMutation {
+ 		// Sorted by IndexId and free of duplicates. This gives one native graph
+ 		// generation a deterministic, fail-closed derived-state publication order.
+ 		std::vector<NativeGraphIndexTreeMutation> index_tree_mutations;
++        std::vector<NativeGraphEntityFreeSummaryFence> entity_free_summary_fences;
+ 		// A LargeValue reference selected through a pinned content-index lookup is
+ 		// immutable, but its Manifest route can be retired by concurrent
+ 		// maintenance before this graph write owns the metadata writer. The
+@@ -903,7 +910,7 @@ namespace graph::storage {
+         std::vector<std::shared_ptr<NativeGraphDeferredIndexImages>> index_images;
+ 
+ 		[[nodiscard]] constexpr bool empty() const {
+-			return index_images.empty() && index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
++			return entity_free_summary_fences.empty() && index_images.empty() && index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
+ 				   vector_deltas.empty() && private_segments.empty() && !private_segment_plan.has_value() &&
+ 				   !external_private_tail_reservation.has_value();
+ 		}
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index 84d3e19a..cd3ac5ac 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -6942,6 +6942,27 @@ namespace graph::storage {
+ 		return std::move(created.front());
+ 	}
+ 
++    void RelocatableStorageBackend::rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint) {
++        requireOpen();
++        if (isReadOnly()) throw std::logic_error("free-space initialization requires a writable backend");
++        requireNoIndeterminateWrite();
++        auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
++        auto workspace = mutationWriteWorkspace(resource_domain_);
++        utils::OwnedAllocationScope allocation(workspace);
++        std::lock_guard lock(native_publication_mutex_);
++        auto transaction = native_graph_write_planner_->beginTransaction();
++        transaction.rebuild_entity_free_summaries_ = true;
++        transaction.free_summary_checkpoint_ = checkpoint;
++        const auto publicationBase = transaction.snapshot_.superblock();
++        try {
++            const auto result = transaction.commit();
++            if (!result.committed()) throw LogicalGraphMutationConflict("free-space initialization source changed");
++        } catch (...) {
++            markReopenRequiredIfPublicationAdvanced(publicationBase);
++            throw;
++        }
++    }
++
+ 	void RelocatableStorageBackend::rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint) {
+ 		requireOpen();
+ 		if (isReadOnly()) throw std::runtime_error("token statistics rebuilding requires a writable backend");
+diff --git a/src/storage/relocatable/cache/BufferPool.cpp b/src/storage/relocatable/cache/BufferPool.cpp
+index e7bdcdb2..5a5d53fd 100644
+--- a/src/storage/relocatable/cache/BufferPool.cpp
++++ b/src/storage/relocatable/cache/BufferPool.cpp
+@@ -85,7 +85,7 @@ namespace graph::storage {
+ 	BufferPool::BufferPool(StorageIO &io, size_t capacityBytes, std::shared_ptr<std::pmr::memory_resource> memoryOwner) :
+ 		io_(io), capacity_bytes_(capacityBytes - capacityBytes % RSS_BUFFER_POOL_PAGE_BYTES),
+ 		memory_owner_(std::move(memoryOwner)), memory_(memory_owner_ ? memory_owner_.get() : std::pmr::get_default_resource()),
+-		entries_(memory_), recent_(memory_), frequent_(memory_) {
++		entries_(memory_), offsets_(OffsetOrder{}, memory_), recent_(memory_), frequent_(memory_) {
+ 		if (capacity_bytes_ == 0U) {
+ 			throw std::invalid_argument("buffer pool capacity must contain at least one 4 KiB page");
+ 		}
+@@ -146,11 +146,10 @@ namespace graph::storage {
+ 		auto entry = allocateEntryLocked();
+ 		entry->valid_bytes = RSS_BUFFER_POOL_PAGE_BYTES;
+ 		entry->pin_count = 1U;
+-		entry->dirty = true;
+ 		entry->private_cow = true;
+-		static_cast<void>(storeEntryLocked(key, std::move(entry)));
++		Entry &stored = storeEntryLocked(key, std::move(entry));
++		markDirtyLocked(stored);
+ 		++pinned_pages_;
+-		++dirty_pages_;
+ 		return Pin(this, key, true);
+ 	}
+ 
+@@ -218,10 +217,7 @@ namespace graph::storage {
+ 
+ 		std::copy(input.begin(), input.end(), entry->bytes.begin());
+ 		entry->valid_bytes = RSS_BUFFER_POOL_PAGE_BYTES;
+-		if (!entry->dirty) {
+-			entry->dirty = true;
+-			++dirty_pages_;
+-		}
++		markDirtyLocked(*entry);
+ 		promoteLocked(key, *entry);
+ 	}
+ 
+@@ -325,12 +321,7 @@ namespace graph::storage {
+ 		const uint64_t end = firstKey.page_offset + input.size();
+ 		// Check the entire range before flushing any stale entry. A rejected batch
+ 		// must not partly invalidate a live snapshot or modify dirty accounting.
+-		for (const auto &[key, entry]: entries_) {
+-			if (key.page_offset >= firstKey.page_offset && key.page_offset < end &&
+-				(entry->pin_count != 0U || entry->private_cow)) {
+-				throw std::logic_error("buffer pool refuses to overwrite a pinned or private typed page");
+-			}
+-		}
++		requireUnpinnedRangeLocked(firstKey.page_offset, end, true);
+ 		discardStaleGenerationsInRangeLocked(firstKey, pageCount);
+ 		for (size_t page = 0U; page < pageCount; ++page) {
+ 			const BufferPoolPageKey key{firstKey.page_offset + page * RSS_BUFFER_POOL_PAGE_BYTES,
+@@ -350,67 +341,37 @@ namespace graph::storage {
+ 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
+ 						RSS_BUFFER_POOL_PAGE_BYTES, entry->bytes.begin());
+ 			entry->valid_bytes = RSS_BUFFER_POOL_PAGE_BYTES;
+-			if (!entry->dirty) {
+-				entry->dirty = true;
+-				++dirty_pages_;
+-			}
++			markDirtyLocked(*entry);
+ 			promoteLocked(key, *entry);
+ 		}
+ 	}
+ 
+ 	void BufferPool::writePagesThrough(BufferPoolPageKey firstKey, std::span<const std::byte> input) {
+-		requireTypedPageRange(firstKey, input.size(), "typed write-through");
+-		io_.requireWritable("BufferPool::writePagesThrough");
+-		io_.ensureFileSizeUncached(firstKey.page_offset + input.size());
+-		const uint64_t end = firstKey.page_offset + input.size();
+-		std::lock_guard lock(mutex_);
+-		for (const auto &[key, entry]: entries_) {
+-			if (key.page_offset >= firstKey.page_offset && key.page_offset < end &&
+-				(entry->pin_count != 0U || entry->private_cow)) {
+-				throw std::logic_error("buffer pool refuses to write through a pinned or private typed page");
+-			}
+-		}
+-		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+-			const BufferPoolPageKey key = iterator->first;
+-			Entry &entry = *iterator->second;
+-			if (key.page_offset < firstKey.page_offset || key.page_offset >= end) {
+-				++iterator;
+-				continue;
+-			}
+-			if (entry.dirty) {
+-				flushEntryLocked(entry, key.page_offset);
+-			}
+-			eraseLocked(key, entry);
+-			iterator = entries_.erase(iterator);
+-		}
+-		// Cache entries are gone before I/O. A short write therefore cannot be
+-		// followed by a stale dirty-page flush that overwrites partial bytes.
+-		io_.writeAtUncached(firstKey.page_offset, input.data(), input.size());
+-		disk_write_bytes_ += input.size();
+-	}
+-
+- void BufferPool::writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> input) {
+-  if (!isAligned(key) || key.generation == 0U || input.empty() ||
+-      byteOffset > RSS_BUFFER_POOL_PAGE_BYTES || input.size() > RSS_BUFFER_POOL_PAGE_BYTES - byteOffset)
+-   throw std::invalid_argument("buffer pool control record requires a valid typed-page range");
+-  const uint64_t offset = checkedEnd(key.page_offset, byteOffset, "control-record offset");
+-  io_.requireWritableRange(offset, input.size(), "BufferPool::writeControlRecord");
+-  std::lock_guard lock(mutex_);
+-  for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+-   const auto cachedKey = iterator->first;
+-   Entry &entry = *iterator->second;
+-   if (cachedKey.page_offset != key.page_offset) { ++iterator; continue; }
+-   if (entry.pin_count != 0U)
+-    throw std::logic_error("buffer pool refuses to invalidate a pinned page");
+-   if (entry.dirty) flushEntryLocked(entry, cachedKey.page_offset);
+-   eraseLocked(cachedKey, entry);
+-   iterator = entries_.erase(iterator);
+-  }
+-  // A short/failed native write leaves no retained image that could overwrite
+-  // a surviving A/B record. Readers may refill only after this lock releases.
+-  io_.writeAtUncached(offset, input.data(), input.size());
+-  disk_write_bytes_ += input.size();
+- }
++        requireTypedPageRange(firstKey, input.size(), "typed write-through");
++        io_.requireWritable("BufferPool::writePagesThrough");
++        io_.ensureFileSizeUncached(firstKey.page_offset + input.size());
++        const uint64_t end = firstKey.page_offset + input.size();
++        std::lock_guard lock(mutex_);
++        requireUnpinnedRangeLocked(firstKey.page_offset, end, true);
++        eraseRangeLocked(firstKey.page_offset, end);
++        // Invalidate before I/O so a short write cannot be overwritten by a
++        // surviving dirty image. Unrelated offsets are never visited.
++        io_.writeAtUncached(firstKey.page_offset, input.data(), input.size());
++        disk_write_bytes_ += input.size();
++    }
++
++    void BufferPool::writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> input) {
++        if (!isAligned(key) || key.generation == 0U || input.empty() ||
++            byteOffset > RSS_BUFFER_POOL_PAGE_BYTES || input.size() > RSS_BUFFER_POOL_PAGE_BYTES - byteOffset)
++            throw std::invalid_argument("buffer pool control record requires a valid typed-page range");
++        const uint64_t offset = checkedEnd(key.page_offset, byteOffset, "control-record offset");
++        io_.requireWritableRange(offset, input.size(), "BufferPool::writeControlRecord");
++        std::lock_guard lock(mutex_);
++        requireUnpinnedRangeLocked(key.page_offset, key.page_offset + RSS_BUFFER_POOL_PAGE_BYTES, false);
++        eraseRangeLocked(key.page_offset, key.page_offset + RSS_BUFFER_POOL_PAGE_BYTES);
++        io_.writeAtUncached(offset, input.data(), input.size());
++        disk_write_bytes_ += input.size();
++    }
+ 
+ 	size_t BufferPool::read(uint64_t offset, std::span<std::byte> output, BufferPoolReadHint hint) {
+ 		if (output.empty()) {
+@@ -529,10 +490,7 @@ namespace graph::storage {
+ 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(copied), bytes,
+ 						entry->bytes.begin() + static_cast<std::ptrdiff_t>(inPage));
+ 			entry->valid_bytes = std::max(entry->valid_bytes, inPage + bytes);
+-			if (!entry->dirty) {
+-				entry->dirty = true;
+-				++dirty_pages_;
+-			}
++            markDirtyLocked(*entry);
+ 			promoteLocked(key, *entry);
+ 			copied += bytes;
+ 			current += bytes;
+@@ -562,39 +520,21 @@ namespace graph::storage {
+ 	}
+ 
+ 	void BufferPool::flush() {
+-		std::lock_guard lock(mutex_);
+-		for (const auto &[key, entry]: entries_) {
+-			if (entry->dirty) {
+-				flushEntryLocked(*entry, key.page_offset);
+-			}
+-		}
+-	}
++        std::lock_guard lock(mutex_);
++        while (dirty_head_) {
++            debug::PerfTrace::addValue("storage.buffer_pool.flush_visited_entries", 1);
++            flushEntryLocked(*dirty_head_, dirty_head_->key.page_offset);
++        }
++    }
+ 
+-	void BufferPool::invalidateRange(uint64_t offset, size_t bytes) {
+-		if (bytes == 0U) {
+-			return;
+-		}
+-		const uint64_t end = checkedEnd(offset, bytes, "invalidation");
+-		std::lock_guard lock(mutex_);
+-		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+-			const uint64_t pageStart = iterator->first.page_offset;
+-			const uint64_t pageEnd = pageStart + RSS_BUFFER_POOL_PAGE_BYTES;
+-			Entry &entry = *iterator->second;
+-			if (pageEnd <= offset || pageStart >= end) {
+-				++iterator;
+-				continue;
+-			}
+-			if (entry.pin_count != 0U) {
+-				throw std::logic_error("buffer pool refuses to invalidate a pinned page");
+-			}
+-			if (entry.dirty) {
+-				flushEntryLocked(entry, pageStart);
+-			}
+-			const BufferPoolPageKey key = iterator->first;
+-			eraseLocked(key, entry);
+-			iterator = entries_.erase(iterator);
+-		}
+-	}
++    void BufferPool::invalidateRange(uint64_t offset, size_t bytes) {
++        if (!bytes) return;
++        const uint64_t end = checkedEnd(offset, bytes, "invalidation");
++        const uint64_t begin = offset - offset % RSS_BUFFER_POOL_PAGE_BYTES;
++        std::lock_guard lock(mutex_);
++        requireUnpinnedRangeLocked(begin, end, false);
++        eraseRangeLocked(begin, end);
++    }
+ 
+ 	void BufferPool::discardForExternalRebase() {
+ 		std::lock_guard lock(mutex_);
+@@ -605,7 +545,9 @@ namespace graph::storage {
+ 						"buffer pool cannot discard pinned or dirty pages during an external metadata rebase");
+ 			}
+ 		}
++		offsets_.clear();
+ 		entries_.clear();
++        dirty_head_ = nullptr;
+ 		recent_.clear();
+ 		frequent_.clear();
+ 		resident_bytes_ = 0U;
+@@ -685,8 +627,13 @@ namespace graph::storage {
+                 // A denied node can be retried after evicting an unpinned page.
+                 auto [stored, inserted] = entries_.emplace(key, entry);
+                 if (!inserted) throw std::logic_error("buffer pool entry is already resident");
+-                try { admitLocked(key, *stored->second); }
+-                catch (...) { entries_.erase(stored); throw; }
++                try {
++                    const auto [offset, added] = offsets_.emplace(key, stored->second.get());
++                    if (!added) throw std::logic_error("buffer pool offset is already indexed");
++                    try { admitLocked(key, *stored->second); }
++                    catch (...) { offsets_.erase(offset); throw; }
++                } catch (...) { entries_.erase(stored); throw; }
++                stored->second->key = key;
+                 resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+                 return *stored->second;
+             } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+@@ -713,7 +660,8 @@ namespace graph::storage {
+ 		entry.recency = recent_.begin();
+ 	}
+ 
+-	void BufferPool::eraseLocked(BufferPoolPageKey, Entry &entry) {
++	void BufferPool::eraseLocked(BufferPoolPageKey key, Entry &entry) {
++        offsets_.erase(key);
+ 		if (entry.queue == QueueKind::BQK_RECENT) {
+ 			recent_.erase(entry.recency);
+ 		} else {
+@@ -769,51 +717,65 @@ namespace graph::storage {
+ 		const size_t bytes = entry.valid_bytes;
+ 		io_.writeAtUncached(pageOffset, entry.bytes.data(), bytes);
+ 		disk_write_bytes_ += bytes;
++        if (entry.dirty_previous) entry.dirty_previous->dirty_next = entry.dirty_next;
++        else dirty_head_ = entry.dirty_next;
++        if (entry.dirty_next) entry.dirty_next->dirty_previous = entry.dirty_previous;
++        entry.dirty_previous = entry.dirty_next = nullptr;
+ 		entry.dirty = false;
+ 		--dirty_pages_;
+ 	}
+ 
+-	void BufferPool::discardStaleGenerationsLocked(BufferPoolPageKey key) {
+-		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+-			const BufferPoolPageKey residentKey = iterator->first;
+-			Entry &entry = *iterator->second;
+-			if (residentKey.page_offset != key.page_offset || residentKey.generation == key.generation) {
+-				++iterator;
+-				continue;
+-			}
+-			if (entry.pin_count != 0U || entry.private_cow) {
+-				throw std::logic_error("buffer pool refuses to recycle a pinned or private generation");
+-			}
+-			if (entry.dirty) {
+-				flushEntryLocked(entry, residentKey.page_offset);
+-			}
+-			eraseLocked(residentKey, entry);
+-			iterator = entries_.erase(iterator);
+-		}
+-	}
++    void BufferPool::markDirtyLocked(Entry &entry) noexcept {
++        if (entry.dirty) return;
++        entry.dirty = true;
++        entry.dirty_next = dirty_head_;
++        entry.dirty_previous = nullptr;
++        if (dirty_head_) dirty_head_->dirty_previous = &entry;
++        dirty_head_ = &entry;
++        ++dirty_pages_;
++    }
+ 
+-	void BufferPool::discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount) {
+-		const uint64_t end = firstKey.page_offset + pageCount * RSS_BUFFER_POOL_PAGE_BYTES;
+-		for (const auto &[key, entry]: entries_) {
+-			if (key.page_offset >= firstKey.page_offset && key.page_offset < end && key.generation != firstKey.generation &&
+-				(entry->pin_count != 0U || entry->private_cow)) {
+-				throw std::logic_error("buffer pool refuses to recycle a pinned or private generation");
+-			}
+-		}
+-		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+-			const BufferPoolPageKey key = iterator->first;
+-			Entry &entry = *iterator->second;
+-			if (key.page_offset < firstKey.page_offset || key.page_offset >= end || key.generation == firstKey.generation) {
+-				++iterator;
+-				continue;
+-			}
+-			if (entry.dirty) {
+-				flushEntryLocked(entry, key.page_offset);
+-			}
+-			eraseLocked(key, entry);
+-			iterator = entries_.erase(iterator);
+-		}
+-	}
++    void BufferPool::requireUnpinnedRangeLocked(uint64_t begin, uint64_t end, bool rejectPrivate) const {
++        for (auto it = offsets_.lower_bound({begin, 0U}); it != offsets_.end() && it->first.page_offset < end; ++it) {
++            debug::PerfTrace::addValue("storage.buffer_pool.range_checked_entries", 1);
++            if (it->second->pin_count || (rejectPrivate && it->second->private_cow))
++                throw std::logic_error("buffer pool refuses to invalidate a pinned or private page");
++        }
++    }
++
++    void BufferPool::eraseRangeLocked(uint64_t begin, uint64_t end, std::optional<uint64_t> keepGeneration) {
++        auto it = offsets_.lower_bound({begin, 0U});
++        while (it != offsets_.end() && it->first.page_offset < end) {
++            const auto key = it->first;
++            Entry &entry = *it->second;
++            ++it; // eraseLocked removes this entry from both indexing structures.
++            debug::PerfTrace::addValue("storage.buffer_pool.range_erase_visited_entries", 1);
++            if (keepGeneration && key.generation == *keepGeneration) continue;
++            if (entry.dirty) flushEntryLocked(entry, key.page_offset);
++            eraseLocked(key, entry);
++            entries_.erase(key);
++        }
++    }
++
++    void BufferPool::discardStaleGenerationsLocked(BufferPoolPageKey key) {
++        const uint64_t end = key.page_offset + RSS_BUFFER_POOL_PAGE_BYTES;
++        for (auto it = offsets_.lower_bound({key.page_offset, 0U}); it != offsets_.end() && it->first.page_offset < end; ++it) {
++            debug::PerfTrace::addValue("storage.buffer_pool.generation_checked_entries", 1);
++            if (it->first.generation != key.generation && (it->second->pin_count || it->second->private_cow))
++                throw std::logic_error("buffer pool refuses to recycle a pinned or private generation");
++        }
++        eraseRangeLocked(key.page_offset, end, key.generation);
++    }
++
++    void BufferPool::discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount) {
++        const uint64_t end = firstKey.page_offset + pageCount * RSS_BUFFER_POOL_PAGE_BYTES;
++        for (auto it = offsets_.lower_bound({firstKey.page_offset, 0U}); it != offsets_.end() && it->first.page_offset < end; ++it) {
++            debug::PerfTrace::addValue("storage.buffer_pool.generation_checked_entries", 1);
++            if (it->first.generation != firstKey.generation && (it->second->pin_count || it->second->private_cow))
++                throw std::logic_error("buffer pool refuses to recycle a pinned or private generation");
++        }
++        eraseRangeLocked(firstKey.page_offset, end, firstKey.generation);
++    }
+ 
+ 	void BufferPool::unpin(BufferPoolPageKey key) noexcept {
+ 		try {
+@@ -883,10 +845,7 @@ namespace graph::storage {
+ 										   // this call.
+ 			throw std::logic_error("buffer pool mutable pin lost exclusive private-page ownership");
+ 		}
+-		if (!found->second->dirty) {
+-			found->second->dirty = true;
+-			++dirty_pages_;
+-		}
++        markDirtyLocked(*found->second);
+ 	}
+ 
+ } // namespace graph::storage
+diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+index e6514fae..84f5db39 100644
+--- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
++++ b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+@@ -9,6 +9,7 @@
+  **/
+ 
+ #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
+ #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+ 
+ #include "graph/utils/OwnedAssociativeContainers.hpp"
+@@ -207,7 +208,7 @@ namespace graph::storage {
+ 
+ 		[[nodiscard]] constexpr bool isReservedInternalIndexId(uint64_t indexId) {
+ 			return indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID || indexId == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+-                isHybridPropertyIndexId(indexId);
++                isHybridPropertyIndexId(indexId) || isEntityFreeSpaceIndexId(indexId);
+ 		}
+ 
+ 		void validatePlannerOptions(const NativeGraphWritePlannerOptions &options) {
+@@ -402,6 +403,9 @@ namespace graph::storage {
+         hybrid_conversion_(std::move(other.hybrid_conversion_)), hybrid_columns_(std::move(other.hybrid_columns_)), covered_adjacency_sealed_(other.covered_adjacency_sealed_),
+         covered_adjacency_pending_(other.covered_adjacency_pending_),
+         covered_adjacency_request_(other.covered_adjacency_request_) {
++        free_summary_credit_ = std::move(other.free_summary_credit_);
++        rebuild_entity_free_summaries_ = other.rebuild_entity_free_summaries_;
++        free_summary_checkpoint_ = std::move(other.free_summary_checkpoint_);
+ 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
+ 		other.next_vector_id_ = 0U;
+ 		other.global_adjacency_operations_canonical_ = false;
+@@ -446,6 +450,9 @@ namespace graph::storage {
+         covered_adjacency_sealed_ = other.covered_adjacency_sealed_;
+         covered_adjacency_pending_ = other.covered_adjacency_pending_;
+         covered_adjacency_request_ = other.covered_adjacency_request_;
++        free_summary_credit_ = std::move(other.free_summary_credit_);
++        rebuild_entity_free_summaries_ = other.rebuild_entity_free_summaries_;
++        free_summary_checkpoint_ = std::move(other.free_summary_checkpoint_);
+ 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
+ 		other.next_vector_id_ = 0U;
+ 		other.global_adjacency_operations_canonical_ = false;
+@@ -2616,7 +2623,11 @@ namespace graph::storage {
+             if (hybrid_columns_->cancellation) hybrid_columns_->cancellation->check();
+             hybrid_vector_pending_ = true;
+         }
+-		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
++        if (rebuild_entity_free_summaries_ && (!nodes_.empty() || !edges_.empty() || !properties_.empty() ||
++            !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() || !vector_bootstraps_.empty() || !vector_deltas_.empty()))
++            fail(FormatError::FERR_INVALID_STATE, "free-space initialization cannot mix ordinary graph mutations");
++        if (free_summary_checkpoint_) free_summary_checkpoint_();
++		const bool hasGraphWork = rebuild_entity_free_summaries_ || !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
+ 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
+ 								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
+ 		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
+@@ -2727,28 +2738,38 @@ namespace graph::storage {
+ 			return pageId;
+ 		};
+ 
+-		const std::vector<CatalogEntry> currentPools = context_->entities->currentPools(snapshot_);
++		std::optional<std::vector<CatalogEntry>> currentPools;
++		const auto getCurrentPools = [&]() -> const std::vector<CatalogEntry> & {
++			if (!currentPools) {
++				currentPools = context_->entities->currentPools(snapshot_);
++				debug::PerfTrace::addValue("native_graph.commit.entity_pool_discoveries", 1);
++			}
++			return *currentPools;
++		};
+ 		// Fresh pools can receive either initial logical pages or COW images of
+ 		// existing PageIds. Both uses consume the same bounded frame budget and
+ 		// become visible through this transaction's single metadata publication.
+ 		std::vector<FreshEntityPool> labelPools;
+ 		std::map<uint64_t, uint8_t> freeFrames;
+-		for (const CatalogEntry &pool: currentPools) {
+-			freeFrames.emplace(pool.segment_id.value(), context_->entities->availableFrameCount(snapshot_, pool));
+-		}
++		const auto availableFrames = [&](const CatalogEntry &pool) -> uint8_t & {
++			auto found = freeFrames.find(pool.segment_id.value());
++			if (found == freeFrames.end()) {
++				const auto count = context_->entities->availableFrameCount(snapshot_, pool);
++				found = freeFrames.emplace(pool.segment_id.value(), count).first;
++				debug::PerfTrace::addValue("native_graph.commit.entity_pool_capacity_queries", 1);
++			}
++			return found->second;
++		};
+ 		std::map<uint64_t, uint8_t> reservedFrames;
+ 		const auto tryReserveCurrentFrame = [&](const CatalogEntry &pool) {
+-			const auto available = freeFrames.find(pool.segment_id.value());
+-			if (available == freeFrames.end()) {
+-				return false;
+-			}
+-			if (reservedFrames[pool.segment_id.value()] >= available->second) {
++			auto &available = availableFrames(pool);
++			if (reservedFrames[pool.segment_id.value()] >= available) {
+ 				// Reclaim only frames absent from every active snapshot before declaring
+ 				// the pool full. Consecutive short writes must not exhaust a finite
+ 				// COW pool merely because their retired frames were never revisited.
+ 				context_->entities->reclaimRetiredFrames(pool.segment_id);
+-				available->second = context_->entities->availableFrameCount(snapshot_, pool);
+-				if (reservedFrames[pool.segment_id.value()] >= available->second) {
++				available = context_->entities->availableFrameCount(snapshot_, pool);
++				if (reservedFrames[pool.segment_id.value()] >= available) {
+ 					return false;
+ 				}
+ 			}
+@@ -2761,7 +2782,7 @@ namespace graph::storage {
+ 					 "native graph write has no COW frame capacity in the selected Entity pool");
+ 			}
+ 		};
+-		const auto reserveReplacementFrame = [&currentPools, &tryReserveCurrentFrame, &labelPools, &reserveSegment,
++		const auto reserveReplacementFrame = [&getCurrentPools, &tryReserveCurrentFrame, &labelPools, &reserveSegment,
+ 											  this](const CatalogEntry &source) {
+ 			const auto compatible = [&source](const CatalogEntry &candidate) {
+ 				return candidate.kind == SegmentKind::SGK_ENTITY_PAGE_POOL &&
+@@ -2771,7 +2792,7 @@ namespace graph::storage {
+ 			if (compatible(source) && tryReserveCurrentFrame(source)) {
+ 				return EntityPageReplacementDestination{source, std::nullopt};
+ 			}
+-			for (const CatalogEntry &candidate: currentPools) {
++			for (const CatalogEntry &candidate: getCurrentPools()) {
+ 				if (candidate.segment_id != source.segment_id && compatible(candidate) &&
+ 					tryReserveCurrentFrame(candidate)) {
+ 					return EntityPageReplacementDestination{candidate, std::nullopt};
+@@ -2796,8 +2817,8 @@ namespace graph::storage {
+ 			return EntityPageReplacementDestination{{}, fresh};
+ 		};
+ 		const auto findAppendPool = [&]() -> std::optional<CatalogEntry> {
+-			for (const CatalogEntry &pool: currentPools) {
+-				if (reservedFrames[pool.segment_id.value()] < freeFrames[pool.segment_id.value()]) {
++			for (const CatalogEntry &pool: getCurrentPools()) {
++				if (reservedFrames[pool.segment_id.value()] < availableFrames(pool)) {
+ 					return pool;
+ 				}
+ 			}
+@@ -2947,11 +2968,12 @@ namespace graph::storage {
+ 		};
+ 		const bool needsNodeInsertSearch = std::ranges::any_of(nodes_, [](const auto &entry) {
+ 			return entry.second.inserted && !entry.second.erased;
+-		});
++		}) || rebuild_entity_free_summaries_;
+ 		const bool needsEdgeInsertSearch = std::ranges::any_of(edges_, [](const auto &entry) {
+ 			return entry.second.inserted && !entry.second.erased;
+-		});
+-		std::map<uint64_t, EntityPageRecordKind> currentEntityPageKinds;
++		}) || rebuild_entity_free_summaries_;
++		using PageKindEntry = std::pair<const uint64_t, EntityPageRecordKind>;
++        std::map<uint64_t, EntityPageRecordKind, std::less<uint64_t>, utils::OwnedPmrAllocator<PageKindEntry>> currentEntityPageKinds;
+ 		std::vector<ExistingInsertCandidate> existingInsertCandidates;
+ 		existingInsertCandidates.reserve(currentEntityPageKinds.size());
+ 		const auto targetKindIndex = [](EntityPageRecordKind kind) -> size_t {
+@@ -2963,6 +2985,27 @@ namespace graph::storage {
+ 			}
+ 			fail(FormatError::FERR_INVALID_STATE, "native graph write encountered an unknown Entity record kind");
+ 		};
++        std::array<std::optional<EntityFreeSpaceIndex::Proof>, 2> freeSummaryProofs;
++        std::array<bool, 2> freeSummaryRead{}, freeSummaryManaged{};
++        const auto loadFreeSummary = [&](EntityPageRecordKind kind) {
++            const size_t ordinal = targetKindIndex(kind);
++            if (!freeSummaryRead[ordinal]) {
++                freeSummaryProofs[ordinal] = EntityFreeSpaceIndex::readProof(*context_->metadata, *context_->indexes, snapshot_, kind);
++                bool emptySource = !EntityFreeSpaceIndex::entityRoot(snapshot_.superblock(), kind).isValid();
++                if (!freeSummaryProofs[ordinal] && !emptySource) {
++                    bool any = false;
++                    const auto first = [&](const EntityPageLocation &) { any = true; return false; };
++                    if (kind == EntityPageRecordKind::EPRK_NODE) (void)context_->metadata->visitNodePageLocationsUntil(snapshot_, first);
++                    else (void)context_->metadata->visitEdgePageLocationsUntil(snapshot_, first);
++                    emptySource = !any;
++                }
++                freeSummaryManaged[ordinal] = rebuild_entity_free_summaries_ ||
++                    (freeSummaryProofs[ordinal] ? freeSummaryProofs[ordinal]->fresh : emptySource);
++                freeSummaryRead[ordinal] = true;
++            }
++            return freeSummaryManaged[ordinal];
++        };
++        std::map<uint64_t, uint16_t> indexedFreeCounts;
+ 		// All pages observed in one snapshot belong to a stable Catalog
+ 		// generation. Cache the pool descriptor per segment while checking free
+ 		// insertion slots instead of descending the Catalog once per page.
+@@ -2987,7 +3030,7 @@ namespace graph::storage {
+ 			const auto hasCachedKind = [&](EntityPageRecordKind kind) {
+ 				return std::ranges::any_of(cache.targets, [kind](const auto &target) { return target.kind == kind; });
+ 			};
+-			usedInsertionTargetCache = cache.valid &&
++			usedInsertionTargetCache = !rebuild_entity_free_summaries_ && cache.valid &&
+ 					(!needsNodeInsertSearch || insertionKindsComplete[0] || hasCachedKind(EntityPageRecordKind::EPRK_NODE)) &&
+                     (!needsEdgeInsertSearch || insertionKindsComplete[1] || hasCachedKind(EntityPageRecordKind::EPRK_EDGE));
+ 			if (usedInsertionTargetCache) {
+@@ -3004,20 +3047,36 @@ namespace graph::storage {
+ 			// Updates/deletes never need an insertion target. Avoid walking the
+ 			// complete Entity Directory in those transactions; mixed writes inspect
+ 			// only the kind that can consume a free slot.
+-			if (needsNodeInsertSearch) {
+-				context_->metadata->visitNodePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+-					debug::PerfTrace::addValue("native_graph.commit.entity_insert_node_directory_pages", 1);
+-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
+-				});
+-                insertionKindsComplete[0] = true;
+-			}
+-			if (needsEdgeInsertSearch) {
+-				context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+-					debug::PerfTrace::addValue("native_graph.commit.entity_insert_edge_directory_pages", 1);
+-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
+-				});
+-                insertionKindsComplete[1] = true;
+-			}
++            const auto discover = [&](EntityPageRecordKind kind, size_t needed) {
++                const auto type = targetKindIndex(kind);
++                if (!rebuild_entity_free_summaries_ && loadFreeSummary(kind)) {
++                    if (freeSummaryProofs[type]) {
++                        insertionKindsComplete[type] = EntityFreeSpaceIndex::visitCandidates(*context_->metadata, *context_->indexes,
++                            snapshot_, kind, *freeSummaryProofs[type], needed, [&](const auto &entry) {
++                                if (!currentEntityPageKinds.emplace(entry.page.value(), kind).second ||
++                                    !indexedFreeCounts.emplace(entry.page.value(), entry.free_slots).second)
++                                    fail(FormatError::FERR_INVALID_STATE, "free-space index repeats an entity page");
++                                debug::PerfTrace::addValue("native_graph.write.entity_free_summary.candidate_pages", 1);
++                            });
++                    } else insertionKindsComplete[type] = true; // New empty directory, not a legacy migration.
++                    return;
++                }
++                size_t visited = 0U;
++                const auto visit = [&](const EntityPageLocation &location) {
++                    if ((visited++ & 127U) == 0U && free_summary_checkpoint_) free_summary_checkpoint_();
++                    debug::PerfTrace::addValue(kind == EntityPageRecordKind::EPRK_NODE ?
++                        "native_graph.commit.entity_insert_node_directory_pages" : "native_graph.commit.entity_insert_edge_directory_pages", 1);
++                    currentEntityPageKinds.emplace(location.page_id.value(), kind);
++                };
++                if (kind == EntityPageRecordKind::EPRK_NODE) context_->metadata->visitNodePageLocations(snapshot_, visit);
++                else context_->metadata->visitEdgePageLocations(snapshot_, visit);
++                insertionKindsComplete[type] = true;
++            };
++            if (needsNodeInsertSearch) discover(EntityPageRecordKind::EPRK_NODE,
++                (std::max)(size_t{1}, size_t(std::ranges::count_if(nodes_, [](const auto &entry) { return entry.second.inserted && !entry.second.erased; }))));
++            if (needsEdgeInsertSearch) discover(EntityPageRecordKind::EPRK_EDGE,
++                (std::max)(size_t{1}, size_t(std::ranges::count_if(edges_, [](const auto &entry) { return entry.second.inserted && !entry.second.erased; }))));
++
+ 			for (const auto &[pageValue, kind]: currentEntityPageKinds) {
+ 				const PageId pageId(pageValue);
+ 				const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
+@@ -3033,6 +3092,9 @@ namespace graph::storage {
+ 							"native graph write found an Entity Map page outside a current Entity pool");
+ 				}
+ 				const uint16_t remaining = context_->entities->freeSlotCount(snapshot_, pageId, kind);
++                if (const auto indexed = indexedFreeCounts.find(pageValue); indexed != indexedFreeCounts.end() && indexed->second != remaining)
++                    fail(FormatError::FERR_INVALID_STATE, "free-space index disagrees with the authenticated entity page");
++                if (free_summary_checkpoint_) free_summary_checkpoint_();
+ 				if (remaining != 0U) {
+ 					existingInsertCandidates.push_back({pageId, kind, pool, remaining, false, false});
+ 				}
+@@ -3081,8 +3143,13 @@ namespace graph::storage {
+ 		// large update/delete batches no longer pay one root-to-leaf descent per ID.
+ 		std::vector<uint64_t> nodeMutationIds;
+ 		std::vector<uint64_t> edgeMutationIds;
++		// Endpoint reads participate in validation but do not modify Node records.
++		// Adjacency is published separately; only labels or deletion need Node COW.
++		const auto changesExistingNode = [](const auto &change) {
++			return !change.inserted && (change.erased || change.labels.has_value());
++		};
+ 		for (const auto &[nodeId, change]: nodes_) {
+-			if (!change.inserted) {
++			if (changesExistingNode(change)) {
+ 				nodeMutationIds.push_back(nodeId);
+ 			}
+ 		}
+@@ -3114,7 +3181,7 @@ namespace graph::storage {
+ 		};
+ 
+ 		for (const auto &[nodeId, change]: nodes_) {
+-			if (change.inserted) {
++			if (!changesExistingNode(change)) {
+ 				continue;
+ 			}
+ 			const EntityPageLocation location = requireMutationLocation(
+@@ -3264,7 +3331,7 @@ namespace graph::storage {
+ 						continue;
+ 					}
+ 					if (!candidate.planned && candidate.remaining != 0U &&
+-							reservedFrames[candidate.pool.segment_id.value()] < freeFrames[candidate.pool.segment_id.value()]) {
++							reservedFrames[candidate.pool.segment_id.value()] < availableFrames(candidate.pool)) {
+ 						candidateOrdinal = ordinal;
+ 						break;
+ 					}
+@@ -3611,6 +3678,119 @@ namespace graph::storage {
+ 		// Every current-pool B+Tree mutation now competes in one deterministic
+ 		// frame budget. Fresh rebuilds are selected before any typed preparer runs,
+ 		// so scalar, adjacency, and LargeValue content trees cannot overbook a pool.
++        std::vector<NativeGraphEntityFreeSummaryFence> freeSummaryFences;
++        const auto stageFreeSummaries = [&](EntityPageRecordKind kind) {
++            const size_t type = targetKindIndex(kind);
++            const auto insertedCount = [kind](const auto &page) {
++                return kind == EntityPageRecordKind::EPRK_NODE ? page.node_insertions.size() : page.edge_insertions.size();
++            };
++            bool changed = false;
++            for (const auto &page : mutations) if (page.record_kind == kind)
++                changed = changed || insertedCount(page) || (kind == EntityPageRecordKind::EPRK_NODE ? !page.erased_node_ids.empty() : !page.erased_edge_ids.empty());
++            for (const auto &page : appends) changed = changed || (page.record_kind == kind && insertedCount(page));
++            for (const auto &page : newPools) changed = changed || (page.record_kind == kind && insertedCount(page));
++            if ((!changed && !rebuild_entity_free_summaries_) || !loadFreeSummary(kind)) return;
++            const uint64_t id = EntityFreeSpaceIndex::indexId(kind);
++            auto position = std::lower_bound(scalar_index_mutations_.begin(), scalar_index_mutations_.end(), id,
++                [](const auto &staged, uint64_t key) { return staged.index_id < key; });
++            if (position != scalar_index_mutations_.end() && position->index_id == id)
++                fail(FormatError::FERR_INVALID_STATE, "free-space summary overlaps a caller Index mutation");
++            position = scalar_index_mutations_.insert(position, {context_->indexes, id, {}, {}, {}, BTreeLeafValueLayout::BLVL_U64});
++            auto &operations = position->operations;
++            uint64_t freePages = freeSummaryProofs[type] ? freeSummaryProofs[type]->free_pages : 0U;
++            BTreeIndex existing(id, *context_->indexes, *context_->metadata);
++            const auto append = [&](BTreeScalarIndexOperationKind operation, const auto &key, uint64_t value = 1U) {
++                if (!free_summary_credit_)
++                    free_summary_credit_ = std::make_unique<utils::OwnedHeapReservation>(utils::OwnedAllocationScope::owner(), 1024U);
++                const size_t admitted = free_summary_credit_->bytes();
++                if (admitted > (std::numeric_limits<size_t>::max)() - 256U)
++                    fail(FormatError::FERR_INVALID_STATE, "free-space summary operation admission overflows");
++                // Covers vector growth and each small owned key before STL allocation.
++                // Retain admission with the staged operations on failed commits too.
++                free_summary_credit_->set(admitted + 256U);
++                operations.push_back({operation, std::vector<std::byte>(key.begin(), key.end()), value});
++            };
++            if (rebuild_entity_free_summaries_) {
++                if (freeSummaryProofs[type]) {
++                    const uint64_t count = freeSummaryProofs[type]->free_pages;
++                    auto old = existing.openRangeCursor(snapshot_, std::nullopt, size_t(count) + 3U, BufferPoolReadHint::BPRH_NORMAL);
++                    size_t visited = 0U;
++                    while (const auto entry = old.next()) {
++                        if (++visited > count + 2U) fail(FormatError::FERR_INVALID_STATE, "summary rebuild found uncounted entries");
++                        append(BTreeScalarIndexOperationKind::BSIOP_ERASE, entry->key);
++                    }
++                    if (visited != count + 2U) fail(FormatError::FERR_INVALID_STATE, "summary rebuild found missing entries");
++                }
++                freePages = 0U;
++                for (const auto &candidate : existingInsertCandidates) if (candidate.kind == kind && candidate.remaining) {
++                    append(BTreeScalarIndexOperationKind::BSIOP_UPSERT,
++                        EntityFreeSpaceIndex::entryKey(candidate.page_id, candidate.remaining, kind));
++                    ++freePages;
++                }
++            } else {
++                const uint16_t capacity = EntityPage::recordCapacity(kind);
++                for (const auto &page : mutations) {
++                    if (page.record_kind != kind) continue;
++                    const size_t inserted = insertedCount(page);
++                    const size_t erased = kind == EntityPageRecordKind::EPRK_NODE ? page.erased_node_ids.size() : page.erased_edge_ids.size();
++                    if (!inserted && !erased) continue;
++                    const uint16_t before = remainingSlots.at(page.page_id.value());
++                    if (inserted > size_t(before) + erased || size_t(before) + erased - inserted > capacity)
++                        fail(FormatError::FERR_INVALID_STATE, "summary mutation has an impossible free-slot count");
++                    const auto after = uint16_t(size_t(before) + erased - inserted);
++                    if (before == after) continue;
++                    if (before) {
++                        const auto key = EntityFreeSpaceIndex::entryKey(page.page_id, before, kind);
++                        if (!freePages || !existing.find(snapshot_, key))
++                            fail(FormatError::FERR_INVALID_STATE, "fresh summary is missing a changed free page");
++                        append(BTreeScalarIndexOperationKind::BSIOP_ERASE, key); --freePages;
++                    }
++                    if (after && after < capacity) {
++                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::entryKey(page.page_id, after, kind));
++                        ++freePages;
++                    }
++                }
++                const auto addFresh = [&](const auto &page) {
++                    if (page.record_kind != kind) return;
++                    const size_t count = insertedCount(page);
++                    if (!count || count > capacity) fail(FormatError::FERR_INVALID_STATE, "fresh summary page has invalid occupancy");
++                    if (count < capacity) {
++                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT,
++                            EntityFreeSpaceIndex::entryKey(page.request.page_id, uint16_t(capacity - count), kind));
++                        ++freePages;
++                    }
++                };
++                for (const auto &page : appends) addFresh(page);
++                for (const auto &page : newPools) addFresh(page);
++            }
++            const auto sourceRoot = EntityFreeSpaceIndex::entityRoot(snapshot_.superblock(), kind);
++            const uint64_t generation = changed ? snapshot_.superblock().generation.value() + 1U : sourceRoot.generation.value();
++            if (generation == (std::numeric_limits<uint64_t>::max)() || freePages == (std::numeric_limits<uint64_t>::max)())
++                fail(FormatError::FERR_INVALID_STATE, "free-space summary marker encoding overflows");
++            append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::generationKey(), generation + 1U);
++            append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::countKey(), freePages + 1U);
++            freeSummaryFences.push_back({id, sourceRoot, Generation(generation), freePages});
++            debug::PerfTrace::addValue("native_graph.write.entity_free_summary.changed_operations", operations.size());
++            if (!freeSummaryProofs[type]) {
++                std::vector<BTreePageEntry> entries;
++                entries.reserve(operations.size());
++                for (const auto &operation : operations) {
++                    BTreePageEntry entry;
++                    entry.key.assign(operation.key.begin(), operation.key.end());
++                    entry.value_or_child = operation.value;
++                    entries.push_back(std::move(entry));
++                }
++                std::ranges::sort(entries, {}, &BTreePageEntry::key);
++                auto plan = context_->indexes->planInitialTreeMutation(snapshot_, id, entries);
++                scalar_index_mutations_.erase(position);
++                auto initial = std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(), id,
++                    [](const auto &staged, uint64_t key) { return staged.index_id < key; });
++                initial_scalar_index_mutations_.insert(initial, {context_->indexes, id, std::move(plan)});
++            }
++        };
++        stageFreeSummaries(EntityPageRecordKind::EPRK_NODE);
++        stageFreeSummaries(EntityPageRecordKind::EPRK_EDGE);
++
+ 		if (contentIndexPlan.has_value()) {
+ 			prepareIndexMutationPlans(&*contentIndexPlan, [this, &contentIndexPlan, &contentValuesToPublish,
+ 													contentIndexStore] {
+@@ -3794,6 +3974,7 @@ namespace graph::storage {
+ 				 "native graph transaction has overlapping existing and initial scalar Index mutations");
+ 		}
+ 		NativeGraphDerivedStateMutation derivedState;
++        derivedState.entity_free_summary_fences = std::move(freeSummaryFences);
+         if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
+         for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);
+ 		derivedState.index_tree_mutations.reserve(pendingDerivedBindings.size());
+@@ -4282,7 +4463,7 @@ namespace graph::storage {
+ 					if (candidate.remaining != 0U) {
+ 						targets[{candidate.page_id.value(), static_cast<uint16_t>(candidate.kind)}] =
+ 								{candidate.page_id, candidate.kind, candidate.pool, candidate.remaining};
+-					}
++                    } else targets.erase({candidate.page_id.value(), static_cast<uint16_t>(candidate.kind)});
+ 				}
+ 				for (size_t ordinal = 0U; ordinal < mutations.size(); ++ordinal) {
+ 					const EntityPageBatchMutation &mutation = mutations[ordinal];
+diff --git a/src/storage/relocatable/index/BTreePageStore.cpp b/src/storage/relocatable/index/BTreePageStore.cpp
+index 3276859f..c86d3661 100644
+--- a/src/storage/relocatable/index/BTreePageStore.cpp
++++ b/src/storage/relocatable/index/BTreePageStore.cpp
+@@ -409,10 +409,21 @@ namespace graph::storage {
+ 					throw FormatException(FormatError::FERR_INVALID_HEADER,
+ 									  "relocatable key-only B+Tree overlay cannot upsert a nonempty value");
+ 				}
+-				upsert(operation.key, operation.value);
++                constexpr size_t maximumKeyBytes = 16U * 1024U;
++                if (operation.key.size() > maximumKeyBytes) {
++                    flushPendingUpserts();
++                    upsert(operation.key, operation.value);
++                    return;
++                }
++                if (pending_upserts_.size() == 64U || operation.key.size() > maximumKeyBytes - pending_key_bytes_)
++                    flushPendingUpserts();
++                pending_upserts_.push_back({utils::OwnedStdVector<std::byte>(operation.key.begin(), operation.key.end()), operation.value});
++                pending_key_bytes_ += operation.key.size();
++                debug::PerfTrace::addValue("native_btree.plan.buffered_upserts", 1);
+ 				return;
+ 			}
+ 			if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_ERASE) {
++                flushPendingUpserts();
+ 				leaf_append_size_.reset();
+ 				erase(operation.key);
+ 				return;
+@@ -422,6 +433,7 @@ namespace graph::storage {
+ 		}
+ 
+ 		[[nodiscard]] BTreeStructuralMutationPlan buildPlan() {
++            flushPendingUpserts();
+ 			struct ExistingReplacement {
+ 				PageLocation location;
+ 				OverlayPageReference reference;
+@@ -1256,6 +1268,96 @@ namespace graph::storage {
+ 			}
+ 		}
+ 
++        // Pending keys own their input: streamed emitters may reuse the source
++        // operation immediately after apply returns. ERASE is a flush barrier.
++        struct PendingUpsert {
++            using OwnedHeapElement = void;
++            utils::OwnedStdVector<std::byte> key;
++            uint64_t value = 0U;
++        };
++
++        size_t mergeUpsertsIntoLeaf(std::span<const PendingUpsert *const> operations) {
++            checkNative();
++            auto path = pathFor(operations.front()->key);
++            auto &leaf = nodeFor(path.back());
++            std::optional<std::span<const std::byte>> upper;
++            for (size_t depth = path.size() - 1U; depth > 0U; --depth) {
++                const auto &parent = nodeFor(path[depth - 1U]);
++                const size_t ordinal = childOrdinal(parent, path[depth]);
++                if (ordinal < parent.internal_entries.size()) {
++                    upper = parent.internal_entries[ordinal].key;
++                    break;
++                }
++            }
++            size_t count = 1U;
++            while (count < operations.size() && (!upper || lessKey(operations[count]->key, *upper))) ++count;
++            // Ordered tail growth already has an admitted geometric backing and
++            // constant-time packed-size deltas. Preserve that existing path.
++            if (leaf.leaf_entries.empty() || lessKey(leaf.leaf_entries.back().key, operations.front()->key)) {
++                for (size_t i = 0U; i < count; ++i) {
++                    checkNative();
++                    upsert(operations[i]->key, operations[i]->value);
++                }
++                return count;
++            }
++            constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
++                2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
++            while (count > 1U) {
++                utils::OwnedStdVector<BTreePageEntry> merged;
++                merged.reserve(leaf.leaf_entries.size() + count);
++                size_t old = 0U, next = 0U;
++                while (old < leaf.leaf_entries.size() || next < count) {
++                    checkNative();
++                    if (next == count || (old < leaf.leaf_entries.size() &&
++                            lessKey(leaf.leaf_entries[old].key, operations[next]->key))) {
++                        merged.push_back(leaf.leaf_entries[old++]);
++                        debug::PerfTrace::addValue("native_btree.plan.batch_copied_source_entries", 1);
++                        continue;
++                    }
++                    const auto *operation = operations[next++];
++                    while (next < count && std::ranges::equal(operation->key, operations[next]->key))
++                        operation = operations[next++]; // Original equal-key order: last write wins.
++                    if (old < leaf.leaf_entries.size() && std::ranges::equal(leaf.leaf_entries[old].key, operation->key)) ++old;
++                    merged.push_back({operation->key, operation->value});
++                }
++                const auto bytes = PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF, merged, leaf_value_layout_);
++                const bool fitsOne = bytes <= capacity;
++                if (!fitsOne && !findBalancedLeafSplitIndex(leaf.header, index_id_, LogSequenceNumber(1U),
++                        LogSequenceNumber(1U), leaf.left_sibling ? preview(*leaf.left_sibling) : PageId{},
++                        leaf.right_sibling ? preview(*leaf.right_sibling) : PageId{}, merged)) {
++                    // Wide keys may require more than two pages. Reduce this
++                    // bounded group before changing any private node.
++                    count = (count + 1U) / 2U;
++                    continue;
++                }
++                leaf_append_size_.reset();
++                leaf.leaf_entries = std::move(merged);
++                leaf.dirty = true;
++                debug::PerfTrace::addValue("native_btree.plan.leaf_batch_merges", 1);
++                debug::PerfTrace::addValue("native_btree.plan.batch_merged_upserts", count);
++                if (fitsOne) leaf_append_size_ = LeafAppendSize{path.back(), leaf.leaf_entries.size(), bytes};
++                else splitLeaf(path);
++                return count;
++            }
++            upsert(operations.front()->key, operations.front()->value);
++            return 1U;
++        }
++
++        void flushPendingUpserts() {
++            if (pending_upserts_.empty()) return;
++            std::array<const PendingUpsert *, 64U> ordered{};
++            for (size_t i = 0U; i < pending_upserts_.size(); ++i) ordered[i] = &pending_upserts_[i];
++            auto remaining = std::span<const PendingUpsert *const>(ordered.data(), pending_upserts_.size());
++            std::ranges::sort(std::span(ordered.data(), pending_upserts_.size()), [](const auto *left, const auto *right) {
++                if (lessKey(left->key, right->key)) return true;
++                if (lessKey(right->key, left->key)) return false;
++                return left < right; // Same contiguous buffer, preserving source statement order.
++            });
++            while (!remaining.empty()) remaining = remaining.subspan(mergeUpsertsIntoLeaf(remaining));
++            pending_upserts_.clear();
++            pending_key_bytes_ = 0U;
++        }
++
+ 		void upsert(std::span<const std::byte> key, uint64_t value) {
+ 			std::vector<OverlayPageReference> path = pathFor(key);
+ 			OverlayMutationNode &leaf = nodeFor(path.back());
+@@ -1752,6 +1854,8 @@ namespace graph::storage {
+ 		// Transaction-local, last-leaf only. Erases/non-appends and splits
+ 		// invalidate it; no persisted bytes or cross-snapshot proof is cached.
+ 		std::optional<LeafAppendSize> leaf_append_size_;
++        utils::OwnedStdVector<PendingUpsert> pending_upserts_;
++        size_t pending_key_bytes_ = 0U;
+ 		std::deque<OverlayMutationNode, utils::OwnedPmrAllocator<OverlayMutationNode>> virtual_nodes_;
+ 	};
+ 
+diff --git a/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp b/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
+index dab02a3c..10d9b120 100644
+--- a/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
++++ b/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
+@@ -31,6 +31,7 @@
+ #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
+ #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
+ #include "graph/storage/relocatable/entity/EntityPage.hpp"
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
+ #include "graph/storage/relocatable/index/BTreePage.hpp"
+ #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+ #include "graph/storage/relocatable/metadata/StateRecord.hpp"
+@@ -893,6 +894,41 @@ namespace graph::storage {
+ 							 "relocatable integrity scan found an Index Root Directory reference mismatch");
+ 		});
+ 
++
++        // Full integrity checks the derived summary against every authoritative
++        // live entity page. Ordinary writes validate only their accessed pages.
++        for (const auto kind : {EntityPageRecordKind::EPRK_NODE, EntityPageRecordKind::EPRK_EDGE}) {
++            const auto root = metadata_.locations_.findIndexRootOptional(superblock, EntityFreeSpaceIndex::indexId(kind));
++            if (!root) continue; // Legacy files have no summary until explicit initialization.
++            ScanMap<utils::OwnedVector<std::byte>, uint64_t> expected;
++            for (const auto &[id, scanned] : scannedPages) {
++                if (scanned.owner.kind != PageOwnerKind::POK_ENTITY) continue;
++                const auto header = EntityPage::open(scanned.owner, scanned.payload).header();
++                if (header.record_kind != kind || !header.live_count || header.live_count == header.slot_capacity) continue;
++                const auto key = EntityFreeSpaceIndex::entryKey(PageId(id), uint16_t(header.slot_capacity - header.live_count), kind);
++                expected.emplace(utils::OwnedVector<std::byte>(key.begin(), key.end()), 0U);
++            }
++            const uint64_t count = expected.size();
++            const auto generationKey = EntityFreeSpaceIndex::generationKey(), countKey = EntityFreeSpaceIndex::countKey();
++            const auto entries = scanIndexTree(scannedPages, *root, expected.size() + 3U, BTreeLeafValueLayout::BLVL_U64);
++            std::optional<uint64_t> generation, declaredCount;
++            for (const auto &entry : entries) {
++                if (std::ranges::equal(entry.key, generationKey)) generation = entry.value_or_child;
++                else if (std::ranges::equal(entry.key, countKey)) declaredCount = entry.value_or_child;
++                else {
++                    const auto found = expected.find(entry.key);
++                    requireIntegrity(found != expected.end() && entry.value_or_child == 1U,
++                        "relocatable integrity scan found an invalid entity free-space entry");
++                    expected.erase(found);
++                }
++            }
++            const auto entityRoot = EntityFreeSpaceIndex::entityRoot(superblock, kind);
++            requireIntegrity(generation && declaredCount && *declaredCount == count + 1U && expected.empty() &&
++                *generation && *generation - 1U <= superblock.generation.value() &&
++                (entityRoot.isValid() || count == 0U),
++                "relocatable integrity scan found an incomplete or stale entity free-space summary");
++        }
++
+ 		ScanMap<uint64_t, EntityPageLocation> nativeNodes;
+ 		ScanMap<uint64_t, EntityPageLocation> nativeEdges;
+ 		ScanSet<StableSlotKey> mappedEntitySlots;
+diff --git a/src/storage/relocatable/metadata/CatalogTree.cpp b/src/storage/relocatable/metadata/CatalogTree.cpp
+index 21061154..71a7c7e0 100644
+--- a/src/storage/relocatable/metadata/CatalogTree.cpp
++++ b/src/storage/relocatable/metadata/CatalogTree.cpp
+@@ -7,6 +7,7 @@
+  **/
+ 
+ #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
++#include "graph/debug/PerfTrace.hpp"
+ 
+ #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+@@ -382,11 +383,12 @@ namespace graph::storage {
+ 			return !hasChildren(node);
+ 		}
+ 
+-		void normalizeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation, LogSequenceNumber lsn) {
++		void normalizeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation, LogSequenceNumber lsn,
++						   bool retainLogicalChildren) {
+ 			node.page.kind = kind;
+ 			node.page.generation = generation;
+ 			node.page.committed_lsn = lsn;
+-			if (node.page.logical_children_enabled) {
++			if (node.page.logical_children_enabled && !retainLogicalChildren) {
+ 				// Candidate COW pages remain physical until the final route branch is ready.
+ 				node.page.logical_children.fill({});
+ 				node.page.logical_children_enabled = false;
+@@ -461,17 +463,34 @@ namespace graph::storage {
+ 		[[nodiscard]] PhysicalPageRef writeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation,
+ 												LogSequenceNumber lsn, MetadataPageFile &pages,
+ 												MetadataWriteBatch &batch) {
+-			normalizeNode(node, kind, generation, lsn);
++			const bool retainLogicalChildren = batch.candidate().usesPageDirectoryBootstrap();
++			if (retainLogicalChildren && !node.page.logical_children_enabled) {
++				for (size_t index = 0U; index < node.page.children.size(); ++index) {
++					if (node.page.children[index].isValid() && !node.leaf_children.contains(index) &&
++						!node.node_children.contains(index))
++						node.page.logical_children[index] = readChildPageId(
++								pages, node.page.children[index], node.page.level != 0U);
++				}
++				node.page.logical_children_enabled = true;
++			}
++			normalizeNode(node, kind, generation, lsn, retainLogicalChildren);
+ 			if (node.page.level == 0) {
+ 				for (auto &[index, leaf]: node.leaf_children) {
+ 					node.page.children[index] = writeLeaf(*leaf, generation, lsn, pages, batch);
++					if (retainLogicalChildren) node.page.logical_children[index] = leaf->page.page_id;
+ 				}
+ 			} else {
+ 				for (auto &[index, child]: node.node_children) {
+ 					node.page.children[index] =
+ 							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch);
++					if (retainLogicalChildren) node.page.logical_children[index] = child->page.page_id;
+ 				}
+ 			}
++			if (retainLogicalChildren) {
++				node.page.children.fill({});
++				node.page.logical_children_resolved = false;
++				debug::PerfTrace::addValue("native_graph.catalog.retained_logical_radix_pages", 1);
++			}
+ 			const PhysicalPageRef reference = batch.allocatePage();
+ 			pages.writeCatalogRadix(reference, node.page);
+ 			batch.registerMetadataPageRoute(node.page.page_id, reference);
+diff --git a/src/storage/relocatable/metadata/LocationDirectory.cpp b/src/storage/relocatable/metadata/LocationDirectory.cpp
+index c03a6552..95cf694c 100644
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -702,6 +702,7 @@ namespace graph::storage {
+ 			if (entries.empty()) {
+ 				node.leaf_children.erase(iterator);
+ 				node.page.children[index] = {};
++				node.page.logical_children[index] = {};
+ 				return;
+ 			}
+ 			iterator->second->page.generation = generation;
+@@ -811,21 +812,45 @@ namespace graph::storage {
+ 											PreparedFrameCursor *preparedFrames = nullptr,
+ 											PreparedPageWriter *preparedWriter = nullptr) {
+ 			node.page.kind = kind;
+-			normalizePhysicalChildren(node.page);
++			// A published logical radix already authenticates stable child IDs.
++			// Retain untouched IDs instead of decoding every sibling to recover
++			// them again during final logicalization. Physical legacy pages retain
++			// the established conversion path.
++			const bool retainLogicalChildren = batch.candidate().usesPageDirectoryBootstrap();
++			if (retainLogicalChildren && !node.page.logical_children_enabled) {
++				// Newly created children already expose their IDs below. Only a
++				// legacy physical sibling needs one conversion read; every new COW
++				// internal page must be logical even below an already-logical parent.
++				for (size_t index = 0U; index < node.page.children.size(); ++index) {
++					if (node.page.children[index].isValid() && !node.leaf_children.contains(index) &&
++						!node.node_children.contains(index))
++						node.page.logical_children[index] = readLocationChildPageId(
++								pages, node.page.children[index], node.page.level != 0U);
++				}
++				node.page.logical_children_enabled = true;
++			}
++			if (!retainLogicalChildren) normalizePhysicalChildren(node.page);
+ 			node.page.generation = generation;
+ 			node.page.committed_lsn = lsn;
+ 			if (node.page.level == 0U) {
+ 				for (auto &[index, leaf]: node.leaf_children) {
+ 					node.page.children[index] =
+ 							writeLeaf(*leaf, generation, lsn, pages, batch, preparedFrames, preparedWriter);
++					if (retainLogicalChildren) node.page.logical_children[index] = leaf->page.page_id;
+ 				}
+ 			} else {
+ 				for (auto &[index, child]: node.node_children) {
+ 					node.page.children[index] =
+ 							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch,
+ 									  preparedFrames, preparedWriter);
++					if (retainLogicalChildren) node.page.logical_children[index] = child->page.page_id;
+ 				}
+ 			}
++			if (retainLogicalChildren) {
++				node.page.children.fill({});
++				node.page.logical_children_resolved = false;
++				debug::PerfTrace::addValue("native_graph.directory.retained_logical_radix_pages", 1);
++			}
+ 			PhysicalPageRef reference;
+ 			{
+ 				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.allocate_page");
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+index 50eda631..9094687b 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -6,6 +6,7 @@
+  * @license Apache-2.0
+  **/
+ 
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
+ #include "graph/storage/relocatable/property/HybridPropertyPoolRoutes.hpp"
+ #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
+@@ -1003,6 +1004,18 @@ namespace graph::storage {
+ 						"native graph external private tail reservation is not the current complete file suffix");
+ 			}
+ 		}
++        uint64_t previousSummaryId = 0U;
++        for (const auto &fence : derivedState.entity_free_summary_fences) {
++            if (!isEntityFreeSpaceIndexId(fence.index_id) || fence.index_id <= previousSummaryId ||
++                fence.expected_entity_root != (fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ? current.node_entity_directory_root : current.edge_entity_directory_root) ||
++                std::ranges::count(derivedState.index_tree_mutations, fence.index_id, &NativeGraphIndexTreeMutation::index_id) != 1)
++                throw FormatException(FormatError::FERR_INVALID_STATE, "free-space summary has a stale source or no unique index mutation");
++            previousSummaryId = fence.index_id;
++        }
++        for (const auto &tree : derivedState.index_tree_mutations)
++            if (isEntityFreeSpaceIndexId(tree.index_id) && std::ranges::count(derivedState.entity_free_summary_fences,
++                    tree.index_id, &NativeGraphEntityFreeSummaryFence::index_id) != 1)
++                throw FormatException(FormatError::FERR_INVALID_STATE, "reserved free-space mutation lacks its entity-root fence");
+ 		if (expectedMetadataGeneration.has_value() && current.generation != *expectedMetadataGeneration) {
+ 			throw FormatException(FormatError::FERR_INVALID_STATE,
+ 								  "native graph metadata publication no longer matches its pinned generation");
+@@ -5160,6 +5173,15 @@ namespace graph::storage {
+ 		if (!insertedEdges.empty() || !erasedEdges.empty()) {
+ 			locations_.prepareReplaceEdgePageLocations(batch, insertedEdges, erasedEdges);
+ 		}
++        // A record kind has one published directory root per database generation.
++        // Verify that the marker's semantic generation names the actual result,
++        // rather than guessing a future physical root address in the planner.
++        for (const auto &fence : derivedState.entity_free_summary_fences) {
++            const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
++                batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
++            if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages))
++                throw FormatException(FormatError::FERR_INVALID_STATE, "free-space marker does not name the resulting entity directory");
++        }
+ 		std::vector<EntityPropertyKey> erasedProperties;
+ 		erasedProperties.reserve(explicitlyErasedEntityProperties.size() + erasedEntityProperties.size());
+ 		erasedProperties.insert(erasedProperties.end(), explicitlyErasedEntityProperties.begin(),
+diff --git a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+index 50557594..9fc88dce 100644
+--- a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
++++ b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+@@ -33,6 +33,8 @@
+ #include "graph/storage/relocatable/property/LargeValueStore.hpp"
+ #include "graph/utils/ChecksumUtils.hpp"
+ #include "graph/utils/Sha256.hpp"
++#include "graph/utils/OwnedHeapReservation.hpp"
++#include "graph/utils/OwnedPmrAllocator.hpp"
+ 
+ namespace graph::storage {
+ 
+@@ -1966,6 +1968,124 @@ namespace graph::storage {
+ 		// A pinned snapshot is immutable. New roots with equal encoded sizes therefore
+ 		// have the same best-fit source page; cache that selection for this batch.
+ 		std::map<size_t, std::optional<SlottedPagePlacement>> placementCache;
++		// Pure insert batches prepare each actual source page once. Existing owners
++		// and LargeValue roots retain the general replacement/relocation planner.
++		const size_t maximumInlineBytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES -
++				RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
++		size_t largestInlineBytes = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
++		bool inlineInsertBatch = roots.size() > 1U && existingLocations.empty();
++		if (inlineInsertBatch) {
++			for (const auto &root : roots) {
++				size_t bytes = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
++				for (const auto &entry : root.entries) {
++					const size_t valueBytes = CanonicalPropertyValueCodec::encodedSize(entry.value);
++					if (bytes > maximumInlineBytes || valueBytes > maximumInlineBytes - bytes ||
++						maximumInlineBytes - bytes - valueBytes < 8U) {
++						inlineInsertBatch = false;
++						break;
++					}
++					bytes += valueBytes + 8U; // directory offset and property token
++				}
++				if (!inlineInsertBatch) break;
++				largestInlineBytes = std::max(largestInlineBytes, bytes);
++			}
++		}
++		if (inlineInsertBatch) {
++			// Bound codec temporaries before encoding. SlottedPage owns admission for
++			// its mutable bytes; the page map owns its nodes through the same scope.
++			utils::OwnedHeapReservation codecCredit(utils::OwnedAllocationScope::owner(), largestInlineBytes * 8U);
++			struct PreparedPage {
++				size_t plan_ordinal;
++				SlottedPage page;
++			};
++			using PageEntry = std::pair<const PageId, PreparedPage>;
++			std::map<PageId, PreparedPage, std::less<PageId>, utils::OwnedPmrAllocator<PageEntry>> prepared;
++			for (size_t ordinal = 0U; ordinal < roots.size(); ++ordinal) {
++				EntityPropertyRootMutationPlan plan;
++				plan.key = rootKeys[ordinal];
++				if (roots[ordinal].entries.empty()) {
++					plans.push_back(std::move(plan));
++					continue;
++				}
++				auto encoded = EntityPropertyCollectionRootCodec::encode(roots[ordinal]);
++				if (!currentPropertyPools) {
++					currentPropertyPools.emplace();
++					for (const auto &pool : metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id))
++						currentPropertyPools->push_back(pool.segment_id);
++				}
++				auto [placement, inserted] = placementCache.try_emplace(encoded.size());
++				if (inserted && !currentPropertyPools->empty()) {
++					placement->second = pages_.findBestFitPageForRecord(snapshot, *currentPropertyPools,
++							PageOwnerKind::POK_PROPERTY, static_cast<uint32_t>(encoded.size()));
++				}
++				if (placement->second) {
++					const auto &target = *placement->second;
++					auto found = prepared.find(target.page_id);
++					if (found == prepared.end()) {
++						const auto source = metadata_.findPageLocation(snapshot, target.page_id);
++						const auto pool = metadata_.findCatalog(snapshot, source.segment_id);
++						auto page = pages_.read(snapshot, target.page_id);
++						if (source.segment_id != target.segment_id ||
++							pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL || pool.owner_id != options.page_owner_id ||
++							pool.state != SegmentState::SGS_SEALED || source.generation != pool.generation ||
++							page.ownerKind() != PageOwnerKind::POK_PROPERTY || page.ownerId() != options.page_owner_id ||
++							!page.ownerCommittedLsn().isValid()) {
++							throwRootStoreError(FormatError::FERR_INVALID_STATE,
++									"Entity Property batch selected a stale or foreign Property placement");
++						}
++						const auto initialStats = page.stats();
++						const size_t initialRequired = encoded.size() +
++								(initialStats.reusable_free_slot_count == 0U ? RSS_SLOTTED_PAGE_SLOT_BYTES : 0U);
++						if (initialRequired > static_cast<size_t>(initialStats.contiguous_free_bytes) + initialStats.reclaimable_bytes) {
++							placement->second.reset();
++							plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
++							plan.encoded_root = std::move(encoded);
++							plans.push_back(std::move(plan));
++							continue;
++						}
++						NativeGraphPropertyPageReplacementRequest request;
++						request.expected_pool = pool;
++						request.expected_location = source;
++						request.expected_page_owner_id = options.page_owner_id;
++						request.expected_owner_lsn = page.ownerCommittedLsn();
++						request.first_slot = options.first_slot;
++						request.last_slot = options.last_slot;
++						plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
++						plan.page_replacement = std::move(request);
++						found = prepared.emplace(target.page_id, PreparedPage{plans.size(), std::move(page)}).first;
++						plans.push_back(std::move(plan));
++						debug::PerfTrace::addValue("native_graph.write.property_batch_prepared_source_pages", 1);
++					}
++					auto &page = found->second.page;
++					const auto stats = page.stats();
++					const size_t required = encoded.size() +
++							(stats.reusable_free_slot_count == 0U ? RSS_SLOTTED_PAGE_SLOT_BYTES : 0U);
++					if (required <= static_cast<size_t>(stats.contiguous_free_bytes) + stats.reclaimable_bytes) {
++						const auto slot = page.insert(encoded);
++						plans[found->second.plan_ordinal].page_replacement->upserted_properties.push_back(
++								{rootKeys[ordinal], target.page_id, slot.slot_id, slot.generation});
++						debug::PerfTrace::addValue("native_graph.write.property_batch_direct_insertions", 1);
++						continue;
++					}
++					// Capacity exhaustion is an ordinary branch, not an exception.
++					debug::PerfTrace::addValue("native_graph.write.property_batch_capacity_overflows", 1);
++				}
++				plan.key = rootKeys[ordinal];
++				plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
++				plan.encoded_root = std::move(encoded);
++				plans.push_back(std::move(plan));
++			}
++			for (auto &[pageId, preparedPage] : prepared) {
++				auto &plan = plans[preparedPage.plan_ordinal];
++				plan.replacement_payload = preparedPage.page.serialize();
++				plan.replacement_free_bytes = preparedPage.page.stats().contiguous_free_bytes;
++				debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_images", 1);
++				debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_payload_bytes",
++						static_cast<int64_t>(plan.replacement_payload.size()));
++			}
++			debug::PerfTrace::addValue("native_graph.write.property_plan_owners", static_cast<int64_t>(roots.size()));
++			return plans;
++		}
+ 		EntityPropertyBatchPageCache pageCache;
+ 		uint64_t nextLargeValueId = snapshot.superblock().next_large_value_id;
+ 		for (const PropertyCollectionRoot &root: roots) {
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp b/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
+index 2318081a..db2b6cf1 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
+@@ -1,6 +1,10 @@
+ #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
+ #include "graph/storage/relocatable/entity/EntityPage.hpp"
+ #include "graph/debug/PerfTrace.hpp"
++#include <cerrno>
++#ifdef _WIN32
++#include <windows.h>
++#endif
+ using namespace relocatable_storage_backend_test;
+ namespace {
+ struct ImportTrace {
+@@ -46,9 +50,10 @@ TEST_F(RelocatableStorageBackendTest, AnotherHandleDeletionInvalidatesNegativeIn
+     ImportTrace trace;
+     std::vector<uint64_t> created; ASSERT_NO_THROW(created = reader.createLogicalNodes({{{"Import"}, {}}})); ASSERT_EQ(created.size(), 1U);
+     const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+-    ASSERT_TRUE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
+-    EXPECT_EQ(counters.at("native_graph.commit.entity_insert_node_directory_pages").totalValue, initialCount - 1U);
+-    RecordProperty("cold_refresh_directory_entries", static_cast<int>(counters.at("native_graph.commit.entity_insert_node_directory_pages").totalValue));
++    EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
++    ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++    EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
++    RecordProperty("cold_refresh_directory_entries", 0);
+     RecordProperty("protected_old_rows", static_cast<int>(initialCount));
+     RecordProperty("alternating_publications", 20);
+     for (size_t publication = 0; publication < 20U; ++publication) {
+@@ -65,3 +70,102 @@ TEST_F(RelocatableStorageBackendTest, AnotherHandleDeletionInvalidatesNegativeIn
+     EXPECT_EQ(reopened.openLogicalGraphReadSnapshot()->readNode(created.front()).node_id, created.front());
+     EXPECT_THROW((void)reopened.openLogicalGraphReadSnapshot()->readNode(ids.front()), FormatException);
+ }
++
++TEST_F(RelocatableStorageBackendTest, ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
++    for (const size_t pages : {3U, 30U, 90U}) {
++        std::vector<uint64_t> ids;
++        {
++            RelocatableStorageBackend populate(options); populate.open();
++            ids = populate.createLogicalNodes(std::vector<LogicalGraphNodeCreateRequest>(pages * capacity, {{"Import"}, {}}));
++            ASSERT_EQ(ids.size(), pages * capacity);
++            populate.deleteLogicalNodes({{ids.front()}});
++            populate.close();
++        }
++        RelocatableStorageBackend cold(options); cold.open();
++        ImportTrace trace;
++        ASSERT_EQ(cold.createLogicalNodes({{{"Import"}, {}}}).size(), 1U);
++        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++        EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
++        ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++        EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
++        EXPECT_NO_THROW((void)cold.verifyIntegrity());
++        RecordProperty("largest_added_page_count", static_cast<int>(pages));
++        cold.close();
++    }
++}
++
++TEST_F(RelocatableStorageBackendTest, ColdCompleteEmptySummaryAvoidsDirectoryCensus) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    {
++        RelocatableStorageBackend populate(options); populate.open();
++        const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
++        ASSERT_EQ(populate.createLogicalNodes(std::vector<LogicalGraphNodeCreateRequest>(capacity * 5U, {{"Import"}, {}})).size(), capacity * 5U);
++        populate.close();
++    }
++    RelocatableStorageBackend cold(options); cold.open(); ImportTrace trace;
++    ASSERT_EQ(cold.createLogicalNodes({{{"Import"}, {}}}).size(), 1U);
++    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++    EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
++    EXPECT_FALSE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++    EXPECT_NO_THROW((void)cold.verifyIntegrity());
++}
++
++TEST_F(RelocatableStorageBackendTest, FreeSummariesSeparateNodeAndEdgeSlotsAndSurviveExplicitRebuild) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++    const auto capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
++    const auto edges = backend.createLogicalEdges(std::vector<LogicalGraphEdgeCreateRequest>(capacity * 2U, {nodes[0], nodes[1], "LINK", {}}));
++    ASSERT_EQ(edges.size(), capacity * 2U);
++    backend.deleteLogicalEdges({{edges.front()}});
++    EXPECT_NO_THROW(backend.rebuildNativeEntityFreeSpaceSummaries());
++    EXPECT_NO_THROW((void)backend.verifyIntegrity());
++    backend.close(); backend.open(); ImportTrace trace;
++    ASSERT_EQ(backend.createLogicalEdges({{nodes[0], nodes[1], "LINK", {}}}).size(), 1U);
++    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++    EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_edge_directory_pages"));
++    ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++    EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
++    EXPECT_NO_THROW((void)backend.verifyIntegrity());
++    size_t checkpoints = 0U;
++    EXPECT_THROW(backend.rebuildNativeEntityFreeSpaceSummaries([&] {
++        if (++checkpoints == 3U) throw std::runtime_error("cancel partial summary census");
++    }), std::runtime_error);
++    EXPECT_EQ(checkpoints, 3U);
++    EXPECT_NO_THROW((void)backend.verifyIntegrity());
++}
++
++TEST_F(RelocatableStorageBackendTest, FreeSummaryRebuildFencesIndeterminatePublicationUntilReopen) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto nodes = backend.createLogicalNodes({{{"Import"}, {}}});
++    bool wroteSuperblock = false, injected = false;
++    {
++        StorageIO::ScopedNativeWriteHookForTesting observe([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
++            if (count == RSS_SUPERBLOCK_BYTES && offset >= 0 && uint64_t(offset) < RSS_FILE_BOOTSTRAP_BYTES)
++                wroteSuperblock = true;
++            return portable_pwrite(fd, bytes, count, offset);
++        });
++        StorageIO::ScopedNativeSyncHookForTesting fail([&](file_handle_t fd) {
++            if (wroteSuperblock && !injected) {
++                injected = true;
++#ifdef _WIN32
++                SetLastError(ERROR_WRITE_FAULT);
++#else
++                errno = EIO;
++#endif
++                return -1;
++            }
++            return portable_fsync(fd);
++        });
++        EXPECT_THROW(backend.rebuildNativeEntityFreeSpaceSummaries(), std::exception);
++    }
++    ASSERT_TRUE(injected);
++    EXPECT_TRUE(backend.hasIndeterminateWriteOutcome());
++    EXPECT_THROW(backend.rebuildNativeEntityFreeSpaceSummaries(), std::exception);
++    backend.close(); backend.open();
++    EXPECT_NO_THROW((void)backend.verifyIntegrity());
++    EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNode(nodes.front()).node_id, nodes.front());
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp
+index 6439d9e5..07a20abd 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DetachDeleteFaults.cpp
+@@ -10,12 +10,21 @@
+ #include <atomic>
+ #include <cerrno>
+ #include <span>
++#include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
+ 
+ #ifdef _WIN32
+ #include <windows.h>
+ #endif
+ 
+ using namespace relocatable_storage_backend_test;
++namespace {
++bool isMetadataCandidatePage(const void *bytes, size_t size) {
++    if (size != RSS_PAGE_SIZE) return false;
++    const auto magic = LittleEndianCodec::readU32(std::span<const std::byte>(static_cast<const std::byte *>(bytes), size), 0U);
++    return magic == RSS_CATALOG_RADIX_PAGE_MAGIC || magic == RSS_LOCATION_LEAF_MAGIC;
++}
++}
++
+ 
+ TEST_F(RelocatableStorageBackendTest,
+ 		DetachDeleteShortAdjacencyPageRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
+@@ -397,15 +406,6 @@ TEST_F(RelocatableStorageBackendTest,
+ TEST_F(RelocatableStorageBackendTest,
+ 		DetachDeleteShortMetadataPageRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
+ 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+-	uint64_t metadataPoolOffset = 0U;
+-	{
+-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+-		ASSERT_TRUE(data->is_open());
+-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+-		auto metadata = RelocatableMetadataStore::open(io);
+-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+-		metadataPoolOffset = snapshot.superblock().data_region_offset;
+-	}
+ 
+ 	RelocatableStorageBackendOptions options = backendOptions();
+ 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+@@ -418,11 +418,9 @@ TEST_F(RelocatableStorageBackendTest,
+ 	std::atomic<bool> injected{false};
+ 	{
+ 		StorageIO::ScopedNativeWriteHookForTesting shortMetadataPage(
+-				[metadataPoolOffset, &injected](file_handle_t fd, const void *bytes, size_t byteCount,
++				[&injected](file_handle_t fd, const void *bytes, size_t byteCount,
+ 													 pwrite_off_t offset) {
+-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE &&
++					if (isMetadataCandidatePage(bytes, byteCount) &&
+ 						!injected.load(std::memory_order_relaxed)) {
+ 						injected.store(true, std::memory_order_relaxed);
+ 						return portable_pwrite(fd, bytes, 16U, offset);
+@@ -470,15 +468,6 @@ TEST_F(RelocatableStorageBackendTest,
+ TEST_F(RelocatableStorageBackendTest,
+ 		DetachDeleteMetadataPageDiskFullRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
+ 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+-	uint64_t metadataPoolOffset = 0U;
+-	{
+-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+-		ASSERT_TRUE(data->is_open());
+-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+-		auto metadata = RelocatableMetadataStore::open(io);
+-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+-		metadataPoolOffset = snapshot.superblock().data_region_offset;
+-	}
+ 
+ 	RelocatableStorageBackendOptions options = backendOptions();
+ 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+@@ -491,11 +480,9 @@ TEST_F(RelocatableStorageBackendTest,
+ 	std::atomic<bool> injected{false};
+ 	{
+ 		StorageIO::ScopedNativeWriteHookForTesting diskFullOnMetadataPage(
+-				[metadataPoolOffset, &injected](file_handle_t fd, const void *bytes, size_t byteCount,
++				[&injected](file_handle_t fd, const void *bytes, size_t byteCount,
+ 														 pwrite_off_t offset) {
+-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE &&
++					if (isMetadataCandidatePage(bytes, byteCount) &&
+ 						!injected.load(std::memory_order_relaxed)) {
+ 						injected.store(true, std::memory_order_relaxed);
+ #ifdef _WIN32
+@@ -629,15 +616,6 @@ TEST_F(RelocatableStorageBackendTest,
+ TEST_F(RelocatableStorageBackendTest,
+ 		DetachDeleteMetadataDataSyncFailureRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
+ 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+-	uint64_t metadataPoolOffset = 0U;
+-	{
+-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+-		ASSERT_TRUE(data->is_open());
+-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+-		auto metadata = RelocatableMetadataStore::open(io);
+-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+-		metadataPoolOffset = snapshot.superblock().data_region_offset;
+-	}
+ 
+ 	RelocatableStorageBackendOptions options = backendOptions();
+ 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+@@ -651,11 +629,9 @@ TEST_F(RelocatableStorageBackendTest,
+ 	std::atomic<bool> failedDataFence{false};
+ 	{
+ 		StorageIO::ScopedNativeWriteHookForTesting observeMetadataCandidate(
+-				[metadataPoolOffset, &sawMetadataCandidate](file_handle_t fd, const void *bytes, size_t byteCount,
++				[&sawMetadataCandidate](file_handle_t fd, const void *bytes, size_t byteCount,
+ 															pwrite_off_t offset) {
+-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE) {
++					if (isMetadataCandidatePage(bytes, byteCount)) {
+ 						sawMetadataCandidate.store(true, std::memory_order_relaxed);
+ 					}
+ 					return portable_pwrite(fd, bytes, byteCount, offset);
+diff --git a/tests/src/storage/relocatable/cache/test_BufferPool.cpp b/tests/src/storage/relocatable/cache/test_BufferPool.cpp
+index d874dc23..c2770879 100644
+--- a/tests/src/storage/relocatable/cache/test_BufferPool.cpp
++++ b/tests/src/storage/relocatable/cache/test_BufferPool.cpp
+@@ -7,6 +7,7 @@
+  **/
+ 
+ #include <algorithm>
++#include "graph/debug/PerfTrace.hpp"
+ #include <array>
+ #include <atomic>
+ #include <cstddef>
+@@ -1076,3 +1077,83 @@ TEST_F(BufferPoolTest, SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPa
+  EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{2U});
+  EXPECT_EQ(pinned.bytes()[0], std::byte{3U});
+ }
++
++TEST_F(BufferPoolTest, LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows) {
++    open(2048U);
++    const bool collected = graph::debug::PerfTrace::areValuesEnabled();
++    struct Restore {
++        bool enabled;
++        ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); }
++    } restore{collected};
++    graph::debug::PerfTrace::setValueCollectionEnabled(true);
++    for (const size_t pages : {32U, 512U, 2048U}) {
++        SCOPED_TRACE(pages);
++        pool_ = createPool(pages);
++        for (size_t page = 0U; page < pages; ++page) {
++            auto pin = pool_->pin({page * RSS_BUFFER_POOL_PAGE_BYTES, 1U});
++        }
++        graph::debug::PerfTrace::reset();
++        BufferPool::PageBytes replacement{}; replacement.fill(std::byte{0x57});
++        pool_->writePage({0U, 2U}, replacement);
++        pool_->flush();
++        const std::array control{std::byte{0x19}};
++        pool_->writeControlRecord({0U, 2U}, 8U, control);
++        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++        ASSERT_TRUE(counters.contains("storage.buffer_pool.generation_checked_entries"));
++        EXPECT_EQ(counters.at("storage.buffer_pool.generation_checked_entries").totalValue, 1);
++        EXPECT_EQ(counters.at("storage.buffer_pool.range_erase_visited_entries").totalValue, 2);
++        EXPECT_EQ(counters.at("storage.buffer_pool.range_checked_entries").totalValue, 1);
++        EXPECT_EQ(counters.at("storage.buffer_pool.flush_visited_entries").totalValue, 1);
++        EXPECT_EQ(pool_->stats().resident_bytes, (pages - 1U) * RSS_BUFFER_POOL_PAGE_BYTES);
++        EXPECT_EQ(diskByte(0U), std::byte{0x57});
++        EXPECT_EQ(diskByte(8U), std::byte{0x19});
++        RecordProperty("largest_clean_residency", static_cast<int>(pages));
++        const auto suffix = std::to_string(pages);
++        RecordProperty("generation_checks_" + suffix, std::to_string(counters.at("storage.buffer_pool.generation_checked_entries").totalValue));
++        RecordProperty("erase_visits_" + suffix, std::to_string(counters.at("storage.buffer_pool.range_erase_visited_entries").totalValue));
++        RecordProperty("range_checks_" + suffix, std::to_string(counters.at("storage.buffer_pool.range_checked_entries").totalValue));
++        RecordProperty("flush_visits_" + suffix, std::to_string(counters.at("storage.buffer_pool.flush_visited_entries").totalValue));
++    }
++}
++
++TEST_F(BufferPoolTest, OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData) {
++    open(3U); pool_ = createPool(3U);
++    BufferPool::PageBytes replacement{}; replacement.fill(std::byte{0x42});
++    pool_->writePage({0U, 1U}, replacement);
++    auto pin = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U});
++    const auto before = pool_->stats();
++    EXPECT_THROW(pool_->invalidateRange(RSS_BUFFER_POOL_PAGE_BYTES - 4U, 5U), std::logic_error);
++    EXPECT_EQ(pool_->stats().dirty_bytes, before.dirty_bytes);
++    EXPECT_EQ(pool_->stats().disk_write_bytes, before.disk_write_bytes);
++    EXPECT_EQ(diskByte(0U), std::byte{1});
++    // The exclusive end at the next page must not visit its pinned image.
++    EXPECT_NO_THROW(pool_->invalidateRange(RSS_BUFFER_POOL_PAGE_BYTES - 4U, 4U));
++    EXPECT_EQ(diskByte(0U), std::byte{0x42});
++    EXPECT_EQ(pin.bytes()[0U], std::byte{2});
++}
++
++#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
++TEST_F(BufferPoolTest, FailedFlushRetainsDirtyChainForAnExactRetry) {
++    open(3U); pool_ = createPool(3U);
++    BufferPool::PageBytes first{}, second{}; first.fill(std::byte{0x31}); second.fill(std::byte{0x63});
++    pool_->writePage({0U, 1U}, first);
++    pool_->writePage({RSS_BUFFER_POOL_PAGE_BYTES, 1U}, second);
++    bool failed = false;
++    {
++        StorageIO::ScopedNativeWriteHookForTesting shortWrite([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
++            if (!failed) { failed = true; return portable_pwrite(fd, bytes, 8U, offset); }
++            return portable_pwrite(fd, bytes, count, offset);
++        });
++        EXPECT_THROW(pool_->flush(), std::system_error);
++    }
++    ASSERT_TRUE(failed);
++    EXPECT_EQ(pool_->stats().dirty_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
++    EXPECT_NO_THROW(pool_->flush());
++    EXPECT_EQ(pool_->stats().dirty_bytes, 0U);
++    EXPECT_EQ(diskByte(0U), std::byte{0x31});
++    EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{0x63});
++    const auto written = pool_->stats().disk_write_bytes;
++    EXPECT_NO_THROW(pool_->flush());
++    EXPECT_EQ(pool_->stats().disk_write_bytes, written);
++}
++#endif
+diff --git a/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp b/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp
+index d304f966..ac5dbe1f 100644
+--- a/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp
++++ b/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_PublicContracts.cpp
+@@ -17,8 +17,11 @@
+ 
+ #include <gtest/gtest.h>
+ 
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
++#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
+ #include "graph/core/Edge.hpp"
+ #include "graph/core/Node.hpp"
++#include "graph/debug/PerfTrace.hpp"
+ #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+ #include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
+ 
+@@ -872,3 +875,101 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, MoveAssignmentAbandonsTheRepl
+ 	EXPECT_THROW(static_cast<void>(entities_->readNode(snapshot, abandonedNodeId)), FormatException);
+ 	EXPECT_EQ(entities_->readNode(snapshot, committedNodeId), NodeEntityRecord{});
+ }
++
++TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsPublicMutationOfFreeSpaceSummaryNamespace) {
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
++    auto tx = planner.beginTransaction();
++    for (const auto id : {RSS_NODE_FREE_SPACE_INDEX_ID, RSS_EDGE_FREE_SPACE_INDEX_ID}) {
++        EXPECT_THROW(tx.stageScalarIndexUpsert(*btree_pages_, id, {}, 1U), FormatException);
++        EXPECT_THROW(tx.stageScalarIndexErase(*btree_pages_, id, {}), FormatException);
++        EXPECT_THROW(tx.stageScalarIndexCreate(*btree_pages_, id, {}), FormatException);
++        EXPECT_THROW(tx.stageScalarIndexDrop(*btree_pages_, id, 1U), FormatException);
++    }
++}
++
++TEST_F(NativeGraphWritePlannerPublicContractsTest, MissingFreeSpaceCandidateFailsIntegrityAndColdInsertion) {
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
++    auto tx = planner.beginTransaction();
++    const auto node = tx.createNode(std::array<uint64_t, 0U>{});
++    ASSERT_TRUE(tx.commit().committed());
++    auto snapshot = metadata_->openSnapshot();
++    const auto location = metadata_->findNodePageLocation(snapshot, node);
++    const auto key = EntityFreeSpaceIndex::entryKey(location.page_id,
++        uint16_t(EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE) - 1U), EntityPageRecordKind::EPRK_NODE);
++    const auto lsn = LogSequenceNumber(snapshot.superblock().checkpoint_lsn.value() + 1U);
++    snapshot.release();
++    ASSERT_TRUE(btree_pages_->erase(RSS_NODE_FREE_SPACE_INDEX_ID, key, lsn));
++    EXPECT_THROW((void)RelocatableIntegrityScanner(io_, *metadata_).scan(), FormatException);
++    NativeGraphWritePlanner cold(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
++    auto insertion = cold.beginTransaction();
++    (void)insertion.createNode(std::array<uint64_t, 0U>{});
++    EXPECT_THROW((void)insertion.commit(), FormatException);
++}
++
++TEST_F(NativeGraphWritePlannerPublicContractsTest, EdgeEndpointReadsDoNotRewriteNodePagesButLabelChangesDo) {
++	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
++	auto seed = planner.beginTransaction();
++	const auto source = seed.createNode(std::array<uint64_t, 0U>{});
++	const auto target = seed.createNode(std::array<uint64_t, 0U>{});
++	ASSERT_TRUE(seed.commit().committed());
++	auto old = metadata_->openSnapshot();
++	const auto nodeLocation = metadata_->findNodePageLocation(old, source);
++	const auto physical = metadata_->findPageLocation(old, nodeLocation.page_id);
++	auto create = planner.beginTransaction();
++	const auto edge = create.createEdge(source, target, 7U);
++	const auto loop = create.createEdge(source, source, 8U);
++	ASSERT_TRUE(create.commit().committed());
++	auto current = metadata_->openSnapshot();
++	EXPECT_EQ(metadata_->findNodePageLocation(current, source), nodeLocation);
++	EXPECT_EQ(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
++	EXPECT_EQ(entities_->readEdge(current, edge).target_node_id, target);
++	EXPECT_EQ(entities_->readEdge(current, loop).target_node_id, source);
++	auto inspect = planner.beginTransaction();
++	EXPECT_EQ(inspect.collectIncidentEdgeIds(source, 4U).size(), 2U);
++	inspect.rollback();
++	current.release();
++	auto erase = planner.beginTransaction();
++	erase.eraseEdge(edge); erase.eraseEdge(loop);
++	ASSERT_TRUE(erase.commit().committed());
++	current = metadata_->openSnapshot();
++	EXPECT_EQ(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
++	current.release();
++	auto relabel = planner.beginTransaction();
++	static_cast<void>(relabel.createEdge(source, target, 9U));
++	relabel.replaceNodeLabels(source, std::array<uint64_t, 1U>{42U});
++	ASSERT_TRUE(relabel.commit().committed());
++	current = metadata_->openSnapshot();
++	EXPECT_NE(metadata_->findPageLocation(current, nodeLocation.page_id), physical);
++	EXPECT_EQ(entities_->readNode(old, source), NodeEntityRecord{});
++	EXPECT_EQ(entities_->readNode(current, source).inline_label_ids.front(), 42U);
++	old.release(); current.release();
++	reopenNativeStores();
++	auto reopened = metadata_->openSnapshot();
++	EXPECT_EQ(entities_->readNode(reopened, source).inline_label_ids.front(), 42U);
++}
++
++TEST_F(NativeGraphWritePlannerPublicContractsTest, PropertyOnlyCommitDoesNotDiscoverOrQueryUnrelatedEntityPools) {
++	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
++	auto seed = planner.beginTransaction();
++	const auto node = seed.createNode(std::array<uint64_t, 0U>{});
++	seed.replaceNodeProperty({node, Node::typeId, {{1U, graph::PropertyValue(int64_t{1})}}});
++	ASSERT_TRUE(seed.commit().committed());
++	auto old = metadata_->openSnapshot();
++	const auto nodePage = metadata_->findNodePageLocation(old, node).page_id;
++	const auto physical = metadata_->findPageLocation(old, nodePage);
++	auto update = planner.beginTransaction();
++	update.replaceNodeProperty({node, Node::typeId, {{1U, graph::PropertyValue(int64_t{2})}}});
++	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
++	struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
++	graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
++	ASSERT_TRUE(update.commit().committed());
++	const auto values = graph::debug::PerfTrace::snapshotAndReset();
++	EXPECT_FALSE(values.contains("native_graph.commit.entity_pool_discoveries"));
++	EXPECT_FALSE(values.contains("native_graph.commit.entity_pool_capacity_queries"));
++	auto current = metadata_->openSnapshot();
++	EXPECT_EQ(metadata_->findPageLocation(current, nodePage), physical);
++	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,
++			graph::PropertyValue(int64_t{1}));
++	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,
++			graph::PropertyValue(int64_t{2}));
++}
+diff --git a/tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp b/tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp
+index 0b50df62..fbae13f7 100644
+--- a/tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp
++++ b/tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp
+@@ -166,3 +166,82 @@ TEST_F(RelocatableBTreePageStoreTest, LargeValueCleanupPreservesMappedIndexRoots
+  EXPECT_FALSE(metadata->isPhysicalSlotAllocated(current, pool.physical_slot));
+  current.release();
+ }
++
++TEST_F(RelocatableBTreePageStoreTest, MiddleUpsertBatchesCopyLeavesPerGroupAndKeepOldPinsAndDuplicateValues) {
++ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
++ SlottedPagePool pages(io, *metadata);
++ NativeBTreeWriteContext writes(io, *metadata, pages);
++ BTreePageStore store(pages, *metadata);
++ const auto request = allocationRequest();
++ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
++                           LogSequenceNumber(2)).has_value());
++ const IndexRootLocation root{17U, request.page_id, request.generation};
++ static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3)));
++ constexpr uint16_t count = 512U;
++ {
++  auto seed = writes.beginTransaction();
++  for (uint16_t i = 0; i < count; ++i) seed.stageScalarIndexUpsert(store, 17U, overlayCostKey(i * 2U), i + 1U);
++  ASSERT_TRUE(seed.commit().committed());
++ }
++ auto old = metadata->openSnapshot();
++ std::vector<BTreeScalarIndexOperation> operations;
++ for (uint16_t i = 0; i < count; ++i) {
++  operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT, overlayCostKey(i * 2U + 1U), i + 5000U});
++  if (i % 31U == 0U) operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT, overlayCostKey(i * 2U + 1U), i + 9000U});
++ }
++ const bool collected = graph::debug::PerfTrace::areValuesEnabled();
++ struct Restore { bool value; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(value); } } restore{collected};
++ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
++ auto counter = std::make_shared<OverlayAdmissionCounter>();
++ {
++  graph::utils::OwnedAllocationScope scope(counter);
++  const auto plan = store.planScalarIndexTransactionMutation(old, 17U, operations);
++  EXPECT_FALSE(plan.final_tree_empty);
++ }
++ const auto stats = graph::debug::PerfTrace::snapshotAndReset();
++ ASSERT_TRUE(stats.contains("native_btree.plan.leaf_batch_merges"));
++ const auto merged = stats.at("native_btree.plan.batch_merged_upserts").totalValue;
++ const auto copied = stats.at("native_btree.plan.batch_copied_source_entries").totalValue;
++ EXPECT_GT(merged, count / 2U);
++ EXPECT_LT(copied, count * 32U);
++ EXPECT_LT(counter->total, count * (sizeof(BTreePageEntry) + overlayCostKey(0U).size()) * 48U);
++ RecordProperty("merged_upserts", std::to_string(merged));
++ RecordProperty("copied_source_entries", std::to_string(copied));
++ RecordProperty("cumulative_admitted_bytes", std::to_string(counter->total));
++ {
++  auto transaction = writes.beginTransaction();
++  for (const auto &operation : operations) transaction.stageScalarIndexUpsert(store, 17U, operation.key, operation.value);
++  ASSERT_TRUE(transaction.commit().committed());
++ }
++ BTreeIndex index(17U, store, *metadata); auto current = metadata->openSnapshot();
++ ASSERT_EQ(index.scan(current, {}, count * 2U + 1U).size(), count * 2U);
++ ASSERT_EQ(index.scan(old, {}, count + 1U).size(), count);
++ for (uint16_t i = 0; i < count; ++i) {
++  EXPECT_EQ(index.find(old, overlayCostKey(i * 2U)), std::optional<uint64_t>(i + 1U));
++  EXPECT_EQ(index.find(old, overlayCostKey(i * 2U + 1U)), std::nullopt);
++  EXPECT_EQ(index.find(current, overlayCostKey(i * 2U + 1U)), std::optional<uint64_t>(i + (i % 31U == 0U ? 9000U : 5000U)));
++ }
++}
++
++TEST_F(RelocatableBTreePageStoreTest, BufferedDuplicatesAcrossSixtyFourEntryBoundariesRespectEraseBarriers) {
++ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
++ SlottedPagePool pages(io, *metadata); NativeBTreeWriteContext writes(io, *metadata, pages); BTreePageStore store(pages, *metadata);
++ const auto request = allocationRequest();
++ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
++                           LogSequenceNumber(2)).has_value());
++ const IndexRootLocation root{17U, request.page_id, request.generation};
++ static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3)));
++ auto before = metadata->openSnapshot();
++ auto tx = writes.beginTransaction();
++ for (uint64_t value = 1; value <= 130U; ++value) tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(1U), value);
++ tx.stageScalarIndexErase(store, 17U, overlayCostKey(1U));
++ for (uint64_t value = 131; value <= 261U; ++value) tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(1U), value);
++ tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(2U), 1000U);
++ tx.stageScalarIndexErase(store, 17U, overlayCostKey(2U));
++ ASSERT_TRUE(tx.commit().committed());
++ BTreeIndex index(17U, store, *metadata); auto current = metadata->openSnapshot();
++ EXPECT_EQ(index.find(current, overlayCostKey(1U)), std::optional<uint64_t>(261U));
++ EXPECT_EQ(index.find(current, overlayCostKey(2U)), std::nullopt);
++ EXPECT_TRUE(index.scan(before, {}, 1U).empty());
++ ASSERT_EQ(index.scan(current, {}, 3U).size(), 1U);
++}
+diff --git a/tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp b/tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp
+index 950b5901..71fa50d8 100644
+--- a/tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp
++++ b/tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp
+@@ -175,9 +175,10 @@ namespace {
+ 		BTreePageStore trees(pages, *result.metadata);
+ 		NativeGraphWritePlannerOptions options;
+ 		options.first_slot = PhysicalSlotId(40U);
+-		options.last_slot = PhysicalSlotId(42U);
++		// Entity/property/adjacency pools plus the two derived free-space trees.
++		options.last_slot = PhysicalSlotId(44U);
+ 		options.entity_pool_owner_id = 901U;
+-		options.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(42U), 903U};
++		options.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(44U), 903U};
+ 		NativeGraphWritePlanner planner(*result.metadata, entities, labels, properties, trees, options);
+ 		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+ 		const uint64_t nodeId = transaction.createNode(labelIds);
+diff --git a/tests/src/storage/relocatable/metadata/test_Catalog.cpp b/tests/src/storage/relocatable/metadata/test_Catalog.cpp
+index 47e01ea8..bb054ca2 100644
+--- a/tests/src/storage/relocatable/metadata/test_Catalog.cpp
++++ b/tests/src/storage/relocatable/metadata/test_Catalog.cpp
+@@ -182,7 +182,7 @@ TEST(RelocatableCatalogTest, RejectsInvalidOrStaleLifecycleRequests) {
+ 	expectFormatError(
+ 			[&] {
+ 				static_cast<void>(catalog.allocate(
+-						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH) + 1U),
++						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH) + 1U),
+ 						1));
+ 			},
+ 					  FormatError::FERR_INVALID_ENUM);
+diff --git a/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp b/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp
+index f8ec478a..22b6167d 100644
+--- a/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp
++++ b/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp
+@@ -258,7 +258,7 @@ TEST_F(RelocatableCatalogTreeTest, PublishesOneBatchIntoSharedLeavesAndSurvivesR
+ 			  PhysicalSlotId(103));
+ }
+ 
+-TEST_F(RelocatableCatalogTreeTest, LogicalizesAnOwnedCandidateRootBeforeBootstrapRoutePublication) {
++TEST_F(RelocatableCatalogTreeTest, MaterializesLogicalCandidateOnceBeforeBootstrapRoutePublication) {
+ 	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+ 	MetadataSnapshotPin snapshot = store->openSnapshot();
+ 	const Superblock current = snapshot.superblock();
+@@ -274,10 +274,13 @@ TEST_F(RelocatableCatalogTreeTest, LogicalizesAnOwnedCandidateRootBeforeBootstra
+ 
+ 	tree.prepareUpsert(batch, std::span(&added, 1U));
+ 	ASSERT_TRUE(batch.ownsAllocatedPage(batch.candidate().catalog_root));
+-	EXPECT_FALSE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
+-
+-	tree.prepareLogicalRootChildren(batch);
+ 	EXPECT_TRUE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
++	const auto root = batch.candidate().catalog_root;
++	const auto allocated = batch.allocatedPageCount();
++	tree.prepareLogicalRootChildren(batch);
++	EXPECT_EQ(batch.candidate().catalog_root, root);
++	EXPECT_EQ(batch.allocatedPageCount(), allocated);
++	EXPECT_TRUE(pages.readMetadataRadixUnresolved(root).logical_children_enabled);
+ }
+ 
+ TEST_F(RelocatableCatalogTreeTest, NativeCandidateShortWriteRetainsOldGenerationAndAllowsRetryAfterReopen) {
+diff --git a/tests/src/storage/relocatable/metadata/test_LocationDirectoryRootGrowth.cpp b/tests/src/storage/relocatable/metadata/test_LocationDirectoryRootGrowth.cpp
+index bb23f8c8..c28ace9c 100644
+--- a/tests/src/storage/relocatable/metadata/test_LocationDirectoryRootGrowth.cpp
++++ b/tests/src/storage/relocatable/metadata/test_LocationDirectoryRootGrowth.cpp
+@@ -6,7 +6,9 @@
+ #include <boost/uuid/uuid_io.hpp>
+ #include <gtest/gtest.h>
+ #include "graph/storage/StorageIO.hpp"
++#include "graph/debug/PerfTrace.hpp"
+ #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
++#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+ #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+ using namespace graph::storage;
+ 
+@@ -56,3 +58,112 @@ TEST_F(LocationDirectoryRootGrowthTest, ErasesPublishedRoutesWhileGrowingOneOrTw
+   EXPECT_THROW(directory.prepareReplacePages(invalid, {}, absent), FormatException);
+  }
+ }
++
++class LocationDirectoryLogicalCowTest : public LocationDirectoryRootGrowthTest, public ::testing::WithParamInterface<size_t> {};
++TEST_P(LocationDirectoryLogicalCowTest, KeepsUntouchedChildIdentitiesWithoutDecodingSiblingLeaves) {
++ const size_t branchCount = GetParam();
++  Superblock initial; initial.database_id = DatabaseId(17); initial.generation = Generation(1);
++  initial.checkpoint_lsn = LogSequenceNumber(1);
++  auto store = RelocatableMetadataStore::initializeNewComplete(io, initial);
++  std::vector<PageLocation> locations;
++  for (size_t i = 0; i < branchCount; ++i)
++   locations.push_back({PageId(i * RSS_LOCATION_LEAF_MAX_ENTRIES + 1U), SegmentId(10), 1, Generation(1), 0});
++  static_cast<void>(store->upsertLocations(locations, {}, LogSequenceNumber(3)));
++  auto old = store->openSnapshot();
++  auto replacement = locations.front(); replacement.free_bytes = 64U;
++  const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
++  struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
++  graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
++  static_cast<void>(store->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(4)));
++  const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++  ASSERT_TRUE(counters.contains("native_graph.directory.retained_logical_radix_pages"));
++  EXPECT_GT(counters.at("native_graph.directory.retained_logical_radix_pages").totalValue, 0);
++  ASSERT_TRUE(counters.contains("native_graph.read.metadata_decodes.location"));
++  EXPECT_LE(counters.at("native_graph.read.metadata_decodes.location").totalValue, 4) << branchCount;
++  RecordProperty("sibling_branches_" + std::to_string(branchCount),
++    std::to_string(counters.at("native_graph.read.metadata_decodes.location").totalValue));
++  auto current = store->openSnapshot();
++  EXPECT_EQ(store->findPageLocation(old, locations.front().page_id), locations.front());
++  EXPECT_EQ(store->findPageLocation(current, replacement.page_id), replacement);
++  for (size_t i = 1; i < locations.size(); ++i)
++   EXPECT_EQ(store->findPageLocation(current, locations[i].page_id), locations[i]);
++  old.release(); current.release(); store.reset();
++  store = RelocatableMetadataStore::open(io);
++  auto reopened = store->openSnapshot();
++  EXPECT_EQ(store->findPageLocation(reopened, replacement.page_id), replacement);
++  for (size_t i = 1; i < locations.size(); ++i)
++   EXPECT_EQ(store->findPageLocation(reopened, locations[i].page_id), locations[i]);
++  reopened.release(); store.reset();
++}
++TEST_P(LocationDirectoryLogicalCowTest, CatalogCowPreservesSiblingIdsAndOldSnapshots) {
++ const size_t branchCount = GetParam();
++ Superblock initial; initial.database_id = DatabaseId(17); initial.generation = Generation(1);
++ initial.checkpoint_lsn = LogSequenceNumber(1);
++ auto store = RelocatableMetadataStore::initializeNewComplete(io, initial);
++ std::vector<CatalogEntry> entries;
++ for (size_t i = 0; i < branchCount; ++i)
++  entries.push_back({SegmentId(i * RSS_CATALOG_PAGE_MAX_ENTRIES + 10U), PhysicalSlotId(1000U + i),
++    SegmentKind::SGK_ENTITY_PAGE_POOL, 7U, Generation(1), SegmentState::SGS_SEALED, LogSequenceNumber(3)});
++ static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(3)));
++ auto old = store->openSnapshot();
++ auto replacement = entries.front(); replacement.generation = Generation(2); replacement.committed_lsn = LogSequenceNumber(4);
++ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
++ struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
++ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
++ static_cast<void>(store->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4)));
++ const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++ ASSERT_TRUE(counters.contains("native_graph.catalog.retained_logical_radix_pages"));
++ EXPECT_GT(counters.at("native_graph.catalog.retained_logical_radix_pages").totalValue, 0);
++ ASSERT_TRUE(counters.contains("native_graph.read.metadata_decodes.catalog"));
++ EXPECT_LE(counters.at("native_graph.read.metadata_decodes.catalog").totalValue, 8) << branchCount;
++ RecordProperty("catalog_sibling_branches_" + std::to_string(branchCount),
++   std::to_string(counters.at("native_graph.read.metadata_decodes.catalog").totalValue));
++ auto current = store->openSnapshot();
++ EXPECT_EQ(store->findCatalog(old, entries.front().segment_id).generation, entries.front().generation);
++ EXPECT_EQ(store->findCatalog(current, replacement.segment_id).generation, replacement.generation);
++ for (size_t i = 1; i < entries.size(); ++i)
++  EXPECT_EQ(store->findCatalog(current, entries[i].segment_id).physical_slot, entries[i].physical_slot);
++ old.release(); current.release(); store.reset(); store = RelocatableMetadataStore::open(io);
++ auto reopened = store->openSnapshot();
++ EXPECT_EQ(store->findCatalog(reopened, replacement.segment_id).generation, replacement.generation);
++ for (size_t i = 1; i < entries.size(); ++i)
++  EXPECT_EQ(store->findCatalog(reopened, entries[i].segment_id).physical_slot, entries[i].physical_slot);
++}
++INSTANTIATE_TEST_SUITE_P(BranchCounts, LocationDirectoryLogicalCowTest, ::testing::Values(3U, 31U, 90U));
++
++TEST_F(LocationDirectoryRootGrowthTest, BootstrapRootGrowthWritesLogicalInternalChildrenAndRetainsTheirIds) {
++ Superblock initial; initial.database_id = DatabaseId(17); initial.generation = Generation(1);
++ initial.checkpoint_lsn = LogSequenceNumber(1);
++ auto store = RelocatableMetadataStore::initializeNewComplete(io, initial);
++ const PageLocation low{PageId(1), SegmentId(10), 1, Generation(1), 0};
++ static_cast<void>(store->upsertLocations(std::span(&low, 1U), {}, LogSequenceNumber(3)));
++ auto old = store->openSnapshot();
++ PageLocation high{PageId(uint64_t{RSS_CATALOG_RADIX_FANOUT} * RSS_LOCATION_LEAF_MAX_ENTRIES + 1U),
++   SegmentId(11), 1, Generation(1), 0};
++ static_cast<void>(store->upsertLocations(std::span(&high, 1U), {}, LogSequenceNumber(4)));
++ auto current = store->openSnapshot();
++ MetadataPageFile pages(io, current.superblock());
++ const auto boot = pages.readPageDirectoryBootstrap(current.superblock().page_directory_root);
++ const auto root = pages.readMetadataRadixUnresolved(boot.data_page_directory_root);
++ ASSERT_EQ(root.level, 1U); ASSERT_TRUE(root.logical_children_enabled);
++ MetadataPageRouteDirectory routes(pages);
++ for (const auto id : root.logical_children) if (id.isValid()) {
++  const auto target = routes.find(current.superblock(), boot.metadata_page_directory_root, id);
++  const auto child = pages.readMetadataRadixUnresolved(target);
++  EXPECT_TRUE(child.logical_children_enabled);
++  EXPECT_EQ(child.page_id, id);
++ }
++ const auto highChild = root.logical_children[1U]; ASSERT_TRUE(highChild.isValid());
++ high.free_bytes = 128U;
++ static_cast<void>(store->upsertLocations(std::span(&high, 1U), {}, LogSequenceNumber(5)));
++ auto next = store->openSnapshot();
++ const auto nextBoot = pages.readPageDirectoryBootstrap(next.superblock().page_directory_root);
++ const auto nextRoot = pages.readMetadataRadixUnresolved(nextBoot.data_page_directory_root);
++ EXPECT_EQ(nextRoot.logical_children[1U], highChild);
++ EXPECT_EQ(store->findPageLocation(old, low.page_id), low);
++ EXPECT_EQ(store->findPageLocation(next, high.page_id), high);
++ old.release(); current.release(); next.release(); store.reset();
++ store = RelocatableMetadataStore::open(io); auto reopened = store->openSnapshot();
++ EXPECT_EQ(store->findPageLocation(reopened, low.page_id), low);
++ EXPECT_EQ(store->findPageLocation(reopened, high.page_id), high);
++}
+diff --git a/tests/src/storage/relocatable/property/test_PropertyPagePoolPacking.cpp b/tests/src/storage/relocatable/property/test_PropertyPagePoolPacking.cpp
+index a312c7c0..ad14b89c 100644
+--- a/tests/src/storage/relocatable/property/test_PropertyPagePoolPacking.cpp
++++ b/tests/src/storage/relocatable/property/test_PropertyPagePoolPacking.cpp
+@@ -24,6 +24,9 @@
+ #include <gtest/gtest.h>
+ 
+ #include "graph/core/Node.hpp"
++#include "graph/debug/PerfTrace.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/utils/OwnedPmrAllocator.hpp"
+ #include "graph/storage/StorageIO.hpp"
+ #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+ #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+@@ -612,3 +615,80 @@ TEST_F(PropertyPagePoolPackingTest, RecoversFreshPropertyCowPoolAfterInactiveSup
+ 			  sourcePool.segment_id);
+ 	recovered.release();
+ }
++
++TEST_F(PropertyPagePoolPackingTest, NewOwnerBatchPreparesSourceOnceAndPacksOverflowWithoutChangingOldSnapshot) {
++	std::vector<uint64_t> nodeIds;
++	for (uint64_t id = 1001U; id <= 1033U; ++id) nodeIds.push_back(id);
++	const auto initial = sizedRoot(1001U, 3U, 2500U, 'a');
++	static_cast<void>(publishInitial(nodeIds, std::span(&initial, 1U)));
++	auto old = metadata_->openSnapshot();
++	std::vector<PropertyCollectionRoot> roots;
++	for (uint64_t id = 1002U; id <= 1032U; ++id)
++		roots.push_back(sizedRoot(id, 3U, 64U + (id % 3U) * 16U, 'b'));
++	roots.push_back({1033U, graph::Node::typeId, {}});
++	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
++	struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
++	graph::debug::PerfTrace::reset();
++	graph::debug::PerfTrace::setValueCollectionEnabled(true);
++	const auto plans = properties_->planEntityRootReplacements(old, roots, propertyOptions());
++	const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++	ASSERT_TRUE(counters.contains("native_graph.write.property_batch_prepared_source_pages"));
++	EXPECT_EQ(counters.at("native_graph.write.property_batch_prepared_source_pages").totalValue, 1);
++	EXPECT_EQ(counters.at("native_graph.write.property_plan_replacement_images").totalValue, 1);
++	EXPECT_GT(counters.at("native_graph.write.property_batch_capacity_overflows").totalValue, 0);
++	size_t inserted = 0U, replacements = 0U, overflow = 0U;
++	for (const auto &plan : plans) {
++		if (plan.page_replacement) {
++			++replacements;
++			EXPECT_FALSE(plan.page_replacement->upserted_properties.empty());
++			inserted += plan.page_replacement->upserted_properties.size();
++		} else if (plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED) {
++			++overflow;
++		}
++	}
++	EXPECT_EQ(replacements, 1U);
++	EXPECT_GT(inserted, 1U);
++	EXPECT_EQ(inserted + overflow, roots.size() - 1U);
++	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans, *properties_,
++			propertyOptions(), LogSequenceNumber(3U)));
++	auto current = metadata_->openSnapshot();
++	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, 1001U}), initial);
++	for (const auto &root : roots) {
++		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, root.owner_entity_id};
++		EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(old, key).has_value());
++		if (root.entries.empty()) EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(current, key).has_value());
++		else EXPECT_EQ(properties_->readEntity(current, key), root);
++	}
++	old.release(); current.release();
++	properties_.reset(); pages_.reset(); entities_.reset(); metadata_.reset();
++	metadata_ = RelocatableMetadataStore::open(io_);
++	entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
++	pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
++	properties_ = std::make_unique<PropertyCollectionRootStore>(*pages_, *metadata_);
++	auto reopened = metadata_->openSnapshot();
++	for (const auto &root : roots) if (!root.entries.empty())
++		EXPECT_EQ(properties_->readEntity(reopened, {EntityPropertyOwnerKind::EPOK_NODE, root.owner_entity_id}), root);
++}
++
++TEST_F(PropertyPagePoolPackingTest, InlineBatchAdmissionRefusalLeavesSourceUnchangedAndCanRetry) {
++	const std::array<uint64_t, 3U> ids{1001U, 1002U, 1003U};
++	const auto initial = sizedRoot(1001U, 3U, 2500U, 'a');
++	static_cast<void>(publishInitial(ids, std::span(&initial, 1U)));
++	auto snapshot = metadata_->openSnapshot();
++	const auto before = snapshot.superblock();
++	const auto epoch = io_->dataMutationEpoch();
++	const std::array roots{sizedRoot(1002U, 3U, 64U, 'b'), sizedRoot(1003U, 3U, 128U, 'c')};
++	auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
++	{
++		graph::utils::OwnedAllocationScope scope(memory);
++		EXPECT_THROW(static_cast<void>(properties_->planEntityRootReplacements(snapshot, roots, propertyOptions())), graph::query::execution::MaterializedByteLimitExceeded);
++	}
++	EXPECT_EQ(memory->used(), 0U);
++	EXPECT_EQ(io_->dataMutationEpoch(), epoch);
++	EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++	const auto retry = properties_->planEntityRootReplacements(snapshot, roots, propertyOptions());
++	ASSERT_EQ(retry.size(), 1U);
++	ASSERT_TRUE(retry.front().page_replacement.has_value());
++	EXPECT_EQ(retry.front().page_replacement->upserted_properties.size(), 2U);
++	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, 1001U}), initial);
++}
+diff --git a/include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp b/include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp
+new file mode 100644
+index 00000000..1485634b
+--- /dev/null
++++ b/include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp
+@@ -0,0 +1,97 @@
++/**
++ * @brief Derived, snapshot-bound free-slot lookup over the existing B+Tree wire format.
++ * Published entity directory roots have a unique generation per record kind
++ * and database. Physical evacuation invalidates this fast-path proof; explicit
++ * rebuild can rebind it. The graph publisher checks each summary fence.
++ */
++#pragma once
++#include <array>
++#include <algorithm>
++#include <limits>
++#include "graph/storage/relocatable/entity/EntityPage.hpp"
++#include "graph/storage/relocatable/index/BTreeIndex.hpp"
++#include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
++
++namespace graph::storage {
++constexpr uint64_t RSS_NODE_FREE_SPACE_INDEX_ID = UINT64_C(0x8000000000000040);
++constexpr uint64_t RSS_EDGE_FREE_SPACE_INDEX_ID = UINT64_C(0x8000000000000041);
++[[nodiscard]] constexpr bool isEntityFreeSpaceIndexId(uint64_t id) {
++    return id == RSS_NODE_FREE_SPACE_INDEX_ID || id == RSS_EDGE_FREE_SPACE_INDEX_ID;
++}
++class EntityFreeSpaceIndex final {
++public:
++    struct Proof { uint64_t directory_generation = 0, free_pages = 0; bool fresh = false; };
++    struct Entry { PageId page; uint16_t free_slots; };
++    static uint64_t indexId(EntityPageRecordKind kind) {
++        if (kind == EntityPageRecordKind::EPRK_NODE) return RSS_NODE_FREE_SPACE_INDEX_ID;
++        if (kind == EntityPageRecordKind::EPRK_EDGE) return RSS_EDGE_FREE_SPACE_INDEX_ID;
++        throw std::invalid_argument("free-space summary requires Node or Edge records");
++    }
++    static PhysicalPageRef entityRoot(const Superblock &source, EntityPageRecordKind kind) {
++        return indexId(kind) == RSS_NODE_FREE_SPACE_INDEX_ID ? source.node_entity_directory_root : source.edge_entity_directory_root;
++    }
++    static constexpr std::array<std::byte, 5> generationKey() {
++        return {std::byte{0}, std::byte{'F'}, std::byte{'S'}, std::byte{1}, std::byte{0}};
++    }
++    static constexpr std::array<std::byte, 5> countKey() {
++        auto key = generationKey(); key.back() = std::byte{1}; return key;
++    }
++    static std::array<std::byte, 11> entryKey(PageId page, uint16_t freeSlots, EntityPageRecordKind kind) {
++        if (!page.isValid() || !freeSlots || freeSlots >= EntityPage::recordCapacity(kind))
++            throw FormatException(FormatError::FERR_INVALID_HEADER, "invalid entity free-slot summary entry");
++        std::array<std::byte, 11> key{}; key[0] = std::byte{1};
++        const uint16_t ordered = uint16_t(UINT16_MAX - freeSlots);
++        key[1] = std::byte(ordered >> 8U); key[2] = std::byte(ordered & 255U);
++        for (unsigned i = 0; i < 8; ++i) key[3 + i] = std::byte((page.value() >> (56U - 8U * i)) & 255U);
++        return key;
++    }
++    static Entry decodeEntry(const BTreePageEntry &entry, EntityPageRecordKind kind) {
++        const auto &key = entry.key;
++        if (key.size() != 11U || key[0] != std::byte{1} || entry.value_or_child != 1U)
++            throw FormatException(FormatError::FERR_INVALID_HEADER, "invalid entity free-slot summary key/value");
++        const auto ordered = uint16_t((uint16_t(std::to_integer<uint8_t>(key[1])) << 8U) | std::to_integer<uint8_t>(key[2]));
++        const uint16_t free = uint16_t(UINT16_MAX - ordered); uint64_t id = 0U;
++        for (unsigned i = 0; i < 8; ++i) id = (id << 8U) | std::to_integer<uint8_t>(key[3 + i]);
++        const Entry result{PageId(id), free};
++        static_cast<void>(entryKey(result.page, result.free_slots, kind));
++        return result;
++    }
++    static std::optional<Proof> readProof(RelocatableMetadataStore &metadata, BTreePageStore &pages,
++        const MetadataSnapshotPin &snapshot, EntityPageRecordKind kind) {
++        const auto id = indexId(kind);
++        if (!metadata.findIndexRootOptional(snapshot, id)) return std::nullopt;
++        BTreeIndex index(id, pages, metadata);
++        const auto generation = index.find(snapshot, generationKey()), count = index.find(snapshot, countKey());
++        if (!generation || !count)
++            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "reserved free-space index lacks its versioned markers");
++        if (!*generation || !*count || *generation - 1U > snapshot.superblock().generation.value() || *count - 1U >= (std::numeric_limits<size_t>::max)() ||
++            (snapshot.superblock().next_logical_page_id && *count - 1U > snapshot.superblock().next_logical_page_id))
++            throw FormatException(FormatError::FERR_INVALID_STATE, "free-space index has impossible source/count markers");
++        const auto root = entityRoot(snapshot.superblock(), kind);
++        // The canonical empty directory itself proves no live entity pages.
++        return Proof{*generation - 1U, *count - 1U, root.isValid() ? *generation - 1U == root.generation.value() : *count == 1U};
++    }
++    // true means the complete candidate set was exhausted. At most `needed`
++    // candidates can be consumed because every candidate has a positive count.
++    template<class Visitor>
++    static bool visitCandidates(RelocatableMetadataStore &metadata, BTreePageStore &pages,
++        const MetadataSnapshotPin &snapshot, EntityPageRecordKind kind, const Proof &proof,
++        size_t needed, Visitor visitor, const CancellationCheckpoint *cancellation = nullptr) {
++        if (!proof.fresh || !needed) throw std::invalid_argument("free-slot lookup requires fresh proof and positive work");
++        BTreeIndex index(indexId(kind), pages, metadata); const std::array lower{std::byte{1}};
++        auto cursor = index.openRangeCursor(snapshot, std::span<const std::byte>(lower), size_t(proof.free_pages) + 1U,
++            BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
++        size_t visited = 0U, capacity = 0U;
++        while (visited < proof.free_pages) {
++            if (cancellation) cancellation->check();
++            const auto encoded = cursor.next();
++            if (!encoded) throw FormatException(FormatError::FERR_INVALID_STATE, "free-space index count exceeds its entries");
++            const auto entry = decodeEntry(*encoded, kind); visitor(entry); ++visited;
++            capacity += (std::min)(size_t(entry.free_slots), needed - capacity);
++            if (capacity == needed && visited < proof.free_pages) return false;
++        }
++        if (cursor.next()) throw FormatException(FormatError::FERR_INVALID_STATE, "free-space index contains uncounted entries");
++        return true;
++    }
++};
++} // namespace graph::storage

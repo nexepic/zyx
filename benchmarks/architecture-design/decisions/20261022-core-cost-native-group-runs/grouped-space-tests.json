@@ -1,0 +1,2002 @@
+{
+  "tests": 190,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T19:37:56Z",
+  "time": "11.051s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyRecordsTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:37:56Z",
+      "time": "0.001s",
+      "testsuite": [
+        {
+          "name": "CanonicalPrimitiveLayoutsPreserveRawBitsAndNullVersusMissing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "NativeIdDomainRejectsZeroOverflowAndFinalGroupPhantomSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "GroupCountUsesWireRangeWhileConversionKeepsItsSeparateWorkBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "RetainedColumnsAllowBirthAndDeathOnlyOnAbsentCells",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 82,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "CorrectBytesDoNotAuthorizeWrongGroupTokenKindTypeOrGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "MalformedHeadersMasksCountsAndNoncanonicalPayloadFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "EveryTruncatedWidthAndOversizedRecordRejectWithoutReadingOutsideInput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 142,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "ShortTextWordsAreCanonicalByteValuesAcrossNullAndMissingMasks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyGroupConversionTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:37:56Z",
+      "time": "0.004s",
+      "testsuite": [
+        {
+          "name": "RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 22,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 34,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "QuotaCancellationAndShapeRefusalsRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 58,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "NullMixedAndHeapExtensionsRemainBorrowedAndOrdered",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        },
+        {
+          "name": "DenseShortTextUsesExistingBoundedColumnsAndLongTextRetainsExtension",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyGroupConversion.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0s",
+          "classname": "HybridPropertyGroupConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyInlineMutationTest",
+      "tests": 10,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:37:56Z",
+      "time": "0.489s",
+      "testsuite": [
+        {
+          "name": "DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 27,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.047s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "InlineKindsRoundTripAndNoopUsesRecursiveRowEquality",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.028s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "NativeStagingOwnsPayloadAcrossMoveConflictAndRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "ComplexWriteABRecoveryAndErasePreserveAtomicFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.013s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.048s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "RepeatedSmallWritesReusePhysicalFramesWithoutGrowingPropertyPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.098s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.106s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "GroupedColumnsPreserveSparseMembersAndUnrelatedExtensionAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.138s",
+          "classname": "HybridPropertyInlineMutationTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 60,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:37:56Z",
+      "time": "7.737s",
+      "testsuite": [
+        {
+          "name": "ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 7,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.062s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 56,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.063s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryPlacementNeverGrantsReadOrAllocationAuthorityForNativePools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointPropertyPublicationCoordinatesNativeAndRowLargeValuesAndNewNames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 92,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:56Z",
+          "time": "0.105s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointPropertyPublicationRelabelsNativeOwnerAndMaintainsItsFieldAndScalarIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:57Z",
+          "time": "0.203s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointPropertyPublicationMergesNativeAndRowPatchesWithoutDroppingOtherFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:57Z",
+          "time": "0.096s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointPropertyPublicationRecoversBothLayoutsLargeValuesAndVectorTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:57Z",
+          "time": "0.358s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionAndFieldChangeMergeTheSameNativeColumn",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:57Z",
+          "time": "0.15s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionAndFieldChangeShareThresholdDemotionAndLargeExtension",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:57Z",
+          "time": "0.152s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesAndDropsScalarIndexWithoutChangingFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 211,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.09s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesRequiredAndUniqueConstraintsAndMaintainsTheirSupport",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 222,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.083s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleRebuildsVectorDefinitionAndThenCoordinatesNativeUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.205s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleRecoversCatalogDefinitionAndScalarRootAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 254,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.108s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesCompositeIndexAndKeepsItsLogicalFieldOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 277,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.068s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleRejectsInvalidUniqueDefinitionWithoutPublishingIt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 290,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.078s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSchemaLifecycleBuildsEdgeConstraintAndMaintainsItsNativeSupportEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 300,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.065s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 312,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.056s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 326,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.047s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.044s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 351,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.042s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePropertyReplacementMaintainsScalarIndexAndPinnedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 363,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:58Z",
+          "time": "0.102s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 377,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.189s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePropertyReplacementEnforcesRequiredFieldsAndPublishesNewTokensAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 390,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.128s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePropertyReplacementAccepts64OwnersAndPreservesNoopGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 407,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.081s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePropertyReplacementCoordinatesMixedRoutesAndPinnedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 426,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.062s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 442,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.078s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeWritableReopenReclaimsOrphanBulkScratchAndPreservesFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.079s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeBulkScratchRetirementWaitsForOldPinThenRecoversWithoutChangingFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 464,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.068s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeActiveLayoutAllowsFreshPrivateScratchWithoutChangingGraphValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 481,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.133s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeSegmentNamespaceReservationPreservesFieldsAcrossBothBootstrapFaults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 490,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.131s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePatchUpdatesScalarAndRemovesFieldWithoutChangingOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 511,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:37:59Z",
+          "time": "0.089s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePatchErasesAndRecreatesVectorFieldAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 523,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.192s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePatchPreservesUnknownRemovalNoopAndRejectsRequiredFieldRemoval",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 532,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.087s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesIsolatedNodeAndKeepsOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 542,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.066s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeOwnerDeletionMaintainsConvertedEdgeAdjacencyAndCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 555,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.066s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesVectorMembershipAndPreservesOldEmbedding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 563,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.178s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesComplete64EdgeGroupAndPreservesPinnedRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 573,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.067s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionRejectsIncidentNodeAndThenDetachesItsRowEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 584,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.076s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionRemovesNativeAndRowNodesWhileOldPinsRemainLive",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 594,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.066s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionRemovesNativeAndRowEdgesAndCanonicalAdjacencyTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.067s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "JointOwnerDeletionRecoversNativeRowFieldsAndVectorAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 621,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:00Z",
+          "time": "0.344s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 650,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.042s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 657,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativePatchAllocatesNamesAndPreservesTheirIdentityAcrossRemoveAndRestore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 673,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.101s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeReplacementPublishesNewNameAndVectorTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 687,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.181s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "InvalidNativeVectorPatchDoesNotPublishItsNewPropertyName",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 697,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.166s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeConstraintFailureDoesNotPublishItsStagedNewPropertyToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 709,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.085s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeNewPropertyTokenIsSharedBy64OwnersInTheOriginalBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 722,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:01Z",
+          "time": "0.198s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NewNativeTokenFieldsAndVectorRecoverTogetherAcrossBootstrapWriteFaults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 734,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:02Z",
+          "time": "0.342s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "RawNativeFieldMutationRejectsTokensMissingFromTheCatalog",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:02Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicMixedNodeEdgeReplacementPublishesOneNewNameInBothNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 778,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:02Z",
+          "time": "0.156s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicMixedNodeVectorAndEdgeColumnPublishTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 794,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:02Z",
+          "time": "0.215s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "MixedNodeEdgeNewNameAndVectorRecoverTogetherAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 812,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:02Z",
+          "time": "0.436s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "MixedNodeEdgeConstraintFailurePublishesNeitherNamespaceOrNewToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 846,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.098s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicNativeDetachDeletesItsCompleteIncidentClosureAndPreservesOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 867,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.122s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "PublicExplicitNodeEdgeDeletionBatchMayRemoveAllIncidentEdgesWithoutDetach",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 879,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.115s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeDetachBoundFailureCanRetryTheSameHandleWithoutChangingItsOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 888,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.126s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeDetachUses64AsAnOperationBoundAndCanProgressAfterASeparateEdgeDelete",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 897,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.122s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "MixedDeletionCanDemoteTheRemainingNodeFieldsAndUpdateScalarIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 907,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:03Z",
+          "time": "0.234s",
+          "classname": "HybridPropertyQueryParityTest"
+        },
+        {
+          "name": "NativeDetachEntityFieldsCountsAndVectorRecoverTogetherAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 918,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.498s",
+          "classname": "HybridPropertyQueryParityTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyReadContextTest",
+      "tests": 56,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:38:04Z",
+      "time": "0.383s",
+      "testsuite": [
+        {
+          "name": "AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 225,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "OwningCompatibilityDecodeRetainsCallerOutputCreditAndRefundsTemporaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "IndependentLargeFieldAuthenticatesContentAndRetainsOnlyOutputCredit",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 326,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "WholeRowLargeCarrierWithValidManifestAndHashStillFailsSingleFieldDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 347,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MembershipCountsTokensAndPresenceDoNotDecodePropertyValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "LargeNonNullProjectionAuthenticatesWithoutMaterializingTheValueTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 382,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MissingSourceAndCompetingRowFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 394,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "FullCollectionLargeAdmissionDoesNotAllocateDecodedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "SelectedBatchPreservesRowPositionsCountsNullsAndSinkOrdinals",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 465,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "NativeScalarBatchBypassesOwningValuesAndRefundsOnRefusalAndRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "RawBoolColumnPreservesAuthenticatedBitsWithoutOwningValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 542,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "RawDoubleNaNColumnPreservesAuthenticatedBitsWithoutOwningValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 566,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "RawDoubleNegativeZeroColumnPreservesAuthenticatedBitsWithoutOwningValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 590,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "SelectedOnlyBatchDoesNotEnumerateUnrequestedFieldMemberships",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 614,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ColumnDeltaUsesActualNativeSourceAndRetainsOnlyItsBoundedPlan",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 639,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ColumnDeltaDemotesOnlyTheChangedFieldAndReportsGroupEffects",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 681,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ColumnDeltaKeepsRowDoubleNoopRulesAndExactReplacementBits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 710,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "EqualNanColumnBitsStillRequireAChange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 728,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "CompatibleColumnWritesCoalesceOwnersAndGroupIntoOneActualPrivateFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 740,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "NativeColumnCowQuotaAndLateCancellationRefundImagesForRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 797,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityStreamsActualOwnershipWithoutDecodingValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 846,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityRejectsValidlyEncodedWrongGroupCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 870,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityRejectsSelectorWithoutBodyEvenWhenHeaderCountMatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 878,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityRejectsColumnDirectoryOutsideRegisteredGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 887,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityAuthenticatesSingleLargeBodyWithoutOwningValueDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 895,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityRejectsAuthenticatedWholeRowLargeCarrier",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 909,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 917,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 928,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 957,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "PhysicalOwnershipRejectsUnroutedDuplicateGroupSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 977,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "PhysicalOwnershipRejectsUnroutedDuplicateColumnSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 988,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "PhysicalOwnershipRejectsUnroutedDuplicateExtensionSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 999,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "PhysicalOwnershipRejectsStaleFreeHintWithoutHidingItAsLogicalCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1010,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "EmptyNativePageMayRemainReusableWithoutADescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1019,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "LiveNativePageCannotClaimOwnershipWithoutADescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1027,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "SharedLargeReferenceWalkAuthenticatesMetadataWithinBudgetWithoutReadingBodies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1035,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "NativeReferenceWalkRejectsWrongManifestIdentityBeforeEmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1070,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1090,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1142,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1213,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1264,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1300,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1360,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.021s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1383,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1395,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.021s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1425,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.013s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1522,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.007s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.008s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1635,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.026s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1683,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.008s",
+          "classname": "HybridPropertyReadContextTest"
+        },
+        {
+          "name": "ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyReadContext.cpp",
+          "line": 1748,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyReadContextTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyOwnerDeletionTest",
+      "tests": 28,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:38:04Z",
+      "time": "2.017s",
+      "testsuite": [
+        {
+          "name": "DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 61,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:04Z",
+          "time": "0.121s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 84,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.277s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 126,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.06s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 141,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 157,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.101s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 177,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.066s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 201,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.027s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 237,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.366s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:05Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 275,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.007s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 291,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.023s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 311,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.02s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.087s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 351,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.072s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 370,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.02s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "NodeDeletionRejectsIncidentEdgesAndAcceptsTheirLogicallyEmptyMapAfterRemoval",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 394,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 412,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.065s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 427,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.304s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "OwnersInTwoNodeGroupsAreDeletedWithBothLiveMasksAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 440,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.054s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "NodeAndEdgeWithTheSameIdDeleteTheirOwnEntityAndFieldNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.055s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "CrossGroupDemotionThenLastOwnerDeletionRemovesEveryNativeDirectory",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 467,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.077s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "MixedKindDeletionRecoversAllEntityAndFieldRootsAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 487,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.098s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "IncidentNodeDeletionRequiresEveryParallelEdgeInItsAtomicBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 501,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        },
+        {
+          "name": "AtomicNodeDeletionHandlesSelfLoopsAndUntypedIncidentEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyOwnerDeletion.cpp",
+          "line": 517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyOwnerDeletionTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableSuperblockTest",
+      "tests": 15,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:38:06Z",
+      "time": "0.139s",
+      "testsuite": [
+        {
+          "name": "CodecMatchesGoldenFieldsAndRoundTrips",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 111,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.005s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:06Z",
+          "time": "0.134s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "PersistsAndValidatesTheMetadataEmergencyReserveDescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "AllowsEmptyRootsAndSelectsTheNewestValidGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 297,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "PersistsTheTypedPageDirectoryBootstrapFlag",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationDoesNotSerializeOrChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationRejectsEveryMalformedRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "DescriptorValidationPreservesLifecycleAndReserveFences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsInvalidInMemoryValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 398,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "RejectsTruncatedChecksummedAndMalformedDiskBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 447,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "CompactColumnMembershipFeatureRequiresNativeFormatAndDescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 557,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        },
+        {
+          "name": "IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_Superblock.cpp",
+          "line": 572,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "RelocatableSuperblockTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:38:07Z",
+      "time": "0.276s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InvalidCohortEnvelopeRefusesBeforeIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NonColumnGroupNeverPublishesAnEarlierPreparedGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "UnprofitableWholeCohortKeepsEveryRowAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.013s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.031s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.06s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "row_steady_bytes": "917504",
+          "candidate_steady_bytes": "1179648",
+          "peak_allocated_bytes": "1310720"
+        },
+        {
+          "name": "CancellationAfterCompleteCostPreparationKeepsAllRowRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 152,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.059s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:38:07Z",
+          "time": "0.099s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        }
+      ]
+    }
+  ]
+}

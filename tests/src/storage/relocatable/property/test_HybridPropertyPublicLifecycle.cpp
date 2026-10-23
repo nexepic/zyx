@@ -4,6 +4,113 @@
 using namespace hybrid_property_query_parity_test;
 
 #if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+TEST_F(HybridPropertyQueryParityTest, ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns) {
+    seed(false);
+    const auto execute = [&]() {
+        auto options = backendOptions(); options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+        RelocatableStorageBackend backend(options); backend.open();
+        query::execution::LogicalPlanReadRuntime runtime(backend);
+        query::execution::LogicalPlanReadRuntimeBounds bounds;
+        bounds.maximum_node_records = 128; bounds.maximum_node_page_records = 16;
+        bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128;
+        bounds.maximum_adjacency_page_records = 16;
+        bounds.maximum_metadata_pages_per_node_page = 8192; bounds.maximum_property_entries = 16;
+        bounds.maximum_rows = 128; bounds.maximum_distinct_rows = 128;
+        parser::cypher::CypherParserImpl parser;
+        const std::array<std::string, 2> texts{{
+            "MATCH (n:Person) WHERE n.note = 'person' RETURN count(n) AS count",
+            "MATCH (n:Person) RETURN n.note AS note, count(n) AS count ORDER BY note"}};
+        std::array<Rows, 2> rows;
+        for (size_t i = 0; i < texts.size(); ++i) {
+            auto plan = parser.parseToLogical(texts[i]);
+            const auto result = runtime.executeToQueryResult(*plan.root, bounds);
+            for (const auto &row : result.getRows()) {
+                std::vector<PropertyValue> values;
+                for (const auto &column : result.getColumns()) values.push_back(row.at(column).asPrimitive());
+                rows[i].push_back(std::move(values));
+            }
+        }
+        backend.close(); return rows;
+    };
+    const auto row = execute();
+    ASSERT_EQ(row[0], (Rows{{PropertyValue(int64_t(63))}}));
+    ASSERT_EQ(row[1], (Rows{{PropertyValue("person"), PropertyValue(int64_t(63))},
+                          {PropertyValue("seven"), PropertyValue(int64_t(1))}}));
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+    struct RestoreTrace {
+        bool enabled;
+        ~RestoreTrace() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); }
+    } restore{enabled};
+    graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
+    EXPECT_EQ(execute(), row);
+    const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+    const auto *compact = std::getenv("ZYX_TEST_COMPACT_COLUMN_MEMBERSHIPS");
+    if (compact && std::string_view(compact) == "1") {
+        ASSERT_TRUE(trace.contains("native_graph.hybrid.grouped_column_batches"));
+        EXPECT_GT(trace.at("native_graph.hybrid.grouped_column_batches").totalValue, 0);
+        EXPECT_EQ(trace.at("native_graph.hybrid.grouped_owner_route_checks").totalValue, 128);
+        ASSERT_TRUE(trace.contains("native_graph.hybrid.direct_column_locator_reads"));
+        EXPECT_GT(trace.at("native_graph.hybrid.direct_column_locator_reads").totalValue, 0);
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io); auto pin = metadata->openSnapshot();
+        EXPECT_FALSE(metadata->findIndexRootOptional(pin,
+            hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_COLUMN)));
+    }
+    inspectPublicNativeState();
+}
+TEST_F(HybridPropertyQueryParityTest, ProductionMixedLongIdsPreserveFilterGroupingAndColdFieldLookup) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    {
+        RelocatableStorageBackend backend(options); backend.open();
+        std::vector<LogicalGraphNodeCreateRequest> nodes;
+        for (uint64_t i = 0; i < 64; ++i) {
+            const auto suffix = std::to_string(i);
+            nodes.push_back({{"User"}, {{"id", PropertyValue("user-" + std::string(6U - suffix.size(), '0') + suffix)},
+                {"age", PropertyValue(int64_t(18 + i % 50))}, {"country", PropertyValue(i % 2 ? "US" : "CN")},
+                {"score", PropertyValue(double(i) / 10.0)}}});
+        }
+        ASSERT_EQ(backend.createLogicalNodes(nodes).size(), 64U); backend.close();
+    }
+    const auto execute = [&]() {
+        auto readOptions = backendOptions(); readOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+        RelocatableStorageBackend backend(readOptions); backend.open();
+        query::execution::LogicalPlanReadRuntime runtime(backend);
+        query::execution::LogicalPlanReadRuntimeBounds bounds;
+        bounds.maximum_node_records = 128; bounds.maximum_node_page_records = 16;
+        bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128;
+        bounds.maximum_adjacency_page_records = 16; bounds.maximum_metadata_pages_per_node_page = 8192;
+        bounds.maximum_property_entries = 16; bounds.maximum_rows = 128; bounds.maximum_distinct_rows = 128;
+        const std::array<std::string, 3> queries{{
+            "MATCH (n:User) WHERE n.country = 'CN' RETURN count(n) AS count",
+            "MATCH (n:User) RETURN n.country AS country, count(n) AS count ORDER BY country",
+            "MATCH (n:User {id:'user-000007'}) RETURN n.country AS country, n.id AS id"}};
+        parser::cypher::CypherParserImpl parser; std::array<Rows, 3> output;
+        for (size_t i = 0; i < queries.size(); ++i) {
+            auto plan = parser.parseToLogical(queries[i]); const auto result = runtime.executeToQueryResult(*plan.root, bounds);
+            for (const auto &row : result.getRows()) {
+                std::vector<PropertyValue> values;
+                for (const auto &column : result.getColumns()) values.push_back(row.at(column).asPrimitive());
+                output[i].push_back(std::move(values));
+            }
+        }
+        backend.close(); return output;
+    };
+    const auto row = execute();
+    ASSERT_EQ(row[0], (Rows{{PropertyValue(int64_t(32))}}));
+    ASSERT_EQ(row[1], (Rows{{PropertyValue("CN"), PropertyValue(int64_t(32))},
+                          {PropertyValue("US"), PropertyValue(int64_t(32))}}));
+    ASSERT_EQ(row[2], (Rows{{PropertyValue("US"), PropertyValue("user-000007")}}));
+    const auto rowCost = wholeCost();
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    EXPECT_EQ(execute(), row); inspectPublicNativeState();
+    const auto nativeCost = wholeCost();
+    RecordProperty("mixed_row_steady_bytes", std::to_string(rowCost.steadyAllocatedBytes()));
+    RecordProperty("mixed_native_steady_bytes", std::to_string(nativeCost.steadyAllocatedBytes()));
+    RecordProperty("mixed_native_directory_bytes", std::to_string(nativeCost.sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_HYBRID_MAP)]));
+}
 TEST_F(HybridPropertyQueryParityTest, RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate) {
     seed(false); convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;

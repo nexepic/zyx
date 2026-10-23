@@ -1,0 +1,4 @@
+START edge_batch_1000 control
+FINISH edge_batch_1000 control # user_cpu_seconds 2.752786000 system_cpu_seconds 0.111387000 wall_seconds 2.866270378 samples 0
+START edge_batch_1000 sampled
+FINISH edge_batch_1000 sampled # user_cpu_seconds 2.710858000 system_cpu_seconds 0.165856000 wall_seconds 2.877004209 samples 714

@@ -1,0 +1,86 @@
+{
+  "measurement_status": "passed",
+  "processes": 99,
+  "failed_processes": [],
+  "implementation_progress_percent": 90,
+  "P7_accepted": false,
+  "Kuzu_objective_met": false,
+  "experimental_cold_adoption": false,
+  "commit_push": false,
+  "primary_gates": [
+    {
+      "scale": "holdout",
+      "case": "edge_batch_1000",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "holdout",
+      "case": "fresh_import",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "holdout",
+      "case": "property_set",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": true
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "edge_batch_1000",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "fresh_import",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "property_set",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": true
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    }
+  ],
+  "scope_closed": "Final measured outcome retained; no follow-on optimization branches opened. Public cold conversion/whole-target bootstrap remains explicitly undelivered.",
+  "baseline_sha256": "d59dc4b7f6009ea7244f4b6d27f43aff64e07ecde9edb61c413ad7b0e0faad10"
+}

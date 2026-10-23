@@ -1,0 +1,69 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-initial-": {
+      "tests": 29,
+      "failures": 2,
+      "skipped": 0
+    },
+    "hybrid-corrected-": {
+      "tests": 29,
+      "failures": 1,
+      "skipped": 0
+    },
+    "hybrid-complete-legacy-": {
+      "tests": 293,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-complete-compact-": {
+      "tests": 293,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 68,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-row-ownership-hybrid-candidate/libzyx_core.a",
+      "profile": "13/39",
+      "sha256": "36cbec26e6f7af39ced35422e6bcb6f1bf0915486855c85598100f6ced1f5d23"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-row-ownership-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "8a6993ea160cfc15984bdd12cac63ec491fbd817ad0784dd85c71179de6dfb8f"
+    }
+  },
+  "implemented": [
+    "Read-only forward/reverse cold-field ownership through existing DirectoryIntegrity and physical-page auditor",
+    "All actual Entity Map/no competing ROW routes and no legacy selector proof",
+    "Exact hot column references/presence; distinct cold block ownership masks, actual row directories/values, global field totals",
+    "Actual LargeValue owner/media/block-generation/manifest/content/field-directory checks without owning PropertyValue materialization",
+    "Reverse rejects orphan/duplicate cold and membership slots, stale/exact locators and slot generation mismatch",
+    "RAW Edge owner-kind@7 handling; cold-only group ownership; const immutable store inspection",
+    "Physical LargeValue visitor once per reference row, exceptions no replay/write, quota/cancellation refunds"
+  ],
+  "fixture_scope": "Existing private candidate descriptor with real data/index/Entity Map pages and valid feature framing. No normal producer emits mode3; whole-database acceptance after public conversion remains pending.",
+  "retained_failures": [
+    "Direct cold count in a test omitted its explicit resource account; test now supplies that account",
+    "Fixture inferred LargeValue generation from metadata epochs; independent immutable values use logical generation1. Test now deliberately forges newer-than-block/not-newer-than-group generation and requires local INVALID_HEADER before manifest identity mismatch INVALID_STATE. No source guard or semantic assertion relaxed."
+  ],
+  "not_implemented": [
+    "Cold-owner LargeValue reachability scanner/retirement; the legacy explicit-selector iterator remains insufficient",
+    "Actual Native conversion/producer activation and publicly converted whole-database integrity acceptance",
+    "Compatible/cold writes/demotion/delete/inverse/old-pin/fault/move/retirement lifecycle",
+    "Cold selected batches reuse one decoded body within the existing window",
+    "Actual mature space/migration bootstrap/final P7 matrix"
+  ],
+  "limits": "Same page/64owner/8group/1MiB conversion/shared budgets/CACHE. No new cache/index/backend/persistent format (13/39 and5/31).",
+  "performance_claim": null
+}

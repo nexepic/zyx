@@ -1,0 +1,45 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "directory_module_tests": 234,
+  "related_lifecycle_tests": 401,
+  "mechanism": {
+    "branches": [
+      3,
+      31,
+      90
+    ],
+    "location_leaf_decodes": [
+      1,
+      1,
+      1
+    ],
+    "catalog_leaf_decodes": [
+      2,
+      2,
+      2
+    ]
+  },
+  "medium_p50_ms": {
+    "set_before": 8.119717,
+    "set_after": 5.75867,
+    "edge_before": 41.5075685,
+    "edge_after": 39.1372795
+  },
+  "medium_p95_ms": {
+    "set_before": 9.643086,
+    "set_after": 6.504353,
+    "edge_before": 62.09129,
+    "edge_after": 53.423975
+  },
+  "library_sha256": "33796379222aff981b905d5e959edc2627d062dfb43dbcaed5426afc58001114",
+  "retained_library": "/workspace/zyx-logical-radix-candidate/libzyx_core.a",
+  "patch_sha256": "2b671f32446cb4699b0db75ac1e2b9c8a79d557b9590c8bd1b07d11d7cc98430",
+  "test_adjustments": [
+    "Catalog candidate already logical at first materialization: replaced expectation of a physical intermediate with logical output and allocation-free/idempotent finalization",
+    "Preexisting isolated SegmentCatalog invalid-enum fixture incorrectly treated SGK_QUERY_SCRATCH(15) as invalid via BULK_SCRATCH+1. Independently reproduced on frozen original baseline; now tests QUERY_SCRATCH+1(16), preserving rejection requirement. Original baseline failure retained."
+  ],
+  "scope": "logical COW for changed radix paths; physical legacy fallback; all newly created internal pages logical; no persisted format/header ABI change; no commit/push without acceptance progress"
+}

@@ -99,7 +99,7 @@ New Cypher clauses, functions, procedures, C++ API operations, Driver ABI operat
 
 ## 2026-10-22 optimization checkpoint scope
 
-This page's C0–C7/platform gates and the [optimization plan](optimization)'s24deliverables are counted separately. Default format31 retains ROW; isolated format33 allows only explicit bounded hybrid conversion after complete cost admission. The final graph choice is the canonical key-only tree with bounded primary-record reuse; covering/segmented prototypes are not automatically adopted.
+This page's C0–C7/platform gates and the [optimization plan](optimization)'s P0–P7 acceptance are counted separately. Default format31 retains ROW. The locator candidate is frozen at 37 (profile 11); current experimental source uses 39 (profile 13; old 37/35 rejected). Cold-ROW reading, read-only forward/reverse field ownership and cold whole-root enumeration in the existing reclamation scanner are integrated, but actual conversion and mutation/whole-database lifecycle/reachability retirement remain incomplete; do not publish new-mode data; short-text byte/initial-lifecycle checks are in `20261022-core-cost-native-short-text/`, and grouped authentication/production filter and real-group checks are in `20261022-core-cost-native-group-runs/`. The narrow-field 512-owner fixture increases allocation by 28.57% and correctly fails admission; group-owned locator evidence in `20261022-core-cost-direct-locators/` passes 234 checks in each configuration and 62 default checks. All actual-input nodes retain long IDs, leaving mixed-layout and whole cost/performance gates open. Frozen format33/35 evidence is not full acceptance of 37. Hybrid conversion remains explicit, bounded and subject to cost admission. The final graph choice is the canonical key-only tree with bounded primary-record reuse; covering/segmented prototypes are not automatically adopted.
 
 Verified repairs cover unchanged-transaction native property-cell forwarding, owning fallback after mutation and callback revision guards (`test_RelocatableOverlayDirectCells.cpp`); accounted original-pin/I/O-epoch read-context reuse (`test_HybridPropertyColumnReadReuse.cpp`); and small global-adjacency/EDGE-membership deletions, terminal retirement and A/B recovery (`test_RelocatableStreamedAdjacencyDelta.cpp`). First-repair modules have559candidate and272default unique executed cases in their final passing states, each with one existing disabled case. A failed case was rerun after an oracle correction:these are neither single all-pass runs nor a full unit suite. Only Linux ran. Final pure-column reads/eligibility validation/source-pin reuse pass365candidate/24default affected cases,8untimed preflight groups and five layout pairs under the optimization plan's original stable-rejection formula. SET pooledP50/P95remain+5.9%/+13.4%;not every pooled tail is below5%,and the Kuzu goal is unmet. Optimization completion does not close this page's independent platform,coverage or C0–C7gates.
 
@@ -333,3 +333,16 @@ C0 is complete only when every supported individual clause, function, procedure,
 Related documents:
 
 - [Native Single-File Storage Re-architecture Plan](native-single-file-storage-plan)
+
+
+## Current optimization acceptance (2026-10-23)
+
+| Path | Current capability and boundary |
+|---|---|
+| Public cold conversion | Explicit experimental13/39; actual ROW sources; at most8 groups/1MiB; prepare all then publish once; missing whole-database admission refuses |
+| Space/recovery | Require10% whole-database saving and original peak/file limits; otherwise retain ROW; cancellation/faults expose no prefix |
+| Lifecycle/consumption | Actual converted Node/Edge, filter/group/cold point, hot/cold writes/demotion, sealed birth/deletion, inverse, large-value/relocation reclamation, old pins/reopen/integrity |
+| Necessary tests | Public12; both experimental modes576 each including public cases; default155; two full-query cache modes2; all pass |
+| Performance/completion | Updated user instruction requires delivered implementation and objective reporting, not Kuzu superiority; retain unmet speed targets honestly |
+
+Evidence and identities: `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Default5/31 does not automatically adopt the experimental layout; the space fixture is no universal data promise. Historical round notes are archived rather than current capability limits. Broader C0 API-ledger completion and cross-platform release gates remain independent.

@@ -1,0 +1,85 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 35 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 33 tests from NativeGraphWritePlannerPublicContractsTest
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsEveryUnboundedOrInvalidPlannerOption (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsStoresFromAnotherMetadataDomain (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsTransactionsFromAMovedFromPlanner (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MovesActiveTransactionsWithoutPublishingTheDiscardedTargetState (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsOperationsOnDefaultAndCompletedTransactions (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidLabelsBeforeLeasingLogicalNodeIds (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesOnlyBoundedNonemptyLogicalIdentityRanges (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently
+[       OK ] NativeGraphWritePlannerPublicContractsTest.ReservesNodeAndEdgeIdentityRangesIndependently (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsInvalidActiveTransactionInputsBeforePublication (5 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsZeroEntityIdentitiesAndAdjacencyReadsForAnAlreadyErasedNodeBeforePublication (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPersistedNodeDeletionUntilEveryIncidentEdgeIsStagedForErasure (16 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations (3 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PublishesReservedEdgeBetweenDistinctReservedNodes (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedAdoptedLogicalIdReservationsBeforeStagingGraphState (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsMalformedPreplannedScalarIndexCreationBeforePublication (4 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsScalarIndexMutationsThatChangeTheirPageStoreIdentity (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStalePropertyWriteInsteadOfRebasingItOntoAnUnrelatedPublication (14 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint (14 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherNodeMutationAfterStagedDeletion (10 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsFurtherEdgeMutationAfterStagedDeletion (14 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection
+[       OK ] NativeGraphWritePlannerPublicContractsTest.CancelsAnUnpublishedSelfLoopWithoutLeavingEitherAdjacencyDirection (9 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveTransfersThePinnedTransactionAndRollsBackTheMovedFromObject (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.SelfMoveAssignmentKeepsThePinnedTransactionAndItsLease (6 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MoveAssignmentAbandonsTheReplacedTransactionLease (7 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.RejectsPublicMutationOfFreeSpaceSummaryNamespace
+[       OK ] NativeGraphWritePlannerPublicContractsTest.RejectsPublicMutationOfFreeSpaceSummaryNamespace (2 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.MissingFreeSpaceCandidateFailsIntegrityAndColdInsertion
+[       OK ] NativeGraphWritePlannerPublicContractsTest.MissingFreeSpaceCandidateFailsIntegrityAndColdInsertion (14 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.EdgeEndpointReadsDoNotRewriteNodePagesButLabelChangesDo
+[       OK ] NativeGraphWritePlannerPublicContractsTest.EdgeEndpointReadsDoNotRewriteNodePagesButLabelChangesDo (35 ms)
+[ RUN      ] NativeGraphWritePlannerPublicContractsTest.PropertyOnlyCommitDoesNotDiscoverOrQueryUnrelatedEntityPools
+[       OK ] NativeGraphWritePlannerPublicContractsTest.PropertyOnlyCommitDoesNotDiscoverOrQueryUnrelatedEntityPools (10 ms)
+[----------] 33 tests from NativeGraphWritePlannerPublicContractsTest (267 ms total)
+
+[----------] 1 test from NativeGraphWritePlannerOptionsTest
+[ RUN      ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections
+[       OK ] NativeGraphWritePlannerOptionsTest.DefaultAdjacencyBudgetAccountsForBothDirections (0 ms)
+[----------] 1 test from NativeGraphWritePlannerOptionsTest (0 ms total)
+
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest
+[ RUN      ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations
+[       OK ] NativeGraphWriteTransactionPublicContractsTest.DefaultTransactionIsInactiveAndRejectsOperations (0 ms)
+[----------] 1 test from NativeGraphWriteTransactionPublicContractsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 35 tests from 3 test suites ran. (267 ms total)
+[  PASSED  ] 35 tests.

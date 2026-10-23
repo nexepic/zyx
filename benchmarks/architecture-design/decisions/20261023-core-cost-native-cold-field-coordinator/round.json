@@ -1,0 +1,67 @@
+{
+  "recorded_at_utc": "2026-10-23T06:26:16.182087+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-native-cold-dispatch-stable-legacy-": {
+      "tests": 507,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-native-cold-dispatch-stable-compact-": {
+      "tests": 507,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-native-cold-coordinator-": {
+      "tests": 26,
+      "failures": 2,
+      "skipped": 0
+    },
+    "targeted-native-cold-coordinator-store-order-": {
+      "tests": 26,
+      "failures": 2,
+      "skipped": 0
+    },
+    "targeted-native-cold-dispatch-stable-target-": {
+      "tests": 29,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "60dda11ac94bbb1836cf01a293821a78c9c950e01459bcc98acddfe6e887522c",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "0079ab78dd7450f2495521b383b0dbc007677a52d40e62ae0bee2c3e7e68ea24",
+      "binary_preserved": false
+    }
+  },
+  "source_files": {
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "a72948d9d471d3dbd25550fed1053b60320dfc78a86ab4521ae44eb6f61922e3",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "ea6f8180fe04904e136f6c194236116b19d91eaa808b8148dd9999ac67f4acc2",
+    "include/graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp": "ba37d9bdc852e04416108d1a965f66bd674a1207face776796b8ca30cea4b51e",
+    "tests/include/storage/relocatable/property/HybridPropertyNativeWriteTestAccess.hpp": "0888f52c3994e036572e22d1d1863a16c3b57c2d789578e63bc3a168d92d3b94",
+    "tests/src/storage/relocatable/property/test_HybridPropertyColdCompatibleHot.cpp": "d0d9dfd1d5498a48f699968f4c74c2aa7b3d7b9c89058220a45414c019d76519"
+  },
+  "evidence_limit": "Actual original Native coordinator preparation consumes an in-memory candidate descriptor only; all candidate sources unconditionally refuse before physical IO. No public conversion/new-mode installation/Catalog-index-constraint lifecycle or performance acceptance is claimed.",
+  "remaining": [
+    "Real Catalog/index/constraint source coverage and atomic physical installation",
+    "Global hot demotion; pending/new/deleted-owner/liveness/final-group/inverse lifecycle",
+    "Whole-space/staged-target bootstrap admission and full public-conversion lifecycle",
+    "Remaining primary query costs and final P7 matrix"
+  ]
+}

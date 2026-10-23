@@ -97,3 +97,28 @@ TEST(HybridPropertyGroupConversionTest, NullMixedAndHeapExtensionsRemainBorrowed
     EXPECT_EQ(memory->used(), 0U);
 }
 } // namespace
+
+TEST(HybridPropertyGroupConversionTest, DenseShortTextUsesExistingBoundedColumnsAndLongTextRetainsExtension) {
+ auto roots=nativeRows(64,2);auto memory=std::make_shared<MaterializedByteBudget>(1024*1024);
+ for(size_t i=0;i<roots.size();++i) {
+  roots[i].entries[0].value=i==4?PropertyValue{}:PropertyValue(i%2?std::string("a\0b",3):std::string("CN"));
+  roots[i].entries[1].value=PropertyValue(std::string(8,'x'));
+ }
+ {
+  Plan plan(memory,roots,NODE,1,Generation(7),3952);
+  ASSERT_EQ(plan.columns().size(),1U);
+  EXPECT_EQ(plan.columns()[0].identity.scalar_kind,HybridPropertyScalarKind::HPSK_SHORT_TEXT7);
+  for(const auto &root:roots) {
+   std::vector<PropertyCollectionRootEntry> selected;
+   plan.visitOwner(root.owner_entity_id,[&](auto token,const auto &value){selected.push_back({token,value});});
+   EXPECT_EQ(selected,root.entries);
+  }
+ }
+ EXPECT_EQ(memory->used(),0U);
+ roots[0].entries[0].value=PropertyValue(std::string(8,'y'));
+ {
+  Plan plan(memory,roots,NODE,1,Generation(7),3952);
+  EXPECT_TRUE(plan.columns().empty());
+ }
+ EXPECT_EQ(memory->used(),0U);
+}

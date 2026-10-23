@@ -10,12 +10,21 @@
 #include <atomic>
 #include <cerrno>
 #include <span>
+#include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 using namespace relocatable_storage_backend_test;
+namespace {
+bool isMetadataCandidatePage(const void *bytes, size_t size) {
+    if (size != RSS_PAGE_SIZE) return false;
+    const auto magic = LittleEndianCodec::readU32(std::span<const std::byte>(static_cast<const std::byte *>(bytes), size), 0U);
+    return magic == RSS_CATALOG_RADIX_PAGE_MAGIC || magic == RSS_LOCATION_LEAF_MAGIC;
+}
+}
+
 
 TEST_F(RelocatableStorageBackendTest,
 		DetachDeleteShortAdjacencyPageRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
@@ -397,15 +406,6 @@ TEST_F(RelocatableStorageBackendTest,
 TEST_F(RelocatableStorageBackendTest,
 		DetachDeleteShortMetadataPageRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
-	uint64_t metadataPoolOffset = 0U;
-	{
-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-		ASSERT_TRUE(data->is_open());
-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-		auto metadata = RelocatableMetadataStore::open(io);
-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
-		metadataPoolOffset = snapshot.superblock().data_region_offset;
-	}
 
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -418,11 +418,9 @@ TEST_F(RelocatableStorageBackendTest,
 	std::atomic<bool> injected{false};
 	{
 		StorageIO::ScopedNativeWriteHookForTesting shortMetadataPage(
-				[metadataPoolOffset, &injected](file_handle_t fd, const void *bytes, size_t byteCount,
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount,
 													 pwrite_off_t offset) {
-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE &&
+					if (isMetadataCandidatePage(bytes, byteCount) &&
 						!injected.load(std::memory_order_relaxed)) {
 						injected.store(true, std::memory_order_relaxed);
 						return portable_pwrite(fd, bytes, 16U, offset);
@@ -470,15 +468,6 @@ TEST_F(RelocatableStorageBackendTest,
 TEST_F(RelocatableStorageBackendTest,
 		DetachDeleteMetadataPageDiskFullRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
-	uint64_t metadataPoolOffset = 0U;
-	{
-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-		ASSERT_TRUE(data->is_open());
-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-		auto metadata = RelocatableMetadataStore::open(io);
-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
-		metadataPoolOffset = snapshot.superblock().data_region_offset;
-	}
 
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -491,11 +480,9 @@ TEST_F(RelocatableStorageBackendTest,
 	std::atomic<bool> injected{false};
 	{
 		StorageIO::ScopedNativeWriteHookForTesting diskFullOnMetadataPage(
-				[metadataPoolOffset, &injected](file_handle_t fd, const void *bytes, size_t byteCount,
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount,
 														 pwrite_off_t offset) {
-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE &&
+					if (isMetadataCandidatePage(bytes, byteCount) &&
 						!injected.load(std::memory_order_relaxed)) {
 						injected.store(true, std::memory_order_relaxed);
 #ifdef _WIN32
@@ -629,15 +616,6 @@ TEST_F(RelocatableStorageBackendTest,
 TEST_F(RelocatableStorageBackendTest,
 		DetachDeleteMetadataDataSyncFailureRetainsTheCompleteOldGraphAndAllowsRetryAfterReopen) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
-	uint64_t metadataPoolOffset = 0U;
-	{
-		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
-		ASSERT_TRUE(data->is_open());
-		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-		auto metadata = RelocatableMetadataStore::open(io);
-		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
-		metadataPoolOffset = snapshot.superblock().data_region_offset;
-	}
 
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -651,11 +629,9 @@ TEST_F(RelocatableStorageBackendTest,
 	std::atomic<bool> failedDataFence{false};
 	{
 		StorageIO::ScopedNativeWriteHookForTesting observeMetadataCandidate(
-				[metadataPoolOffset, &sawMetadataCandidate](file_handle_t fd, const void *bytes, size_t byteCount,
+				[&sawMetadataCandidate](file_handle_t fd, const void *bytes, size_t byteCount,
 															pwrite_off_t offset) {
-					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
-					if (byteCount == RSS_PAGE_SIZE && absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
-						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE) {
+					if (isMetadataCandidatePage(bytes, byteCount)) {
 						sawMetadataCandidate.store(true, std::memory_order_relaxed);
 					}
 					return portable_pwrite(fd, bytes, byteCount, offset);

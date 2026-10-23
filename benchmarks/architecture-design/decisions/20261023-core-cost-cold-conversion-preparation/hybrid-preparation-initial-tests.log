@@ -1,0 +1,56 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableBorrowedPropertyRootTest.*:HybridPropertyConversionPreparationTest.*:HybridPropertyLargeFieldPreparationTest.*
+[==========] Running 20 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from HybridPropertyLargeFieldPreparationTest
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.SingleFieldEncoderPreservesExistingWireBytesAndRefunds
+[       OK ] HybridPropertyLargeFieldPreparationTest.SingleFieldEncoderPreservesExistingWireBytesAndRefunds (0 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.ProposalOwnsPayloadWithoutPublishingOrConsumingIdentity
+[       OK ] HybridPropertyLargeFieldPreparationTest.ProposalOwnsPayloadWithoutPublishingOrConsumingIdentity (0 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.SharedContentReusesIdentityAndDifferentTokenDoesNot
+[       OK ] HybridPropertyLargeFieldPreparationTest.SharedContentReusesIdentityAndDifferentTokenDoesNot (1 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput
+[       OK ] HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput (1 ms)
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing
+[       OK ] HybridPropertyLargeFieldPreparationTest.BorrowedWholeRootProposalAndColdBindingReuseActualManifestWithoutPublishing (1 ms)
+[----------] 5 tests from HybridPropertyLargeFieldPreparationTest (5 ms total)
+
+[----------] 4 tests from RelocatableBorrowedPropertyRootTest
+[ RUN      ] RelocatableBorrowedPropertyRootTest.CanonicalNodeAndEdgeBytesMatchExistingCodecWithoutCloningSourceValues
+[       OK ] RelocatableBorrowedPropertyRootTest.CanonicalNodeAndEdgeBytesMatchExistingCodecWithoutCloningSourceValues (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.OwnerNeutralLargeBytesMatchExistingCanonicalPayloadForNestedValues
+[       OK ] RelocatableBorrowedPropertyRootTest.OwnerNeutralLargeBytesMatchExistingCanonicalPayloadForNestedValues (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.EmptyCanonicalRootsAndInvalidOwnersPointersOrOrderRetainExistingContract
+[       OK ] RelocatableBorrowedPropertyRootTest.EmptyCanonicalRootsAndInvalidOwnersPointersOrOrderRetainExistingContract (0 ms)
+[ RUN      ] RelocatableBorrowedPropertyRootTest.QuotaAndCancellationAfterAllocationReleaseBothOutputAndCanonicalWorkspace
+[       OK ] RelocatableBorrowedPropertyRootTest.QuotaAndCancellationAfterAllocationReleaseBothOutputAndCanonicalWorkspace (0 ms)
+[----------] 4 tests from RelocatableBorrowedPropertyRootTest (0 ms total)
+
+[----------] 11 tests from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories
+[       OK ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity
+[       OK ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner
+[       OK ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing
+[       OK ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate
+[       OK ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors
+[       OK ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues
+[       OK ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues
+[       OK ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues (8 ms)
+[----------] 11 tests from HybridPropertyConversionPreparationTest (15 ms total)
+
+[----------] Global test environment tear-down
+[==========] 20 tests from 3 test suites ran. (21 ms total)
+[  PASSED  ] 20 tests.

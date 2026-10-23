@@ -1,0 +1,165 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 72 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from PropertyPagePoolPackingTest
+[ RUN      ] PropertyPagePoolPackingTest.AppendsANewPageToAnExistingPoolBeforeAllocatingAnotherSegment
+[       OK ] PropertyPagePoolPackingTest.AppendsANewPageToAnExistingPoolBeforeAllocatingAnotherSegment (7 ms)
+[ RUN      ] PropertyPagePoolPackingTest.FillsOneFreshPoolBeforeCreatingTheNextPool
+[       OK ] PropertyPagePoolPackingTest.FillsOneFreshPoolBeforeCreatingTheNextPool (6 ms)
+[ RUN      ] PropertyPagePoolPackingTest.ReservesTheLastExistingFrameForCowBeforePlacingANewPage
+[       OK ] PropertyPagePoolPackingTest.ReservesTheLastExistingFrameForCowBeforePlacingANewPage (11 ms)
+[ RUN      ] PropertyPagePoolPackingTest.MovesPropertyCowToFreshPoolWhenPinnedSnapshotsExhaustSourceFrames
+[       OK ] PropertyPagePoolPackingTest.MovesPropertyCowToFreshPoolWhenPinnedSnapshotsExhaustSourceFrames (140 ms)
+[ RUN      ] PropertyPagePoolPackingTest.PacksConcurrentPinnedPropertyCowFallbacksIntoOneFreshPool
+[       OK ] PropertyPagePoolPackingTest.PacksConcurrentPinnedPropertyCowFallbacksIntoOneFreshPool (26 ms)
+[ RUN      ] PropertyPagePoolPackingTest.DoesNotPublishAnyConcurrentFreshPoolCowReplacementBeforeSuperblockPublication
+[       OK ] PropertyPagePoolPackingTest.DoesNotPublishAnyConcurrentFreshPoolCowReplacementBeforeSuperblockPublication (130 ms)
+[ RUN      ] PropertyPagePoolPackingTest.RollsBackFreshPropertyCowPoolWhenPublicationIsInterrupted
+[       OK ] PropertyPagePoolPackingTest.RollsBackFreshPropertyCowPoolWhenPublicationIsInterrupted (146 ms)
+[ RUN      ] PropertyPagePoolPackingTest.RecoversFreshPropertyCowPoolAfterInactiveSuperblockPublication
+[       OK ] PropertyPagePoolPackingTest.RecoversFreshPropertyCowPoolAfterInactiveSuperblockPublication (145 ms)
+[ RUN      ] PropertyPagePoolPackingTest.NewOwnerBatchPreparesSourceOnceAndPacksOverflowWithoutChangingOldSnapshot
+[       OK ] PropertyPagePoolPackingTest.NewOwnerBatchPreparesSourceOnceAndPacksOverflowWithoutChangingOldSnapshot (16 ms)
+[----------] 9 tests from PropertyPagePoolPackingTest (631 ms total)
+
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains
+[       OK ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains (4 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState
+[       OK ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads (22 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity (23 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads (13 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing (3 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit (12 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots (9 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage (9 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot
+[       OK ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot (7 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp
+[       OK ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource (10 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove (8 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically (15 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources (10 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans (2 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations
+[       OK ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations (5 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks (35 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode
+[       OK ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode (29 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries
+[       OK ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry (7 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission
+[       OK ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission (22 ms)
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest (305 ms total)
+
+[----------] 21 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (6 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (5 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges
+[       OK ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges (4 ms)
+[----------] 21 tests from PropertyCollectionRootStoreCacheTest (89 ms total)
+
+[----------] 10 tests from PropertyPagePoolDurabilityTest
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPoolAppendPublishesOnlyAtACompleteSuperblockBoundary
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPoolAppendPublishesOnlyAtACompleteSuperblockBoundary (14 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPoolAppendWriteFailureIsReconciledWithoutLeakingAFrame
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPoolAppendWriteFailureIsReconciledWithoutLeakingAFrame (10 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPoolAppendDiskFullRetainsThePublishedRootAndCanRetryAfterReopen
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPoolAppendDiskFullRetainsThePublishedRootAndCanRetryAfterReopen (12 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPoolAppendSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPoolAppendSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen (12 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPageReplacementDiskFullRetainsThePublishedRootAndCanRetryAfterReopen
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPageReplacementDiskFullRetainsThePublishedRootAndCanRetryAfterReopen (12 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPageReplacementSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPageReplacementSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen (13 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPageReplacementMetadataDiskFullRetainsThePublishedRootAndCanRetryAfterReopen
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPageReplacementMetadataDiskFullRetainsThePublishedRootAndCanRetryAfterReopen (12 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.ExistingPageReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteRoot
+[       OK ] PropertyPagePoolDurabilityTest.ExistingPageReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteRoot (12 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.FreshMultiPagePoolIsRecoveredAsAllOrNothing
+[       OK ] PropertyPagePoolDurabilityTest.FreshMultiPagePoolIsRecoveredAsAllOrNothing (11 ms)
+[ RUN      ] PropertyPagePoolDurabilityTest.MultiPagePoolReclaimsAfterSnapshotsDrainAndReusesSlotAcrossKinds
+[       OK ] PropertyPagePoolDurabilityTest.MultiPagePoolReclaimsAfterSnapshotsDrainAndReusesSlotAcrossKinds (12 ms)
+[----------] 10 tests from PropertyPagePoolDurabilityTest (124 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValueReferenceTest
+[ RUN      ] EntityPropertyLargeValueReferenceTest.RoundTripsLogicalIdentityAndRejectsCorruption
+[       OK ] EntityPropertyLargeValueReferenceTest.RoundTripsLogicalIdentityAndRejectsCorruption (0 ms)
+[ RUN      ] EntityPropertyLargeValueReferenceTest.RejectsInvalidOwnersAndTruncatedReferences
+[       OK ] EntityPropertyLargeValueReferenceTest.RejectsInvalidOwnersAndTruncatedReferences (0 ms)
+[ RUN      ] EntityPropertyLargeValueReferenceTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] EntityPropertyLargeValueReferenceTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (8 ms)
+[----------] 3 tests from EntityPropertyLargeValueReferenceTest (8 ms total)
+
+[----------] Global test environment tear-down
+[==========] 72 tests from 5 test suites ran. (1158 ms total)
+[  PASSED  ] 72 tests.

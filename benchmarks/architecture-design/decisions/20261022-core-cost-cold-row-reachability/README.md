@@ -1,0 +1,11 @@
+# Cold whole-root reference scanning
+
+Accepted progress remains **90%**, P7 open. No timing benchmark, full unit suite, commit or push.
+
+The existing Entity Property LargeValue ownership scanner merges ordinary ROW, existing explicit-selector owners and cold whole-root references by stable logical EntityPropertyKey. A reference-free group tail is a bounded work probe, merged with ordinary ROW so no unchecked ROW is skipped. Each cold whole root costs one owner record, not repeated field visits. Owner/type/media/block generation are checked before the existing sink authenticates its real immutable manifest. Marking does not materialize complete value content; field reads/full integrity retain their stronger checks. All original bounds remain, with no new cache/index/backend/format flag.
+
+Related module selections pass **357 tests in each experimental membership configuration and119 default tests**. Six new checks cover reference-only marking, local future-reference rejection, sink failure/no replay/refund, resume after one whole root and a reference-free tail, inline cold-only Edge group progress, and zero/one metadata/zero owner budgets. Existing mixed ROW/native retirement and journal regressions pass. Tests use actual pages/indexes/Entity Map and the existing private candidate descriptor, entering the production scan loop through a private friend seam. They are not acceptance after a real public mode3 conversion. Production still opens the persisted descriptor; normal mode3 publication and mutation remain closed.
+
+The initial25-test selection had24passes/1failure: a single-leaf BTree does not emit sibling-key admission, so one-page work could mark a cold reference. Source now explicitly charges group probes/cold blocks and reference-owner processing, retaining limits and the failure report. The original mixed fixture still has five references; a new reference-free group-tail probe adds one work unit (total5->6, resumed tail3->4), preserving reference set/order/final cursor. Assertion changes implement that explicit documented work contract.
+
+Actual public conversion/reclamation/old-pin/retirement, complete mutation/fault/reopen lifecycle, cold selected batch reuse, mature whole allocation/migration bootstrap and final P7 matrix remain pending.

@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
@@ -200,14 +201,15 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] CatalogRadixPage readRadixForMutation(MetadataPageFile &pages, PhysicalPageRef reference,
-																			const MetadataWriteBatch &batch) {
+																			const MetadataWriteBatch &batch, bool resolveAll = true) {
 			const MetadataRadixPage unresolved = pages.readMetadataRadixUnresolved(reference);
 			// Existing logical pages must follow the generation that published their
 			// route. New batch-owned pages are physical until the next route branch.
 			if (!unresolved.logical_children_enabled) {
 				return pages.readCatalogRadix(reference, batch.candidate());
 			}
-		CatalogRadixPage page = unresolved;
+		if (!resolveAll) return unresolved;
+			CatalogRadixPage page = unresolved;
 			const PageDirectoryBootstrap currentBootstrap =
 					pages.readPageDirectoryBootstrap(batch.current().page_directory_root);
 			for (size_t index = 0U; index < page.logical_children.size(); ++index) {
@@ -225,10 +227,31 @@ namespace graph::storage {
 			return page;
 		}
 
+
+		void resolveMutationChild(MetadataRadixPage &page, uint32_t index,
+				const Superblock &superblock, MetadataPageFile &pages, const MetadataWriteBatch *batch) {
+			if (!page.logical_children_enabled || page.children[index].isValid() ||
+				!page.logical_children[index].isValid()) return;
+			const auto id = page.logical_children[index];
+			if (batch) {
+				const auto pending = batch->pendingMetadataPageRoute(id);
+				if (pending) page.children[index] = *pending;
+				else {
+					const auto bootstrap = pages.readPageDirectoryBootstrap(batch->current().page_directory_root);
+					page.children[index] = MetadataPageRouteDirectory(pages).find(
+							batch->current(), bootstrap.metadata_page_directory_root, id);
+				}
+			} else {
+				pages.resolveMetadataRadixChildren(page, superblock, std::span(&index, 1U),
+						std::span(&page.children[index], 1U));
+			}
+			debug::PerfTrace::addValue("native_graph.catalog.mutation_child_route_resolutions", 1);
+		}
+
 		[[nodiscard]] std::unique_ptr<MutableNode> loadInternalNode(MetadataPageFile &pages, PhysicalPageRef reference,
 															uint16_t expectedLevel,
-															const MetadataWriteBatch &batch) {
-			CatalogRadixPage page = readRadixForMutation(pages, reference, batch);
+															const MetadataWriteBatch &batch, bool resolveAll = true) {
+			CatalogRadixPage page = readRadixForMutation(pages, reference, batch, resolveAll);
 			if (page.kind != CatalogRadixPageKind::CRPK_INTERNAL || page.level != expectedLevel) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable Catalog radix parent has an invalid child level or kind");
@@ -276,6 +299,7 @@ namespace graph::storage {
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			const uint32_t index = CatalogRadixPageCodec::childIndex(entry.segment_id, node.page.level);
+			resolveMutationChild(node.page, index, batch.current(), pages, &batch);
 			if (node.page.level == 0) {
 				auto iterator = node.leaf_children.find(index);
 				if (iterator == node.leaf_children.end()) {
@@ -295,7 +319,7 @@ namespace graph::storage {
 				const uint16_t childLevel = node.page.level - 1U;
 				std::unique_ptr<MutableNode> child =
 						node.page.children[index].isValid()
-								? loadInternalNode(pages, node.page.children[index], childLevel, batch)
+								? loadInternalNode(pages, node.page.children[index], childLevel, batch, false)
 								: makeRadixNode(CatalogRadixPageKind::CRPK_INTERNAL, childLevel, generation, lsn,
 												batch);
 				iterator = node.node_children.emplace(index, std::move(child)).first;
@@ -320,7 +344,9 @@ namespace graph::storage {
 
 		[[nodiscard]] bool hasChildren(const MutableNode &node) {
 			return std::ranges::any_of(node.page.children,
-									   [](PhysicalPageRef reference) { return reference.isValid(); });
+									   [](PhysicalPageRef reference) { return reference.isValid(); }) ||
+					std::ranges::any_of(node.page.logical_children,
+									   [](MetadataPageId id) { return id.isValid(); });
 		}
 
 		[[nodiscard]] bool applyErase(MutableNode &node, SegmentId segmentId, Generation generation,
@@ -328,6 +354,7 @@ namespace graph::storage {
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			const uint32_t index = CatalogRadixPageCodec::childIndex(segmentId, node.page.level);
+			resolveMutationChild(node.page, index, batch.current(), pages, &batch);
 			if (node.page.level == 0U) {
 				auto iterator = node.leaf_children.find(index);
 				if (iterator == node.leaf_children.end()) {
@@ -371,7 +398,7 @@ namespace graph::storage {
 				const uint16_t childLevel = node.page.level - 1U;
 				iterator = node.node_children
 								   .emplace(index,
-											loadInternalNode(pages, node.page.children[index], childLevel, batch))
+											loadInternalNode(pages, node.page.children[index], childLevel, batch, false))
 									   .first;
 			}
 			if (applyErase(*iterator->second, segmentId, generation, lsn, pages, batch)) {
@@ -382,11 +409,12 @@ namespace graph::storage {
 			return !hasChildren(node);
 		}
 
-		void normalizeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation, LogSequenceNumber lsn) {
+		void normalizeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation, LogSequenceNumber lsn,
+						   bool retainLogicalChildren) {
 			node.page.kind = kind;
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
-			if (node.page.logical_children_enabled) {
+			if (node.page.logical_children_enabled && !retainLogicalChildren) {
 				// Candidate COW pages remain physical until the final route branch is ready.
 				node.page.logical_children.fill({});
 				node.page.logical_children_enabled = false;
@@ -461,16 +489,33 @@ namespace graph::storage {
 		[[nodiscard]] PhysicalPageRef writeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation,
 												LogSequenceNumber lsn, MetadataPageFile &pages,
 												MetadataWriteBatch &batch) {
-			normalizeNode(node, kind, generation, lsn);
+			const bool retainLogicalChildren = batch.candidate().usesPageDirectoryBootstrap();
+			if (retainLogicalChildren && !node.page.logical_children_enabled) {
+				for (size_t index = 0U; index < node.page.children.size(); ++index) {
+					if (node.page.children[index].isValid() && !node.leaf_children.contains(index) &&
+						!node.node_children.contains(index))
+						node.page.logical_children[index] = readChildPageId(
+								pages, node.page.children[index], node.page.level != 0U);
+				}
+				node.page.logical_children_enabled = true;
+			}
+			normalizeNode(node, kind, generation, lsn, retainLogicalChildren);
 			if (node.page.level == 0) {
 				for (auto &[index, leaf]: node.leaf_children) {
 					node.page.children[index] = writeLeaf(*leaf, generation, lsn, pages, batch);
+					if (retainLogicalChildren) node.page.logical_children[index] = leaf->page.page_id;
 				}
 			} else {
 				for (auto &[index, child]: node.node_children) {
 					node.page.children[index] =
 							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch);
+					if (retainLogicalChildren) node.page.logical_children[index] = child->page.page_id;
 				}
+			}
+			if (retainLogicalChildren) {
+				node.page.children.fill({});
+				node.page.logical_children_resolved = false;
+				debug::PerfTrace::addValue("native_graph.catalog.retained_logical_radix_pages", 1);
 			}
 			const PhysicalPageRef reference = batch.allocatePage();
 			pages.writeCatalogRadix(reference, node.page);
@@ -478,8 +523,8 @@ namespace graph::storage {
 			return reference;
 		}
 
-		[[nodiscard]] CatalogRadixPage readRootForMutation(MetadataPageFile &pages, const MetadataWriteBatch &batch) {
-			CatalogRadixPage root = readRadixForMutation(pages, catalogRootReference(pages, batch.candidate()), batch);
+		[[nodiscard]] CatalogRadixPage readRootForMutation(MetadataPageFile &pages, const MetadataWriteBatch &batch, bool resolveAll = true) {
+			CatalogRadixPage root = readRadixForMutation(pages, catalogRootReference(pages, batch.candidate()), batch, resolveAll);
 			if (root.kind != CatalogRadixPageKind::CRPK_ROOT) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable Catalog Superblock root is not a root radix page");
@@ -924,7 +969,7 @@ namespace graph::storage {
 			root = makeRadixNode(CatalogRadixPageKind::CRPK_ROOT, targetLevel, generation, checkpointLsn, batch);
 		} else {
 			root = std::make_unique<MutableNode>();
-			root->page = readRootForMutation(pages_, batch);
+			root->page = readRootForMutation(pages_, batch, false);
 			while (root->page.level < targetLevel) {
 				root->page.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 				root->page.generation = generation;
@@ -958,7 +1003,7 @@ namespace graph::storage {
 		const Generation generation = batch.generation();
 		const LogSequenceNumber checkpointLsn = batch.checkpointLsn();
 		auto root = std::make_unique<MutableNode>();
-		root->page = readRootForMutation(pages_, batch);
+		root->page = readRootForMutation(pages_, batch, false);
 		for (const SegmentId segmentId: segmentIds) {
 			static_cast<void>(applyErase(*root, segmentId, generation, checkpointLsn, pages_, batch));
 		}

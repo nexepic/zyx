@@ -1,0 +1,61 @@
+{
+  "recorded_at_utc": "2026-10-23T09:20:41.745747+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-inverse-final-legacy-": {
+      "tests": 521,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-inverse-final-compact-": {
+      "tests": 521,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 43,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "0584668d862357c5df137eea115e9909a456f6b2c2a7e044f645506ec3e89737",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "348bb24bc813decc06114990884706d8e26da0a03582c6f49fe5c6c9df6146e8",
+      "binary_preserved": false
+    }
+  },
+  "pre_fix": {
+    "tests": 40,
+    "failures": 2,
+    "cause": "nested openSnapshot under already-held metadata writer while reading actual large cold values"
+  },
+  "implemented": [
+    "Private original Native inverse coordinator entry with unconditional before-IO refusal",
+    "Complete authenticated cold/hot ROW projection, real owner namespaces, source field retention, original ID and manifest planning",
+    "Reuse complete existing cold whole-root carriers; allocate combined ROW carrier when hot fields must be merged",
+    "Private already-owned source-pin attachment to original LargeValueStore/SlottedPagePool; no nested snapshot or reconciliation",
+    "Propertyless live owners, quota and late cancellation refund and retry, existing large-source field mutation"
+  ],
+  "remaining": [
+    "Actual cold public conversion/atomic installation",
+    "Owner creation/deletion/liveness/final-group cleanup and remaining schema combinations",
+    "Whole-space staged target admission and full public lifecycle",
+    "Remaining primary query costs and final P7"
+  ]
+}

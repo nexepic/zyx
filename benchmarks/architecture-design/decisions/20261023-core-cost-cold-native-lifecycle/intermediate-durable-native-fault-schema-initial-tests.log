@@ -1,0 +1,41 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 16 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 16 tests from HybridPropertyColdNativeLifecycleTest
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity (10 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity (11 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity (10 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin (15 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues (13 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues (16 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ReadOnlyGroupProbesDistinguishPendingAndLiveWithoutColdDecoding
+[       OK ] HybridPropertyColdNativeLifecycleTest.ReadOnlyGroupProbesDistinguishPendingAndLiveWithoutColdDecoding (2 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualMixedBirthAndDeletionPublishesOnlyNewEntityAndCompleteColdRoot
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualMixedBirthAndDeletionPublishesOnlyNewEntityAndCompleteColdRoot (17 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualFinalGroupDeletionRemovesAllEntityAndFieldAuthorityTogether
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualFinalGroupDeletionRemovesAllEntityAndFieldAuthorityTogether (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualInversePublishesCompleteLargeRowsAndPreservesOldColdSnapshot
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualInversePublishesCompleteLargeRowsAndPreservesOldColdSnapshot (7 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.PartialInactiveRootFaultReopensOnlyOriginalColdValue
+[       OK ] HybridPropertyColdNativeLifecycleTest.PartialInactiveRootFaultReopensOnlyOriginalColdValue (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.CompleteInactiveRootFaultReopensCompleteColdValueAndManifest
+[       OK ] HybridPropertyColdNativeLifecycleTest.CompleteInactiveRootFaultReopensCompleteColdValueAndManifest (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.CancellationAfterPrivateWritePreservesOldRootRefundsAndAllowsRetry
+[       OK ] HybridPropertyColdNativeLifecycleTest.CancellationAfterPrivateWritePreservesOldRootRefundsAndAllowsRetry (18 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdIndexesAndUniqueRequiredConstraintsPublishTogetherOrRefuse
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualColdIndexesAndUniqueRequiredConstraintsPublishTogetherOrRefuse (19 ms)
+[----------] 16 tests from HybridPropertyColdNativeLifecycleTest (217 ms total)
+
+[----------] Global test environment tear-down
+[==========] 16 tests from 1 test suite ran. (217 ms total)
+[  PASSED  ] 16 tests.

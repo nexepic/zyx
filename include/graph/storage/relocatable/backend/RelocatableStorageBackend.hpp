@@ -271,6 +271,8 @@ namespace graph::storage {
 		// Builds missing global label/type member trees in one native publication.
 		// Existing definitions/roots are reused; no implicit rebuild on reopen.
 		void rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint = {});
+        // Explicit initialization/repair for legacy files; never hidden in open or an ordinary write.
+        void rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint = {});
 		[[nodiscard]] std::vector<uint64_t> ensureLogicalMembershipIndexes(
 				const std::function<void()> &checkpoint = {});
 		[[nodiscard]] std::vector<uint64_t>

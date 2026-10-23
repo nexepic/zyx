@@ -1,0 +1,20 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "property_tests": 72,
+  "related_lifecycle_tests": 399,
+  "medium_p50_ms": {
+    "before": 68.445981,
+    "after": 56.232573
+  },
+  "medium_p95_ms": {
+    "before": 83.380173,
+    "after": 67.067703
+  },
+  "library_sha256": "dbc08fac095fd318dec30349e23cedd00e8c41c8fdb59faa8bc59719f0f29209",
+  "retained_library": "/workspace/zyx-property-batch-candidate/libzyx_core.a",
+  "patch_sha256": "28e4c6f3e5c9e7f098996481f2656334d9bad32265e592e5bd5aebf055ad2b2a",
+  "scope": "new inline owners only; existing/mixed/LargeValue use unchanged fallback; no page-format/header ABI change; no commit/push without acceptance progress"
+}

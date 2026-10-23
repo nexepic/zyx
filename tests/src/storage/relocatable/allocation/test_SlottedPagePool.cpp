@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
@@ -1075,4 +1076,60 @@ TEST_F(RelocatableSlottedPagePoolTest, SharedReadPayloadKeepsTheSnapshotAllocati
     EXPECT_EQ(SlottedPage::open(escaped->owner, escaped->payload).pageId(), PageId(101U));
     escaped.reset();
     EXPECT_TRUE(weak.expired());
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, PoolLocalFreeIndexWorkDoesNotGrowWithUnrelatedDirectoryPages) {
+ auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+ SlottedPagePool pool(io, *metadata);
+ ASSERT_TRUE(pool.allocateEmptyPage(request(60U, 160U), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(3U)));
+ const std::array pools{SegmentId(60U)};
+ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+ struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
+ uint64_t lsn = 4U;
+ for (size_t unrelated : {32U, 512U, 4096U}) {
+  std::vector<PageLocation> elsewhere;
+  for (size_t i = 0U; i < unrelated; ++i)
+   elsewhere.push_back({PageId(1000U + i * RSS_LOCATION_LEAF_MAX_ENTRIES), SegmentId(999U), 1U, Generation(1U), 0U});
+  static_cast<void>(metadata->upsertLocations(elsewhere, {}, LogSequenceNumber(lsn++)));
+  graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+  const auto selection = pool.findBestFitPageForRecord(pools, PageOwnerKind::POK_PROPERTY, 1U);
+  const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+  ASSERT_TRUE(selection); EXPECT_EQ(selection->page_id, PageId(160U));
+  ASSERT_TRUE(counters.contains("storage.slotted.free_index.pool_frames"));
+  EXPECT_EQ(counters.at("storage.slotted.free_index.pool_frames").totalValue, 1);
+  EXPECT_EQ(counters.at("storage.slotted.free_index.metadata_point_lookups").totalValue, 1);
+  EXPECT_EQ(counters.at("storage.slotted.free_index.live_candidate_pages").totalValue, 1);
+  EXPECT_FALSE(counters.contains("storage.slotted.free_index.directory_fallbacks"));
+  EXPECT_LE(counters.at("native_graph.read.metadata_decodes.location").totalValue, 2);
+  RecordProperty("unrelated_pages_" + std::to_string(unrelated),
+    std::to_string(counters.at("storage.slotted.free_index.metadata_point_lookups").totalValue));
+ }
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, UndecodableOrphanOwnerFallsBackToAuthoritativeDirectory) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ SlottedPagePool pool(io, *metadata);
+ const auto allocated = pool.allocateEmptyPage(request(60U, 160U), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U));
+ ASSERT_TRUE(allocated);
+ auto snapshot = metadata->openSnapshot();
+ const auto &entry = allocated->allocation.pool;
+ const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, entry.physical_slot);
+ SharedPagePoolHeader header; header.segment_id = entry.segment_id; header.generation = entry.generation;
+ header.committed_lsn = entry.committed_lsn; header.allocated_frames = 3U; header.control_sequence = 1000U;
+ const auto bytes = SharedPagePoolHeaderCodec::encode(header);
+ io->writeAt(offset + RSS_ENVELOPE_BYTES, bytes.data(), bytes.size());
+ const std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> partial{};
+ io->writeAt(offset + 2U * RSS_PAGE_SIZE, partial.data(), partial.size());
+ const auto epoch = io->dataMutationEpoch();
+ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+ struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); } } restore{enabled};
+ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ const std::array pools{entry.segment_id};
+ const auto selection = pool.findBestFitPageForRecord(snapshot, pools, PageOwnerKind::POK_PROPERTY, 1U);
+ const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+ ASSERT_TRUE(selection); EXPECT_EQ(selection->page_id, PageId(160U));
+ ASSERT_TRUE(counters.contains("storage.slotted.free_index.directory_fallbacks"));
+ EXPECT_EQ(counters.at("storage.slotted.free_index.directory_fallbacks").totalValue, 1);
+ EXPECT_EQ(io->dataMutationEpoch(), epoch);
+ EXPECT_EQ(pool.read(snapshot, PageId(160U)).stats().live_slot_count, 0U);
 }

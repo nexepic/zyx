@@ -24,7 +24,7 @@ namespace graph::storage {
 class HybridPropertyColumnDelta final {
 public:
     enum class Action : uint8_t { HCD_NO_CHANGE = 1, HCD_REPLACE_COLUMN, HCD_DEMOTE_FIELD };
-    enum class CellKind : uint8_t { HCC_MISSING = 1, HCC_NULL, HCC_INT64, HCC_DOUBLE, HCC_BOOL, HCC_EXTENSION };
+    enum class CellKind : uint8_t { HCC_MISSING = 1, HCC_NULL, HCC_INT64, HCC_DOUBLE, HCC_BOOL, HCC_EXTENSION, HCC_SHORT_TEXT7 };
     struct Cell {
         CellKind kind = CellKind::HCC_MISSING;
         uint64_t bits = 0;
@@ -62,6 +62,7 @@ private:
             case HybridPropertyScalarKind::HPSK_INT64: return CellKind::HCC_INT64;
             case HybridPropertyScalarKind::HPSK_DOUBLE: return CellKind::HCC_DOUBLE;
             case HybridPropertyScalarKind::HPSK_BOOL: return CellKind::HCC_BOOL;
+            case HybridPropertyScalarKind::HPSK_SHORT_TEXT7: return CellKind::HCC_SHORT_TEXT7;
             default: throw FormatException(FormatError::FERR_INVALID_ENUM, "unknown native column type");
         }
     }
@@ -78,6 +79,8 @@ private:
         if (const auto *v = std::get_if<int64_t>(&data)) return {CellKind::HCC_INT64, std::bit_cast<uint64_t>(*v)};
         if (const auto *v = std::get_if<double>(&data)) return {CellKind::HCC_DOUBLE, std::bit_cast<uint64_t>(*v)};
         if (const auto *v = std::get_if<bool>(&data)) return {CellKind::HCC_BOOL, uint64_t(*v)};
+        if(const auto *text=std::get_if<std::string>(&data))
+            if(const auto word=HybridPropertyShortText::encode(*text))return {CellKind::HCC_SHORT_TEXT7,*word};
         return {CellKind::HCC_EXTENSION, 0, value};
     }
     static bool same(Cell left, Cell right) {
@@ -126,11 +129,15 @@ public:
     // coordinator must retain its separate write route. A NULL pointer removes
     // the field; a pointer to PropertyValue(NULL) stores NULL. There is no
     // implicit promotion or whole-group reconstruction in this operation.
+    // prepareColdDemotion exposes only complete immutable cell planning for
+    // the bounded whole-column coordinator. Default callers keep the original
+    // guard; Entity liveness and physical publication remain forbidden.
     [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planExistingColumn(
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
         const PropertyValue *replacement, bool eraseOwner = false,
-        size_t nativeRecordLimit = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES) {
+        size_t nativeRecordLimit = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
+        bool prepareColdDemotion = false) {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column mutation is disabled");
         hybrid_property_detail::require(context.usesSnapshot(snapshot) && bool(memory) &&
@@ -145,7 +152,7 @@ public:
         const auto column = [&](const HybridPropertyGroupRecord &group, const HybridPropertyColumnRecord &source,
             const SlottedSlotReference &groupReference, const SlottedSlotReference &columnReference) {
             boundaryCredit.set(0);
-            if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+            if (group.usesColumnMembership())
                 hybrid_property_detail::require(context.columnMembership(group).presence(source.identity.token) == source.presence,
                     "native column change has contradictory compact source presence");
             static_assert(std::is_nothrow_default_constructible_v<State>);
@@ -156,13 +163,18 @@ public:
             state->owner = owner; state->group_reference = groupReference; state->column_reference = columnReference;
             state->requested_slots = UINT64_C(1) << hybridPropertySlotFor(owner);
             state->group = group; state->source = state->column = source;
+            if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER && eraseOwner)
+                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "cold owner deletion requires its complete lifecycle");
             change(*state, owner, replacement, eraseOwner, nativeRecordLimit);
+            if (group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER &&
+                state->action == Action::HCD_DEMOTE_FIELD && !prepareColdDemotion)
+                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "cold ROW hot-field demotion requires complete repacking");
             result = HybridPropertyColumnDelta(std::move(state));
         };
         const auto ignoreScalar = [](const HybridPropertyFieldView::ScalarCell &) {};
         const auto ignoreExtension = [](const HybridPropertyExtensionView &) {};
-        static_cast<void>(context.visitField(owner, token, std::ref(ignoreScalar), std::ref(ignoreExtension),
-            std::ref(boundary), std::ref(reference), std::ref(column)));
+        static_cast<void>(context.visitFieldImpl(owner, token, std::ref(ignoreScalar), std::ref(ignoreExtension),
+            std::ref(boundary), std::ref(reference), std::ref(column), {}, nullptr, true));
         return result;
     }
     // Missing memberships may join an existing group column. Authenticate the
@@ -172,22 +184,22 @@ public:
     [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planMissingColumnMember(
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
-        const PropertyValue &replacement) {
-        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, false);
+        const PropertyValue &replacement, bool prepareColdDemotion = false) {
+        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, false, prepareColdDemotion);
     }
     // Private images only: a pending logical owner has no Entity Map authority.
     // Publication additionally needs its leased Entity/field/liveness coordinator.
     [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planPendingOwnerColumnMember(
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
-        const PropertyValue &replacement) {
-        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, true);
+        const PropertyValue &replacement, bool prepareColdPending = false) {
+        return planAbsentColumnMember(context, snapshot, owner, token, nextGeneration, std::move(memory), replacement, true, prepareColdPending);
     }
 private:
     [[nodiscard]] static std::optional<HybridPropertyColumnDelta> planAbsentColumnMember(
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
-        const PropertyValue &replacement, bool pendingOwner) {
+        const PropertyValue &replacement, bool pendingOwner, bool prepareColdDemotion = false) {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column insertion is disabled");
         const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
@@ -197,30 +209,42 @@ private:
         utils::OwnedHeapReservation boundaryCredit(memory), referenceCredit(memory);
         const auto boundary = [&](size_t bytes) { boundaryCredit.set(bytes); };
         const auto reference = [&](size_t bytes) { referenceCredit.set(bytes); };
-        require(context.visitField(owner, token, [](const auto &) {}, [](const auto &) {}, std::ref(boundary),
-            std::ref(reference)) == HybridPropertyReadContext::FieldRoute::HFR_MISSING,
+        const HybridPropertyReadContext::ColumnVisitor columnProbe = [](const auto &, const auto &, const auto &, const auto &) {};
+        require(context.visitFieldImpl(owner, token, [](const auto &) {}, [](const auto &) {}, std::ref(boundary),
+            std::ref(reference), columnProbe, {}, nullptr, true) == HybridPropertyReadContext::FieldRoute::HFR_MISSING,
             "native insertion requires an absent owner membership");
         boundaryCredit.set(0); referenceCredit.set(0);
         SlottedSlotReference groupRef;
-        const auto group = context.findGroup(owner, std::ref(boundary), &groupRef);
+        const auto group = context.findGroup(owner, std::ref(boundary), &groupRef, true, true);
         require(group && context.isLive(owner, *group) != pendingOwner,
             "native insertion has inconsistent existing/pending owner liveness");
+        if (group->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER && pendingOwner && !prepareColdDemotion)
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "cold pending-owner insertion requires complete liveness coordination");
         if (context.hasRoot(owner.owner_kind, 2)) {
             const auto extensionBinding = context.bind(owner.owner_kind, 2);
             HybridPropertyFieldDirectoryMap extensions(extensionBinding.root.index_id, context.trees_, context.metadata_, extensionBinding);
             require(!extensions.find(snapshot, HybridPropertyDirectoryCodec::ownerKey(owner, token), std::ref(boundary), context.cancellation_),
                 "native insertion has a competing extension locator"); boundaryCredit.set(0);
         }
-        if (!context.hasRoot(owner.owner_kind, 1)) return {};
-        const auto binding = context.bind(owner.owner_kind, 1);
-        HybridPropertyFieldDirectoryMap map(binding.root.index_id, context.trees_, context.metadata_, binding);
-        const auto locator = map.find(snapshot, HybridPropertyDirectoryCodec::columnKey(group->group_id, token),
-            std::ref(boundary), context.cancellation_); boundaryCredit.set(0);
-        if (!locator) return {};
-        const auto ref = HybridPropertyDirectoryCodec::decodeLocator(*locator);
+        const auto selectedRef = [&]() -> std::optional<SlottedSlotReference> {
+            if (group->usesColumnMembership()) {
+                const auto matrix = context.columnMembership(*group);
+                if (!matrix.ordinal(token)) return {};
+                return matrix.columnLocator(token);
+            }
+            if (!context.hasRoot(owner.owner_kind, 1)) return {};
+            const auto binding = context.bind(owner.owner_kind, 1);
+            HybridPropertyFieldDirectoryMap map(binding.root.index_id, context.trees_, context.metadata_, binding);
+            const auto locator = map.find(snapshot, HybridPropertyDirectoryCodec::columnKey(group->group_id, token),
+                std::ref(boundary), context.cancellation_); boundaryCredit.set(0);
+            if (!locator) return {};
+            return HybridPropertyDirectoryCodec::decodeLocator(*locator);
+        }();
+        if (!selectedRef) return {};
+        const auto ref = *selectedRef;
         const auto page = context.fields_.read(snapshot, ref.page_id);
         const auto column = page.view().readColumn(ref, *group, token, context.descriptor_->semantic_generation);
-        if (group->mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
+        if (group->usesColumnMembership())
             require(context.columnMembership(*group).presence(token) == column.presence,
                 "native insertion has contradictory compact source presence");
         const auto bit = UINT64_C(1) << hybridPropertySlotFor(owner);
@@ -234,6 +258,8 @@ private:
         state->source = state->column = column;
         state->column.live |= bit;
         change(*state, owner, &replacement, false, RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, pendingOwner);
+        if (group->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER && state->action == Action::HCD_DEMOTE_FIELD && !prepareColdDemotion)
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "cold ROW hot insertion requires complete demotion repacking");
         context.check(); return HybridPropertyColumnDelta(std::move(state));
     }
 public:
@@ -245,7 +271,8 @@ public:
         std::span<const HybridPropertyColumnDelta *const> changes,
         std::shared_ptr<std::pmr::memory_resource> memory,
         size_t nativeRecordLimit = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
-        const CancellationCheckpoint *cancellation = nullptr) {
+        const CancellationCheckpoint *cancellation = nullptr, bool prepareColdDemotion = false,
+        bool prepareColdPending = false) {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column merge is disabled");
         hybrid_property_detail::require(bool(memory) && !changes.empty() && changes.size() <= RSS_HYBRID_GROUP_CAPACITY &&
@@ -305,6 +332,10 @@ public:
                 column.validate(); state.action = Action::HCD_REPLACE_COLUMN;
             } else { state.action = Action::HCD_DEMOTE_FIELD; state.effects.columns = -1; }
         }
+        if (state.group.mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER &&
+            ((state.action == Action::HCD_DEMOTE_FIELD && !prepareColdDemotion) || state.effects.clear_live ||
+                (state.effects.set_live && !prepareColdPending)))
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "merged cold hot changes require complete demotion/liveness coordination");
         check();
         return HybridPropertyColumnDelta(std::move(merged));
     }

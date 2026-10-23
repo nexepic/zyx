@@ -1,0 +1,38 @@
+{
+  "recorded_at_utc": "2026-10-23T05:14:20.514603+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-inverse-shared-final-legacy-": {
+      "tests": 502,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-inverse-shared-final-compact-": {
+      "tests": 502,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "b20c05c4a59600e41930574ce2bce609f50526c6a6487327b34e5a6ed00d20a2",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "ef2d9a472dd9775529390e94b08b020c1f939341fd8a169ae829db4f6837b13e",
+      "binary_preserved": false
+    }
+  },
+  "evidence_limit": "The actual eight-group converter currently creates distinct logical pages. Public multi-group inverse therefore verifies preservation of other groups, not the retained shared-frame publication branch. Separate private PageImage test verifies exact slot retention and source immutability. Cold inverse public guard remains closed."
+}

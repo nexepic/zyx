@@ -1,0 +1,36 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 6 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 6 tests from HybridPropertyColdNativeLifecycleTest
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity (9 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity (10 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity (10 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin
+unknown file: Failure
+C++ exception with description "cold ROW reading requires the caller's original resource account" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin (6 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues
+unknown file: Failure
+C++ exception with description "cold ROW reading requires the caller's original resource account" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues (6 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues
+unknown file: Failure
+C++ exception with description "cold ROW reading requires the caller's original resource account" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues (9 ms)
+[----------] 6 tests from HybridPropertyColdNativeLifecycleTest (53 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 1 test suite ran. (53 ms total)
+[  PASSED  ] 3 tests.
+[  FAILED  ] 3 tests, listed below:
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues
+
+ 3 FAILED TESTS

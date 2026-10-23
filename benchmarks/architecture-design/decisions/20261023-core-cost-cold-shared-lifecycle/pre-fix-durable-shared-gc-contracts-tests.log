@@ -1,0 +1,54 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 19 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 19 tests from HybridPropertyColdNativeLifecycleTest
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity (11 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity (11 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity (12 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin (17 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues (15 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ReadOnlyGroupProbesDistinguishPendingAndLiveWithoutColdDecoding
+[       OK ] HybridPropertyColdNativeLifecycleTest.ReadOnlyGroupProbesDistinguishPendingAndLiveWithoutColdDecoding (2 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualMixedBirthAndDeletionPublishesOnlyNewEntityAndCompleteColdRoot
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualMixedBirthAndDeletionPublishesOnlyNewEntityAndCompleteColdRoot (17 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualFinalGroupDeletionRemovesAllEntityAndFieldAuthorityTogether
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualFinalGroupDeletionRemovesAllEntityAndFieldAuthorityTogether (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualInversePublishesCompleteLargeRowsAndPreservesOldColdSnapshot
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualInversePublishesCompleteLargeRowsAndPreservesOldColdSnapshot (7 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.PartialInactiveRootFaultReopensOnlyOriginalColdValue
+[       OK ] HybridPropertyColdNativeLifecycleTest.PartialInactiveRootFaultReopensOnlyOriginalColdValue (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.CompleteInactiveRootFaultReopensCompleteColdValueAndManifest
+[       OK ] HybridPropertyColdNativeLifecycleTest.CompleteInactiveRootFaultReopensCompleteColdValueAndManifest (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.CancellationAfterPrivateWritePreservesOldRootRefundsAndAllowsRetry
+[       OK ] HybridPropertyColdNativeLifecycleTest.CancellationAfterPrivateWritePreservesOldRootRefundsAndAllowsRetry (18 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdIndexesAndUniqueRequiredConstraintsPublishTogetherOrRefuse
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualColdIndexesAndUniqueRequiredConstraintsPublishTogetherOrRefuse (19 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualPropertyClearKeepsLiveOwnerAndRemovesAllItsHotAndColdFields
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualPropertyClearKeepsLiveOwnerAndRemovesAllItsHotAndColdFields (14 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualInverseRetainsOtherNamespaceOnTheSameLogicalFieldFrame
+unknown file: Failure
+C++ exception with description "relocatable new shared page pool has an invalid initial page owner or duplicate Page ID" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualInverseRetainsOtherNamespaceOnTheSameLogicalFieldFrame (7 ms)
+[ RUN      ] HybridPropertyColdNativeLifecycleTest.ActualColdValueReclamationPreservesLiveValueAndPinnedOldCarrierThenReusesFrames
+[       OK ] HybridPropertyColdNativeLifecycleTest.ActualColdValueReclamationPreservesLiveValueAndPinnedOldCarrierThenReusesFrames (16 ms)
+[----------] 19 tests from HybridPropertyColdNativeLifecycleTest (260 ms total)
+
+[----------] Global test environment tear-down
+[==========] 19 tests from 1 test suite ran. (260 ms total)
+[  PASSED  ] 18 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyColdNativeLifecycleTest.ActualInverseRetainsOtherNamespaceOnTheSameLogicalFieldFrame
+
+ 1 FAILED TEST

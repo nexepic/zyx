@@ -1,0 +1,12 @@
+{
+  "units": [
+    "storage/relocatable/property/test_PropertyPagePoolPacking",
+    "storage/relocatable/property/test_PropertyCollectionRootStoreValidation",
+    "storage/relocatable/property/test_PropertyCollectionRootStoreCache",
+    "storage/relocatable/property/test_PropertyPagePoolDurability",
+    "storage/relocatable/property/test_EntityPropertyLargeValueReference"
+  ],
+  "full_suite": false,
+  "returncode": 0,
+  "library_sha256": "5f9625133191da286cfbbd49313a4d1c3fde200a8debf723c7dcf694bcced6c5"
+}

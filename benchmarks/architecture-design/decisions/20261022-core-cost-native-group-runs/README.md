@@ -1,0 +1,15 @@
+# Native grouped supply and actual narrow-layout admission
+
+Accepted progress remains 90%; P7 is not accepted. No timing benchmark, commit, push or default-format adoption.
+
+The current 9/35 experimental reader authenticates at most 64 same-group owners through ordered Entity and Property metadata batches, retains competing ROW/extension authority checks, validates the selected column once, and delivers synchronous typed runs. Source scratch rejection can fall back only before output; cancellation and consumer failure cannot replay output. The expanded selected modules pass 190 checks in each membership configuration; the default 5/31 selected modules pass 35 checks. Production short-text filtering and actual grouping preserve the independent ROW oracle and assert grouped-column consumption in compact mode.
+
+## Space is a real unfinished gate
+
+For 512 owners with two fields (two-byte country and integer), full steady allocation is 917504 bytes for ROW versus 1179648 for the private native candidate, a 28.57% increase. Peak allocated bytes are 1310720. Eight field frames and two index frames require 393216 bytes of fresh sealed pools; this count includes pool headers and unused frames, with final metadata/retirement additional. The fixed >=10% whole-allocation-saving gate correctly refuses publication. All 512 ROW roots, contents, old pins and full integrity survive. File growth and mature-database ratios are not inferred from these numbers.
+
+Source explanations are concrete: Format.hpp fixes segments at 128 KiB; separate field and index owners retain disjoint authenticated pools. The cohort constructs each 64-owner preparation separately and appends its pages/maps rather than packing a single page across group preparations (GraphMutation.cpp, preparedGroup append). Initial FieldDirectory and GroupDirectory roots each require an index-owned pool. These facts explain the cold pool granularity; they do not prove a mature database can never amortize it. A maximum eight-group conversion plus a per-publication whole-database saving gate also requires a demonstrated bootstrap strategy on actual medium/holdout data. Neither faster decoding nor a successful laboratory conversion resolves this.
+
+Next proof must separate fixed pool costs, useful field/index bytes and live/retired/peak costs, establish reachable whole-layout conversion without weakening the gate or increasing the existing 1 MiB/512-owner bounds, and then validate production routing and complete lifecycle. If private staged migration is needed, specify source fencing, bounded preparation, crash cleanup, final whole-cost admission and publication before implementation. Do not reinterpret optional ungated isolated laboratory publication as production authorization.
+
+The first production fixture omitted compatible edge bounds; that failure is retained separately and corrected using the existing runtime contract. The 4096-byte fallback fixture uses a warmed, separately owned existing read context and is not evidence for a cold 4096-byte full query. No full unit suite was run.

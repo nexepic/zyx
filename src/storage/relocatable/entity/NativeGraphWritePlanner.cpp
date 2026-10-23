@@ -9,6 +9,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
 #include "graph/utils/OwnedAssociativeContainers.hpp"
@@ -207,7 +208,7 @@ namespace graph::storage {
 
 		[[nodiscard]] constexpr bool isReservedInternalIndexId(uint64_t indexId) {
 			return indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID || indexId == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
-                isHybridPropertyIndexId(indexId);
+                isHybridPropertyIndexId(indexId) || isEntityFreeSpaceIndexId(indexId);
 		}
 
 		void validatePlannerOptions(const NativeGraphWritePlannerOptions &options) {
@@ -402,6 +403,9 @@ namespace graph::storage {
         hybrid_conversion_(std::move(other.hybrid_conversion_)), hybrid_columns_(std::move(other.hybrid_columns_)), covered_adjacency_sealed_(other.covered_adjacency_sealed_),
         covered_adjacency_pending_(other.covered_adjacency_pending_),
         covered_adjacency_request_(other.covered_adjacency_request_) {
+        free_summary_credit_ = std::move(other.free_summary_credit_);
+        rebuild_entity_free_summaries_ = other.rebuild_entity_free_summaries_;
+        free_summary_checkpoint_ = std::move(other.free_summary_checkpoint_);
 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		other.next_vector_id_ = 0U;
 		other.global_adjacency_operations_canonical_ = false;
@@ -446,6 +450,9 @@ namespace graph::storage {
         covered_adjacency_sealed_ = other.covered_adjacency_sealed_;
         covered_adjacency_pending_ = other.covered_adjacency_pending_;
         covered_adjacency_request_ = other.covered_adjacency_request_;
+        free_summary_credit_ = std::move(other.free_summary_credit_);
+        rebuild_entity_free_summaries_ = other.rebuild_entity_free_summaries_;
+        free_summary_checkpoint_ = std::move(other.free_summary_checkpoint_);
 		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		other.next_vector_id_ = 0U;
 		other.global_adjacency_operations_canonical_ = false;
@@ -792,12 +799,17 @@ namespace graph::storage {
     void NativeGraphWriteTransaction::stageHybridPropertyConversion(EntityPropertyOwnerKind kind, uint64_t groupId,
             std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool publishCandidate,
             NativeHybridPropertyConversionDirection direction, bool compactColumnMemberships,
-            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission, uint8_t groupCount) {
+            std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission, uint8_t groupCount,
+            bool coldRowRemainder) {
         requireActive("stage a native property group conversion");
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
             fail(FormatError::FERR_UNSUPPORTED_VERSION, "native property group conversion is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
+        if (coldRowRemainder && (!compactColumnMemberships ||
+            direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID ||
+            (publishCandidate && !allocationAdmission)))
+            fail(FormatError::FERR_INVALID_HEADER, "cold ROW conversion requires compact forward layout and whole-database admission");
         if (!groupCount || groupCount > 8U || groupId > RSS_HYBRID_MAX_GROUP_ID - (groupCount - 1U) ||
             (groupCount > 1U && (!compactColumnMemberships || !allocationAdmission || !publishCandidate ||
                 direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
@@ -818,7 +830,7 @@ namespace graph::storage {
             source.hybrid_property_descriptor_root, NativeHybridPropertyRootMode::NHPRM_REPLACE, {},
             NativeGraphHybridPropertyConversion{kind, groupId, std::move(memory), cancellation,
                 placement.first_slot, placement.last_slot, placement.page_owner_id, publishCandidate, direction,
-                std::move(allocationAdmission), compactColumnMemberships, groupCount}};
+                std::move(allocationAdmission), compactColumnMemberships, groupCount, coldRowRemainder}};
     }
 
 	NativeGraphWriteTransaction::NodeChange &NativeGraphWriteTransaction::mutableNode(uint64_t nodeId) {
@@ -2616,7 +2628,11 @@ namespace graph::storage {
             if (hybrid_columns_->cancellation) hybrid_columns_->cancellation->check();
             hybrid_vector_pending_ = true;
         }
-		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
+        if (rebuild_entity_free_summaries_ && (!nodes_.empty() || !edges_.empty() || !properties_.empty() ||
+            !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() || !vector_bootstraps_.empty() || !vector_deltas_.empty()))
+            fail(FormatError::FERR_INVALID_STATE, "free-space initialization cannot mix ordinary graph mutations");
+        if (free_summary_checkpoint_) free_summary_checkpoint_();
+		const bool hasGraphWork = rebuild_entity_free_summaries_ || !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
 		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
@@ -2727,28 +2743,38 @@ namespace graph::storage {
 			return pageId;
 		};
 
-		const std::vector<CatalogEntry> currentPools = context_->entities->currentPools(snapshot_);
+		std::optional<std::vector<CatalogEntry>> currentPools;
+		const auto getCurrentPools = [&]() -> const std::vector<CatalogEntry> & {
+			if (!currentPools) {
+				currentPools = context_->entities->currentPools(snapshot_);
+				debug::PerfTrace::addValue("native_graph.commit.entity_pool_discoveries", 1);
+			}
+			return *currentPools;
+		};
 		// Fresh pools can receive either initial logical pages or COW images of
 		// existing PageIds. Both uses consume the same bounded frame budget and
 		// become visible through this transaction's single metadata publication.
 		std::vector<FreshEntityPool> labelPools;
 		std::map<uint64_t, uint8_t> freeFrames;
-		for (const CatalogEntry &pool: currentPools) {
-			freeFrames.emplace(pool.segment_id.value(), context_->entities->availableFrameCount(snapshot_, pool));
-		}
+		const auto availableFrames = [&](const CatalogEntry &pool) -> uint8_t & {
+			auto found = freeFrames.find(pool.segment_id.value());
+			if (found == freeFrames.end()) {
+				const auto count = context_->entities->availableFrameCount(snapshot_, pool);
+				found = freeFrames.emplace(pool.segment_id.value(), count).first;
+				debug::PerfTrace::addValue("native_graph.commit.entity_pool_capacity_queries", 1);
+			}
+			return found->second;
+		};
 		std::map<uint64_t, uint8_t> reservedFrames;
 		const auto tryReserveCurrentFrame = [&](const CatalogEntry &pool) {
-			const auto available = freeFrames.find(pool.segment_id.value());
-			if (available == freeFrames.end()) {
-				return false;
-			}
-			if (reservedFrames[pool.segment_id.value()] >= available->second) {
+			auto &available = availableFrames(pool);
+			if (reservedFrames[pool.segment_id.value()] >= available) {
 				// Reclaim only frames absent from every active snapshot before declaring
 				// the pool full. Consecutive short writes must not exhaust a finite
 				// COW pool merely because their retired frames were never revisited.
 				context_->entities->reclaimRetiredFrames(pool.segment_id);
-				available->second = context_->entities->availableFrameCount(snapshot_, pool);
-				if (reservedFrames[pool.segment_id.value()] >= available->second) {
+				available = context_->entities->availableFrameCount(snapshot_, pool);
+				if (reservedFrames[pool.segment_id.value()] >= available) {
 					return false;
 				}
 			}
@@ -2761,7 +2787,7 @@ namespace graph::storage {
 					 "native graph write has no COW frame capacity in the selected Entity pool");
 			}
 		};
-		const auto reserveReplacementFrame = [&currentPools, &tryReserveCurrentFrame, &labelPools, &reserveSegment,
+		const auto reserveReplacementFrame = [&getCurrentPools, &tryReserveCurrentFrame, &labelPools, &reserveSegment,
 											  this](const CatalogEntry &source) {
 			const auto compatible = [&source](const CatalogEntry &candidate) {
 				return candidate.kind == SegmentKind::SGK_ENTITY_PAGE_POOL &&
@@ -2771,7 +2797,7 @@ namespace graph::storage {
 			if (compatible(source) && tryReserveCurrentFrame(source)) {
 				return EntityPageReplacementDestination{source, std::nullopt};
 			}
-			for (const CatalogEntry &candidate: currentPools) {
+			for (const CatalogEntry &candidate: getCurrentPools()) {
 				if (candidate.segment_id != source.segment_id && compatible(candidate) &&
 					tryReserveCurrentFrame(candidate)) {
 					return EntityPageReplacementDestination{candidate, std::nullopt};
@@ -2796,8 +2822,8 @@ namespace graph::storage {
 			return EntityPageReplacementDestination{{}, fresh};
 		};
 		const auto findAppendPool = [&]() -> std::optional<CatalogEntry> {
-			for (const CatalogEntry &pool: currentPools) {
-				if (reservedFrames[pool.segment_id.value()] < freeFrames[pool.segment_id.value()]) {
+			for (const CatalogEntry &pool: getCurrentPools()) {
+				if (reservedFrames[pool.segment_id.value()] < availableFrames(pool)) {
 					return pool;
 				}
 			}
@@ -2947,11 +2973,12 @@ namespace graph::storage {
 		};
 		const bool needsNodeInsertSearch = std::ranges::any_of(nodes_, [](const auto &entry) {
 			return entry.second.inserted && !entry.second.erased;
-		});
+		}) || rebuild_entity_free_summaries_;
 		const bool needsEdgeInsertSearch = std::ranges::any_of(edges_, [](const auto &entry) {
 			return entry.second.inserted && !entry.second.erased;
-		});
-		std::map<uint64_t, EntityPageRecordKind> currentEntityPageKinds;
+		}) || rebuild_entity_free_summaries_;
+		using PageKindEntry = std::pair<const uint64_t, EntityPageRecordKind>;
+        std::map<uint64_t, EntityPageRecordKind, std::less<uint64_t>, utils::OwnedPmrAllocator<PageKindEntry>> currentEntityPageKinds;
 		std::vector<ExistingInsertCandidate> existingInsertCandidates;
 		existingInsertCandidates.reserve(currentEntityPageKinds.size());
 		const auto targetKindIndex = [](EntityPageRecordKind kind) -> size_t {
@@ -2963,6 +2990,27 @@ namespace graph::storage {
 			}
 			fail(FormatError::FERR_INVALID_STATE, "native graph write encountered an unknown Entity record kind");
 		};
+        std::array<std::optional<EntityFreeSpaceIndex::Proof>, 2> freeSummaryProofs;
+        std::array<bool, 2> freeSummaryRead{}, freeSummaryManaged{};
+        const auto loadFreeSummary = [&](EntityPageRecordKind kind) {
+            const size_t ordinal = targetKindIndex(kind);
+            if (!freeSummaryRead[ordinal]) {
+                freeSummaryProofs[ordinal] = EntityFreeSpaceIndex::readProof(*context_->metadata, *context_->indexes, snapshot_, kind);
+                bool emptySource = !EntityFreeSpaceIndex::entityRoot(snapshot_.superblock(), kind).isValid();
+                if (!freeSummaryProofs[ordinal] && !emptySource) {
+                    bool any = false;
+                    const auto first = [&](const EntityPageLocation &) { any = true; return false; };
+                    if (kind == EntityPageRecordKind::EPRK_NODE) (void)context_->metadata->visitNodePageLocationsUntil(snapshot_, first);
+                    else (void)context_->metadata->visitEdgePageLocationsUntil(snapshot_, first);
+                    emptySource = !any;
+                }
+                freeSummaryManaged[ordinal] = rebuild_entity_free_summaries_ ||
+                    (freeSummaryProofs[ordinal] ? freeSummaryProofs[ordinal]->fresh : emptySource);
+                freeSummaryRead[ordinal] = true;
+            }
+            return freeSummaryManaged[ordinal];
+        };
+        std::map<uint64_t, uint16_t> indexedFreeCounts;
 		// All pages observed in one snapshot belong to a stable Catalog
 		// generation. Cache the pool descriptor per segment while checking free
 		// insertion slots instead of descending the Catalog once per page.
@@ -2987,7 +3035,7 @@ namespace graph::storage {
 			const auto hasCachedKind = [&](EntityPageRecordKind kind) {
 				return std::ranges::any_of(cache.targets, [kind](const auto &target) { return target.kind == kind; });
 			};
-			usedInsertionTargetCache = cache.valid &&
+			usedInsertionTargetCache = !rebuild_entity_free_summaries_ && cache.valid &&
 					(!needsNodeInsertSearch || insertionKindsComplete[0] || hasCachedKind(EntityPageRecordKind::EPRK_NODE)) &&
                     (!needsEdgeInsertSearch || insertionKindsComplete[1] || hasCachedKind(EntityPageRecordKind::EPRK_EDGE));
 			if (usedInsertionTargetCache) {
@@ -3004,20 +3052,36 @@ namespace graph::storage {
 			// Updates/deletes never need an insertion target. Avoid walking the
 			// complete Entity Directory in those transactions; mixed writes inspect
 			// only the kind that can consume a free slot.
-			if (needsNodeInsertSearch) {
-				context_->metadata->visitNodePageLocations(snapshot_, [&](const EntityPageLocation &location) {
-					debug::PerfTrace::addValue("native_graph.commit.entity_insert_node_directory_pages", 1);
-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
-				});
-                insertionKindsComplete[0] = true;
-			}
-			if (needsEdgeInsertSearch) {
-				context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
-					debug::PerfTrace::addValue("native_graph.commit.entity_insert_edge_directory_pages", 1);
-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
-				});
-                insertionKindsComplete[1] = true;
-			}
+            const auto discover = [&](EntityPageRecordKind kind, size_t needed) {
+                const auto type = targetKindIndex(kind);
+                if (!rebuild_entity_free_summaries_ && loadFreeSummary(kind)) {
+                    if (freeSummaryProofs[type]) {
+                        insertionKindsComplete[type] = EntityFreeSpaceIndex::visitCandidates(*context_->metadata, *context_->indexes,
+                            snapshot_, kind, *freeSummaryProofs[type], needed, [&](const auto &entry) {
+                                if (!currentEntityPageKinds.emplace(entry.page.value(), kind).second ||
+                                    !indexedFreeCounts.emplace(entry.page.value(), entry.free_slots).second)
+                                    fail(FormatError::FERR_INVALID_STATE, "free-space index repeats an entity page");
+                                debug::PerfTrace::addValue("native_graph.write.entity_free_summary.candidate_pages", 1);
+                            });
+                    } else insertionKindsComplete[type] = true; // New empty directory, not a legacy migration.
+                    return;
+                }
+                size_t visited = 0U;
+                const auto visit = [&](const EntityPageLocation &location) {
+                    if ((visited++ & 127U) == 0U && free_summary_checkpoint_) free_summary_checkpoint_();
+                    debug::PerfTrace::addValue(kind == EntityPageRecordKind::EPRK_NODE ?
+                        "native_graph.commit.entity_insert_node_directory_pages" : "native_graph.commit.entity_insert_edge_directory_pages", 1);
+                    currentEntityPageKinds.emplace(location.page_id.value(), kind);
+                };
+                if (kind == EntityPageRecordKind::EPRK_NODE) context_->metadata->visitNodePageLocations(snapshot_, visit);
+                else context_->metadata->visitEdgePageLocations(snapshot_, visit);
+                insertionKindsComplete[type] = true;
+            };
+            if (needsNodeInsertSearch) discover(EntityPageRecordKind::EPRK_NODE,
+                (std::max)(size_t{1}, size_t(std::ranges::count_if(nodes_, [](const auto &entry) { return entry.second.inserted && !entry.second.erased; }))));
+            if (needsEdgeInsertSearch) discover(EntityPageRecordKind::EPRK_EDGE,
+                (std::max)(size_t{1}, size_t(std::ranges::count_if(edges_, [](const auto &entry) { return entry.second.inserted && !entry.second.erased; }))));
+
 			for (const auto &[pageValue, kind]: currentEntityPageKinds) {
 				const PageId pageId(pageValue);
 				const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
@@ -3033,6 +3097,9 @@ namespace graph::storage {
 							"native graph write found an Entity Map page outside a current Entity pool");
 				}
 				const uint16_t remaining = context_->entities->freeSlotCount(snapshot_, pageId, kind);
+                if (const auto indexed = indexedFreeCounts.find(pageValue); indexed != indexedFreeCounts.end() && indexed->second != remaining)
+                    fail(FormatError::FERR_INVALID_STATE, "free-space index disagrees with the authenticated entity page");
+                if (free_summary_checkpoint_) free_summary_checkpoint_();
 				if (remaining != 0U) {
 					existingInsertCandidates.push_back({pageId, kind, pool, remaining, false, false});
 				}
@@ -3081,8 +3148,13 @@ namespace graph::storage {
 		// large update/delete batches no longer pay one root-to-leaf descent per ID.
 		std::vector<uint64_t> nodeMutationIds;
 		std::vector<uint64_t> edgeMutationIds;
+		// Endpoint reads participate in validation but do not modify Node records.
+		// Adjacency is published separately; only labels or deletion need Node COW.
+		const auto changesExistingNode = [](const auto &change) {
+			return !change.inserted && (change.erased || change.labels.has_value());
+		};
 		for (const auto &[nodeId, change]: nodes_) {
-			if (!change.inserted) {
+			if (changesExistingNode(change)) {
 				nodeMutationIds.push_back(nodeId);
 			}
 		}
@@ -3114,7 +3186,7 @@ namespace graph::storage {
 		};
 
 		for (const auto &[nodeId, change]: nodes_) {
-			if (change.inserted) {
+			if (!changesExistingNode(change)) {
 				continue;
 			}
 			const EntityPageLocation location = requireMutationLocation(
@@ -3264,7 +3336,7 @@ namespace graph::storage {
 						continue;
 					}
 					if (!candidate.planned && candidate.remaining != 0U &&
-							reservedFrames[candidate.pool.segment_id.value()] < freeFrames[candidate.pool.segment_id.value()]) {
+							reservedFrames[candidate.pool.segment_id.value()] < availableFrames(candidate.pool)) {
 						candidateOrdinal = ordinal;
 						break;
 					}
@@ -3611,6 +3683,119 @@ namespace graph::storage {
 		// Every current-pool B+Tree mutation now competes in one deterministic
 		// frame budget. Fresh rebuilds are selected before any typed preparer runs,
 		// so scalar, adjacency, and LargeValue content trees cannot overbook a pool.
+        std::vector<NativeGraphEntityFreeSummaryFence> freeSummaryFences;
+        const auto stageFreeSummaries = [&](EntityPageRecordKind kind) {
+            const size_t type = targetKindIndex(kind);
+            const auto insertedCount = [kind](const auto &page) {
+                return kind == EntityPageRecordKind::EPRK_NODE ? page.node_insertions.size() : page.edge_insertions.size();
+            };
+            bool changed = false;
+            for (const auto &page : mutations) if (page.record_kind == kind)
+                changed = changed || insertedCount(page) || (kind == EntityPageRecordKind::EPRK_NODE ? !page.erased_node_ids.empty() : !page.erased_edge_ids.empty());
+            for (const auto &page : appends) changed = changed || (page.record_kind == kind && insertedCount(page));
+            for (const auto &page : newPools) changed = changed || (page.record_kind == kind && insertedCount(page));
+            if ((!changed && !rebuild_entity_free_summaries_) || !loadFreeSummary(kind)) return;
+            const uint64_t id = EntityFreeSpaceIndex::indexId(kind);
+            auto position = std::lower_bound(scalar_index_mutations_.begin(), scalar_index_mutations_.end(), id,
+                [](const auto &staged, uint64_t key) { return staged.index_id < key; });
+            if (position != scalar_index_mutations_.end() && position->index_id == id)
+                fail(FormatError::FERR_INVALID_STATE, "free-space summary overlaps a caller Index mutation");
+            position = scalar_index_mutations_.insert(position, {context_->indexes, id, {}, {}, {}, BTreeLeafValueLayout::BLVL_U64});
+            auto &operations = position->operations;
+            uint64_t freePages = freeSummaryProofs[type] ? freeSummaryProofs[type]->free_pages : 0U;
+            BTreeIndex existing(id, *context_->indexes, *context_->metadata);
+            const auto append = [&](BTreeScalarIndexOperationKind operation, const auto &key, uint64_t value = 1U) {
+                if (!free_summary_credit_)
+                    free_summary_credit_ = std::make_unique<utils::OwnedHeapReservation>(utils::OwnedAllocationScope::owner(), 1024U);
+                const size_t admitted = free_summary_credit_->bytes();
+                if (admitted > (std::numeric_limits<size_t>::max)() - 256U)
+                    fail(FormatError::FERR_INVALID_STATE, "free-space summary operation admission overflows");
+                // Covers vector growth and each small owned key before STL allocation.
+                // Retain admission with the staged operations on failed commits too.
+                free_summary_credit_->set(admitted + 256U);
+                operations.push_back({operation, std::vector<std::byte>(key.begin(), key.end()), value});
+            };
+            if (rebuild_entity_free_summaries_) {
+                if (freeSummaryProofs[type]) {
+                    const uint64_t count = freeSummaryProofs[type]->free_pages;
+                    auto old = existing.openRangeCursor(snapshot_, std::nullopt, size_t(count) + 3U, BufferPoolReadHint::BPRH_NORMAL);
+                    size_t visited = 0U;
+                    while (const auto entry = old.next()) {
+                        if (++visited > count + 2U) fail(FormatError::FERR_INVALID_STATE, "summary rebuild found uncounted entries");
+                        append(BTreeScalarIndexOperationKind::BSIOP_ERASE, entry->key);
+                    }
+                    if (visited != count + 2U) fail(FormatError::FERR_INVALID_STATE, "summary rebuild found missing entries");
+                }
+                freePages = 0U;
+                for (const auto &candidate : existingInsertCandidates) if (candidate.kind == kind && candidate.remaining) {
+                    append(BTreeScalarIndexOperationKind::BSIOP_UPSERT,
+                        EntityFreeSpaceIndex::entryKey(candidate.page_id, candidate.remaining, kind));
+                    ++freePages;
+                }
+            } else {
+                const uint16_t capacity = EntityPage::recordCapacity(kind);
+                for (const auto &page : mutations) {
+                    if (page.record_kind != kind) continue;
+                    const size_t inserted = insertedCount(page);
+                    const size_t erased = kind == EntityPageRecordKind::EPRK_NODE ? page.erased_node_ids.size() : page.erased_edge_ids.size();
+                    if (!inserted && !erased) continue;
+                    const uint16_t before = remainingSlots.at(page.page_id.value());
+                    if (inserted > size_t(before) + erased || size_t(before) + erased - inserted > capacity)
+                        fail(FormatError::FERR_INVALID_STATE, "summary mutation has an impossible free-slot count");
+                    const auto after = uint16_t(size_t(before) + erased - inserted);
+                    if (before == after) continue;
+                    if (before) {
+                        const auto key = EntityFreeSpaceIndex::entryKey(page.page_id, before, kind);
+                        if (!freePages || !existing.find(snapshot_, key))
+                            fail(FormatError::FERR_INVALID_STATE, "fresh summary is missing a changed free page");
+                        append(BTreeScalarIndexOperationKind::BSIOP_ERASE, key); --freePages;
+                    }
+                    if (after && after < capacity) {
+                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::entryKey(page.page_id, after, kind));
+                        ++freePages;
+                    }
+                }
+                const auto addFresh = [&](const auto &page) {
+                    if (page.record_kind != kind) return;
+                    const size_t count = insertedCount(page);
+                    if (!count || count > capacity) fail(FormatError::FERR_INVALID_STATE, "fresh summary page has invalid occupancy");
+                    if (count < capacity) {
+                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT,
+                            EntityFreeSpaceIndex::entryKey(page.request.page_id, uint16_t(capacity - count), kind));
+                        ++freePages;
+                    }
+                };
+                for (const auto &page : appends) addFresh(page);
+                for (const auto &page : newPools) addFresh(page);
+            }
+            const auto sourceRoot = EntityFreeSpaceIndex::entityRoot(snapshot_.superblock(), kind);
+            const uint64_t generation = changed ? snapshot_.superblock().generation.value() + 1U : sourceRoot.generation.value();
+            if (generation == (std::numeric_limits<uint64_t>::max)() || freePages == (std::numeric_limits<uint64_t>::max)())
+                fail(FormatError::FERR_INVALID_STATE, "free-space summary marker encoding overflows");
+            append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::generationKey(), generation + 1U);
+            append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::countKey(), freePages + 1U);
+            freeSummaryFences.push_back({id, sourceRoot, Generation(generation), freePages});
+            debug::PerfTrace::addValue("native_graph.write.entity_free_summary.changed_operations", operations.size());
+            if (!freeSummaryProofs[type]) {
+                std::vector<BTreePageEntry> entries;
+                entries.reserve(operations.size());
+                for (const auto &operation : operations) {
+                    BTreePageEntry entry;
+                    entry.key.assign(operation.key.begin(), operation.key.end());
+                    entry.value_or_child = operation.value;
+                    entries.push_back(std::move(entry));
+                }
+                std::ranges::sort(entries, {}, &BTreePageEntry::key);
+                auto plan = context_->indexes->planInitialTreeMutation(snapshot_, id, entries);
+                scalar_index_mutations_.erase(position);
+                auto initial = std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(), id,
+                    [](const auto &staged, uint64_t key) { return staged.index_id < key; });
+                initial_scalar_index_mutations_.insert(initial, {context_->indexes, id, std::move(plan)});
+            }
+        };
+        stageFreeSummaries(EntityPageRecordKind::EPRK_NODE);
+        stageFreeSummaries(EntityPageRecordKind::EPRK_EDGE);
+
 		if (contentIndexPlan.has_value()) {
 			prepareIndexMutationPlans(&*contentIndexPlan, [this, &contentIndexPlan, &contentValuesToPublish,
 													contentIndexStore] {
@@ -3794,6 +3979,7 @@ namespace graph::storage {
 				 "native graph transaction has overlapping existing and initial scalar Index mutations");
 		}
 		NativeGraphDerivedStateMutation derivedState;
+        derivedState.entity_free_summary_fences = std::move(freeSummaryFences);
         if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
         for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);
 		derivedState.index_tree_mutations.reserve(pendingDerivedBindings.size());
@@ -4282,7 +4468,7 @@ namespace graph::storage {
 					if (candidate.remaining != 0U) {
 						targets[{candidate.page_id.value(), static_cast<uint16_t>(candidate.kind)}] =
 								{candidate.page_id, candidate.kind, candidate.pool, candidate.remaining};
-					}
+                    } else targets.erase({candidate.page_id.value(), static_cast<uint16_t>(candidate.kind)});
 				}
 				for (size_t ordinal = 0U; ordinal < mutations.size(); ++ordinal) {
 					const EntityPageBatchMutation &mutation = mutations[ordinal];

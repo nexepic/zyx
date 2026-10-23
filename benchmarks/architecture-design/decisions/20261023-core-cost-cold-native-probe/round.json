@@ -1,0 +1,81 @@
+{
+  "recorded_at_utc": "2026-10-23T00:53:54.288706+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-native-probe-initial-": {
+      "tests": 4,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-native-probe-compact-failed-": {
+      "tests": 476,
+      "failures": 2,
+      "skipped": 0
+    },
+    "hybrid-native-probe-legacy-complete-": {
+      "tests": 476,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-native-probe-compact-complete-": {
+      "tests": 476,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "baselines": {
+    "native-probe-baseline": {
+      "tests": 2,
+      "failures": 2,
+      "skipped": 0
+    },
+    "native-probe-baseline-corrected": {
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-native-probe-hybrid-candidate/libzyx_core.a",
+      "sha256": "a4045e1f8b572bca3927e051ab3913f5073ee68e1be5ffec245102dcea351fbc",
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-native-probe-default-candidate/libzyx_core.a",
+      "sha256": "f37ce620b2a88df76be6b83090e2df7d8be30e9e024c0a3129e812320f144f5a",
+      "format": "5/31"
+    }
+  },
+  "implemented": [
+    "Default-off cold selector in existing Native request, limited to single compact forward preparation-only calls",
+    "Existing real-source Native Entity/ROW/token fencing, shared same-batch proposal dedup/holder/consecutive IDs and private physical/data/manifest/directory/descriptor planning",
+    "New whole-root proposal path borrows authenticated entries and never calls independent LargeValueStore.write",
+    "Field/whole-root carrier dedup shares original full-byte equality and original field checkpoint order",
+    "Publication/noncompact/multigroup/inverse requests reject before source classification",
+    "Actual64owner Node/Edge mixed hot integer/long IDs plan one field frame and one Group-index frame without per-field cold directories",
+    "Source whole-root LargeValue with hot field generates a genuinely new cold whole-root proposal/data/manifest in same private batch",
+    "Original no-publication guard preserves file/I/O epoch/roots/counters/old pins; account refunded"
+  ],
+  "baseline_fixture_corrections": [
+    "Prior frozen preparation library with exact reconstructed old header reproduces same two compact failures, unchanged test source verified",
+    "Dense compact locators need one field pool plus one Group-index pool, equal to two source ROW pools; legacy greater-than assertion retained",
+    "Keep128KiB test quota; occupy remaining shared credit at actual private-map event for deterministic quota refusal before writes; then cancellation boundaries/retry remain required",
+    "Corrected same two cases pass frozen old library, proving fixture-specific causes and avoiding ABI mixing"
+  ],
+  "not_accepted": [
+    "Mode3 actual publication, atomic new-value content-index installation, mixed cohorts/full space admission",
+    "Complete compatible hot/cold mutation/demotion/delete/inverse and actual public-conversion reclamation/old-pin/retirement/fault/reopen lifecycle",
+    "Mature whole allocation/staged migration bootstrap and final P7 matrix"
+  ],
+  "performance_claim": null
+}

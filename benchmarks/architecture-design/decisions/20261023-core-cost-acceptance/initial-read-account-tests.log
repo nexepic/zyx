@@ -1,0 +1,18 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyColdPublicConversionTest
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+unknown file: Failure
+C++ exception with description "cold ROW reading requires the caller's original resource account" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate (29 ms)
+[----------] 1 test from HybridPropertyColdPublicConversionTest (29 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (29 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+
+ 1 FAILED TEST

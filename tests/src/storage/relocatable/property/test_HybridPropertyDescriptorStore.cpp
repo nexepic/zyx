@@ -12,45 +12,7 @@
 #include <windows.h>
 #endif
 
-namespace graph::storage {
-// Exercises the metadata-owned publication, not a new standalone graph API.
-class HybridPropertyDescriptorStoreTestAccess {
-public:
-    enum class Action { HDA_REPLACE, HDA_RELOCATE, HDA_CLEAR, HDA_CLONE };
-    static Superblock publish(RelocatableMetadataStore &store, Action action = Action::HDA_REPLACE,
-        const MetadataPublishOptions &options = {}) {
-        auto writer = store.beginWrite();
-        const auto current = store.bootstrap_.recover();
-        MetadataWriteBatch batch(store.metadata_page_pool_, current,
-            LogSequenceNumber(current.checkpoint_lsn.value() + 1));
-        if (action == Action::HDA_CLEAR) batch.setHybridPropertyDescriptorRoot({});
-        else if (action == Action::HDA_RELOCATE) store.pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
-        else if (action == Action::HDA_CLONE) cloneMetadataDirectoryRootsForEvacuation(store.pages_, batch, current);
-        else store.pages_.prepareHybridPropertyDescriptor(batch, {current.database_id, batch.generation(), {}});
-        store.publishBatch(batch, writer, options);
-        return batch.candidate();
-    }
-    static HybridPropertyDescriptorPage read(RelocatableMetadataStore &store, const MetadataSnapshotPin &pin) {
-        return store.pages_.readHybridPropertyDescriptor(pin.superblock().hybrid_property_descriptor_root, pin.superblock());
-    }
-    static void rejectUninstalledRoots(RelocatableMetadataStore &store) {
-        auto writer = store.beginWrite(); const auto current = store.bootstrap_.recover();
-        MetadataWriteBatch batch(store.metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1));
-        HybridPropertyDescriptor descriptor{current.database_id, batch.generation(), {}};
-        descriptor.roots[0] = {PageId(111), batch.generation()};
-        EXPECT_THROW(store.pages_.prepareHybridPropertyDescriptor(batch, descriptor), FormatException);
-        EXPECT_EQ(batch.allocatedPageCount(), 0U);
-        EXPECT_EQ(batch.candidate().hybrid_property_descriptor_root, current.hybrid_property_descriptor_root);
-    }
-    static void overwriteForCorruptionTest(RelocatableMetadataStore &store, const Superblock &snapshot,
-        const HybridPropertyDescriptorPage &page) {
-        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
-        const auto reference = snapshot.hybrid_property_descriptor_root;
-        store.io_->writeAt({store.pages_.pageOffset(reference), reference.generation.value()}, bytes.data(), bytes.size());
-        store.io_->sync();
-    }
-};
-} // namespace graph::storage
+#include "storage/relocatable/property/HybridPropertyDescriptorStoreTestAccess.hpp"
 using namespace graph::storage;
 namespace {
 using Access = HybridPropertyDescriptorStoreTestAccess;
@@ -122,7 +84,7 @@ TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChe
 #if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyDescriptorStoreTest, NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting) {
     const auto first = Access::publish(*metadata_); auto old = metadata_->openSnapshot();
-    ASSERT_EQ(RSS_SUPERBLOCK_VERSION, 32); ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
+    ASSERT_EQ(RSS_SUPERBLOCK_VERSION, 39); ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
     const auto bytes = SuperblockCodec::encode(first); EXPECT_EQ(SuperblockCodec::decode(bytes), first);
     EXPECT_EQ(LittleEndianCodec::readU64(bytes, 336), first.hybrid_property_descriptor_root.physical_slot.value());
     const auto oldDescriptor = Access::read(*metadata_, old);

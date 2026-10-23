@@ -1,0 +1,55 @@
+{
+  "recorded_at_utc": "2026-10-23T02:15:35.221719+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-compatible-binding-legacy-": {
+      "tests": 481,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-compatible-binding-compact-": {
+      "tests": 481,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "42a8c1cd2918fffe79aea24de57b034e64a5a90b8d447be536deb81b6f2fac80",
+      "binary_preserved": false,
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "349fa8b558dc163e30752c0d873dc5f853321fbcc8d24c363d21ec9e7f1f4b1a",
+      "binary_preserved": false,
+      "format": "5/31"
+    }
+  },
+  "preceding_frozen_pair": "20261023-core-cost-cold-native-probe",
+  "implemented": [
+    "Private compatible hot value/NULL/presence plans preserve cold references, totals and bytes",
+    "Merged plans recheck threshold; 16 removals retaining48 prepare, 17 dropping47 reject",
+    "Only authenticated FieldPageStore clones mint unchanged-slot proof; new/open images have none",
+    "Insert/overwrite/erase clear slot proof; insertion failure clears all proof",
+    "Trusted binding leaves unvisited unchanged cold bytes intact, while new/modified records retain full validation",
+    "Fresh and reused slots cannot inherit proof; first cold access still detects corrupt unchanged source"
+  ],
+  "not_accepted": [
+    "Actual mode3 mutation/publication",
+    "Cold update/repack, global demotion, owner liveness/delete/inverse",
+    "Public conversion integrity, reclamation, old pins, recovery and whole space admission",
+    "Final P7 performance matrix"
+  ],
+  "performance_claim": null
+}

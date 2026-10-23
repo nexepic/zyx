@@ -1,0 +1,1306 @@
+[0/2] Re-checking globbed directories...
+[1/159] Building CXX object CMakeFiles/zyx_core.dir/src/core/Database.cpp.o
+In file included from /workspace/zyx/src/core/Database.cpp:21:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/core/Database.cpp:21:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[2/159] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanMutationRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:9:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:146:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  146 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:150:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  150 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+7 warnings generated.
+[3/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/LogicalGraphTransactionOverlay.cpp.o
+In file included from /workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphTransactionOverlay.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphTransactionOverlay.hpp:16:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:202:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  202 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:206:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  206 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:283:80: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  283 |                                 const auto edge = readEdgeShaped(reference.entity_id, {.include_type = true});
+      |                                                                                                            ^
+/workspace/zyx/src/storage/LogicalGraphTransactionOverlay.cpp:1821:102: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1821 |                                                         edges.push_back(readEdgeShapedImpl(edge.edge_id, {.include_type = true, .all_properties = true}, admission));
+      |                                                                                                                                                       ^
+10 warnings generated.
+[4/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/StorageBackendFactory.cpp.o
+In file included from /workspace/zyx/src/storage/StorageBackendFactory.cpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/StorageBackendFactory.cpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[5/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/StorageFormat.cpp.o
+[6/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/StorageIO.cpp.o
+[7/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/AdjacencyKeyCodec.cpp.o
+[8/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyIndex.cpp.o
+[9/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyMutationMerger.cpp.o
+[10/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/AllocatorDirectory.cpp.o
+[11/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/AllocatorPage.cpp.o
+[12/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/PhysicalSegmentAllocator.cpp.o
+[13/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SharedPagePool.cpp.o
+[14/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp.o
+[15/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPage.cpp.o
+[16/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPagePool.cpp.o
+/workspace/zyx/src/storage/relocatable/allocation/SlottedPagePool.cpp:654:4: warning: misleading indentation; statement is not part of the previous 'if' [-Wmisleading-indentation]
+  654 |                         if (!rebuilt.pages.pages
+      |                         ^
+/workspace/zyx/src/storage/relocatable/allocation/SlottedPagePool.cpp:653:13: note: previous statement is here
+  653 |             if (native) continue;
+      |             ^
+1 warning generated.
+[17/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:74:82: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   74 |                                 return readNodeShaped(nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                              ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:212:80: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  212 |                                 return readEdgeShaped(edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                            ^
+8 warnings generated.
+[18/159] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanReadRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:2:
+In file included from /workspace/zyx/src/query/execution/DeferredReferenceRowVisitor.hpp:2:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:224:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  224 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:228:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  228 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:2926:55: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2926 |                                                                         state, pageTargetIds, {.include_labels = true}, &nodesBytes);
+      |                                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3604:101: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3604 |                                                 return state.shared.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
+      |                                                                                                                                               ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3636:93: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3636 |                                                         state.shared.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
+      |                                                                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7788:33: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7788 |                                                                         {.include_labels = true}, &sourceBytes);
+      |                                                                                                ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7818:31: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7818 |                                                                         {.include_type = true}, &sourceBytes);
+      |                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:14603:57: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 14603 |                                                         {.include_labels = targetReadShape.include_labels}, &retainedTargets);
+       |                                                                                                          ^
+13 warnings generated.
+[19/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/cache/BufferPool.cpp.o
+[20/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityLabelSet.cpp.o
+[21/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityLabelSetStore.cpp.o
+/workspace/zyx/src/storage/relocatable/entity/EntityLabelSetStore.cpp:605:67: warning: missing field 'node_insertions' initializer [-Wmissing-designated-field-initializers]
+  605 |                                  .node_updates = {{planned.node_id, planned.replacement_node}}},
+      |                                                                                               ^
+1 warning generated.
+[22/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityPage.cpp.o
+[23/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableStorageBackend.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1931:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1931 |                                                         const auto edge = snapshot_->readEdgeShaped(patch.entity.value, {.include_type = false});
+      |                                                                                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1965:56: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1965 |                                         const EntityReadShape shape{.all_properties = true};
+      |                                                                                           ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:2277:96: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2277 |                                                         const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+      |                                                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4073:75: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4073 |                                 snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                       ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4080:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4080 |                                 snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                     ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4866:71: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4866 |                                 snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                   ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5308:78: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5308 |                                         snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5860:79: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5860 |                                                 snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                         ^
+14 warnings generated.
+[24/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityPageStore.cpp.o
+/workspace/zyx/src/storage/relocatable/entity/EntityPageStore.cpp:490:22: warning: unused variable 'activeSession' [-Wunused-variable]
+  490 |                 NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+      |                                    ^~~~~~~~~~~~~
+/workspace/zyx/src/storage/relocatable/entity/EntityPageStore.cpp:537:22: warning: unused variable 'activeSession' [-Wunused-variable]
+  537 |                 NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+      |                                    ^~~~~~~~~~~~~
+2 warnings generated.
+[25/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[26/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[27/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[28/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[29/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunMaterializer.cpp.o
+[30/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunPipeline.cpp.o
+[31/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunSet.cpp.o
+[32/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateTokenResolver.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgePrivateTokenResolver.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePrivateTokenResolver.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[33/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[34/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRecord.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeRecord.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[35/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRun.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeRun.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[36/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRunReducer.cpp.o
+[37/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRunStore.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeRunStore.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[38/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[39/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[40/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeScalarIndexMutationPlanner.cpp.o
+[41/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[42/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphCandidateLayout.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphCandidateLayout.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphCandidateLayout.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[43/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:36:
+In file included from /workspace/zyx/include/graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp:8:
+In file included from /workspace/zyx/include/graph/storage/AdjacencyTopologyContract.hpp:4:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:1271:121: warning: missing field 'images' initializer [-Wmissing-field-initializers]
+ 1271 |                         existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt, leafValueLayout});
+      |                                                                                                                                              ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:1309:121: warning: missing field 'images' initializer [-Wmissing-field-initializers]
+ 1309 |                         existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt, leafValueLayout});
+      |                                                                                                                                              ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:1402:95: warning: missing field 'images' initializer [-Wmissing-field-initializers]
+ 1402 |                 scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::move(plan)});
+      |                                                                                                             ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:2657:85: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+ 2657 |                         hybrid_columns_->field_lifecycle, hybrid_columns_->deletions},
+      |                                                                                     ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:3698:131: warning: missing field 'images' initializer [-Wmissing-field-initializers]
+ 3698 |             position = scalar_index_mutations_.insert(position, {context_->indexes, id, {}, {}, {}, BTreeLeafValueLayout::BLVL_U64});
+      |                                                                                                                                   ^
+/workspace/zyx/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:4545:90: warning: missing field 'pending_owner_additions' initializer [-Wmissing-field-initializers]
+ 4545 |                             fields.cancellation, fields.field_lifecycle, fields.deletions}, hybrid_vectors_->semantics, bool(hybrid_catalog_credit_),
+      |                                                                                          ^
+11 warnings generated.
+[44/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphCatalogIndexPlanner.cpp.o
+[45/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[46/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[47/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.hpp:11:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePrivateMaterializer.hpp:12:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[48/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[49/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePrivateMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePrivateMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePrivateMaterializer.hpp:12:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[50/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[51/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueReferenceMapBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphLargeValueReferenceMapBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueReferenceMapBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[52/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPageRanges.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPageRanges.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPageRanges.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPublicationShape.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[53/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphMembershipIndexPlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphMembershipIndexPlanner.cpp:2:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphMembershipIndexPlanner.hpp:4:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[54/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[55/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPrivatePreparation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPrivatePreparation.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPrivatePreparation.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[56/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationIndexPlanner.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPublicationIndexPlanner.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPublicationIndexPlanner.hpp:11:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[57/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[58/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationShape.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeStreamedGraphPublicationShape.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPublicationShape.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp:15:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[59/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp.o
+[60/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedConstraintMutationAdapter.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/PageBackedConstraintMutationAdapter.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/PageBackedConstraintMutationAdapter.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/ConstraintMutationValidator.hpp:21:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[61/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp:1530:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1530 |                                                                                                                                                                                                                                                   EntityReadShape{.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                                                                                                                                                                                                                 ^
+6 warnings generated.
+[62/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/format/Format.cpp.o
+[63/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/format/Superblock.cpp.o
+[64/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/format/SuperblockFile.cpp.o
+[65/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/format/SuperblockPair.cpp.o
+[66/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp:1350:106: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1350 |                                                                                                                                                                                                                                                                                                                                    EntityReadShape{.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                                                                                                                                                                                                                                                                                                  ^
+6 warnings generated.
+[67/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePage.cpp.o
+[68/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreeIndex.cpp.o
+[69/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BulkBTreeBuilder.cpp.o
+[70/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/ExternalBTreeEntrySorter.cpp.o
+[71/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/IndexKeyCodec.cpp.o
+[72/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/InitialBTreeBuilder.cpp.o
+[73/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[74/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.cpp.o
+[75/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/NativeBulkRun.cpp.o
+[76/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/LargeValueMaintenanceJournal.cpp.o
+[77/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/DerivedObjectReachabilityReclaimer.cpp.o
+[78/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/NativeStorageAllocationCensus.cpp.o
+[79/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineScalarIndexMaterializer.cpp.o
+[80/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.cpp.o
+[81/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyQuality.cpp.o
+[82/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyRebuild.cpp.o
+[83/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorBaseRebuild.cpp.o
+[84/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorPqRebuild.cpp.o
+[85/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableCompactionCoordinator.cpp.o
+[86/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableMaintenanceService.cpp.o
+[87/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatablePageCompactionScheduler.cpp.o
+[88/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableSegmentRelocationScheduler.cpp.o
+[89/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp.o
+[90/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorCodebookReachabilityReclaimer.cpp.o
+[91/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorIndexStateReclaimer.cpp.o
+[92/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorPagePoolReclaimer.cpp.o
+[93/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/Catalog.cpp.o
+[94/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogPage.cpp.o
+[95/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorRawReachabilityReclaimer.cpp.o
+[96/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogRadix.cpp.o
+[97/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogRetireQueueReclaimer.cpp.o
+[98/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogSegmentRelocationCoordinator.cpp.o
+[99/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogSegmentRetirementCoordinator.cpp.o
+[100/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogTree.cpp.o
+[101/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp.o
+[102/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/LocationDirectory.cpp.o
+[103/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageFile.cpp.o
+[104/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePoolAvailability.cpp.o
+[105/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePool.cpp.o
+[106/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageRoute.cpp.o
+[107/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePoolRetirement.cpp.o
+[108/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPoolOwnership.cpp.o
+[109/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp.o
+[110/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataReservationCoordinator.cpp.o
+[111/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataRetirement.cpp.o
+[112/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataStoreLifecycle.cpp.o
+[113/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp.o
+[114/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/PageDirectoryBootstrap.cpp.o
+[115/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataWriteBatch.cpp.o
+[116/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp.o
+[117/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:56:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:1019:3: warning: misleading indentation; statement is not part of the previous 'if' [-Wmisleading-indentation]
+ 1019 |                 if (expectedMetadataGeneration.has_value() && current.generation != *expectedMetadataGeneration) {
+      |                 ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:1016:13: note: previous statement is here
+ 1016 |             if (isEntityFreeSpaceIndexId(tree.index_id) && std::ranges::count(derivedState.entity_free_summary_fences,
+      |             ^
+6 warnings generated.
+[118/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp.o
+[119/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreNativeJournal.cpp.o
+[120/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:25:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/ConstraintMutationValidator.hpp:21:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1125:113: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+ 1125 |         request.memory, request.cancellation, request.first_slot, request.last_slot, request.field_pool_owner_id};
+      |                                                                                                                 ^
+6 warnings generated.
+[121/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreNativePoolRecovery.cpp.o
+[122/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVector.cpp.o
+[123/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreStreamedAdjacency.cpp.o
+[124/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/StateRecord.cpp.o
+[125/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/StateRecordStore.cpp.o
+[126/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValue.cpp.o
+[127/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp.o
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp:535:97: warning: missing field 'replacement_pool' initializer [-Wmissing-field-initializers]
+  535 |                         mappingRetirementBatches.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
+      |                                                                                                                      ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp:560:80: warning: missing field 'replacement_pool' initializer [-Wmissing-field-initializers]
+  560 |                                 result.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
+      |                                                                                                            ^
+2 warnings generated.
+[128/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyCollectionRoot.cpp.o
+/workspace/zyx/src/storage/relocatable/property/PropertyCollectionRoot.cpp:206:20: warning: result of comparison of constant 1537228672809129301 with expression of type 'const uint32_t' (aka 'const unsigned int') is always false [-Wtautological-constant-out-of-range-compare]
+  206 |                                 if (entryCount > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyLargeValueEntryLocation)) {
+      |                                     ~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/src/storage/relocatable/property/PropertyCollectionRoot.cpp:348:19: warning: result of comparison of constant 256204778801521550 with expression of type 'uint32_t' (aka 'unsigned int') is always false [-Wtautological-constant-out-of-range-compare]
+  348 |                         if (entryCount > std::numeric_limits<size_t>::max() / sizeof(PropertyCollectionRootEntry)) {
+      |                             ~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+[129/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValueStore.cpp.o
+[130/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyValueCodec.cpp.o
+[131/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintDefinition.cpp.o
+[132/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyCollectionRootStore.cpp.o
+[133/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintSupportTree.cpp.o
+[134/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/IndexDefinition.cpp.o
+[135/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintMutationValidator.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/ConstraintMutationValidator.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/ConstraintMutationValidator.hpp:21:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[136/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintDefinitionWriter.cpp.o
+[137/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[138/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintSupportTreeBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/NativeConstraintSupportTreeBuilder.cpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[139/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/TokenDefinition.cpp.o
+[140/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/DeterministicProductQuantizer.cpp.o
+[141/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/SystemCatalog.cpp.o
+[142/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/RelocatableVectorSemanticScanner.cpp.o
+[143/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/RelocatableVectorSearch.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/vector/RelocatableVectorSearch.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/vector/RelocatableVectorSearch.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:413:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  413 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:422:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:534:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  534 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:628:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  628 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:637:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  637 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/vector/RelocatableVectorSearch.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/vector/RelocatableVectorSearch.hpp:13:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[144/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacency.cpp.o
+[145/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyMapping.cpp.o
+[146/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyPageStore.cpp.o
+[147/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebook.cpp.o
+[148/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebookExtent.cpp.o
+[149/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorDeltaMapping.cpp.o
+[150/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebookStore.cpp.o
+[151/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestPage.cpp.o
+[152/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestStore.cpp.o
+[153/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPage.cpp.o
+[154/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorNodeMapping.cpp.o
+[155/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPageStore.cpp.o
+[156/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPqMapping.cpp.o
+[157/159] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorSemanticCodec.cpp.o
+[158/159] Linking CXX static library libzyx_core.a

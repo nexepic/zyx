@@ -6942,6 +6942,27 @@ namespace graph::storage {
 		return std::move(created.front());
 	}
 
+    void RelocatableStorageBackend::rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint) {
+        requireOpen();
+        if (isReadOnly()) throw std::logic_error("free-space initialization requires a writable backend");
+        requireNoIndeterminateWrite();
+        auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
+        auto workspace = mutationWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope allocation(workspace);
+        std::lock_guard lock(native_publication_mutex_);
+        auto transaction = native_graph_write_planner_->beginTransaction();
+        transaction.rebuild_entity_free_summaries_ = true;
+        transaction.free_summary_checkpoint_ = checkpoint;
+        const auto publicationBase = transaction.snapshot_.superblock();
+        try {
+            const auto result = transaction.commit();
+            if (!result.committed()) throw LogicalGraphMutationConflict("free-space initialization source changed");
+        } catch (...) {
+            markReopenRequiredIfPublicationAdvanced(publicationBase);
+            throw;
+        }
+    }
+
 	void RelocatableStorageBackend::rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint) {
 		requireOpen();
 		if (isReadOnly()) throw std::runtime_error("token statistics rebuilding requires a writable backend");

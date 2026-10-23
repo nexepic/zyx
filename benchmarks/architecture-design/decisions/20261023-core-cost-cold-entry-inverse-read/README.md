@@ -1,0 +1,11 @@
+# Fresh cold entries and inverse read projection
+
+Accepted progress **90%**, P7 open. No full suite/timing/commit/push. Original format/quota/bounds unchanged. Source/reports/recipes/current library fingerprints retained without duplicating binaries.
+
+The original codec accepts an empty source for fresh private preparation only: validate group/kind/generations/canonical owner/count/reference constraints, reject removal of nonexistent rows, and return accounted whole results. Only canonical empty references request creation in the original preparer. New roots require actual live Entity Map owners with no competing cold root, granting no entity creation authority. No fabricated source page/retirement is performed. Other hot/cold authorities/totals remain, including a first cold field on an entirely propertyless live group. Original batch private IDs/PageImages remain unpublished until the enclosing coordinator succeeds.
+
+Existing inverse RowPreparation now performs read-only mode3 lookup, retaining actual Entity authentication, owner enumeration and original ValueReader/accounted decoding. Original public groupRecord guards remain, and the inverse publisher explicitly retains that guard before projection. Read support does not enable cold inverse installation/publication. Tests cover actual8193-byte LargeValue, NULL/missing/propertyless owners, Node/Edge identity/exact counts and corrupt-CRC refunds.
+
+22 targeted cases pass. The initial18-case selection had one assertion mistake: hasFields returns optional<bool>, so routed false is engaged. The assertion now checks optional(false); reading source was not changed. Original failed report/generating test script and corrected18-case report remain. Both experimental memberships pass498 related module cases, default153. Both final-library codec/binding selections pass20 cases. No failures/skips in final selections.
+
+Actual Native field dispatch/batch-local new values, global demotion, owner liveness/delete, actual inverse installation/retirement, public atomic conversion/mutation/reopen/fault/integrity/old-pin lifecycle, complete-space/staged-target bootstrap admission, remaining primary read costs and final P7 matrix remain pending. These are private mechanism/read projections, not completed public conversion or performance acceptance.

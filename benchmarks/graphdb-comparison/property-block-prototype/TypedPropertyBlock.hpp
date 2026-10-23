@@ -4,6 +4,7 @@
 #include <array>
 #include <bit>
 #include <map>
+#include <functional>
 #include <memory>
 #include <set>
 #include <optional>
@@ -183,6 +184,88 @@ public:
    }
   }
   return result;
+ }
+
+ // Lab-only synchronous supply from existing persisted column bytes. This
+ // grants no graph route, cache, format adoption, or borrow beyond the visitor.
+ struct BorrowedCell {
+  uint64_t owner = 0;
+  bool present = false;
+  std::optional<CanonicalPropertyValueCodec::BorrowedPrimitive> primitive;
+  std::span<const std::byte> complex;
+ };
+ using ColumnVisitor = std::function<void(std::span<const BorrowedCell>)>;
+ static void visitSelectedColumn(const Image &image, uint64_t block, uint32_t type, uint32_t token,
+                                 const ColumnVisitor &visitor, const std::function<void()> &checkpoint = {}) {
+  require(token != 0 && bool(visitor), "invalid borrowed column request");
+  if (checkpoint) checkpoint();
+  // This authenticates metadata and the complete owner map, without decoding
+  // any value or accessing an unselected payload. At most 64 owner descriptors.
+  const auto owners = decode(image, block, type, {});
+  const auto &m = image.metadata;
+  const size_t rows = owners.size(), count = get32(m, 8);
+  std::array<BorrowedCell, MAX_ROWS> cells{};
+  for (size_t row = 0; row < rows; ++row) cells[row].owner = owners[row].owner_entity_id;
+  std::optional<size_t> selected;
+  for (size_t col = 0; col < count; ++col)
+   if (get32(m, HEADER + rows * 8 + col * DESCRIPTOR) == token) { selected = col; break; }
+  if (selected) {
+   const size_t d = HEADER + rows * 8 + *selected * DESCRIPTOR;
+   require(image.columns[*selected] != nullptr, "selected property column missing");
+   const auto &bytes = *image.columns[*selected];
+   require(get64(m, d + 24) == bytes.size() && crc(bytes) == get32(m, d + 32),
+           "selected property column length or checksum mismatch");
+   const auto kind = static_cast<ColumnKind>(get32(m, d + 4));
+   const auto presence = get64(m, d + 8), nulls = get64(m, d + 16);
+   if (kind == ColumnKind::COL_CANONICAL)
+    require(bytes.size() >= (rows + 1) * 4 && get32(bytes, 0) == (rows + 1) * 4 &&
+            get32(bytes, rows * 4) == bytes.size(), "invalid canonical column directory");
+   else require(bytes.size() == rows * (kind == ColumnKind::COL_BOOLEAN ? 1 : 8), "invalid typed column length");
+   for (size_t row = 0; row < rows; ++row) {
+    if (checkpoint) checkpoint();
+    auto &cell = cells[row]; const uint64_t bit = uint64_t{1} << row;
+    cell.present = (presence & bit) != 0;
+    const bool isNull = (nulls & bit) != 0;
+    if (kind == ColumnKind::COL_CANONICAL) {
+     const size_t begin = get32(bytes, row * 4), end = get32(bytes, (row + 1) * 4);
+     require(begin <= end && end <= bytes.size(), "invalid canonical column offsets");
+     if (!cell.present || isNull) require(begin == end, "absent/null column owns payload");
+     else {
+      const auto encoded = std::span(bytes).subspan(begin, end - begin);
+      cell.primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(encoded);
+      if (cell.primitive) require(cell.primitive->type != graph::PropertyType::NULL_TYPE, "non-null cell encodes NULL");
+      else {
+       // Only complex values cross the original owning validation boundary.
+       size_t consumed = 0;
+       const auto value = CanonicalPropertyValueCodec::decodeNext(encoded, consumed);
+       require(consumed == encoded.size() && value.getType() != graph::PropertyType::NULL_TYPE,
+               "invalid canonical column cell");
+       cell.complex = encoded;
+      }
+     }
+    } else {
+     const size_t stride = kind == ColumnKind::COL_BOOLEAN ? 1 : 8;
+     if (!cell.present || isNull) {
+      for (size_t i = 0; i < stride; ++i) require(bytes[row * stride + i] == std::byte{}, "absent/null typed payload is nonzero");
+     } else {
+      CanonicalPropertyValueCodec::BorrowedPrimitive value;
+      if (kind == ColumnKind::COL_BOOLEAN) {
+       require(bytes[row] == std::byte{0} || bytes[row] == std::byte{1}, "invalid boolean cell");
+       value.type = graph::PropertyType::BOOLEAN; value.bits = std::to_integer<uint8_t>(bytes[row]);
+      } else {
+       value.type = kind == ColumnKind::COL_INTEGER ? graph::PropertyType::INTEGER : graph::PropertyType::DOUBLE;
+       value.bits = get64(bytes, row * 8);
+      }
+      cell.primitive = value;
+     }
+    }
+    if (isNull) cell.primitive = CanonicalPropertyValueCodec::BorrowedPrimitive{};
+   }
+  }
+  if (checkpoint) checkpoint();
+  // No callback before complete selected-column validation; views stay within
+  // the caller's immutable/native read buffers and are consumed synchronously.
+  visitor(std::span(cells).first(rows));
  }
 
  static std::vector<uint32_t> tokens(const Image &image) {

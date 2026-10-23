@@ -1,0 +1,38 @@
+from pathlib import Path
+from datetime import datetime,timezone
+import json,subprocess,shutil,hashlib,tarfile
+r=Path('/workspace/zyx');d=r/'benchmarks/architecture-design/decisions/20261023-core-cost-cold-native-probe';d.mkdir(exist_ok=True);raw=r/'benchmarks/architecture-design/results/20261022-core-cost';checks={};libs={}
+for profile,stems,build,total in [('hybrid',['native-probe-initial-','native-probe-compact-failed-','native-probe-legacy-complete-','native-probe-compact-complete-'],'zyx-build-core-hybrid',476),('default',[''],'zyx-build-core-candidate',153)]:
+ src=raw/('cold-row-ownership-'+profile)
+ for stem in stems:
+  report=json.loads((src/(stem+'tests.json')).read_text());check={k:report.get(k,0) for k in ['tests','failures','skipped']};checks[profile+'-'+(stem or 'final')]=check
+  if stem not in ['native-probe-initial-','native-probe-compact-failed-']:assert check=={'tests':total,'failures':0,'skipped':0}
+  for name in ['tests.json','tests.log','receipt.json']:shutil.copy2(src/(stem+name),d/(profile+'-'+stem+name))
+ for name in ['compile.json','link.json','native-probe-initial-build-tests.log']:shutil.copy2(src/name,d/(profile+'-'+name))
+ target=Path('/workspace')/('zyx-cold-native-probe-'+profile+'-candidate');target.mkdir(exist_ok=True);p=target/'libzyx_core.a';shutil.copy2(Path('/workspace')/build/'libzyx_core.a',p);libs[profile]={'path':str(p),'sha256':hashlib.file_digest(p.open('rb'),'sha256').hexdigest(),'format':'13/39' if profile=='hybrid' else '5/31'}
+baselines={}
+for name in ['native-probe-baseline','native-probe-baseline-corrected']:
+ src=raw/name
+ report=json.loads((src/'tests.json').read_text());baselines[name]={k:report.get(k,0) for k in ['tests','failures','skipped']}
+ for fn in ['tests.json','tests.log','receipt.json']:shutil.copy2(src/fn,d/(name+'-'+fn))
+ with tarfile.open(d/(name+'-source.tar.gz'),'w:gz') as tar:tar.add(src/'source',arcname='source')
+assert baselines['native-probe-baseline']=={'tests':2,'failures':2,'skipped':0};assert baselines['native-probe-baseline-corrected']=={'tests':2,'failures':0,'skipped':0}
+for name in ['integrate-cold-native-probe.py','check-cold-native-probe-baseline.py','check-cold-native-probe-corrected-baseline.py','update-cold-native-probe-docs.py','record-cold-native-probe.py','build-cold-native-probe-hybrid-modules.py','build-cold-native-probe-default-modules.py','run-cold-row-ownership-hybrid-modules.py','run-cold-row-ownership-default-modules.py']:shutil.copy2(Path('/tmp')/name,d/name)
+(d/'source.patch').write_bytes(subprocess.check_output(['git','diff','--binary'],cwd=r))
+untracked=subprocess.check_output(['git','ls-files','--others','--exclude-standard','include','src','tests','cmake'],cwd=r,text=True).splitlines()
+with tarfile.open(d/'additional-source.tar.gz','w:gz') as tar:
+ for name in untracked:tar.add(r/name,arcname=name)
+(d/'round.json').write_text(json.dumps({'recorded_at_utc':datetime.now(timezone.utc).isoformat(),'progress_percent':90,'P7_accepted':False,'full_suite':False,'timing_benchmark':False,'commit_push':False,'checks':checks,'baselines':baselines,'libraries':libs,'implemented':['Default-off cold selector in existing Native request, limited to single compact forward preparation-only calls','Existing real-source Native Entity/ROW/token fencing, shared same-batch proposal dedup/holder/consecutive IDs and private physical/data/manifest/directory/descriptor planning','New whole-root proposal path borrows authenticated entries and never calls independent LargeValueStore.write','Field/whole-root carrier dedup shares original full-byte equality and original field checkpoint order','Publication/noncompact/multigroup/inverse requests reject before source classification','Actual64owner Node/Edge mixed hot integer/long IDs plan one field frame and one Group-index frame without per-field cold directories','Source whole-root LargeValue with hot field generates a genuinely new cold whole-root proposal/data/manifest in same private batch','Original no-publication guard preserves file/I/O epoch/roots/counters/old pins; account refunded'],'baseline_fixture_corrections':['Prior frozen preparation library with exact reconstructed old header reproduces same two compact failures, unchanged test source verified','Dense compact locators need one field pool plus one Group-index pool, equal to two source ROW pools; legacy greater-than assertion retained','Keep128KiB test quota; occupy remaining shared credit at actual private-map event for deterministic quota refusal before writes; then cancellation boundaries/retry remain required','Corrected same two cases pass frozen old library, proving fixture-specific causes and avoiding ABI mixing'],'not_accepted':['Mode3 actual publication, atomic new-value content-index installation, mixed cohorts/full space admission','Complete compatible hot/cold mutation/demotion/delete/inverse and actual public-conversion reclamation/old-pin/retirement/fault/reopen lifecycle','Mature whole allocation/staged migration bootstrap and final P7 matrix'],'performance_claim':None},indent=2)+'\n')
+(d/'README.md').write_text('''# Actual Native cold preparation-only probe
+
+Accepted progress remains **90%**, P7 open. No timing benchmark, full unit suite, commit or push.
+
+The existing Native request gains a default-off cold selector, restricted to single compact forward preparation-only calls. Publication/noncompact/multigroup/inverse requests reject before source classification. Original writer/source fences authenticate real Entity/ROW/tokens, then original planners prepare cold fields, same-batch whole-root proposals/consecutive IDs, physical/data/manifest/directory/descriptor images. Field/root carriers share the original full-payload dedup/holder/ID algorithm; original field checkpoint order remains. No independent LargeValueStore.write occurs.
+
+Four actual-source tests prove64-owner Node/Edge integer-plus-long-ID sources plan one field frame and one Group-index frame without cold per-field directories. Extracting cold content from an old LargeValue containing a hot field genuinely plans a new batch-local whole-root value/data/manifest. All stop at the original guard with unchanged file/I/O epoch/roots/counters/old pins and refunded budget. Frame counts are neither latency nor whole-allocation/adoption proof.
+
+Both experimental membership configurations pass **476 related module tests**, default **153**. The compact run initially exposed two legacy fixture assumptions. Exactly matched preceding frozen preparation header/library reproduce both failures on unchanged tests; corrected same cases pass that old library. The dense compact fixture's field/group-index pools equal two ROW pools rather than old larger multi-directory storage. The quota remains128KiB, now deterministically occupied at the real private-map boundary; no-write/refund, both cancellation boundaries and successful retry remain. No budget/10% full-space gate changed and no tests removed/skipped. Original failed reports, exact baseline/corrected sources and recipes/fingerprints are retained. Initial compile fixture used optional syntax for owning-root readEntity; corrected to actual API without source-semantic changes.
+
+Mode3 actual publication, atomic new-value content-index installation, mixed cohorts/full cost admission, compatible hot/cold mutation/demotion/delete/inverse and real reclamation/old-pin/retirement/fault/reopen lifecycle, mature whole allocation/staged migration bootstrap and final P7 matrix remain pending. Production callers retain old default behavior and new-mode publication remains closed.
+''')
+print(checks,baselines)

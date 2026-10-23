@@ -1,0 +1,45 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid": {
+      "tests": 21,
+      "failures": 0
+    },
+    "default": {
+      "tests": 21,
+      "failures": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-row-inspection-hybrid-candidate/libzyx_core.a",
+      "profile": "13/39",
+      "sha256": "0b413f667e476400441226d480413ca7f910baf2fc722a3773e94c2df56bd033"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-row-inspection-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "0ee94494bf2ec320e95f50b95ec69f24c4208f6f1bad395b7a69110345c6d9b0"
+    }
+  },
+  "implemented": [
+    "Synchronous canonical ROW root and actual LargeValue selected-byte projection component",
+    "Real reference owner/kind/media/block-generation, manifest/content verification and exact actual directory length/count",
+    "Group-global hot token rejection before cold source exposure",
+    "Selected entry token/canonical framing, NULL/missing and exact scalar bit preservation",
+    "Original live snapshot lifetime checks, charged vectors/manifest/range and refusal/cancellation refunds",
+    "Consumer failure propagates without replay; no nested PropertyValue construction in source"
+  ],
+  "not_implemented": [
+    "Native production routing and batch/full/cold source consumption; existing new-mode refusal remains",
+    "Native cold conversion/mutation/demotion/delete/inverse/full ownership lifecycle",
+    "Cursor one-ROW representation transition and shared-source grouping",
+    "Actual mature space/migration bootstrap/final P7 performance matrix"
+  ],
+  "scope": "No persisted format change (13/39 and5/31). No new cache/backend/index or allowance. The component is not a producer/publication capability.",
+  "performance_claim": null
+}

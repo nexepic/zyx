@@ -1,0 +1,18 @@
+{
+  "deleted": [
+    {
+      "path": "buildDir/zyx_test_suite",
+      "bytes": 602158040,
+      "sha256": "2fb88d8e82894c960c7a1edc86a544b2fe23e81349fd9e34a248b7f396d5f6f0",
+      "reason": "obsolete generated Debug build artifact; current module tests link separately against current Release archives"
+    },
+    {
+      "path": "buildDir/libzyx_core.a",
+      "bytes": 587965142,
+      "sha256": "4fff39b06a03aeab7aed06f003cc8cf9ab69133b38408ef59fbf5fd83f55ab91",
+      "reason": "obsolete generated Debug build artifact; current module tests link separately against current Release archives"
+    }
+  ],
+  "available_before": 179658752,
+  "available_after": 758050816
+}

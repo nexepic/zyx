@@ -259,7 +259,8 @@ namespace graph::storage {
 												  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		// Keeps the owned data frame pinned after validating the Page Directory,
 		// Catalog, pool control record, and page owner. A disabled Buffer Pool
-		// returns nullopt so callers can retain the copy-based compatibility path.
+		// or a one-frame sequential scan returns nullopt, preserving a bounded
+		// copy-based path without holding the only frame across consumer callbacks.
 		[[nodiscard]] std::optional<SharedPagePoolPinnedView>
 		readPinned(const MetadataSnapshotPin &snapshot, PageId pageId,
 					   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;

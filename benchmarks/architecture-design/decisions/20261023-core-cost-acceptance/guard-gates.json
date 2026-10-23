@@ -1,0 +1,267 @@
+[
+  {
+    "scale": "holdout",
+    "case": "edge_create_delete",
+    "p50_ratio": 0.07408093175869923,
+    "p95_ratio": 0.08931986374378303,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "property_noop",
+    "p50_ratio": 0.984553411605277,
+    "p95_ratio": 0.9314999985440866,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "graph_full_neighbors",
+    "p50_ratio": 0.9653100485273189,
+    "p95_ratio": 0.8962031146122333,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "graph_full_point",
+    "p50_ratio": 0.9410878833028792,
+    "p95_ratio": 0.9229200852566618,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "point_lookup_indexed",
+    "p50_ratio": 0.9224272905951323,
+    "p95_ratio": 0.809025097228089,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "all_nodes_property_filter",
+    "p50_ratio": 0.7409564700479991,
+    "p95_ratio": 0.7727280343859726,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "one_hop_expand",
+    "p50_ratio": 0.9504875668416488,
+    "p95_ratio": 0.945314999980247,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "holdout",
+    "case": "two_hop_expand",
+    "p50_ratio": 0.9294713857594609,
+    "p95_ratio": 0.9417542999102158,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "large",
+    "case": "large_patch",
+    "p50_ratio": 0.8409922164432833,
+    "p95_ratio": 1.0984965206711421,
+    "within_5_percent": false,
+    "original_matrix_within_5_percent": false,
+    "targeted_confirmation": {
+      "case": "large_patch",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 4.5773945000000005,
+        "p95_ms": 5.121313
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 3.762123,
+        "p95_ms": 4.186533
+      },
+      "p50_ratio": 0.8218917989262231,
+      "p95_ratio": 0.817472589548813,
+      "within_5_percent": true
+    },
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "large",
+    "case": "large_full",
+    "p50_ratio": 0.9300441952914146,
+    "p95_ratio": 0.8524478423996036,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "large",
+    "case": "large_selected",
+    "p50_ratio": 0.9715352776213139,
+    "p95_ratio": 1.324099711342426,
+    "within_5_percent": false,
+    "original_matrix_within_5_percent": false,
+    "targeted_confirmation": {
+      "case": "large_selected",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 1.077419,
+        "p95_ms": 1.578526
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 0.9897279999999999,
+        "p95_ms": 1.059117
+      },
+      "p50_ratio": 0.9186101228955494,
+      "p95_ratio": 0.6709531550319728,
+      "within_5_percent": true
+    },
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "edge_create_delete",
+    "p50_ratio": 0.07197753438670211,
+    "p95_ratio": 0.07310222634268888,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "property_noop",
+    "p50_ratio": 0.9630757502867614,
+    "p95_ratio": 0.9592862055073275,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "graph_full_neighbors",
+    "p50_ratio": 0.9459255233670361,
+    "p95_ratio": 0.9504693816660073,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "graph_full_point",
+    "p50_ratio": 0.95747571555537,
+    "p95_ratio": 1.0467047091840571,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "point_lookup_indexed",
+    "p50_ratio": 0.9574376184705259,
+    "p95_ratio": 0.9628124595949765,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "all_nodes_property_filter",
+    "p50_ratio": 0.7667330759893497,
+    "p95_ratio": 0.859322579850463,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "one_hop_expand",
+    "p50_ratio": 0.9307988314038416,
+    "p95_ratio": 0.5372567665011044,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "medium",
+    "case": "two_hop_expand",
+    "p50_ratio": 0.9523318484363053,
+    "p95_ratio": 0.9623791775138795,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_both",
+    "p50_ratio": 0.9620026223142033,
+    "p95_ratio": 0.5346327602073992,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_out",
+    "p50_ratio": 0.9945414942506652,
+    "p95_ratio": 0.9881605128483057,
+    "within_5_percent": true,
+    "original_matrix_within_5_percent": true,
+    "targeted_confirmation": null,
+    "no_stable_regression_confirmed": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_twohop",
+    "p50_ratio": 0.9900952487037812,
+    "p95_ratio": 1.267743192838853,
+    "within_5_percent": false,
+    "original_matrix_within_5_percent": false,
+    "targeted_confirmation": {
+      "case": "skew_twohop",
+      "baseline": {
+        "samples": 90,
+        "p50_ms": 0.949908,
+        "p95_ms": 1.015972
+      },
+      "current": {
+        "samples": 90,
+        "p50_ms": 0.9312555,
+        "p95_ms": 0.993298
+      },
+      "p50_ratio": 0.9803638878712465,
+      "p95_ratio": 0.9776824558157113,
+      "within_5_percent": true
+    },
+    "no_stable_regression_confirmed": true
+  }
+]

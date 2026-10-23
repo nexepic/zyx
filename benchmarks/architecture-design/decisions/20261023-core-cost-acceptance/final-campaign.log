@@ -1,0 +1,198 @@
+START 1 medium scan zyx
+FINISH 1 medium scan zyx passed 8.06
+START 1 medium scan kuzu
+FINISH 1 medium scan kuzu passed 0.82
+START 1 medium retrieval zyx
+FINISH 1 medium retrieval zyx passed 0.62
+START 1 medium retrieval kuzu
+FINISH 1 medium retrieval kuzu passed 0.41
+START 1 medium property_set zyx
+FINISH 1 medium property_set zyx passed 4.02
+START 1 medium property_set kuzu
+FINISH 1 medium property_set kuzu passed 0.61
+START 1 medium edge_batch_1000 zyx
+FINISH 1 medium edge_batch_1000 zyx passed 4.42
+START 1 medium edge_batch_1000 kuzu
+FINISH 1 medium edge_batch_1000 kuzu passed 0.81
+START 1 medium property_noop zyx
+FINISH 1 medium property_noop zyx passed 4.01
+START 1 medium property_noop kuzu
+FINISH 1 medium property_noop kuzu passed 0.61
+START 1 medium edge_create_delete zyx
+FINISH 1 medium edge_create_delete zyx passed 4.22
+START 1 medium edge_create_delete kuzu
+FINISH 1 medium edge_create_delete kuzu passed 0.81
+START 1 medium import-production zyx
+FINISH 1 medium import-production zyx passed 44.25
+START 1 medium import-production kuzu
+FINISH 1 medium import-production kuzu passed 1.21
+START 1 medium import-equal-reopened kuzu
+FINISH 1 medium import-equal-reopened kuzu passed 39.26
+START 1 holdout scan zyx
+FINISH 1 holdout scan zyx passed 6.18
+START 1 holdout scan kuzu
+FINISH 1 holdout scan kuzu passed 0.59
+START 1 holdout retrieval zyx
+FINISH 1 holdout retrieval zyx passed 0.59
+START 1 holdout retrieval kuzu
+FINISH 1 holdout retrieval kuzu passed 0.4
+START 1 holdout property_set zyx
+FINISH 1 holdout property_set zyx passed 3.26
+START 1 holdout property_set kuzu
+FINISH 1 holdout property_set kuzu passed 0.61
+START 1 holdout edge_batch_1000 zyx
+FINISH 1 holdout edge_batch_1000 zyx passed 3.83
+START 1 holdout edge_batch_1000 kuzu
+FINISH 1 holdout edge_batch_1000 kuzu passed 0.61
+START 1 holdout property_noop zyx
+FINISH 1 holdout property_noop zyx passed 3.42
+START 1 holdout property_noop kuzu
+FINISH 1 holdout property_noop kuzu passed 0.61
+START 1 holdout edge_create_delete zyx
+FINISH 1 holdout edge_create_delete zyx passed 4.21
+START 1 holdout edge_create_delete kuzu
+FINISH 1 holdout edge_create_delete kuzu passed 0.61
+START 1 holdout import-production zyx
+FINISH 1 holdout import-production zyx passed 36.24
+START 1 holdout import-production kuzu
+FINISH 1 holdout import-production kuzu passed 1.01
+START 1 holdout import-equal-reopened kuzu
+FINISH 1 holdout import-equal-reopened kuzu passed 32.04
+START 1 large special-read zyx
+FINISH 1 large special-read zyx passed 0.27
+START 1 large large_patch zyx
+FINISH 1 large large_patch zyx passed 0.21
+START 1 skew special-read zyx
+FINISH 1 skew special-read zyx passed 0.22
+START 2 medium scan kuzu
+FINISH 2 medium scan kuzu passed 0.84
+START 2 medium scan zyx
+FINISH 2 medium scan zyx passed 7.47
+START 2 medium retrieval kuzu
+FINISH 2 medium retrieval kuzu passed 0.43
+START 2 medium retrieval zyx
+FINISH 2 medium retrieval zyx passed 0.83
+START 2 medium property_set kuzu
+FINISH 2 medium property_set kuzu passed 0.61
+START 2 medium property_set zyx
+FINISH 2 medium property_set zyx passed 4.23
+START 2 medium edge_batch_1000 kuzu
+FINISH 2 medium edge_batch_1000 kuzu passed 0.81
+START 2 medium edge_batch_1000 zyx
+FINISH 2 medium edge_batch_1000 zyx passed 4.81
+START 2 medium property_noop kuzu
+FINISH 2 medium property_noop kuzu passed 0.61
+START 2 medium property_noop zyx
+FINISH 2 medium property_noop zyx passed 4.22
+START 2 medium edge_create_delete kuzu
+FINISH 2 medium edge_create_delete kuzu passed 0.81
+START 2 medium edge_create_delete zyx
+FINISH 2 medium edge_create_delete zyx passed 4.42
+START 2 medium import-production kuzu
+FINISH 2 medium import-production kuzu passed 1.21
+START 2 medium import-equal-reopened kuzu
+FINISH 2 medium import-equal-reopened kuzu passed 37.86
+START 2 medium import-production zyx
+FINISH 2 medium import-production zyx passed 43.85
+START 2 holdout scan kuzu
+FINISH 2 holdout scan kuzu passed 0.78
+START 2 holdout scan zyx
+FINISH 2 holdout scan zyx passed 5.59
+START 2 holdout retrieval kuzu
+FINISH 2 holdout retrieval kuzu passed 0.38
+START 2 holdout retrieval zyx
+FINISH 2 holdout retrieval zyx passed 0.59
+START 2 holdout property_set kuzu
+FINISH 2 holdout property_set kuzu passed 0.61
+START 2 holdout property_set zyx
+FINISH 2 holdout property_set zyx passed 3.42
+START 2 holdout edge_batch_1000 kuzu
+FINISH 2 holdout edge_batch_1000 kuzu passed 0.81
+START 2 holdout edge_batch_1000 zyx
+FINISH 2 holdout edge_batch_1000 zyx passed 3.82
+START 2 holdout property_noop kuzu
+FINISH 2 holdout property_noop kuzu passed 0.62
+START 2 holdout property_noop zyx
+FINISH 2 holdout property_noop zyx passed 3.42
+START 2 holdout edge_create_delete kuzu
+FINISH 2 holdout edge_create_delete kuzu passed 0.61
+START 2 holdout edge_create_delete zyx
+FINISH 2 holdout edge_create_delete zyx passed 3.62
+START 2 holdout import-production kuzu
+FINISH 2 holdout import-production kuzu passed 1.01
+START 2 holdout import-equal-reopened kuzu
+FINISH 2 holdout import-equal-reopened kuzu passed 31.65
+START 2 holdout import-production zyx
+FINISH 2 holdout import-production zyx passed 35.64
+START 2 large special-read zyx
+FINISH 2 large special-read zyx passed 0.25
+START 2 large large_patch zyx
+FINISH 2 large large_patch zyx passed 0.21
+START 2 skew special-read zyx
+FINISH 2 skew special-read zyx passed 0.21
+START 3 medium scan zyx
+FINISH 3 medium scan zyx passed 7.44
+START 3 medium scan kuzu
+FINISH 3 medium scan kuzu passed 0.83
+START 3 medium retrieval zyx
+FINISH 3 medium retrieval zyx passed 0.62
+START 3 medium retrieval kuzu
+FINISH 3 medium retrieval kuzu passed 0.42
+START 3 medium property_set zyx
+FINISH 3 medium property_set zyx passed 4.02
+START 3 medium property_set kuzu
+FINISH 3 medium property_set kuzu passed 0.61
+START 3 medium edge_batch_1000 zyx
+FINISH 3 medium edge_batch_1000 zyx passed 4.41
+START 3 medium edge_batch_1000 kuzu
+FINISH 3 medium edge_batch_1000 kuzu passed 0.81
+START 3 medium property_noop zyx
+FINISH 3 medium property_noop zyx passed 3.81
+START 3 medium property_noop kuzu
+FINISH 3 medium property_noop kuzu passed 0.62
+START 3 medium edge_create_delete zyx
+FINISH 3 medium edge_create_delete zyx passed 4.21
+START 3 medium edge_create_delete kuzu
+FINISH 3 medium edge_create_delete kuzu passed 0.61
+START 3 medium import-production zyx
+FINISH 3 medium import-production zyx passed 44.25
+START 3 medium import-production kuzu
+FINISH 3 medium import-production kuzu passed 1.21
+START 3 medium import-equal-reopened kuzu
+FINISH 3 medium import-equal-reopened kuzu passed 39.84
+START 3 holdout scan zyx
+FINISH 3 holdout scan zyx passed 5.78
+START 3 holdout scan kuzu
+FINISH 3 holdout scan kuzu passed 0.8
+START 3 holdout retrieval zyx
+FINISH 3 holdout retrieval zyx passed 0.59
+START 3 holdout retrieval kuzu
+FINISH 3 holdout retrieval kuzu passed 0.39
+START 3 holdout property_set zyx
+FINISH 3 holdout property_set zyx passed 3.42
+START 3 holdout property_set kuzu
+FINISH 3 holdout property_set kuzu passed 0.61
+START 3 holdout edge_batch_1000 zyx
+FINISH 3 holdout edge_batch_1000 zyx passed 3.82
+START 3 holdout edge_batch_1000 kuzu
+FINISH 3 holdout edge_batch_1000 kuzu passed 0.61
+START 3 holdout property_noop zyx
+FINISH 3 holdout property_noop zyx passed 3.42
+START 3 holdout property_noop kuzu
+FINISH 3 holdout property_noop kuzu passed 0.61
+START 3 holdout edge_create_delete zyx
+FINISH 3 holdout edge_create_delete zyx passed 3.61
+START 3 holdout edge_create_delete kuzu
+FINISH 3 holdout edge_create_delete kuzu passed 0.61
+START 3 holdout import-production zyx
+FINISH 3 holdout import-production zyx passed 36.24
+START 3 holdout import-production kuzu
+FINISH 3 holdout import-production kuzu passed 1.01
+START 3 holdout import-equal-reopened kuzu
+FINISH 3 holdout import-equal-reopened kuzu passed 31.65
+START 3 large special-read zyx
+FINISH 3 large special-read zyx passed 0.25
+START 3 large large_patch zyx
+FINISH 3 large large_patch zyx passed 0.21
+START 3 skew special-read zyx
+FINISH 3 skew special-read zyx passed 0.21

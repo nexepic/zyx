@@ -2,6 +2,7 @@
 #include <bit>
 #include <optional>
 #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyColdRowBindings.hpp"
 
 namespace graph::storage {
 // Byte/value codec only. A decoded record is not a publication capability.
@@ -9,10 +10,10 @@ namespace graph::storage {
 // to the existing private lifecycle coordinator before any persisted use.
 struct HybridPropertyColumnMembership {
     static constexpr uint32_t MAGIC = 0x4d48595aU; // ZYHM
-    static constexpr uint16_t VERSION = 1;
+    static constexpr uint16_t VERSION = 3;
     static constexpr size_t MAX_COLUMNS = 4096U / 48U;
     static constexpr size_t MAX_WORDS = (MAX_COLUMNS + 63U) / 64U;
-    static constexpr size_t MAX_BYTES = 64U + 4U * MAX_COLUMNS + 64U * MAX_WORDS * 8U;
+    static constexpr size_t MAX_BYTES = 64U + 20U * MAX_COLUMNS + 64U * MAX_WORDS * 8U + HybridPropertyColdRowBindings::MAX_BYTES;
     EntityPropertyOwnerKind owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
     uint64_t group_id = 0;
     Generation semantic_generation{};
@@ -20,14 +21,18 @@ struct HybridPropertyColumnMembership {
     uint16_t column_count = 0;
     std::array<uint32_t, MAX_COLUMNS> tokens{};
     std::array<std::array<uint64_t, MAX_WORDS>, 64> owners{};
+    std::array<SlottedSlotReference, MAX_COLUMNS> locators{};
+    bool row_remainder = false;
+    uint32_t cold_fields = 0;
+    HybridPropertyColdRowBindings cold_rows;
     constexpr bool operator==(const HybridPropertyColumnMembership &) const = default;
 
     [[nodiscard]] size_t wordsPerOwner() const {
-        hybrid_property_detail::require(column_count && column_count <= MAX_COLUMNS,
+        hybrid_property_detail::require((column_count || row_remainder) && column_count <= MAX_COLUMNS,
             "column membership has an invalid column count");
         return (column_count + 63U) / 64U;
     }
-    [[nodiscard]] size_t wireSize() const { return 64U + 4U * column_count + 64U * wordsPerOwner() * 8U; }
+    [[nodiscard]] size_t wireSize() const { return 64U + 20U * column_count + 64U * wordsPerOwner() * 8U + cold_rows.layout().bytes; }
     [[nodiscard]] uint32_t memberships() const {
         uint32_t result = 0;
         for (const auto &row : owners) for (auto word : row) result += std::popcount(word);
@@ -56,7 +61,8 @@ struct HybridPropertyColumnMembership {
         return result;
     }
     // Private builders may have zero columns after removing the last one;
-    // such a value cannot encode and its group must drop the matrix locator.
+    // ordinary column-only groups must drop their matrix locator. ROW-remainder
+    // groups retain it as the authority for cold-only or propertyless owners.
     void eraseColumn(uint32_t token) {
         const auto selected = ordinal(token);
         hybrid_property_detail::require(bool(selected), "compact column removal has no source ordinal");
@@ -70,7 +76,9 @@ struct HybridPropertyColumnMembership {
             row[last / 64U] &= ~(UINT64_C(1) << (last % 64U));
         }
         std::move(tokens.begin() + *selected + 1U, tokens.begin() + column_count, tokens.begin() + *selected);
+        std::move(locators.begin() + *selected + 1U, locators.begin() + column_count, locators.begin() + *selected);
         tokens[--column_count] = 0;
+        locators[column_count] = {};
     }
     void setPresence(uint32_t token, uint64_t presence) {
         const auto field = ordinal(token);
@@ -87,9 +95,17 @@ struct HybridPropertyColumnMembership {
             "column membership has an invalid identity");
         hybrid_property_detail::validateGroup(group_id, live);
         const auto width = wordsPerOwner();
+        static_cast<void>(cold_rows.layout());
+        require(!(cold_rows.owners & ~live) && ((!cold_rows.owners && !cold_fields) ||
+            (cold_rows.owners && cold_fields >= unsigned(std::popcount(cold_rows.owners)))),
+            "cold ROW mask/count contradicts group liveness");
+        require(row_remainder || (!cold_rows.owners && !cold_fields), "ordinary column membership contains cold ROW state");
+        require(cold_fields <= UINT32_MAX - memberships(), "combined hot/cold membership count overflowed");
         for (size_t i = 0; i < tokens.size(); ++i)
             require(i < column_count ? tokens[i] && (!i || tokens[i - 1] < tokens[i]) : !tokens[i],
                 "column membership tokens are unsorted, repeated or noncanonical");
+        for (size_t i = column_count; i < locators.size(); ++i)
+            require(locators[i] == SlottedSlotReference{}, "unused column locator is nonzero");
 #if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
         unsigned completeOwners = 0;
         for (unsigned slot = 0; slot < 64; ++slot) {
@@ -118,10 +134,28 @@ struct HybridPropertyColumnMembership {
         for (size_t field = 0; field < column_count; ++field)
             require(std::popcount(presence(tokens[field])) >= 48, "column membership lost column eligibility");
     }
+    [[nodiscard]] uint32_t totalMemberships() const {
+        const auto hot = memberships();
+        hybrid_property_detail::require(cold_fields <= UINT32_MAX - hot, "combined membership count overflowed");
+        return hot + cold_fields;
+    }
+    void validateBound() const {
+        validate();
+        for (size_t i = 0; i < column_count; ++i)
+            hybrid_property_detail::require(locators[i].isValid(), "column membership has an unbound locator");
+    }
+    [[nodiscard]] SlottedSlotReference columnLocator(uint32_t token) const {
+        const auto field = ordinal(token);
+        hybrid_property_detail::require(field && locators[*field].isValid(), "column membership has no bound token locator");
+        return locators[*field];
+    }
     void validateInGroup(const HybridPropertyGroupRecord &group, Generation descriptor, Generation visible) const {
         validate(); group.validate();
         hybrid_property_detail::require(owner_kind == group.owner_kind && group_id == group.group_id && live == group.live &&
-            column_count == group.columns && memberships() <= group.memberships && semantic_generation <= group.semantic_generation &&
+            column_count == group.columns && (row_remainder ? totalMemberships() == group.memberships : memberships() <= group.memberships) &&
+            (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER || row_remainder) &&
+            (group.mode != HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP || !row_remainder) &&
+            semantic_generation <= group.semantic_generation &&
             descriptor.isValid() && group.semantic_generation <= descriptor && descriptor <= visible,
             "column membership contradicts its authenticated group or snapshot");
     }
@@ -160,29 +194,34 @@ struct HybridPropertyColumnMembership {
         return true;
     }
     void encode(std::span<std::byte> bytes) const {
-        validate(); hybrid_property_detail::require(bytes.size() == wireSize(), "column membership output width mismatch");
+        validateBound(); hybrid_property_detail::require(bytes.size() == wireSize(), "column membership output width mismatch");
         std::fill(bytes.begin(), bytes.end(), std::byte{});
         LittleEndianCodec::writeU32(bytes, 0, MAGIC); LittleEndianCodec::writeU16(bytes, 4, VERSION);
         bytes[6] = std::byte(uint8_t(owner_kind)); bytes[7] = std::byte(wordsPerOwner());
         LittleEndianCodec::writeU64(bytes, 8, group_id); LittleEndianCodec::writeU64(bytes, 16, semantic_generation.value());
         LittleEndianCodec::writeU64(bytes, 24, live); LittleEndianCodec::writeU16(bytes, 32, column_count);
         LittleEndianCodec::writeU32(bytes, 36, memberships());
+        const auto coldLayout = cold_rows.layout();
+        LittleEndianCodec::writeU64(bytes, 40, cold_rows.owners);
+        LittleEndianCodec::writeU32(bytes, 48, cold_fields);
+        bytes[52] = std::byte((row_remainder ? 0x80U : 0U) |
+            (coldLayout.encoding == HybridColdRowLocationEncoding::HCRLE_GROUPED ? 1U : 0U));
+        LittleEndianCodec::writeU16(bytes, 54, coldLayout.groups);
         for (size_t i = 0; i < column_count; ++i) LittleEndianCodec::writeU32(bytes, 64U + i * 4U, tokens[i]);
         size_t offset = 64U + 4U * column_count;
         for (const auto &row : owners) for (size_t word = 0; word < wordsPerOwner(); ++word, offset += 8U)
             LittleEndianCodec::writeU64(bytes, offset, row[word]);
+        for (size_t i = 0; i < column_count; ++i, offset += 16U) {
+            LittleEndianCodec::writeU64(bytes, offset, locators[i].page_id.value());
+            LittleEndianCodec::writeU16(bytes, offset + 8U, locators[i].slot_id);
+            LittleEndianCodec::writeU32(bytes, offset + 12U, locators[i].generation);
+        }
+        cold_rows.encode(bytes.subspan(offset));
     }
     [[nodiscard]] static HybridPropertyColumnMembership decodePayload(std::span<const std::byte> bytes,
         EntityPropertyOwnerKind kind, uint64_t group, Generation visible) {
-        hybrid_property_detail::require(bytes.size() >= 64U, "column membership header is truncated");
-        const HybridPropertyGroupRecord intrinsic{kind, HybridPropertyGroupMode::HPGM_HYBRID, group, visible,
-            LittleEndianCodec::readU64(bytes, 24), LittleEndianCodec::readU32(bytes, 36), LittleEndianCodec::readU16(bytes, 32)};
-        return decode(bytes, intrinsic, visible, visible);
-    }
-    [[nodiscard]] static HybridPropertyColumnMembership decode(std::span<const std::byte> bytes,
-        const HybridPropertyGroupRecord &group, Generation descriptor, Generation visible) {
         using hybrid_property_detail::require;
-        require(bytes.size() >= 64U, "column membership header is truncated");
+        require(bytes.size() >= 64U && bytes.size() <= MAX_BYTES, "column membership header is truncated or oversized");
         require(LittleEndianCodec::readU32(bytes, 0) == MAGIC, "column membership magic mismatch");
         if (LittleEndianCodec::readU16(bytes, 4) != VERSION)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported column membership version");
@@ -190,14 +229,37 @@ struct HybridPropertyColumnMembership {
         result.owner_kind = EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6]));
         result.group_id = LittleEndianCodec::readU64(bytes, 8); result.semantic_generation = Generation(LittleEndianCodec::readU64(bytes, 16));
         result.live = LittleEndianCodec::readU64(bytes, 24); result.column_count = LittleEndianCodec::readU16(bytes, 32);
-        require(bytes.size() == result.wireSize() && std::to_integer<uint8_t>(bytes[7]) == result.wordsPerOwner(),
+        const auto flags = std::to_integer<uint8_t>(bytes[52]);
+        require(!(flags & ~0x81U), "column membership has unknown row flags");
+        result.row_remainder = bool(flags & 0x80U);
+        const auto coldMask = LittleEndianCodec::readU64(bytes, 40);
+        result.cold_fields = LittleEndianCodec::readU32(bytes, 48);
+        const auto coldGroups = LittleEndianCodec::readU16(bytes, 54);
+        const auto encoding = (flags & 1U) ? HybridColdRowLocationEncoding::HCRLE_GROUPED : HybridColdRowLocationEncoding::HCRLE_DENSE;
+        const size_t coldBytes = (flags & 1U) ? size_t(coldGroups) * 24U : size_t(std::popcount(coldMask)) * 16U;
+        const size_t hotBytes = 64U + 20U * result.column_count + 64U * result.wordsPerOwner() * 8U;
+        require(bytes.size() == hotBytes + coldBytes && std::to_integer<uint8_t>(bytes[7]) == result.wordsPerOwner(),
             "column membership record has an unexpected width");
-        hybrid_property_detail::zero(bytes, 34, 36); hybrid_property_detail::zero(bytes, 40, 64);
+        hybrid_property_detail::zero(bytes, 34, 36); hybrid_property_detail::zero(bytes, 53, 54);
+        hybrid_property_detail::zero(bytes, 56, 64);
         for (size_t i = 0; i < result.column_count; ++i) result.tokens[i] = LittleEndianCodec::readU32(bytes, 64U + i * 4U);
         size_t offset = 64U + 4U * result.column_count;
         for (auto &row : result.owners) for (size_t word = 0; word < result.wordsPerOwner(); ++word, offset += 8U)
             row[word] = LittleEndianCodec::readU64(bytes, offset);
+        for (size_t i = 0; i < result.column_count; ++i, offset += 16U) {
+            hybrid_property_detail::zero(bytes, offset + 10U, offset + 12U);
+            result.locators[i] = {PageId(LittleEndianCodec::readU64(bytes, offset)), LittleEndianCodec::readU16(bytes, offset + 8U),
+                LittleEndianCodec::readU32(bytes, offset + 12U)};
+        }
         require(result.memberships() == LittleEndianCodec::readU32(bytes, 36), "column membership count mismatch");
+        result.cold_rows = HybridPropertyColdRowBindings::decode(coldMask, encoding, coldGroups, bytes.subspan(offset));
+        require(result.owner_kind == kind && result.group_id == group && result.semantic_generation <= visible,
+            "column membership belongs to a foreign source");
+        result.validateBound(); return result;
+    }
+    [[nodiscard]] static HybridPropertyColumnMembership decode(std::span<const std::byte> bytes,
+        const HybridPropertyGroupRecord &group, Generation descriptor, Generation visible) {
+        auto result = decodePayload(bytes, group.owner_kind, group.group_id, visible);
         result.validateInGroup(group, descriptor, visible); return result;
     }
 };

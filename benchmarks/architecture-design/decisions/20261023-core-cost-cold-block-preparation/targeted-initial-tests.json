@@ -1,0 +1,140 @@
+{
+  "tests": 10,
+  "failures": 3,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T02:29:51Z",
+  "time": "0.021s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdCompatibleHotTest",
+      "tests": 10,
+      "failures": 3,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T02:29:51Z",
+      "time": "0.021s",
+      "testsuite": [
+        {
+          "name": "CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 71,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"cold ROW inspection requires its owner, pin and account\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 232,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"cold ROW inspection requires its owner, pin and account\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T02:29:51Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"cold ROW inspection requires its owner, pin and account\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "recorded_at_utc": "2026-10-23T02:45:52.864153+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-hot-merge-legacy-": {
+      "tests": 490,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-hot-merge-compact-": {
+      "tests": 490,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-hot-merge-": {
+      "tests": 14,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "3a8298d03dcf231c0b2880674429a4aff9c79e101f46e757fd1291a329dfd570",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "adb4bbb494d25934edab565453723ef90f0ffd54b4a789fc9c9f30d4b9f09e43",
+      "binary_preserved": false
+    }
+  },
+  "implemented": [
+    "Original hot-plan source database/generation/group/column authentication",
+    "Reuse original hot COW images for cold replacement without competing source copies",
+    "Preserve final hot value/presence/null bitmap, cold binding and exact hot/cold/group totals",
+    "Original combined64change bound; source-only FieldPageStore constructor arguments const",
+    "No Entity Map liveness/token/demotion authority or actual publication granted"
+  ],
+  "remaining": [
+    "Block-growth splitting, membership relocation and GroupDirectory/binding atomic changes",
+    "Batch-local new values, actual Native field dispatch/schema/constraint/index coordination",
+    "Full owner/demotion/deletion/inverse and public publication/lifecycle",
+    "Whole-space admission and final P7 performance matrix"
+  ]
+}

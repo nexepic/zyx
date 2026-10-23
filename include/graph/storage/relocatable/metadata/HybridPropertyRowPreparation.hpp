@@ -42,7 +42,9 @@ public:
         const auto boundary = [&](size_t bytes) { boundaryCredit.set(bytes); };
         check();
         const auto first = (groupId - 1U) * RSS_HYBRID_GROUP_CAPACITY + 1U;
-        const auto group = context.groupRecord({kind, first}, std::ref(boundary));
+        // Read-only inverse projection supports cold roots without granting
+        // the publication coordinator mutation authority.
+        const auto group = context.findGroup({kind, first}, std::ref(boundary), nullptr, true, true);
         hybrid_property_detail::require(bool(group), "native inverse conversion requires an installed source group");
         boundaryCredit.set(0);
         if (group->memberships > HybridPropertyGroupConversion::MAX_MEMBERSHIPS)

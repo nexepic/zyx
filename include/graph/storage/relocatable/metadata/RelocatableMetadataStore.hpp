@@ -64,6 +64,7 @@ namespace graph::storage {
     class EntityPageStore;
     class EntityLabelSetStore;
     class HybridPropertyPoolPlacement;
+    class HybridPropertyReadContext;
     class SlottedPagePool;
     class CancellationCheckpoint;
 	class SystemCatalog;
@@ -872,10 +873,17 @@ namespace graph::storage {
 			std::function<std::vector<std::byte>(const NativeGraphPrivateSegmentSet &, size_t)>;
 	using NativeGraphPrivateSegmentPreparer =
 			std::function<void(const NativeGraphPrivateSegmentSet &, const NativeGraphPrivateSegmentReader &)>;
+    struct NativeGraphEntityFreeSummaryFence {
+        uint64_t index_id = 0U;
+        PhysicalPageRef expected_entity_root{};
+        Generation target_directory_generation{};
+        uint64_t free_pages = 0U;
+    };
 	struct NativeGraphDerivedStateMutation {
 		// Sorted by IndexId and free of duplicates. This gives one native graph
 		// generation a deterministic, fail-closed derived-state publication order.
 		std::vector<NativeGraphIndexTreeMutation> index_tree_mutations;
+        std::vector<NativeGraphEntityFreeSummaryFence> entity_free_summary_fences;
 		// A LargeValue reference selected through a pinned content-index lookup is
 		// immutable, but its Manifest route can be retired by concurrent
 		// maintenance before this graph write owns the metadata writer. The
@@ -903,7 +911,7 @@ namespace graph::storage {
         std::vector<std::shared_ptr<NativeGraphDeferredIndexImages>> index_images;
 
 		[[nodiscard]] constexpr bool empty() const {
-			return index_images.empty() && index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
+			return entity_free_summary_fences.empty() && index_images.empty() && index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
 				   vector_deltas.empty() && private_segments.empty() && !private_segment_plan.has_value() &&
 				   !external_private_tail_reservation.has_value();
 		}
@@ -1061,6 +1069,9 @@ namespace graph::storage {
         // Explicit maintenance cohort; every group keeps its64-ID/4096-member
         // bound and shares one<=1MiB account and one final publication gate.
         uint8_t group_count = 1;
+        // Same Native coordinator's explicit cold layout. Publication requires
+        // whole-database allocation admission; unprofitable targets retain ROW.
+        bool cold_row_remainder = false;
     };
     // Isolated format: scalar/NULL or immutable admitted inline values. Default mode replaces compatible
     // existing columns; explicit lifecycle mode also inserts/removes fields
@@ -1217,6 +1228,7 @@ namespace graph::storage {
         friend class NativeStorageAllocationCensus;
 		friend class RelocatableMetadataStoreVectorTestAccess;
         friend class HybridPropertyDescriptorStoreTestAccess;
+        friend class HybridPropertyNativeWriteTestAccess;
 		friend class RelocatableStorageBackend;
 
 	public:
@@ -2001,12 +2013,13 @@ namespace graph::storage {
             EntityPageStore &sourceEntities, EntityLabelSetStore &sourceLabels, HybridPropertyPoolPlacement &placement,
             const NativeHybridVectorPublication *hybridVectors = nullptr,
             const NativeHybridTopologyPublication *hybridTopology = nullptr,
-            std::span<const NativeGraphLargeValueMutation> jointValues = {});
+            std::span<const NativeGraphLargeValueMutation> jointValues = {},
+            HybridPropertyReadContext *preparationSource = nullptr);
         [[nodiscard]] Superblock publishHybridPropertyRows(MetadataWriteBatch &batch,
             const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
             const NativeGraphHybridPropertyConversion &conversion, EntityPageStore &entities,
             SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &largeValues,
-            const MetadataPublishOptions &options);
+            const MetadataPublishOptions &options, HybridPropertyReadContext *preparationSource = nullptr);
 		[[nodiscard]] MetadataWriteGuard beginWrite(bool allowHybridMutation = false);
 		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly,
                                  std::shared_ptr<std::pmr::memory_resource> memoryOwner,

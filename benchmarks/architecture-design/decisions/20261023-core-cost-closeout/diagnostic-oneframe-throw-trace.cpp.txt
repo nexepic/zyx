@@ -1,0 +1,18 @@
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <exception>
+#include <typeinfo>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+extern "C" [[noreturn]] void __cxa_throw(void *object, std::type_info *type, void (*destroy)(void *)) {
+    using Throw = void (*)(void *, std::type_info *, void (*)(void *));
+    static auto original = reinterpret_cast<Throw>(dlsym(RTLD_NEXT, "__cxa_throw"));
+    if (std::strstr(type->name(), "runtime_error") && std::strstr(reinterpret_cast<std::exception *>(object)->what(), "no unpinned")) {
+        void *frames[48]; const int count = backtrace(frames, 48);
+        for (int i = 0; i < count; ++i) { Dl_info info{}; if (dladdr(frames[i], &info))
+            std::fprintf(stderr, "%s + 0x%zx %s\n", info.dli_fname,
+                size_t(reinterpret_cast<char *>(frames[i]) - reinterpret_cast<char *>(info.dli_fbase)), info.dli_sname ? info.dli_sname : ""); }
+    }
+    original(object, type, destroy); std::abort();
+}

@@ -1,0 +1,9 @@
+{
+  "library": "/workspace/zyx-short-text-hybrid-candidate/libzyx_core.a",
+  "sha256": "b3975e4889e546be299e0f457afeef9fc762a2dc3f72b649e3252b2a3ed1dea9",
+  "returncode": 1,
+  "tests": 2,
+  "failures": 2,
+  "test_filter": "RelocatableMetadataPagePoolTest.DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold:RelocatableMetadataPagePoolTest.RecoveryReclaimsDeferredUnpublishedFrames",
+  "full_suite": false
+}

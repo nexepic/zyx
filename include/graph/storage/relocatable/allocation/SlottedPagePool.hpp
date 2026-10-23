@@ -175,6 +175,11 @@ namespace graph::storage {
 														 const MetadataPublishOptions &options = {});
 
 	private:
+        friend class LargeValueStore;
+        // Typed readers under the metadata writer reuse their already owned
+        // snapshot; attaching must neither acquire a second snapshot nor reconcile.
+        SlottedPagePool(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+            const MetadataSnapshotPin &snapshot);
 		friend class BTreePageStore;
         friend class HybridPropertyReadContext;
 		friend class TransactionBTreeOverlay;

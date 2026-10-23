@@ -199,6 +199,14 @@ namespace graph::storage {
 	LargeValueOwnershipScanner::Progress EntityPropertyLargeValueOwnershipScanner::scanReachableAfter(
 			const MetadataSnapshotPin &snapshot, uint64_t afterLocationId, size_t maximumLocations,
 			size_t maximumMetadataPages, LargeValueOwnershipScanSink &sink) const {
+        return scanReachableAfterImpl(snapshot, afterLocationId, maximumLocations, maximumMetadataPages, sink, nullptr);
+    }
+    LargeValueOwnershipScanner::Progress EntityPropertyLargeValueOwnershipScanner::scanReachableAfterImpl(
+        const MetadataSnapshotPin &snapshot, uint64_t afterLocationId, size_t maximumLocations,
+        size_t maximumMetadataPages, LargeValueOwnershipScanSink &sink,
+        const HybridPropertyReadContext *contextOverride) const {
+        if (contextOverride && !contextOverride->usesSnapshot(snapshot))
+            fail(FormatError::FERR_INVALID_STATE, "ownership context belongs to another snapshot");
         if (!metadata_.ownsSnapshot(snapshot) || !property_pages_.usesMetadataStore(metadata_))
             fail(FormatError::FERR_INVALID_STATE, "LargeValue ownership scanner requires its own source domain");
         Progress progress;
@@ -253,7 +261,9 @@ namespace graph::storage {
         const auto admitReference = [&](size_t bytes) { referenceCredit.set(bytes); };
         progress.last_scanned_location_id = afterLocationId;
         ++progress.metadata_pages_scanned; // authenticated physical descriptor
-        HybridPropertyReadContext context(property_pages_, metadata_, snapshot);
+        std::optional<HybridPropertyReadContext> loadedContext;
+        if (!contextOverride) loadedContext.emplace(property_pages_, metadata_, snapshot);
+        const auto &context = contextOverride ? *contextOverride : *loadedContext;
         constexpr uint64_t edgeBit = UINT64_C(1) << 63U;
         const auto nextRow = [&](uint64_t after) -> std::optional<EntityPropertyLocation> {
             if (!snapshot.superblock().entity_property_directory_root.isValid()) return {};
@@ -268,15 +278,17 @@ namespace graph::storage {
         };
         try {
             auto row = nextRow(afterLocationId);
-            auto node = afterLocationId < edgeBit ? context.nextOwnerAfter(EntityPropertyOwnerKind::EPOK_NODE, afterLocationId, std::ref(admit)) : std::nullopt;
+            auto node = afterLocationId < edgeBit ? context.nextOwnershipStepAfter(EntityPropertyOwnerKind::EPOK_NODE, afterLocationId, std::ref(admit)) : std::nullopt;
             boundary.set(0);
-            auto edge = context.nextOwnerAfter(EntityPropertyOwnerKind::EPOK_EDGE,
+            auto edge = context.nextOwnershipStepAfter(EntityPropertyOwnerKind::EPOK_EDGE,
                 afterLocationId < edgeBit ? 0 : afterLocationId & ~edgeBit, std::ref(admit));
             boundary.set(0);
             for (;;) {
-                std::optional<EntityPropertyKey> owner;
-                if (node) owner = node;
-                if (edge && (!owner || edge->directoryId() < owner->directoryId())) owner = edge;
+                std::optional<HybridPropertyReadContext::OwnershipStep> step;
+                using StepKind = HybridPropertyReadContext::OwnershipStepKind;
+                if (node) step = node;
+                if (edge && (!step || edge->owner.directoryId() < step->owner.directoryId())) step = edge;
+                const auto owner = step ? std::optional(step->owner) : std::nullopt;
                 if (row && owner && row->key.directoryId() == owner->directoryId())
                     fail(FormatError::FERR_INVALID_STATE, "LargeValue ownership has overlapping ROW/native owner routes");
                 const bool useRow = row && (!owner || row->key.directoryId() < owner->directoryId());
@@ -289,6 +301,13 @@ namespace graph::storage {
                     progress.last_scanned_location_id = row->key.directoryId();
                     row = nextRow(progress.last_scanned_location_id); continue;
                 }
+                if (step->kind == StepKind::HOSK_BOUNDARY) {
+                    ++progress.locations_scanned;
+                } else if (step->kind == StepKind::HOSK_COLD_OWNER) {
+                    if (!context.visitColdReference(*owner, [&](const auto &reference) { sink.markReachable(reference); }, std::ref(admit)))
+                        fail(FormatError::FERR_INVALID_STATE, "cold ownership step lost its whole-root reference");
+                    ++progress.locations_scanned;
+                } else {
                 const auto remaining = maximumLocations - progress.locations_scanned;
                 const auto summary = context.visitOwner(*owner, remaining, [&](uint32_t token, HybridPropertySource) {
                     const auto route = context.visitField(*owner, token, [](const auto &) {}, [&](const auto &field) {
@@ -303,10 +322,11 @@ namespace graph::storage {
                 if (!summary.routed || !summary.owner_live || !summary.complete || !summary.fields)
                     fail(FormatError::FERR_INVALID_STATE, "native LargeValue owner exceeds its complete membership work bound");
                 progress.locations_scanned += summary.fields;
+                }
                 progress.last_scanned_location_id = owner->directoryId();
                 if (owner->owner_kind == EntityPropertyOwnerKind::EPOK_NODE)
-                    node = context.nextOwnerAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
-                else edge = context.nextOwnerAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
+                    node = context.nextOwnershipStepAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
+                else edge = context.nextOwnershipStepAfter(owner->owner_kind, owner->entity_id, std::ref(admit));
                 boundary.set(0);
             }
         } catch (const DirectoryLimit &) {

@@ -182,7 +182,7 @@ TEST(RelocatableCatalogTest, RejectsInvalidOrStaleLifecycleRequests) {
 	expectFormatError(
 			[&] {
 				static_cast<void>(catalog.allocate(
-						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH) + 1U),
+						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH) + 1U),
 						1));
 			},
 					  FormatError::FERR_INVALID_ENUM);

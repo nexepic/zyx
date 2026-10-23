@@ -1,0 +1,9 @@
+{
+  "status": "candidate_rejected",
+  "implementation_progress_percent": 90,
+  "stop_boundary": "after current second-round medium Kuzu controls; before second ZYX import",
+  "reason": "primary read/write gaps far exceed thresholds; extra repeated imports cannot establish acceptance",
+  "next_action": "exclusive CPU attribution on frozen candidate, then implement proven core changes",
+  "completed_samples_retained": true,
+  "unrun_cases_are_not_passed": true
+}

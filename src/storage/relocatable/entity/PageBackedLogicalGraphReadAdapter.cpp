@@ -901,7 +901,7 @@ namespace graph::storage {
 		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
 		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
 		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
-        const PropertyTextReadSink *texts) const {
+        const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches) const {
 		validateNamedPropertyColumnRequest(ids, keys);
 		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct named Property cells require a sink");
 		std::optional<NativeReadSession> local;
@@ -951,8 +951,29 @@ namespace graph::storage {
 					sink(row, it->second, last ? std::move(value) : value);
 				}
 			};
+        PropertyColumnBatchReadSinks mappedBatches;
+        if (batches) {
+            if (!batches->scalars || !batches->texts) throw std::invalid_argument("Property runs require both sinks");
+            mappedBatches.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
+                    std::span<const uint64_t> bits) {
+                const auto token = tokens.at(column);
+                const auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
+                    [](const auto &entry, uint32_t key) { return entry.first < key; });
+                for (auto it = first; it != resolved.end() && it->first == token; ++it)
+                    batches->scalars(rows, it->second, type, bits);
+            };
+            mappedBatches.texts = [&](std::span<const size_t> rows, size_t column,
+                    std::span<const std::string_view> values) {
+                const auto token = tokens.at(column);
+                const auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
+                    [](const auto &entry, uint32_t key) { return entry.first < key; });
+                for (auto it = first; it != resolved.end() && it->first == token; ++it)
+                    batches->texts(rows, it->second, values);
+            };
+        }
         pages_.readNodePropertyCellsSorted(snapshot, ids, tokens, std::ref(mapValue),
-            &active, admission, scalars ? &emitScalar : nullptr, texts ? &emitText : nullptr);
+            &active, admission, scalars ? &emitScalar : nullptr, texts ? &emitText : nullptr,
+            batches ? &mappedBatches : nullptr);
 	}
 
 	PropertyValue PageBackedLogicalGraphReadAdapter::readEdgeProperty(const MetadataSnapshotPin &snapshot,

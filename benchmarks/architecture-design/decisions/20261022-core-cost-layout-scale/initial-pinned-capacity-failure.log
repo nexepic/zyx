@@ -1,0 +1,22 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLayoutScaleTest.*
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from HybridPropertyLayoutScaleTest
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedNarrowLayoutCensusAt512Owners
+[       OK ] HybridPropertyLayoutScaleTest.IsolatedNarrowLayoutCensusAt512Owners (291 ms)
+[ RUN      ] HybridPropertyLayoutScaleTest.IsolatedNarrowLayoutCensusAt4096Owners
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyLayoutScale.cpp:54: Failure
+Expected: run(conversion) doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "native placement has no free slot or reusable bounded destination capacity".
+
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedNarrowLayoutCensusAt4096Owners (376 ms)
+[----------] 2 tests from HybridPropertyLayoutScaleTest (668 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (668 ms total)
+[  PASSED  ] 1 test.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] HybridPropertyLayoutScaleTest.IsolatedNarrowLayoutCensusAt4096Owners
+
+ 1 FAILED TEST

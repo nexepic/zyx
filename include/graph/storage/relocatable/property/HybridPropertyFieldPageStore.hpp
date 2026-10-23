@@ -55,8 +55,10 @@ private:
                 if constexpr (requires { stored.payload(); }) return stored.payload();
                 else return stored.payload;
             }();
-            return HybridPropertyPageImage::open(bytes, stored.owner.page_id, stored.owner.generation,
+            auto result = HybridPropertyPageImage::open(bytes, stored.owner.page_id, stored.owner.generation,
                 next, memory);
+            result.trustSnapshotClone();
+            return result;
         }, backing_);
     }
 

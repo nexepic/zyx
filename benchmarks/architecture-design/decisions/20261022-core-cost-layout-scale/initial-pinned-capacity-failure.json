@@ -1,0 +1,78 @@
+{
+  "tests": 2,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T19:43:48Z",
+  "time": "0.668s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyLayoutScaleTest",
+      "tests": 2,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:43:48Z",
+      "time": "0.668s",
+      "testsuite": [
+        {
+          "name": "IsolatedNarrowLayoutCensusAt512Owners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLayoutScale.cpp",
+          "line": 76,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:43:48Z",
+          "time": "0.291s",
+          "classname": "HybridPropertyLayoutScaleTest",
+          "row_steady": "917504",
+          "row_total": "917504",
+          "row_file": "5636096",
+          "row_property": "131072",
+          "row_maps": "0",
+          "row_metadata": "262144",
+          "groups_8_steady": "1310720",
+          "groups_8_total": "2359296",
+          "groups_8_file": "6946816",
+          "groups_8_property": "131072",
+          "groups_8_maps": "262144",
+          "groups_8_metadata": "393216",
+          "unpinned_steady": "1310720",
+          "unpinned_total": "2359296",
+          "unpinned_file": "6946816",
+          "unpinned_property": "131072",
+          "unpinned_maps": "262144",
+          "unpinned_metadata": "393216"
+        },
+        {
+          "name": "IsolatedNarrowLayoutCensusAt4096Owners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLayoutScale.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:43:48Z",
+          "time": "0.376s",
+          "classname": "HybridPropertyLayoutScaleTest",
+          "row_steady": "2097152",
+          "row_total": "2097152",
+          "row_file": "6553600",
+          "row_property": "655360",
+          "row_maps": "0",
+          "row_metadata": "524288",
+          "groups_8_steady": "2752512",
+          "groups_8_total": "3670016",
+          "groups_8_file": "7995392",
+          "groups_8_property": "917504",
+          "groups_8_maps": "262144",
+          "groups_8_metadata": "655360",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyLayoutScale.cpp:54\nExpected: run(conversion) doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"native placement has no free slot or reusable bounded destination capacity\".\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

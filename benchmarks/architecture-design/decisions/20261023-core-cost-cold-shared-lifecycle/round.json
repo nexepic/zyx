@@ -1,0 +1,58 @@
+{
+  "recorded_at_utc": "2026-10-23T11:57:41.716525+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-shared-final-legacy-": {
+      "tests": 557,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-shared-final-compact-": {
+      "tests": 557,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 20,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "35bc56da4121e59209fae301caf2e58c1283e7985c067f4d54fbafd7f4e586f0",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "8e3c1c57aad1172044885e2c5846872b93fed56db193639ded3face243a01ab6",
+      "binary_preserved": false
+    }
+  },
+  "fixed": "Inverse dedicated retained Hybrid pool used ordinary pool validation; pass existing native validation only for an entire dedicated Hybrid append set",
+  "implemented": [
+    "Coherent actual Node/Edge groups sharing one logical FieldPage with independent directories and equal logical owner IDs",
+    "Actual Node-to-ROW inverse retains other namespace records/slots/generations/logical PageId and old pins",
+    "Actual cold value reachability retirement/current manifest-content-index removal, old-pin reads/capacity, release/reuse after drain",
+    "Actual shared field-pool relocation plus pin-protected durable retirement and eventual slot release",
+    "Ordinary readers and full integrity on committed durable fixtures"
+  ],
+  "fixture_boundary": "Existing test byte seam initializes coherent durable source; no forward public conversion or space adoption proof. Missing explicit immutable store/obsolete Catalog purging in first19-case fixture report are setup mistakes, corrected through existing public contracts; actual retained-pool failure separately reproduced by later19-case report.",
+  "remaining": [
+    "Cross-group/mixed-namespace mutation batches",
+    "Public forward cold conversion and lifecycle on actually converted data",
+    "Whole-space/private staged target admission and full-data reachable conversion",
+    "4096-byte full query issue, remaining primary query costs and final P7"
+  ]
+}

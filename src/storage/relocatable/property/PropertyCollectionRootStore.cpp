@@ -33,10 +33,49 @@
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/Sha256.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 namespace graph::storage {
 
 	namespace {
+        class BorrowedPropertyRuns final {
+            enum class Kind { PRK_NONE, PRK_SCALAR, PRK_TEXT };
+            const PropertyColumnBatchReadSinks &sinks_;
+            std::array<size_t, PropertyColumnBatchReadSinks::MAXIMUM_CELLS> rows_{};
+            std::array<uint64_t, PropertyColumnBatchReadSinks::MAXIMUM_CELLS> bits_{};
+            std::array<std::string_view, PropertyColumnBatchReadSinks::MAXIMUM_CELLS> texts_{};
+            size_t size_ = 0U, column_ = 0U;
+            Kind kind_ = Kind::PRK_NONE;
+            PropertyType type_ = PropertyType::NULL_TYPE;
+            void prepare(Kind kind, size_t column, PropertyType type) {
+                if (size_ && (kind != kind_ || column != column_ || type != type_ || size_ == rows_.size())) flush();
+                kind_ = kind; column_ = column; type_ = type;
+            }
+        public:
+            explicit BorrowedPropertyRuns(const PropertyColumnBatchReadSinks &sinks) : sinks_(sinks) {
+                if (!sinks_.scalars || !sinks_.texts) throw std::invalid_argument("Property runs require both sinks");
+            }
+            void scalar(size_t row, size_t column, PropertyType type, uint64_t bits) {
+                prepare(Kind::PRK_SCALAR, column, type); rows_[size_] = row; bits_[size_++] = bits;
+            }
+            void text(size_t row, size_t column, std::string_view text) {
+                prepare(Kind::PRK_TEXT, column, PropertyType::STRING); rows_[size_] = row; texts_[size_++] = text;
+            }
+            void flush() {
+                if (!size_) return;
+                if (kind_ == Kind::PRK_SCALAR) {
+                    sinks_.scalars(std::span(rows_.data(), size_), column_, type_, std::span(bits_.data(), size_));
+                    debug::PerfTrace::addValue("native_graph.read.property_scalar_runs", 1);
+                } else {
+                    sinks_.texts(std::span(rows_.data(), size_), column_, std::span(texts_.data(), size_));
+                    debug::PerfTrace::addValue("native_graph.read.property_text_runs", 1);
+                }
+                debug::PerfTrace::addValue("native_graph.read.property_run_cells", size_);
+                size_ = 0U;
+            }
+        };
+
 		[[nodiscard]] size_t pageReadAdmissionBytes(const MetadataSnapshotPin &snapshot) {
 			return snapshot.readContext() && snapshot.readContext()->memoryOwner() ? 0U : RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
 		}
@@ -258,12 +297,13 @@ namespace graph::storage {
         std::span<const EntityPropertyKey> keys, std::span<const uint32_t> tokens,
         std::span<std::optional<PropertyCollectionRootEntry>> values, std::span<std::optional<size_t>> counts,
         const CancellationCheckpoint *cancellation, const SelectedPropertyReadAdmission *admission,
-        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars) const {
+        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches, const std::function<void()> *beforeColdRead) const {
         if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
+                const auto representation = context.borrowColdRowRepresentation(beforeColdRead);
                 return HybridPropertyValueReader::readSelected(context, snapshot, keys, tokens, values, counts,
-                    large_values_, admission, sink, scalars);
+                    large_values_, admission, sink, scalars, texts, batches);
             }
         }
         return false;
@@ -757,7 +797,7 @@ namespace graph::storage {
         if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return false;
         if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) return false;
         HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
-        return bool(context.groupRecord(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{}));
+        return context.ownerLiveness(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{}).has_value();
     }
 
     bool PropertyCollectionRootStore::isHybridPropertyOwner(const MetadataSnapshotPin &snapshot, EntityPropertyKey key,
@@ -768,8 +808,7 @@ namespace graph::storage {
         if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return false;
         if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) return false;
         HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
-        const auto group = context.groupRecord(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{});
-        return group && (group->live & (UINT64_C(1) << hybridPropertySlotFor(key)));
+        return context.ownerLiveness(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{}).value_or(false);
     }
 
 	std::vector<uint32_t> PropertyCollectionRootStore::readEntityPropertyTokens(
@@ -1357,6 +1396,7 @@ namespace graph::storage {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 if (cancellation_) cancellation_->check();
                 const auto pointRead = [&] {
+                    current_page_.reset(); current_page_id_ = PageId{};
                     auto result = store_->readEntityOptional(snapshot, key, admission, slotsAdmission);
                     if (cancellation_) cancellation_->check();
                     return result;
@@ -1375,6 +1415,9 @@ namespace graph::storage {
                         return pointRead();
                     }
                 }
+                const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
+                const std::function<void()> beforeCold = std::ref(releaseRow);
+                const auto representation = hybrid_context_->reader.borrowColdRowRepresentation(&beforeCold);
                 auto result = HybridPropertyValueReader::readCollection(hybrid_context_->reader, snapshot, key,
                     key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId,
                     store_->large_values_, admission, slotsAdmission);
@@ -1399,6 +1442,7 @@ namespace graph::storage {
 		}
         if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                current_page_.reset(); current_page_id_ = PageId{};
                 if (cancellation_) cancellation_->check();
                 auto result = store_->readEntityPropertyOptional(snapshot, key, keyToken);
                 if (cancellation_) cancellation_->check();
@@ -1418,6 +1462,7 @@ namespace graph::storage {
 		}
         if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
+                current_page_.reset(); current_page_id_ = PageId{};
                 if (cancellation_) cancellation_->check();
                 const auto result = store_->readEntityPropertyExists(snapshot, key, keyToken, requireNonNull).value_or(false);
                 if (cancellation_) cancellation_->check();
@@ -1436,13 +1481,15 @@ namespace graph::storage {
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
 			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
-			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts) {
+			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches) {
 			validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Property scan batch requires a rectangular owner/token result shape");
 		}
+		if (batches && (!batches->scalars || !batches->texts || !sink || !scalars || !texts))
+            throw std::invalid_argument("Property runs require both sinks and scalar/owning fallback");
 		uint64_t previousDirectoryId = 0U;
 		for (const EntityPropertyKey &key : keys) {
 			const uint64_t directoryId = key.directoryId();
@@ -1461,7 +1508,21 @@ namespace graph::storage {
 			previousToken = token;
 		}
 		std::fill(results.begin(), results.end(), std::nullopt);
-        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, {}, cancellation_, admission, sink, scalars)) return;
+        const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
+        const std::function<void()> beforeCold = std::ref(releaseRow);
+        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, {}, cancellation_, admission, sink, scalars, texts, batches, &beforeCold)) return;
+        std::optional<BorrowedPropertyRuns> runs;
+        PropertyScalarReadSink bufferedScalar; PropertyTextReadSink bufferedText;
+        const PropertyScalarReadSink *scalarOutput = scalars;
+        const PropertyTextReadSink *textOutput = texts;
+        if (batches) {
+            if (!sink || !scalars || !texts) throw std::invalid_argument("Property runs require scalar/owning fallbacks");
+            runs.emplace(*batches);
+            bufferedScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) { runs->scalar(row, column, type, bits); };
+            bufferedText = [&](size_t row, size_t column, std::string_view value) { runs->text(row, column, value); };
+            scalarOutput = &bufferedScalar; textOutput = &bufferedText;
+        }
+
 		if (sink && admission) {
 			constexpr size_t ownerBytes = sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t);
 			if (keys.size() > std::numeric_limits<size_t>::max() / ownerBytes ||
@@ -1491,6 +1552,7 @@ namespace graph::storage {
 			if (cancellation_ != nullptr) cancellation_->check();
 			const EntityPropertyLocation &location = *locations[ownerIndex];
 			if (previousPage != location.page_id) {
+                if (runs) runs->flush(); // Consume text borrows before releasing the old page pin.
 				previousPage = location.page_id;
 				++pagesRead;
 				pinned.reset();
@@ -1515,11 +1577,12 @@ namespace graph::storage {
 				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
                 if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, *scalars, texts, admission, cancellation_)) {
+                        *sink, *scalarOutput, textOutput, admission, cancellation_)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
                     continue;
                 }
+				if (runs) runs->flush();
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
 						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
@@ -1527,11 +1590,12 @@ namespace graph::storage {
 				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
                 if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         copied->pageId(), copied->ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, *scalars, texts, admission, cancellation_)) {
+                        *sink, *scalarOutput, texts, admission, cancellation_)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
                     continue;
                 }
+				if (runs) runs->flush();
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
 						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
@@ -1551,6 +1615,7 @@ namespace graph::storage {
 					static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
 			}
 		}
+		if (runs) runs->flush();
 		// Keep the established one-page owned cursor cache across batches;
 		// never retain a buffer-pool pin beyond this read. Only the final page
 		// is copied, while borrowed slots were decoded directly above.
@@ -1617,7 +1682,9 @@ namespace graph::storage {
 			current_page_id_ = PageId{};
 		}
 
-        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, counts, cancellation_, admission)) return;
+        const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
+        const std::function<void()> beforeCold = std::ref(releaseRow);
+        if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, counts, cancellation_, admission, nullptr, nullptr, nullptr, nullptr, &beforeCold)) return;
 
 		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
 			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property owner batch slots overflowed");
@@ -1755,7 +1822,9 @@ namespace graph::storage {
 			return;
 		}
 
-        if (store_->readHybridSelectedBatch(snapshot, keys, {}, {}, results, cancellation_)) return;
+        const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
+        const std::function<void()> beforeCold = std::ref(releaseRow);
+        if (store_->readHybridSelectedBatch(snapshot, keys, {}, {}, results, cancellation_, nullptr, nullptr, nullptr, nullptr, nullptr, &beforeCold)) return;
 
 		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
 			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property count owner slots overflowed");
@@ -1966,6 +2035,124 @@ namespace graph::storage {
 		// A pinned snapshot is immutable. New roots with equal encoded sizes therefore
 		// have the same best-fit source page; cache that selection for this batch.
 		std::map<size_t, std::optional<SlottedPagePlacement>> placementCache;
+		// Pure insert batches prepare each actual source page once. Existing owners
+		// and LargeValue roots retain the general replacement/relocation planner.
+		const size_t maximumInlineBytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES -
+				RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
+		size_t largestInlineBytes = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
+		bool inlineInsertBatch = roots.size() > 1U && existingLocations.empty();
+		if (inlineInsertBatch) {
+			for (const auto &root : roots) {
+				size_t bytes = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
+				for (const auto &entry : root.entries) {
+					const size_t valueBytes = CanonicalPropertyValueCodec::encodedSize(entry.value);
+					if (bytes > maximumInlineBytes || valueBytes > maximumInlineBytes - bytes ||
+						maximumInlineBytes - bytes - valueBytes < 8U) {
+						inlineInsertBatch = false;
+						break;
+					}
+					bytes += valueBytes + 8U; // directory offset and property token
+				}
+				if (!inlineInsertBatch) break;
+				largestInlineBytes = std::max(largestInlineBytes, bytes);
+			}
+		}
+		if (inlineInsertBatch) {
+			// Bound codec temporaries before encoding. SlottedPage owns admission for
+			// its mutable bytes; the page map owns its nodes through the same scope.
+			utils::OwnedHeapReservation codecCredit(utils::OwnedAllocationScope::owner(), largestInlineBytes * 8U);
+			struct PreparedPage {
+				size_t plan_ordinal;
+				SlottedPage page;
+			};
+			using PageEntry = std::pair<const PageId, PreparedPage>;
+			std::map<PageId, PreparedPage, std::less<PageId>, utils::OwnedPmrAllocator<PageEntry>> prepared;
+			for (size_t ordinal = 0U; ordinal < roots.size(); ++ordinal) {
+				EntityPropertyRootMutationPlan plan;
+				plan.key = rootKeys[ordinal];
+				if (roots[ordinal].entries.empty()) {
+					plans.push_back(std::move(plan));
+					continue;
+				}
+				auto encoded = EntityPropertyCollectionRootCodec::encode(roots[ordinal]);
+				if (!currentPropertyPools) {
+					currentPropertyPools.emplace();
+					for (const auto &pool : metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id))
+						currentPropertyPools->push_back(pool.segment_id);
+				}
+				auto [placement, inserted] = placementCache.try_emplace(encoded.size());
+				if (inserted && !currentPropertyPools->empty()) {
+					placement->second = pages_.findBestFitPageForRecord(snapshot, *currentPropertyPools,
+							PageOwnerKind::POK_PROPERTY, static_cast<uint32_t>(encoded.size()));
+				}
+				if (placement->second) {
+					const auto &target = *placement->second;
+					auto found = prepared.find(target.page_id);
+					if (found == prepared.end()) {
+						const auto source = metadata_.findPageLocation(snapshot, target.page_id);
+						const auto pool = metadata_.findCatalog(snapshot, source.segment_id);
+						auto page = pages_.read(snapshot, target.page_id);
+						if (source.segment_id != target.segment_id ||
+							pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL || pool.owner_id != options.page_owner_id ||
+							pool.state != SegmentState::SGS_SEALED || source.generation != pool.generation ||
+							page.ownerKind() != PageOwnerKind::POK_PROPERTY || page.ownerId() != options.page_owner_id ||
+							!page.ownerCommittedLsn().isValid()) {
+							throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property batch selected a stale or foreign Property placement");
+						}
+						const auto initialStats = page.stats();
+						const size_t initialRequired = encoded.size() +
+								(initialStats.reusable_free_slot_count == 0U ? RSS_SLOTTED_PAGE_SLOT_BYTES : 0U);
+						if (initialRequired > static_cast<size_t>(initialStats.contiguous_free_bytes) + initialStats.reclaimable_bytes) {
+							placement->second.reset();
+							plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
+							plan.encoded_root = std::move(encoded);
+							plans.push_back(std::move(plan));
+							continue;
+						}
+						NativeGraphPropertyPageReplacementRequest request;
+						request.expected_pool = pool;
+						request.expected_location = source;
+						request.expected_page_owner_id = options.page_owner_id;
+						request.expected_owner_lsn = page.ownerCommittedLsn();
+						request.first_slot = options.first_slot;
+						request.last_slot = options.last_slot;
+						plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
+						plan.page_replacement = std::move(request);
+						found = prepared.emplace(target.page_id, PreparedPage{plans.size(), std::move(page)}).first;
+						plans.push_back(std::move(plan));
+						debug::PerfTrace::addValue("native_graph.write.property_batch_prepared_source_pages", 1);
+					}
+					auto &page = found->second.page;
+					const auto stats = page.stats();
+					const size_t required = encoded.size() +
+							(stats.reusable_free_slot_count == 0U ? RSS_SLOTTED_PAGE_SLOT_BYTES : 0U);
+					if (required <= static_cast<size_t>(stats.contiguous_free_bytes) + stats.reclaimable_bytes) {
+						const auto slot = page.insert(encoded);
+						plans[found->second.plan_ordinal].page_replacement->upserted_properties.push_back(
+								{rootKeys[ordinal], target.page_id, slot.slot_id, slot.generation});
+						debug::PerfTrace::addValue("native_graph.write.property_batch_direct_insertions", 1);
+						continue;
+					}
+					// Capacity exhaustion is an ordinary branch, not an exception.
+					debug::PerfTrace::addValue("native_graph.write.property_batch_capacity_overflows", 1);
+				}
+				plan.key = rootKeys[ordinal];
+				plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
+				plan.encoded_root = std::move(encoded);
+				plans.push_back(std::move(plan));
+			}
+			for (auto &[pageId, preparedPage] : prepared) {
+				auto &plan = plans[preparedPage.plan_ordinal];
+				plan.replacement_payload = preparedPage.page.serialize();
+				plan.replacement_free_bytes = preparedPage.page.stats().contiguous_free_bytes;
+				debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_images", 1);
+				debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_payload_bytes",
+						static_cast<int64_t>(plan.replacement_payload.size()));
+			}
+			debug::PerfTrace::addValue("native_graph.write.property_plan_owners", static_cast<int64_t>(roots.size()));
+			return plans;
+		}
 		EntityPropertyBatchPageCache pageCache;
 		uint64_t nextLargeValueId = snapshot.superblock().next_large_value_id;
 		for (const PropertyCollectionRoot &root: roots) {
@@ -2064,10 +2251,15 @@ namespace graph::storage {
 											FormatError::FERR_INVALID_STATE,
 											"Entity Property batch coalescing found a root on a foreign source page");
 								}
-								page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
 							}
 							try {
-								const SlottedSlotReference slot = page.insert(stored);
+								SlottedSlotReference slot;
+								if (existing) {
+									slot = {existing->page_id, existing->slot_id, existing->slot_generation};
+									page.overwrite(slot, stored);
+								} else {
+									slot = page.insert(stored);
+								}
 								request.upserted_properties.push_back(
 										{member.key, request.expected_location.page_id, slot.slot_id, slot.generation});
 								merged.large_values.insert(merged.large_values.end(), std::make_move_iterator(member.large_values.begin()),
@@ -2076,9 +2268,14 @@ namespace graph::storage {
 																  member.reused_large_values.begin(),
 																  member.reused_large_values.end());
 							} catch (const FormatException &error) {
-								// ZYX_COV_EXCL_NEXT: only capacity can fail, and an erased record always fits again.
-								if (error.error() != FormatError::FERR_INVALID_STATE || existing.has_value()) {
+								if (error.error() != FormatError::FERR_INVALID_STATE) {
 									throw;
+								}
+								// Several individually fitting growths can exhaust the shared
+								// private page. Failed overwrite leaves its source intact.
+								if (existing) {
+									page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
+									request.relocated_properties.push_back(member.key);
 								}
 								EntityPropertyRootMutationPlan overflow = std::move(member);
 								overflow.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
@@ -2323,15 +2520,17 @@ namespace graph::storage {
 
 		if (existing.has_value()) {
 			SlottedPage page = readPage(existing->page_id);
-			page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
-			SlottedSlotReference replacement;
+			const SlottedSlotReference replacement{existing->page_id, existing->slot_id, existing->slot_generation};
 			try {
-				replacement = page.insert(encoded);
+				// A value change does not change the logical owner/slot identity.
+				// Snapshot PageDirectory COW still versions the actual page bytes.
+				page.overwrite(replacement, encoded);
 			} catch (const FormatException &error) {
 				// ZYX_COV_EXCL_NEXT: a validated page insertion can fail here only for capacity.
 				if (error.error() != FormatError::FERR_INVALID_STATE) {
 					throw;
 				}
+				page.erase(replacement);
 				plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 				plan.encoded_root = encoded;
 				prepareExistingPage(*existing, std::move(page), std::nullopt, ExistingPageMutationKind::EPMK_RELOCATE);

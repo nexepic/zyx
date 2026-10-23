@@ -1,0 +1,61 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-reachability-initial-": {
+      "tests": 25,
+      "failures": 1,
+      "skipped": 0
+    },
+    "hybrid-reachability-legacy-": {
+      "tests": 357,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-reachability-compact-": {
+      "tests": 357,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 119,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-row-reachability-hybrid-candidate/libzyx_core.a",
+      "sha256": "f45cb1a34855a0683d52858b67596b67b3224116ca96eaaee33970b5c87d4f34",
+      "format": "13/39"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-row-reachability-default-candidate/libzyx_core.a",
+      "sha256": "eadd1a598dd4f3e16bafc474037eaee89e9fdd5525ddd5c8f0823ec10f757281",
+      "format": "5/31"
+    }
+  },
+  "implemented": [
+    "Shared single accounted decoded cold block for reading and reference marking",
+    "Stable logical merge of ordinary ROW, explicit selectors and cold whole-root owners through existing scanner",
+    "Reference-free group-tail progress probe, one owner work unit, merged before unchecked ROW",
+    "Whole-root owner/media/kind/block-generation validation and existing manifest-authenticating sink",
+    "Conservative explicit group/block metadata work charges even for single-leaf cursors with no sibling boundary key",
+    "No full LargeValue content materialization for mark, no new cache/index/backend/format flag",
+    "Private test-only candidate context enters real production scanner loop; actual production descriptor path unchanged"
+  ],
+  "work_contract_change": "Original mixed fixture five references unchanged; one reference-free tail probe changes total work5->6 and resumed tail3->4, with same reference set/order/final cursor. Tests now assert the explicit work contract.",
+  "initial_failure": "One-page budget was able to mark a cold reference because generic BTree sibling-key admission is not emitted for a single-leaf tree. Fixed source with explicit group/block work admission; retained initial 24pass/1fail report.",
+  "limits": "Original owner/metadata/memory bounds; experiments13/39, default5/31",
+  "not_accepted": [
+    "Actual converted mode3 public publication/reclamation/retirement/old pins",
+    "Mutation/demotion/delete/inverse/fault/reopen lifecycle",
+    "Cold selected batch sharing",
+    "Actual mature whole-allocation admission, staged migration bootstrap",
+    "Final performance matrix and P7 acceptance"
+  ],
+  "performance_claim": null
+}

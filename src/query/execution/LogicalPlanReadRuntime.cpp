@@ -11275,10 +11275,11 @@ namespace graph::query::execution {
 						lookupBytes.set(scratch);
 						std::vector<size_t> sortedOrdinals(end - begin);
 						std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), begin);
-						std::ranges::sort(sortedOrdinals, [&](size_t left, size_t right) {
-							return pending.values()[left].reference.entity_id <
-								   pending.values()[right].reference.entity_id;
-						});
+                        const auto ownerLess = [&](size_t left, size_t right) {
+                            return pending.values()[left].reference.entity_id < pending.values()[right].reference.entity_id;
+                        };
+                        if (!std::ranges::is_sorted(sortedOrdinals, ownerLess))
+                            std::ranges::sort(sortedOrdinals, ownerLess);
 						std::vector<uint64_t> nodeIds;
 						nodeIds.reserve(end - begin);
 						std::vector<size_t> lookupOrdinals(end - begin);
@@ -11321,8 +11322,30 @@ namespace graph::query::execution {
 									directGuard();
 									sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
 								};
-								state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
-                                    std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), std::ref(admitSource));
+                                bool deliveredRuns = false;
+                                if (state.shared.snapshot.hasImmutableReadIdentity() && nodeIds.size() > 1U && keyViews.size() == 1U) {
+                                    bool emitted = false;
+                                    const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                                        emitted = true; emitValue(row, column, std::move(value));
+                                    };
+                                    storage::PropertyColumnBatchReadSinks runs;
+                                    runs.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
+                                            std::span<const uint64_t> bits) {
+                                        emitted = true; direct->appendScalarRun(rows, column, type, bits, directGuard);
+                                    };
+                                    runs.texts = [&](std::span<const size_t> rows, size_t column,
+                                            std::span<const std::string_view> texts) {
+                                        emitted = true; direct->appendTextRun(rows, column, texts, directGuard);
+                                    };
+                                    deliveredRuns = state.shared.snapshot.tryReadNodePropertyColumnBatchesSortedWithAdmission(
+                                        nodeIds, keyViews, std::ref(owning), runs, std::ref(admitSource));
+                                    if (!deliveredRuns && emitted)
+                                        throw std::invalid_argument("unsupported Property batch emitted partial cells");
+                                    if (deliveredRuns) debug::PerfTrace::addValue("logical_plan.direct_property.run_batches", 1);
+                                }
+                                if (!deliveredRuns)
+                                    state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
+                                        std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), std::ref(admitSource));
 								direct->seal(); sourceScratch.reset();
 								(void)predicates.filter(*direct, *selected, directGuard);
 								if (state.shared.bound_program) {

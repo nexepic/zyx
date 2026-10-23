@@ -1,0 +1,33 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T06:36:12Z",
+  "time": "0.01s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdCompatibleHotTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T06:36:12Z",
+      "time": "0.009s",
+      "testsuite": [
+        {
+          "name": "NativeCoordinatorUsesColdSourceForRealCatalogIndexesAndRequiredFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 811,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T06:36:12Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyColdCompatibleHotTest",
+          "schema_stage": "coordinator"
+        }
+      ]
+    }
+  ]
+}

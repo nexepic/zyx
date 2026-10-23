@@ -166,3 +166,82 @@ TEST_F(RelocatableBTreePageStoreTest, LargeValueCleanupPreservesMappedIndexRoots
  EXPECT_FALSE(metadata->isPhysicalSlotAllocated(current, pool.physical_slot));
  current.release();
 }
+
+TEST_F(RelocatableBTreePageStoreTest, MiddleUpsertBatchesCopyLeavesPerGroupAndKeepOldPinsAndDuplicateValues) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+ SlottedPagePool pages(io, *metadata);
+ NativeBTreeWriteContext writes(io, *metadata, pages);
+ BTreePageStore store(pages, *metadata);
+ const auto request = allocationRequest();
+ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+                           LogSequenceNumber(2)).has_value());
+ const IndexRootLocation root{17U, request.page_id, request.generation};
+ static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3)));
+ constexpr uint16_t count = 512U;
+ {
+  auto seed = writes.beginTransaction();
+  for (uint16_t i = 0; i < count; ++i) seed.stageScalarIndexUpsert(store, 17U, overlayCostKey(i * 2U), i + 1U);
+  ASSERT_TRUE(seed.commit().committed());
+ }
+ auto old = metadata->openSnapshot();
+ std::vector<BTreeScalarIndexOperation> operations;
+ for (uint16_t i = 0; i < count; ++i) {
+  operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT, overlayCostKey(i * 2U + 1U), i + 5000U});
+  if (i % 31U == 0U) operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT, overlayCostKey(i * 2U + 1U), i + 9000U});
+ }
+ const bool collected = graph::debug::PerfTrace::areValuesEnabled();
+ struct Restore { bool value; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(value); } } restore{collected};
+ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ auto counter = std::make_shared<OverlayAdmissionCounter>();
+ {
+  graph::utils::OwnedAllocationScope scope(counter);
+  const auto plan = store.planScalarIndexTransactionMutation(old, 17U, operations);
+  EXPECT_FALSE(plan.final_tree_empty);
+ }
+ const auto stats = graph::debug::PerfTrace::snapshotAndReset();
+ ASSERT_TRUE(stats.contains("native_btree.plan.leaf_batch_merges"));
+ const auto merged = stats.at("native_btree.plan.batch_merged_upserts").totalValue;
+ const auto copied = stats.at("native_btree.plan.batch_copied_source_entries").totalValue;
+ EXPECT_GT(merged, count / 2U);
+ EXPECT_LT(copied, count * 32U);
+ EXPECT_LT(counter->total, count * (sizeof(BTreePageEntry) + overlayCostKey(0U).size()) * 48U);
+ RecordProperty("merged_upserts", std::to_string(merged));
+ RecordProperty("copied_source_entries", std::to_string(copied));
+ RecordProperty("cumulative_admitted_bytes", std::to_string(counter->total));
+ {
+  auto transaction = writes.beginTransaction();
+  for (const auto &operation : operations) transaction.stageScalarIndexUpsert(store, 17U, operation.key, operation.value);
+  ASSERT_TRUE(transaction.commit().committed());
+ }
+ BTreeIndex index(17U, store, *metadata); auto current = metadata->openSnapshot();
+ ASSERT_EQ(index.scan(current, {}, count * 2U + 1U).size(), count * 2U);
+ ASSERT_EQ(index.scan(old, {}, count + 1U).size(), count);
+ for (uint16_t i = 0; i < count; ++i) {
+  EXPECT_EQ(index.find(old, overlayCostKey(i * 2U)), std::optional<uint64_t>(i + 1U));
+  EXPECT_EQ(index.find(old, overlayCostKey(i * 2U + 1U)), std::nullopt);
+  EXPECT_EQ(index.find(current, overlayCostKey(i * 2U + 1U)), std::optional<uint64_t>(i + (i % 31U == 0U ? 9000U : 5000U)));
+ }
+}
+
+TEST_F(RelocatableBTreePageStoreTest, BufferedDuplicatesAcrossSixtyFourEntryBoundariesRespectEraseBarriers) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+ SlottedPagePool pages(io, *metadata); NativeBTreeWriteContext writes(io, *metadata, pages); BTreePageStore store(pages, *metadata);
+ const auto request = allocationRequest();
+ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+                           LogSequenceNumber(2)).has_value());
+ const IndexRootLocation root{17U, request.page_id, request.generation};
+ static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3)));
+ auto before = metadata->openSnapshot();
+ auto tx = writes.beginTransaction();
+ for (uint64_t value = 1; value <= 130U; ++value) tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(1U), value);
+ tx.stageScalarIndexErase(store, 17U, overlayCostKey(1U));
+ for (uint64_t value = 131; value <= 261U; ++value) tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(1U), value);
+ tx.stageScalarIndexUpsert(store, 17U, overlayCostKey(2U), 1000U);
+ tx.stageScalarIndexErase(store, 17U, overlayCostKey(2U));
+ ASSERT_TRUE(tx.commit().committed());
+ BTreeIndex index(17U, store, *metadata); auto current = metadata->openSnapshot();
+ EXPECT_EQ(index.find(current, overlayCostKey(1U)), std::optional<uint64_t>(261U));
+ EXPECT_EQ(index.find(current, overlayCostKey(2U)), std::nullopt);
+ EXPECT_TRUE(index.scan(before, {}, 1U).empty());
+ ASSERT_EQ(index.scan(current, {}, 3U).size(), 1U);
+}

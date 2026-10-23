@@ -1,0 +1,74 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-initial-": {
+      "tests": 29,
+      "failures": 1,
+      "skipped": 0
+    },
+    "hybrid-current-": {
+      "tests": 28,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-lifecycle-legacy-": {
+      "tests": 281,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-presence-legacy-": {
+      "tests": 282,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-presence-compact-": {
+      "tests": 282,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 68,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-cold-row-routing-hybrid-candidate/libzyx_core.a",
+      "profile": "13/39",
+      "sha256": "8d02a50d7e8fb908967d6d2b55f85386521386ab81f6f420908a97a85548fc90"
+    },
+    "default": {
+      "path": "/workspace/zyx-cold-row-routing-default-candidate/libzyx_core.a",
+      "profile": "5/31",
+      "sha256": "30817d22c1269bb1678bc73ac6bd7941d148e2390f249266300e689b6bb1b0df"
+    }
+  },
+  "implemented": [
+    "Same-library Native point/presence/count/token/full-value and selected typed cold source paths",
+    "Actual Entity Map and competing ROW authentication retained; competing explicit owner selectors refused",
+    "Hot token globally owns its field, absent membership never falls back to cold",
+    "Metadata-only root presence keeps ordinary hot scalar fallback away from unrequested cold blocks; exact counts access actual cold directories",
+    "Grouped hot runs authenticate all64 owners with zero cold decodes, including corrupt unvisited cold-record envelopes",
+    "Synchronous cold scalar/text borrowing through existing primitive codec without owning PropertyValue trees",
+    "Existing cursor ROW image handoff before cold decoding, with scoped restoration and no extra cache",
+    "Mutation column callbacks and default group/ownership entry points continue refusing new mode",
+    "OwnerMap persisted source grammar unchanged: source byte3 still refused; HPS_COLD_ROW only enumerates in-library cold fields"
+  ],
+  "fixture_scope": "Existing TestAccess private candidate descriptor, real native pages/indexes/Entity Map; real empty durable descriptor and valid compact feature flag. This is not public conversion or actual production-query adoption evidence. No normal producer publishes mode3.",
+  "retained_failure": "Existing descriptor test still asserted experimental Superblock32; updated explicitly to current documented39. No semantic assertion weakened. Default-only test is excluded from final experimental selection, covered in default build.",
+  "not_implemented": [
+    "Actual Native cold conversion and producer activation",
+    "Cold batch shared-block decoding rather than per-owner repeat within the existing window",
+    "Compatible/cold updates, demotion/delete/inverse and full forward/reverse physical ownership",
+    "Cold-owner LargeValue reachability enumeration and retirement must be integrated before producer activation; current legacy iterator is insufficient",
+    "Old-pin/reopen/fault/move/retirement lifecycle for publicly converted mode3 data",
+    "Actual mature space/migration bootstrap and final P7 matrix"
+  ],
+  "limits": "Same64owner/8group/1MiB conversion, source quotas and CACHE. No new index/backend/ROW cache or allowance.",
+  "performance_claim": null
+}

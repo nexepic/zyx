@@ -10,6 +10,7 @@
 #include <bit>
 #include <span>
 #include "graph/storage/relocatable/format/Format.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyShortText.hpp"
 #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 
 namespace graph::storage {
@@ -25,9 +26,9 @@ constexpr size_t RSS_HYBRID_RECORD_HEADER_BYTES = 64;
 constexpr uint64_t RSS_HYBRID_MAX_ENTITY_ID = (UINT64_C(1) << 63U) - 1U;
 constexpr uint64_t RSS_HYBRID_MAX_GROUP_ID = 1 + (RSS_HYBRID_MAX_ENTITY_ID - 1) / 64;
 
-enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3 };
-enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1, HPGM_COLUMN_MEMBERSHIP_BITMAP = 2 };
-enum class HybridPropertySource : uint8_t { HPS_COLUMN = 1, HPS_EXTENSION = 2 };
+enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3, HPSK_SHORT_TEXT7 = 4 };
+enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1, HPGM_COLUMN_MEMBERSHIP_BITMAP = 2, HPGM_COLUMN_ROW_REMAINDER = 3 };
+enum class HybridPropertySource : uint8_t { HPS_COLUMN = 1, HPS_EXTENSION = 2, HPS_COLD_ROW = 3 };
 
 namespace hybrid_property_detail {
 inline void require(bool value, const char *message) {
@@ -74,12 +75,18 @@ struct HybridPropertyGroupRecord {
     SlottedSlotReference column_membership{};
     constexpr bool operator==(const HybridPropertyGroupRecord &) const = default;
 
+    [[nodiscard]] bool usesColumnMembership() const {
+        return mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+            mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER;
+    }
     void validate() const {
         using namespace hybrid_property_detail;
         require(validKind(owner_kind) && (mode == HybridPropertyGroupMode::HPGM_HYBRID ||
-            mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP), "invalid hybrid group namespace or mode");
-        if (mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP)
-            require(columns && columns <= 4096U / 48U && column_membership.isValid(), "compact group has no bounded column membership record");
+            mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP ||
+            mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER), "invalid hybrid group namespace or mode");
+        if (usesColumnMembership())
+            require((columns || mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER) &&
+                columns <= 4096U / 48U && column_membership.isValid(), "compact group has no bounded column membership record");
         else require(column_membership == SlottedSlotReference{}, "legacy group has a column membership locator");
         validateGroup(group_id, live);
         require(semantic_generation.isValid() && live && columns <= memberships / 48U &&
@@ -96,7 +103,7 @@ struct HybridPropertyGroupRecord {
         LittleEndianCodec::writeU64(bytes, 24, live);
         LittleEndianCodec::writeU32(bytes, 32, memberships);
         LittleEndianCodec::writeU32(bytes, 36, columns);
-        if (mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+        if (usesColumnMembership()) {
             LittleEndianCodec::writeU64(bytes, 40, column_membership.page_id.value());
             LittleEndianCodec::writeU16(bytes, 48, column_membership.slot_id);
             LittleEndianCodec::writeU32(bytes, 52, column_membership.generation);
@@ -113,7 +120,7 @@ struct HybridPropertyGroupRecord {
             HybridPropertyGroupMode(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
             Generation(LittleEndianCodec::readU64(bytes, 16)), LittleEndianCodec::readU64(bytes, 24),
             LittleEndianCodec::readU32(bytes, 32), LittleEndianCodec::readU32(bytes, 36)};
-        if (result.mode == HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP) {
+        if (result.usesColumnMembership()) {
             zero(bytes, 50, 52); zero(bytes, 56, 64);
             result.column_membership = {PageId(LittleEndianCodec::readU64(bytes, 40)), LittleEndianCodec::readU16(bytes, 48),
                 LittleEndianCodec::readU32(bytes, 52)};
@@ -148,7 +155,8 @@ struct HybridPropertyColumnRecord {
         using namespace hybrid_property_detail;
         require(validKind(identity.owner_kind) && (identity.scalar_kind == HybridPropertyScalarKind::HPSK_INT64 ||
             identity.scalar_kind == HybridPropertyScalarKind::HPSK_DOUBLE ||
-            identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL), "invalid hybrid column namespace or scalar");
+            identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL ||
+            identity.scalar_kind == HybridPropertyScalarKind::HPSK_SHORT_TEXT7), "invalid hybrid column namespace or scalar");
         validateGroup(identity.group_id, live);
         require(identity.token && identity.semantic_generation.isValid() && !(presence & ~live) &&
             !(nulls & ~presence) && std::popcount(presence) >= 48, "invalid hybrid column identity or bitmaps");
@@ -157,6 +165,8 @@ struct HybridPropertyColumnRecord {
                 "absent or NULL hybrid column payload is nonzero");
             require(identity.scalar_kind != HybridPropertyScalarKind::HPSK_BOOL || words[slot] <= 1U,
                 "hybrid bool column value is not canonical");
+            if(identity.scalar_kind == HybridPropertyScalarKind::HPSK_SHORT_TEXT7)
+                HybridPropertyShortText::validate(words[slot]);
         }
     }
     void encode(std::span<std::byte> bytes) const {

@@ -22,7 +22,12 @@ struct Fixture {
             columns.push_back(column);
         }
     }
-    Matrix matrix() const { return Matrix::fromColumns(group, columns); }
+    Matrix matrix() const {
+        auto result = Matrix::fromColumns(group, columns);
+        for (size_t i = 0; i < result.column_count; ++i)
+            result.locators[i] = {PageId(100 + i / 8), uint16_t(i % 8), uint32_t(i + 1)};
+        return result;
+    }
     std::vector<std::byte> bytes() const {
         const auto value = matrix(); std::vector<std::byte> bytes(value.wireSize()); value.encode(bytes); return bytes;
     }
@@ -42,8 +47,35 @@ TEST(HybridPropertyColumnMembershipTest, RoundTripsBothWordWidthsAndOnlyEnumerat
             EXPECT_FALSE(matrix.contains({NODE, id}, UINT32_MAX));
         }
     }
-    EXPECT_EQ(Fixture(64).matrix().wireSize(), 832U);
-    EXPECT_EQ(Fixture(85).matrix().wireSize(), Matrix::MAX_BYTES);
+    EXPECT_EQ(Fixture(64).matrix().wireSize(), 1856U);
+    EXPECT_EQ(Fixture(85).matrix().wireSize(), Matrix::MAX_BYTES - HybridPropertyColdRowBindings::MAX_BYTES);
+}
+TEST(HybridPropertyColumnMembershipTest, OnlyBoundCanonicalLocatorsCanBeEncodedAndDecoded) {
+    Fixture f(2);
+    auto unbound = Matrix::fromColumns(f.group, f.columns);
+    std::vector<std::byte> scratch(unbound.wireSize(), std::byte{0x5a});
+    EXPECT_THROW(unbound.encode(scratch), FormatException);
+    EXPECT_TRUE(std::ranges::all_of(scratch, [](std::byte b) { return b == std::byte{0x5a}; }));
+    const auto matrix = f.matrix(); const auto bytes = f.bytes();
+    const size_t locators = 64U + 4U * matrix.column_count + 64U * matrix.wordsPerOwner() * 8U;
+    for (size_t i = 0; i < matrix.column_count; ++i) {
+        EXPECT_EQ(matrix.columnLocator(matrix.tokens[i]), matrix.locators[i]);
+        EXPECT_EQ(LittleEndianCodec::readU64(bytes, locators + 16U * i), matrix.locators[i].page_id.value());
+        EXPECT_EQ(LittleEndianCodec::readU16(bytes, locators + 16U * i + 8U), matrix.locators[i].slot_id);
+        EXPECT_EQ(LittleEndianCodec::readU32(bytes, locators + 16U * i + 12U), matrix.locators[i].generation);
+    }
+    for (unsigned defect = 0; defect < 4; ++defect) {
+        auto bad = bytes;
+        if (defect == 0) LittleEndianCodec::writeU64(bad, locators, 0);
+        if (defect == 1) LittleEndianCodec::writeU16(bad, locators + 8U, RSS_SLOTTED_PAGE_NO_SLOT);
+        if (defect == 2) bad[locators + 10U] = std::byte{1};
+        if (defect == 3) LittleEndianCodec::writeU32(bad, locators + 12U, 0);
+        EXPECT_THROW(Matrix::decode(bad, f.group, Generation(10), Generation(11)), FormatException) << defect;
+    }
+    auto bad = matrix; bad.locators[bad.column_count] = {PageId(999), 0, 1};
+    EXPECT_THROW(bad.encode(scratch), FormatException);
+    EXPECT_THROW(matrix.columnLocator(0), FormatException);
+    EXPECT_THROW(matrix.columnLocator(UINT32_MAX), FormatException);
 }
 TEST(HybridPropertyColumnMembershipTest, EnumerationHonorsBoundsCancellationAndOwnerDomain) {
     const auto matrix = Fixture(65).matrix(); size_t calls = 0;
@@ -161,4 +193,45 @@ TEST(HybridPropertyColumnMembershipTest, PresenceReplacementTouchesOnlyItsOrdina
     EXPECT_EQ(original.presence(449), UINT64_MAX);
 }
 
+}
+
+TEST(HybridPropertyColumnMembershipTest, RowRemainderCombinesHotColumnsWithCanonicalColdBlockLocations) {
+    Fixture f(2); auto matrix = f.matrix(); matrix.row_remainder = true; matrix.cold_fields = 64;
+    matrix.cold_rows.owners = UINT64_MAX;
+    for (unsigned i = 0; i < 64; ++i) matrix.cold_rows.roots[i] = {PageId(99), uint16_t(i < 32 ? 0 : 1), 1};
+    auto group = f.group; group.mode = HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER;
+    group.column_membership = {PageId(100), 4, 1}; group.memberships += 64;
+    std::vector<std::byte> bytes(matrix.wireSize()); matrix.encode(bytes);
+    EXPECT_EQ(bytes.size(), f.matrix().wireSize() + 48U);
+    EXPECT_EQ(HybridPropertyColumnMembership::decode(bytes, group, Generation(10), Generation(11)), matrix);
+    EXPECT_EQ(HybridPropertyColumnMembership::decodePayload(bytes, NODE, 1, Generation(11)), matrix);
+    auto wrong = group; wrong.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+    EXPECT_THROW(HybridPropertyColumnMembership::decode(bytes, wrong, Generation(10), Generation(11)), FormatException);
+    wrong = group; --wrong.memberships;
+    EXPECT_THROW(HybridPropertyColumnMembership::decode(bytes, wrong, Generation(10), Generation(11)), FormatException);
+    auto corrupt = bytes; corrupt[52] |= std::byte{0x40};
+    EXPECT_THROW(HybridPropertyColumnMembership::decode(corrupt, group, Generation(10), Generation(11)), FormatException);
+    corrupt = bytes; LittleEndianCodec::writeU32(corrupt, 48, 63);
+    EXPECT_THROW(HybridPropertyColumnMembership::decode(corrupt, group, Generation(10), Generation(11)), FormatException);
+    auto overflow = matrix; overflow.cold_fields = UINT32_MAX;
+    EXPECT_THROW(overflow.encode(bytes), FormatException);
+}
+TEST(HybridPropertyColumnMembershipTest, ColdOnlyAndPropertylessNativeOwnersRetainTheirGroupAfterLastColumnRemoval) {
+    HybridPropertyColumnMembership matrix; matrix.owner_kind = NODE; matrix.group_id = 1;
+    matrix.semantic_generation = Generation(9); matrix.live = 3; matrix.row_remainder = true;
+    matrix.cold_rows.owners = 3; matrix.cold_fields = 2;
+    matrix.cold_rows.roots[0] = matrix.cold_rows.roots[1] = {PageId(99), 0, 1};
+    HybridPropertyGroupRecord group{NODE, HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER,
+        1, Generation(9), 3, 2, 0, {PageId(100), 1, 1}};
+    EXPECT_EQ(matrix.wordsPerOwner(), 0U);
+    std::vector<std::byte> bytes(matrix.wireSize()); matrix.encode(bytes);
+    EXPECT_EQ(HybridPropertyColumnMembership::decode(bytes, group, Generation(10), Generation(11)), matrix);
+    matrix.cold_rows = {}; matrix.cold_fields = 0; group.memberships = 0;
+    bytes.resize(matrix.wireSize()); matrix.encode(bytes);
+    EXPECT_EQ(bytes.size(), 64U);
+    EXPECT_EQ(HybridPropertyColumnMembership::decode(bytes, group, Generation(10), Generation(11)), matrix);
+    Fixture f(1); auto removed = f.matrix(); removed.row_remainder = true;
+    removed.eraseColumn(removed.tokens[0]);
+    EXPECT_EQ(removed.column_count, 0U); EXPECT_EQ(removed.totalMemberships(), 0U);
+    EXPECT_EQ(removed.wireSize(), 64U);
 }

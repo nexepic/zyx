@@ -1,0 +1,156 @@
+[
+  {
+    "scale": "holdout",
+    "case": "edge_create_delete",
+    "p50_ratio": 0.07312752683312643,
+    "p95_ratio": 0.07939392303762452,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "property_noop",
+    "p50_ratio": 0.9775147837410985,
+    "p95_ratio": 0.9574956977756555,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "graph_full_neighbors",
+    "p50_ratio": 0.9325518443967192,
+    "p95_ratio": 0.9487211866179877,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "graph_full_point",
+    "p50_ratio": 0.9433854588232778,
+    "p95_ratio": 0.9719114525737524,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "point_lookup_indexed",
+    "p50_ratio": 0.9300303922639566,
+    "p95_ratio": 0.8373584062847459,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "all_nodes_property_filter",
+    "p50_ratio": 0.7500373436322956,
+    "p95_ratio": 0.7185464218164829,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "one_hop_expand",
+    "p50_ratio": 0.936737828499349,
+    "p95_ratio": 0.9607084585998332,
+    "within_5_percent": true
+  },
+  {
+    "scale": "holdout",
+    "case": "two_hop_expand",
+    "p50_ratio": 0.9325637988249749,
+    "p95_ratio": 0.9541139959644259,
+    "within_5_percent": true
+  },
+  {
+    "scale": "large",
+    "case": "large_patch",
+    "p50_ratio": 0.8329782287628607,
+    "p95_ratio": 0.8107687536245091,
+    "within_5_percent": true
+  },
+  {
+    "scale": "large",
+    "case": "large_full",
+    "p50_ratio": 0.9221573183445263,
+    "p95_ratio": 0.862158308303753,
+    "within_5_percent": true
+  },
+  {
+    "scale": "large",
+    "case": "large_selected",
+    "p50_ratio": 0.9306316318395542,
+    "p95_ratio": 0.9059314421440059,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "edge_create_delete",
+    "p50_ratio": 0.07062847965052946,
+    "p95_ratio": 0.0767744657573223,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "property_noop",
+    "p50_ratio": 0.9426014035909934,
+    "p95_ratio": 0.7798371307085725,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "graph_full_neighbors",
+    "p50_ratio": 0.9478102778477091,
+    "p95_ratio": 0.8890399925216508,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "graph_full_point",
+    "p50_ratio": 0.924563818581902,
+    "p95_ratio": 0.9106712106340217,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "point_lookup_indexed",
+    "p50_ratio": 0.9332944905378948,
+    "p95_ratio": 0.9689192126863604,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "all_nodes_property_filter",
+    "p50_ratio": 0.7689522051690757,
+    "p95_ratio": 0.7970124215800873,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "one_hop_expand",
+    "p50_ratio": 0.926430222164083,
+    "p95_ratio": 0.5784467326459372,
+    "within_5_percent": true
+  },
+  {
+    "scale": "medium",
+    "case": "two_hop_expand",
+    "p50_ratio": 0.9307028236198601,
+    "p95_ratio": 0.943916513027929,
+    "within_5_percent": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_both",
+    "p50_ratio": 0.9564199203133612,
+    "p95_ratio": 0.5272293015871538,
+    "within_5_percent": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_out",
+    "p50_ratio": 0.966062068013855,
+    "p95_ratio": 0.9066328071166994,
+    "within_5_percent": true
+  },
+  {
+    "scale": "skew",
+    "case": "skew_twohop",
+    "p50_ratio": 0.9793340577166793,
+    "p95_ratio": 0.981135224731351,
+    "within_5_percent": true
+  }
+]

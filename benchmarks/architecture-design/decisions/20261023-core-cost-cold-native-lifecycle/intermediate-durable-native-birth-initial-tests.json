@@ -1,0 +1,117 @@
+{
+  "tests": 8,
+  "failures": 2,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T10:10:21Z",
+  "time": "0.082s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdNativeLifecycleTest",
+      "tests": 8,
+      "failures": 2,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T10:10:21Z",
+      "time": "0.082s",
+      "testsuite": [
+        {
+          "name": "ActualDurableNodeRoutingUsesOrdinaryReaderAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColdNativeLifecycleTest"
+        },
+        {
+          "name": "ActualDurableLargeColdRoutingUsesOrdinaryReaderAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 65,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyColdNativeLifecycleTest"
+        },
+        {
+          "name": "ActualDurableEdgeRoutingKeepsTypeCatalogAndCompleteIntegrity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColdNativeLifecycleTest"
+        },
+        {
+          "name": "ActualColdSetPublishesCombinedLargeRootAndPreservesOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 71,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.015s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualIncompatibleHotSetPublishesAllSurvivingDemotedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.013s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualOwnerDeletionPublishesEntityFieldsCountsAndSurvivingColdValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.014s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "publication_completed": "true"
+        },
+        {
+          "name": "ActualNativeBirthPublishesLeasedEntityHotNullAndLargeColdRootTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 137,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"Entity Property root exceeds the inline page limit but has no LargeValue placement\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ActualNativePropertylessEdgeBirthPublishesAdjacencyTypeCountAndLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdNativeLifecycle.cpp",
+          "line": 166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T10:10:21Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyColdNativeLifecycleTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"native physical reconciliation requires an immutable LargeValue or content-index pool\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

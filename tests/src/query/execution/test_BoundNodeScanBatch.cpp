@@ -234,4 +234,173 @@ TEST(DirectPropertyColumnsTest, ScalarGatherRestoresDuplicateIdsAndUsesOwningFal
     EXPECT_EQ(snapshot.rawCalls, 1U); EXPECT_EQ(snapshot.oldCalls, 1U); EXPECT_EQ(budget.used(), 0U);
 }
 
+TEST(DirectPropertyColumnsTest, OrderedGatherUsesLinearWorkAndRestoresSortedDuplicatesWithoutSorting) {
+    class ScalarSnapshot final : public ScanBatchSnapshot {
+    public:
+        mutable size_t owners = 0U;
+        void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const storage::PropertyScalarReadSink &scalars, const std::function<void(size_t)> &) const override {
+            owners = ids.size();
+            for (size_t i = 0U; i < ids.size(); ++i) {
+                if (i && ids[i] <= ids[i - 1U]) throw std::logic_error("source owners are not unique/ordered");
+                scalars(i, 0U, PropertyType::INTEGER, ids[i]);
+            }
+        }
+    } snapshot;
+    const std::array<std::string_view, 1U> keys{"rank"};
+    for (const size_t rows : {64U, 512U, 4096U}) for (const bool duplicates : {false, true}) {
+        std::vector<uint64_t> ids;
+        for (size_t i = 0U; i < rows; ++i) ids.push_back(1U + (duplicates ? i / 2U : i));
+        MaterializedByteBudget budget(4U * 1024U * 1024U);
+        size_t checkpoints = 0U;
+        {
+            DirectPropertyColumns columns(snapshot, rows, 1U, budget);
+            columns.readGather(ids, keys, [](size_t) {}, [&] { ++checkpoints; });
+            EXPECT_EQ(snapshot.owners, duplicates ? rows / 2U : rows);
+            EXPECT_LE(checkpoints, rows * (duplicates ? 4U : 2U));
+            for (size_t i = 0U; i < rows; ++i)
+                EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(i)).data), int64_t(ids[i]));
+            RecordProperty(std::string(duplicates ? "duplicate_" : "unique_") + std::to_string(rows),
+                std::to_string(checkpoints));
+        }
+        EXPECT_EQ(budget.used(), 0U);
+    }
+}
+
+TEST(DirectPropertyColumnsTest, SynchronousRunsOwnTextAndPreserveScalarBitsNullAndMissing) {
+    class RunSnapshot final : public ScanBatchSnapshot {
+    public:
+        bool hasImmutableReadIdentity() const noexcept override { return true; }
+        bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view>, const PropertyCellSink &values,
+            const storage::PropertyColumnBatchReadSinks &runs, const std::function<void(size_t)> &) const override {
+            if (ids.size() != 10U) throw std::logic_error("unexpected run input");
+            const std::array<size_t, 2U> first{0U, 1U}, doubles{2U, 3U};
+            std::array<uint64_t, 2U> bits{0U, UINT64_MAX};
+            runs.scalars(first, 0U, PropertyType::INTEGER, bits); bits.fill(123U);
+            bits = {0x8000000000000000ULL, 0x7ff8000000000042ULL};
+            runs.scalars(doubles, 0U, PropertyType::DOUBLE, bits); bits.fill(123U);
+            const std::array<size_t, 1U> boolean{4U}, nulls{5U};
+            const std::array<uint64_t, 1U> one{1U}, zero{0U};
+            runs.scalars(boolean, 0U, PropertyType::BOOLEAN, one);
+            runs.scalars(nulls, 0U, PropertyType::NULL_TYPE, zero);
+            std::array<std::string, 3U> source{"", std::string("a\0b", 3U), std::string(600U, 'x')};
+            const std::array<size_t, 3U> rows{6U, 7U, 8U};
+            const std::array<std::string_view, 3U> views{source[0], source[1], source[2]};
+            runs.texts(rows, 0U, views);
+            for (auto &text : source) text.assign(700U, 'z');
+            values(9U, 0U, std::nullopt);
+            return true;
+        }
+    } snapshot;
+    const std::array<uint64_t, 10U> ids{1,2,3,4,5,6,7,8,9,10};
+    const std::array<std::string_view, 1U> keys{"value"};
+    MaterializedByteBudget budget(65536U);
+    {
+        DirectPropertyColumns columns(snapshot, ids.size(), 1U, budget);
+        columns.readGather(ids, keys, [](size_t) {}, [] {});
+        EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(0U)).data), 0);
+        EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(1U)).data), -1);
+        EXPECT_EQ(std::bit_cast<uint64_t>(std::get<double>(columns.cell(0U, columns.rowId(2U)).data)), 0x8000000000000000ULL);
+        EXPECT_EQ(std::bit_cast<uint64_t>(std::get<double>(columns.cell(0U, columns.rowId(3U)).data)), 0x7ff8000000000042ULL);
+        EXPECT_TRUE(std::get<bool>(columns.cell(0U, columns.rowId(4U)).data));
+        EXPECT_EQ(columns.cell(0U, columns.rowId(5U)).state, ColumnCellState::CCS_NULL);
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(6U)).data), std::string_view{});
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(7U)).data), std::string_view("a\0b", 3U));
+        EXPECT_EQ(std::get<std::string_view>(columns.cell(0U, columns.rowId(8U)).data), std::string(600U, 'x'));
+        EXPECT_EQ(columns.cell(0U, columns.rowId(9U)).state, ColumnCellState::CCS_MISSING);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(DirectPropertyColumnsTest, InvalidOrUnsupportedPartialRunsCannotSealAndRefundTheirBudget) {
+    class BadSnapshot final : public ScanBatchSnapshot {
+    public:
+        size_t mode = 0U;
+        bool hasImmutableReadIdentity() const noexcept override { return true; }
+        bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t>,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const storage::PropertyColumnBatchReadSinks &runs, const std::function<void(size_t)> &) const override {
+            std::array<size_t, 65U> rows{}; std::array<uint64_t, 65U> bits{};
+            rows[0] = 0U; rows[1] = mode == 0U ? 0U : mode == 1U ? 2U : 1U;
+            if (mode == 2U) bits[1] = 2U;
+            if (mode == 3U) bits[1] = 1U;
+            const auto type = mode == 2U ? PropertyType::BOOLEAN : mode == 3U ? PropertyType::NULL_TYPE :
+                mode == 4U ? PropertyType::STRING : PropertyType::INTEGER;
+            const size_t count = mode == 5U ? 65U : mode == 7U ? 1U : 2U;
+            runs.scalars(std::span(rows.data(), count), 0U, type,
+                std::span(bits.data(), mode == 6U ? 1U : count));
+            return mode != 7U; // False after a valid output is also a failed construction.
+        }
+    } snapshot;
+    const std::array<uint64_t, 2U> ids{1U, 2U}; const std::array<std::string_view, 1U> keys{"value"};
+    for (size_t mode = 0U; mode < 8U; ++mode) {
+        snapshot.mode = mode; MaterializedByteBudget budget(65536U);
+        {
+            DirectPropertyColumns columns(snapshot, ids.size(), 1U, budget);
+            EXPECT_THROW(columns.readGather(ids, keys, [](size_t) {}, [] {}), std::invalid_argument) << mode;
+            EXPECT_THROW(columns.seal(), std::logic_error);
+            EXPECT_THROW(static_cast<void>(columns.borrowVersion()), std::logic_error);
+        }
+        EXPECT_EQ(budget.used(), 0U);
+    }
+}
+
+TEST(DirectPropertyColumnsTest, ImmutableLegacySourceFallsBackBeforeAnyRunOutput) {
+    class LegacySnapshot final : public ScanBatchSnapshot {
+    public:
+        mutable size_t calls = 0U;
+        bool hasImmutableReadIdentity() const noexcept override { return true; }
+        void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const storage::PropertyScalarReadSink &scalars, const std::function<void(size_t)> &) const override {
+            ++calls; for (size_t i = 0U; i < ids.size(); ++i) scalars(i, 0U, PropertyType::INTEGER, ids[i]);
+        }
+    } snapshot;
+    const std::array<uint64_t, 2U> ids{3U, 4U}; const std::array<std::string_view, 1U> keys{"value"};
+    MaterializedByteBudget budget(65536U);
+    {
+        DirectPropertyColumns columns(snapshot, ids.size(), 1U, budget);
+        columns.readGather(ids, keys, [](size_t) {}, [] {});
+        EXPECT_EQ(snapshot.calls, 1U);
+        EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(1U)).data), 4);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(DirectPropertyColumnsTest, RunArenaDenialAndMidCopyCancellationCannotExposePartialColumns) {
+    class TextSnapshot final : public ScanBatchSnapshot {
+    public:
+        bool hasImmutableReadIdentity() const noexcept override { return true; }
+        bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t>,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const storage::PropertyColumnBatchReadSinks &runs, const std::function<void(size_t)> &) const override {
+            const std::string text(600U, 'x');
+            const std::array<size_t, 2U> rows{0U, 1U}; const std::array<std::string_view, 2U> views{text, text};
+            runs.texts(rows, 0U, views); return true;
+        }
+    } snapshot;
+    const std::array<uint64_t, 2U> ids{1U, 2U}; const std::array<std::string_view, 1U> keys{"text"};
+    {
+        MaterializedByteBudget budget(1024U);
+        {
+            DirectPropertyColumns columns(snapshot, ids.size(), 1U, budget);
+            EXPECT_THROW(columns.readGather(ids, keys, [](size_t) {}, [] {}), MaterializedByteLimitExceeded);
+            EXPECT_THROW(columns.seal(), std::logic_error);
+        }
+        EXPECT_EQ(budget.used(), 0U);
+    }
+    MaterializedByteBudget budget(65536U); size_t checks = 0U;
+    {
+        DirectPropertyColumns columns(snapshot, ids.size(), 1U, budget);
+        EXPECT_THROW(columns.readGather(ids, keys, [](size_t) {}, [&] {
+            if (++checks == 8U) throw std::runtime_error("copy cancelled");
+        }), std::runtime_error);
+        EXPECT_THROW(columns.seal(), std::logic_error);
+        EXPECT_THROW(static_cast<void>(columns.borrowVersion()), std::logic_error);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+
 }

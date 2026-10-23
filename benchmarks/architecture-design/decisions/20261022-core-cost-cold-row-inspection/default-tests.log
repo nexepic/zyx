@@ -1,0 +1,57 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 21 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from HybridPropertyColdRowInspectionTest
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues
+[       OK ] HybridPropertyColdRowInspectionTest.InlineSparseProjectionPreservesNullMissingTextAndExactBitsWithoutOwningValues (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput
+[       OK ] HybridPropertyColdRowInspectionTest.InlineIdentityCountHotOverlapQuotaAndCancelledSourcesRefuseBeforeOutput (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges
+[       OK ] HybridPropertyColdRowInspectionTest.LargeWholeRootAuthenticatesRealContentAndProjectsOnlySelectedEntryRanges (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked
+[       OK ] HybridPropertyColdRowInspectionTest.LargeReferenceOwnerMediaGenerationHashCountAndGlobalHotTokensAreChecked (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure
+[       OK ] HybridPropertyColdRowInspectionTest.NoncanonicalLargeHeaderDirectoryAndEntryTokenFailBeforeSelectedExposure (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes
+[       OK ] HybridPropertyColdRowInspectionTest.ConsumerFailureDoesNotReplayAndReleasedPinCannotExposeBorrowedBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership
+[       OK ] HybridPropertyColdRowInspectionTest.LargeQuotaAndCancellationRefundAllTemporaryManifestAndRangeOwnership (1 ms)
+[ RUN      ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues
+[       OK ] HybridPropertyColdRowInspectionTest.SelectedSourceNeverMaterializesNestedPropertyValues (0 ms)
+[----------] 8 tests from HybridPropertyColdRowInspectionTest (6 ms total)
+
+[----------] 8 tests from HybridPropertyColdRowBlockTest
+[ RUN      ] HybridPropertyColdRowBlockTest.RawSparseOwnersRetainNullTextBytesAndExactScalarBitsForBothNamespaces
+[       OK ] HybridPropertyColdRowBlockTest.RawSparseOwnersRetainNullTextBytesAndExactScalarBitsForBothNamespaces (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.ActualLongIdsUseBoundedBlocksAndCompressionCanReduceNativeFrameCount
+[       OK ] HybridPropertyColdRowBlockTest.ActualLongIdsUseBoundedBlocksAndCompressionCanReduceNativeFrameCount (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.BoundsAndStoredCrcFailBeforeAllocatingDecompressionStorage
+[       OK ] HybridPropertyColdRowBlockTest.BoundsAndStoredCrcFailBeforeAllocatingDecompressionStorage (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.ChecksummedMalformedDirectoriesOwnersAndCanonicalRowsNeverEscape
+[       OK ] HybridPropertyColdRowBlockTest.ChecksummedMalformedDirectoriesOwnersAndCanonicalRowsNeverEscape (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.EncoderRejectsForeignNoncanonicalAndOversizedSourcesWithoutRetainedAllocations
+[       OK ] HybridPropertyColdRowBlockTest.EncoderRejectsForeignNoncanonicalAndOversizedSourcesWithoutRetainedAllocations (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.CancellationAfterScratchAllocationRefundsBothEncoderAndDecoder
+[       OK ] HybridPropertyColdRowBlockTest.CancellationAfterScratchAllocationRefundsBothEncoderAndDecoder (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.LargeRootReferencesRemainReferencesAndRequireStorageAuthenticationLater
+[       OK ] HybridPropertyColdRowBlockTest.LargeRootReferencesRemainReferencesAndRequireStorageAuthenticationLater (0 ms)
+[ RUN      ] HybridPropertyColdRowBlockTest.EncodedOutputRetainsItsAccountUntilTheLastOwnedBufferDies
+[       OK ] HybridPropertyColdRowBlockTest.EncodedOutputRetainsItsAccountUntilTheLastOwnedBufferDies (0 ms)
+[----------] 8 tests from HybridPropertyColdRowBlockTest (0 ms total)
+
+[----------] 5 tests from HybridPropertyColdRowBindingsTest
+[ RUN      ] HybridPropertyColdRowBindingsTest.SharedBlocksUseGroupedMasksAndDistinctBlocksStayWithin1024Bytes
+[       OK ] HybridPropertyColdRowBindingsTest.SharedBlocksUseGroupedMasksAndDistinctBlocksStayWithin1024Bytes (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.TiesChooseDenseAndSparseOwnersKeepExactSlotGenerations
+[       OK ] HybridPropertyColdRowBindingsTest.TiesChooseDenseAndSparseOwnersKeepExactSlotGenerations (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.UnboundAndHiddenLocationsRefuseBeforeWritingAnyBytes
+[       OK ] HybridPropertyColdRowBindingsTest.UnboundAndHiddenLocationsRefuseBeforeWritingAnyBytes (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.GroupedMasksMustBeDisjointCompleteOrderedAndCanonical
+[       OK ] HybridPropertyColdRowBindingsTest.GroupedMasksMustBeDisjointCompleteOrderedAndCanonical (0 ms)
+[ RUN      ] HybridPropertyColdRowBindingsTest.DecoderRejectsBadWidthsReservedBitsInvalidReferencesAndNonminimalForms
+[       OK ] HybridPropertyColdRowBindingsTest.DecoderRejectsBadWidthsReservedBitsInvalidReferencesAndNonminimalForms (0 ms)
+[----------] 5 tests from HybridPropertyColdRowBindingsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 21 tests from 3 test suites ran. (7 ms total)
+[  PASSED  ] 21 tests.

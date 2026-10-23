@@ -1,0 +1,242 @@
+{
+  "tests": 22,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T03:51:26Z",
+  "time": "0.064s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdCompatibleHotTest",
+      "tests": 22,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T03:51:26Z",
+      "time": "0.064s",
+      "testsuite": [
+        {
+          "name": "CompatibleHotValuePreservesUnvisitedColdBytesAndPublicMutationGuard",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "MissingHotNullInsertionOnEdgeKeepsColdBindingAndExactTotals",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 72,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "NoopAndColdOrUnsupportedChangesCannotEscapeAsMutationAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "MergedIndividuallyCompatibleRemovalsCannotBecomeUnsupportedDemotion",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "FreshAndReusedColdSlotsCannotInheritUnchangedSourceProof",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockReplacementUpdatesExactMatrixAndRetainsOtherOwnerBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 188,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ClearingAllColdRowsErasesBlockWithoutChangingOwnerLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 219,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationDoesNotDecodeUnrelatedDamagedBlock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 239,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationRejectsHotTokenAndDuplicateChangesWithoutWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationAuthenticatesExistingActualLargeRootBeforeReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 278,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockInsertionOnExistingEdgePreservesEntityLivenessAndHotNull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdOnlyClearRetainsPropertylessLiveOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 314,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdBlockPreparationRejectsCompetingOrdinaryRow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 330,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "SameBatchColdReplacementRetainsHotValueAndPresenceChangesOnSharedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 344,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdGrowthSplitsAndRelocatesMatrixWithGroupDirectoryEdit",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 378,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.016s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "MultipleColdBlocksAndHotPresenceShareOneFinalMatrix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 440,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "FreshColdBlockInsertionRetainsExistingColdOwnersAndHotAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "FirstColdFieldOnPropertylessLiveGroupNeedsNoFabricatedSourceBlock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 497,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdInverseProjectionRetainsActualLargeNullAndPropertylessNodeRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdInverseProjectionPreservesEdgeOwnerNamespaceAndExactCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 540,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdInverseProjectionRetainsAllPropertylessLiveOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 554,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        },
+        {
+          "name": "ColdInverseProjectionRejectsAccessedCorruptionAndRefunds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdCompatibleHot.cpp",
+          "line": 567,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T03:51:26Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdCompatibleHotTest"
+        }
+      ]
+    }
+  ]
+}

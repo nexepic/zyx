@@ -11,6 +11,7 @@
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 
 #include <algorithm>
@@ -35,6 +36,16 @@
 namespace graph::storage {
 
 	namespace {
+
+        void validateNativeEntityFreeSummaryEntry(uint64_t indexId,const BTreePageEntry &entry) {
+            const auto generation=EntityFreeSpaceIndex::generationKey(),count=EntityFreeSpaceIndex::countKey();
+            if(std::ranges::equal(entry.key,generation) || std::ranges::equal(entry.key,count)) {
+                if(!entry.value_or_child)throw FormatException(FormatError::FERR_INVALID_HEADER,"native summary source has a zero marker");
+                return;
+            }
+            static_cast<void>(EntityFreeSpaceIndex::decodeEntry(entry,indexId==RSS_NODE_FREE_SPACE_INDEX_ID?
+                EntityPageRecordKind::EPRK_NODE:EntityPageRecordKind::EPRK_EDGE));
+        }
 
 		// Transaction-local bootstrap is deliberately bounded to one shared-page
 		// pool worth of input. Large DDL construction must use the streaming bulk
@@ -409,10 +420,21 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "relocatable key-only B+Tree overlay cannot upsert a nonempty value");
 				}
-				upsert(operation.key, operation.value);
+                constexpr size_t maximumKeyBytes = 16U * 1024U;
+                if (operation.key.size() > maximumKeyBytes) {
+                    flushPendingUpserts();
+                    upsert(operation.key, operation.value);
+                    return;
+                }
+                if (pending_upserts_.size() == 64U || operation.key.size() > maximumKeyBytes - pending_key_bytes_)
+                    flushPendingUpserts();
+                pending_upserts_.push_back({utils::OwnedStdVector<std::byte>(operation.key.begin(), operation.key.end()), operation.value});
+                pending_key_bytes_ += operation.key.size();
+                debug::PerfTrace::addValue("native_btree.plan.buffered_upserts", 1);
 				return;
 			}
 			if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_ERASE) {
+                flushPendingUpserts();
 				leaf_append_size_.reset();
 				erase(operation.key);
 				return;
@@ -422,6 +444,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] BTreeStructuralMutationPlan buildPlan() {
+            flushPendingUpserts();
 			struct ExistingReplacement {
 				PageLocation location;
 				OverlayPageReference reference;
@@ -1061,7 +1084,10 @@ namespace graph::storage {
 				}
 				node.leaf_entries = page.entries();
                 if (native_sink_)
-                    for (const auto &entry : node.leaf_entries)
+                    for (const auto &entry : node.leaf_entries) {
+                        if(native_schema_keys_ && isEntityFreeSpaceIndexId(index_id_)) {
+                            validateNativeEntityFreeSummaryEntry(index_id_,entry);continue;
+                        }
                         if (native_schema_keys_ ?
                             (entry.key.size() > RSS_INDEX_KEY_MAX_BYTES ||
                                 (isSystemCatalogConstraintDefinitionId(index_id_) && entry.key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES) ||
@@ -1069,6 +1095,7 @@ namespace graph::storage {
                             index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID ?
                             (entry.key.size() < 53U || entry.key.size() > nativeKeyWidth()) : entry.key.size() != nativeKeyWidth())
                             throw FormatException(FormatError::FERR_INVALID_HEADER, "native map image source has a wrong fixed-key width");
+                    }
 			} else {
 				node.leftmost_child = OverlayPageReference::existing(header.leftmost_child);
 				for (const BTreePageEntry &entry: page.entries()) {
@@ -1255,6 +1282,96 @@ namespace graph::storage {
 				--expectedLevel;
 			}
 		}
+
+        // Pending keys own their input: streamed emitters may reuse the source
+        // operation immediately after apply returns. ERASE is a flush barrier.
+        struct PendingUpsert {
+            using OwnedHeapElement = void;
+            utils::OwnedStdVector<std::byte> key;
+            uint64_t value = 0U;
+        };
+
+        size_t mergeUpsertsIntoLeaf(std::span<const PendingUpsert *const> operations) {
+            checkNative();
+            auto path = pathFor(operations.front()->key);
+            auto &leaf = nodeFor(path.back());
+            std::optional<std::span<const std::byte>> upper;
+            for (size_t depth = path.size() - 1U; depth > 0U; --depth) {
+                const auto &parent = nodeFor(path[depth - 1U]);
+                const size_t ordinal = childOrdinal(parent, path[depth]);
+                if (ordinal < parent.internal_entries.size()) {
+                    upper = parent.internal_entries[ordinal].key;
+                    break;
+                }
+            }
+            size_t count = 1U;
+            while (count < operations.size() && (!upper || lessKey(operations[count]->key, *upper))) ++count;
+            // Ordered tail growth already has an admitted geometric backing and
+            // constant-time packed-size deltas. Preserve that existing path.
+            if (leaf.leaf_entries.empty() || lessKey(leaf.leaf_entries.back().key, operations.front()->key)) {
+                for (size_t i = 0U; i < count; ++i) {
+                    checkNative();
+                    upsert(operations[i]->key, operations[i]->value);
+                }
+                return count;
+            }
+            constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
+                2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+            while (count > 1U) {
+                utils::OwnedStdVector<BTreePageEntry> merged;
+                merged.reserve(leaf.leaf_entries.size() + count);
+                size_t old = 0U, next = 0U;
+                while (old < leaf.leaf_entries.size() || next < count) {
+                    checkNative();
+                    if (next == count || (old < leaf.leaf_entries.size() &&
+                            lessKey(leaf.leaf_entries[old].key, operations[next]->key))) {
+                        merged.push_back(leaf.leaf_entries[old++]);
+                        debug::PerfTrace::addValue("native_btree.plan.batch_copied_source_entries", 1);
+                        continue;
+                    }
+                    const auto *operation = operations[next++];
+                    while (next < count && std::ranges::equal(operation->key, operations[next]->key))
+                        operation = operations[next++]; // Original equal-key order: last write wins.
+                    if (old < leaf.leaf_entries.size() && std::ranges::equal(leaf.leaf_entries[old].key, operation->key)) ++old;
+                    merged.push_back({operation->key, operation->value});
+                }
+                const auto bytes = PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF, merged, leaf_value_layout_);
+                const bool fitsOne = bytes <= capacity;
+                if (!fitsOne && !findBalancedLeafSplitIndex(leaf.header, index_id_, LogSequenceNumber(1U),
+                        LogSequenceNumber(1U), leaf.left_sibling ? preview(*leaf.left_sibling) : PageId{},
+                        leaf.right_sibling ? preview(*leaf.right_sibling) : PageId{}, merged)) {
+                    // Wide keys may require more than two pages. Reduce this
+                    // bounded group before changing any private node.
+                    count = (count + 1U) / 2U;
+                    continue;
+                }
+                leaf_append_size_.reset();
+                leaf.leaf_entries = std::move(merged);
+                leaf.dirty = true;
+                debug::PerfTrace::addValue("native_btree.plan.leaf_batch_merges", 1);
+                debug::PerfTrace::addValue("native_btree.plan.batch_merged_upserts", count);
+                if (fitsOne) leaf_append_size_ = LeafAppendSize{path.back(), leaf.leaf_entries.size(), bytes};
+                else splitLeaf(path);
+                return count;
+            }
+            upsert(operations.front()->key, operations.front()->value);
+            return 1U;
+        }
+
+        void flushPendingUpserts() {
+            if (pending_upserts_.empty()) return;
+            std::array<const PendingUpsert *, 64U> ordered{};
+            for (size_t i = 0U; i < pending_upserts_.size(); ++i) ordered[i] = &pending_upserts_[i];
+            auto remaining = std::span<const PendingUpsert *const>(ordered.data(), pending_upserts_.size());
+            std::ranges::sort(std::span(ordered.data(), pending_upserts_.size()), [](const auto *left, const auto *right) {
+                if (lessKey(left->key, right->key)) return true;
+                if (lessKey(right->key, left->key)) return false;
+                return left < right; // Same contiguous buffer, preserving source statement order.
+            });
+            while (!remaining.empty()) remaining = remaining.subspan(mergeUpsertsIntoLeaf(remaining));
+            pending_upserts_.clear();
+            pending_key_bytes_ = 0U;
+        }
 
 		void upsert(std::span<const std::byte> key, uint64_t value) {
 			std::vector<OverlayPageReference> path = pathFor(key);
@@ -1752,6 +1869,8 @@ namespace graph::storage {
 		// Transaction-local, last-leaf only. Erases/non-appends and splits
 		// invalidate it; no persisted bytes or cross-snapshot proof is cached.
 		std::optional<LeafAppendSize> leaf_append_size_;
+        utils::OwnedStdVector<PendingUpsert> pending_upserts_;
+        size_t pending_key_bytes_ = 0U;
 		std::deque<OverlayMutationNode, utils::OwnedPmrAllocator<OverlayMutationNode>> virtual_nodes_;
 	};
 
@@ -3162,7 +3281,7 @@ namespace graph::storage {
         std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
         const CancellationCheckpoint *cancellation) const {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
-            (!isSystemCatalogIndexDefinitionId(indexId) && !isSystemCatalogConstraintDefinitionId(indexId) && indexId != RSS_SYSTEM_CATALOG_INDEX_ID) ||
+            (!isSystemCatalogIndexDefinitionId(indexId) && !isSystemCatalogConstraintDefinitionId(indexId) && indexId != RSS_SYSTEM_CATALOG_INDEX_ID && !isEntityFreeSpaceIndexId(indexId)) ||
             !source || !memory || !sink || !operationCount || operationCount > 8192U)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native derived images require an owned pin and bounded operation source");
         utils::OwnedAllocationScope scope(memory);
@@ -3173,7 +3292,7 @@ namespace graph::storage {
             if (cancellation) cancellation->check();
             if (emitted == operationCount || operation.key.size() > RSS_INDEX_KEY_MAX_BYTES ||
                 (isSystemCatalogConstraintDefinitionId(indexId) && operation.key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES) ||
-                (indexId != RSS_SYSTEM_CATALOG_INDEX_ID && operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+                (indexId != RSS_SYSTEM_CATALOG_INDEX_ID && !isEntityFreeSpaceIndexId(indexId) && operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
                     IndexKeyCodec::decodeEntryEntityId(operation.key) != operation.value))
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native scalar operation source violates its exact bound or owner");
             if (indexId == RSS_SYSTEM_CATALOG_INDEX_ID) {
@@ -3184,6 +3303,22 @@ namespace graph::storage {
                     (key[1] == std::byte{3U} && std::ranges::all_of(key.subspan(2), [](auto value) { return value == std::byte{0}; })))
                     throw FormatException(FormatError::FERR_INVALID_HEADER, "native catalog preparation permits only canonical count upserts");
                 static_cast<void>(SystemCatalogGraphCardinalityCodec::decodeCount(operation.value));
+            }
+            if(isEntityFreeSpaceIndexId(indexId)) {
+                const auto generationKey=EntityFreeSpaceIndex::generationKey(),countKey=EntityFreeSpaceIndex::countKey();
+                const bool marker=std::ranges::equal(operation.key,generationKey) || std::ranges::equal(operation.key,countKey);
+                if(marker) {
+                    if(operation.kind!=BTreeScalarIndexOperationKind::BSIOP_UPSERT || !operation.value)
+                        throw FormatException(FormatError::FERR_INVALID_HEADER,"native summary markers permit only nonzero upserts");
+                } else {
+                    if((operation.kind!=BTreeScalarIndexOperationKind::BSIOP_UPSERT && operation.kind!=BTreeScalarIndexOperationKind::BSIOP_ERASE) ||
+                        (operation.kind==BTreeScalarIndexOperationKind::BSIOP_UPSERT && operation.value!=1U) ||
+                        (operation.kind==BTreeScalarIndexOperationKind::BSIOP_ERASE && operation.value!=0U))
+                        throw FormatException(FormatError::FERR_INVALID_HEADER,"native summary candidate has an invalid operation/value");
+                    BTreePageEntry entry;entry.key.assign(operation.key.begin(),operation.key.end());entry.value_or_child=1U;
+                    static_cast<void>(EntityFreeSpaceIndex::decodeEntry(entry,indexId==RSS_NODE_FREE_SPACE_INDEX_ID?
+                        EntityPageRecordKind::EPRK_NODE:EntityPageRecordKind::EPRK_EDGE));
+                }
             }
             ++emitted; overlay->apply(operation);
         });

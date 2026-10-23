@@ -1,0 +1,11 @@
+# Native derived reads share the authenticated field source
+
+Progress90%, P7 open.30 targeted cases,508 related module cases in each experimental membership variant and154 default cases pass, no failures/skips. Current receipts match stable library hashes. No full suite, timing, commit or push. Exact cumulative source is source.patch plus additional-source.tar.gz against round.json base HEAD; editing scripts are development evidence rather than a complete final replay recipe.
+
+Derived old-value lookups now use the same authenticated ReadContext as field preparation and fall back to the original ROW path only for actual ROW owners. This preserves the existing source while supporting candidate cold fields and avoids reopening an unrelated descriptor boundary for Native fields. Existing normal Native/ROW compound-publication modules remain passing.
+
+The new coherent private candidate has real Catalog tokens/definitions, two real scalar index trees, an actual Node label and a NOT NULL cold-field definition. Updating a hot field must read unchanged cold data to satisfy the constraint and prepare scalar-index COW. Deleting the required cold field refuses. Original roots/index keys/files/epoch stay unchanged; accounts refund and public guards remain closed. This is candidate preparation, not public conversion or physical installation.
+
+An identical-flags single-object control restores only the former old-value route; the SAME corrected source fixture then fails with required_cold NOT NULL violation because unchanged cold data is misread as missing. Current source passes. Control source/compile/link/test/fingerprints are retained separately; its deliberately failed test is not a current failure or a performance baseline. Its generated executable was removed after receipt creation. Initial source-setup failures are also retained: newly absent index trees require original stageScalarIndexCreate, not upsert. No production validation was relaxed.
+
+Other schema combinations, atomic physical installation, global hot demotion/owner/deletion/liveness/final-group/inverse, whole-space/staged-target admission, full public lifecycle, remaining primary query costs and final P7 remain open.

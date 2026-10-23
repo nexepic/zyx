@@ -1,0 +1,20 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "property_tests": 73,
+  "related_lifecycle_tests": 400,
+  "medium_p50_ms": {
+    "before": 55.377017,
+    "after": 40.281808
+  },
+  "medium_p95_ms": {
+    "before": 62.509695,
+    "after": 44.851715
+  },
+  "library_sha256": "08a7f3eec1ad50c6efb3d2bf55282c3ba522e15e7f800e8699e9718142df3a7c",
+  "retained_library": "/workspace/zyx-endpoint-candidate/libzyx_core.a",
+  "patch_sha256": "ab607b3d8bd4b17105d016936b00054aa580598c460ebee855cacbdecb289368",
+  "scope": "actual existing Node labels/deletions only; endpoint validation and separate adjacency preserved; codec scratch charged to actual largest inline root; no format/header ABI change; no commit/push without acceptance progress"
+}

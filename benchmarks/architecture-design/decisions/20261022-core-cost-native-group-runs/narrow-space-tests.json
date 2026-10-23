@@ -1,0 +1,38 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T19:40:04Z",
+  "time": "0.053s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T19:40:04Z",
+      "time": "0.053s",
+      "testsuite": [
+        {
+          "name": "NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T19:40:04Z",
+          "time": "0.053s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "row_steady_bytes": "917504",
+          "candidate_steady_bytes": "1179648",
+          "peak_allocated_bytes": "1310720",
+          "prepared_field_frames": "8",
+          "prepared_index_frames": "2",
+          "fresh_pool_bytes": "393216"
+        }
+      ]
+    }
+  ]
+}

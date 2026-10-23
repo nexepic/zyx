@@ -1,0 +1,2522 @@
+{
+  "purpose": "rebuildable obsolete Debug objects and prior module test binaries only; retain all source, receipts, frozen benchmark binaries/libraries, datasets and measurement logs",
+  "deleted": [
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/DatabaseImpl.cpp.o",
+      "bytes": 9041032,
+      "sha256": "4774a5e8a218a5482ee09f7626d82137ae84f4f2baffc4e1927842e070d120f0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/DriverAbi.cpp.o",
+      "bytes": 760,
+      "sha256": "fe34538d24c8aa026c8ebb514fe8b68d29804955654897c58d6113a9076b7979"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/PreparedQuery.cpp.o",
+      "bytes": 6142040,
+      "sha256": "eea5ae0a9ab9f533f5b34e50fcd8f2781fbd72a6b3a2af990e8e5c4e5cc42bd6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/cli/CommandLineInterface.cpp.o",
+      "bytes": 4486568,
+      "sha256": "f98a1bda7db0d3ae99ee416a12b3f88cbeb872e5a53993717c9472fa0703cdcb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/cli/CypherCompleter.cpp.o",
+      "bytes": 595744,
+      "sha256": "a655d4145db4a22b7a4a37a1e56fa7ee146e2ca8ece2b9bb006418f335056b6c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/cli/DebugCommandHandler.cpp.o",
+      "bytes": 269112,
+      "sha256": "3806b2e4a3662e28c192b4a74e9f0da5412ee0e27db56bcafb2c8448420f2cd9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/cli/ImportCommand.cpp.o",
+      "bytes": 5466072,
+      "sha256": "4a095b168f049e9ba8e154555f938067db589de46bbb89f1ccf4d2e8a1f2eb00"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/cli/Repl.cpp.o",
+      "bytes": 2022008,
+      "sha256": "dde133c9c2bd134b8ae02386dd302c741a5a61a205bd9f9bfea04f0f7dfa12af"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/concurrent/ParallelOperatorExecutor.cpp.o",
+      "bytes": 379896,
+      "sha256": "53e390f5292c2d3e4210b193b4559acf5468e5d854601d83aaf78acd722759e3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/Database.cpp.o",
+      "bytes": 1183168,
+      "sha256": "75047c4999c98ed0b62b4678949831b5c0f794492e6b63555bb9e67d3a57bbfb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/Edge.cpp.o",
+      "bytes": 1770648,
+      "sha256": "d3900ec4477c4e2181ceeb291aa0540de8b85503e6551f70e861897cbf54b19e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/Node.cpp.o",
+      "bytes": 1814912,
+      "sha256": "cc1855978da1006e8159989f1faf94e38635bfe4bc5077f9f72aaf5e491c82fb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/PropertyTypes.cpp.o",
+      "bytes": 627416,
+      "sha256": "f21bde47e08dbe410458a856da329f7a95e4d73422802c15957a6cf24561f055"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/TemporalTypes.cpp.o",
+      "bytes": 230880,
+      "sha256": "ec235d587e2fd477b0d51f7fa2333dc49dad00da580a9717e1e6a9c7fb619500"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/core/Transaction.cpp.o",
+      "bytes": 1155280,
+      "sha256": "e5b689720a9802ea2e23fe85e482db95e4454357854ce892696f138022477480"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/debug/PerfTrace.cpp.o",
+      "bytes": 558504,
+      "sha256": "b8991d9b220ea5b7ccdf4836a6c720372b6fafba25b2571c1466ce03f7f1ec38"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/NativeConfigurationService.cpp.o",
+      "bytes": 1894568,
+      "sha256": "738ae445cc43872d45c2d633d768aa25172942c40eb0852051fa5cbf555faf39"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/QueryContext.cpp.o",
+      "bytes": 77136,
+      "sha256": "7338d84acb4076baf02bfdf4977393c3ea0cde5fcb5f8a524daab3eb74c9abbc"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/QueryErrorMessages.cpp.o",
+      "bytes": 107992,
+      "sha256": "40f09629e4c5d15093350baab0f5b35f9eaff57afba5cf0ee6474da27740f811"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/QueryGuard.cpp.o",
+      "bytes": 198408,
+      "sha256": "f4baa2e6d587ad3121692a5c44dbb1c8703a67449e5b04b6547406f0b97469a3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/LogicalGraphPropertyPatch.cpp.o",
+      "bytes": 4079520,
+      "sha256": "0deb0828aaead84ab3b92b0453aaef60230146c45a663ed22c35a814d4c37447"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/LogicalGraphTransactionOverlay.cpp.o",
+      "bytes": 11915344,
+      "sha256": "a228a1aeeca9e4e678e44106c02ea0e6ce64fb615763d05cf9db67a16108f24c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/StorageBackendFactory.cpp.o",
+      "bytes": 710896,
+      "sha256": "a982e102b3fd4323dcabb4476150b51bc5f24aa0ede88d08cb51bcf29731fcdc"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/StorageFormat.cpp.o",
+      "bytes": 78680,
+      "sha256": "2aa0bd6772a7746bb14b2f76eda52d14dcb8a4ca8a1f4ed724ee4b4ef316786f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/StorageIO.cpp.o",
+      "bytes": 663984,
+      "sha256": "662343cab1f739288daf4eef8d677f95b4593de49c0d0fcc69ae3050bbc94d61"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/utils/ChecksumUtils.cpp.o",
+      "bytes": 138944,
+      "sha256": "1777464677957bb53a662edada666498d78eb4172541fe083e5a69c81831e0a2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/utils/CompressUtils.cpp.o",
+      "bytes": 102384,
+      "sha256": "cc1612883bef17ce1f30292bad456f0fc430f324ad04f014ca1c6acf852b4eca"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/utils/Sha256.cpp.o",
+      "bytes": 100272,
+      "sha256": "a78167262a84bc2bee3fc6a2126652d3cda7c3bcb967d04cfe57b921fbbc6014"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiDatabase.cpp.o",
+      "bytes": 1121112,
+      "sha256": "92390599f77d34e35edfbe5e35ef1eb939badeddc5f719b1679c2f545dbbe88c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiErrors.cpp.o",
+      "bytes": 172856,
+      "sha256": "683d09f4f08916ca8152c9cd8d90aebfb36e4da81c5d6145e986a635bb133264"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiIngest.cpp.o",
+      "bytes": 2132192,
+      "sha256": "5f87c41c7e9fde631cb876810531078d8adba8ffd3d7d2455b6b4164f83a46f3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiParams.cpp.o",
+      "bytes": 1668200,
+      "sha256": "0d99cb610bb88313606addebf6da856dbb64fc1ea6513c58d3eac4f97159ec6b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiResults.cpp.o",
+      "bytes": 2414328,
+      "sha256": "77f4fde9da165a368b12f36e8d3eb4097db9b6f5a3059e87217f67d42b0cce04"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiTransactions.cpp.o",
+      "bytes": 799656,
+      "sha256": "558b098bd5fa8400a2362feb36bc4b296207cc039d8d7a55336537103063bd47"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiValueRefs.cpp.o",
+      "bytes": 855744,
+      "sha256": "1376a08eb37108c5c694315dad8173c3f0894f65a543a814c9423e3ab2293aa1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/api/driver_abi/DriverAbiValues.cpp.o",
+      "bytes": 2240368,
+      "sha256": "a8e8dfced3c432db17d96cd822de269601ad92ba8673f9be6dc9ef9167eadb71"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/api/QueryEngine.cpp.o",
+      "bytes": 5917136,
+      "sha256": "14a5ff4ba10fdd69f44ae1743be25289c044f342b1046724bbb22634df98b0f8"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalGraphAdjacencyCursor.cpp.o",
+      "bytes": 813904,
+      "sha256": "ff27fb959a5f59089c4a5a5ae86cb65e717f8057f026f1f188a63f0b5672e53c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalGraphNodeCursor.cpp.o",
+      "bytes": 820944,
+      "sha256": "c95ae742cef473ab28e85b5e84fb4f3510f6629325930ab44a990860950a4e42"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalGraphReadExecutor.cpp.o",
+      "bytes": 3977168,
+      "sha256": "feacbd2c286d0443016f80304ee805da20dada7db54e9e1114aaa42babcec9bb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanMutationRuntime.cpp.o",
+      "bytes": 14220112,
+      "sha256": "1457fa90e5d6d3bb63e2dc480027810f9b4cc654cd6f156fbd48d1760c80bc42"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanProcedureRuntime.cpp.o",
+      "bytes": 12497712,
+      "sha256": "1b6bf81311227321787c6b3f458fe204206f52325a65d895d99be5fadc3d9770"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanReadRuntime.cpp.o",
+      "bytes": 46412584,
+      "sha256": "c95d6d8d0956c6b7a99d13435da503390f0b656419e407921b52351d83ed2de0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanSchemaRuntime.cpp.o",
+      "bytes": 2391800,
+      "sha256": "ee8b41675bef5448e693fffc26d7edab5970170241f5d81089eb0da6d428177b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/LogicalPropertyPredicate.cpp.o",
+      "bytes": 806744,
+      "sha256": "39d68d9c50187fff447f60afe5aadf248deceeaa355cc2c22745317061b02d22"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/execution/Record.cpp.o",
+      "bytes": 2037304,
+      "sha256": "45851f9d99be9b9a73ea56a4fd7cb6eb588e17de1c8c956d2fd10dd252452125"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/EntityIntrospectionFunction.cpp.o",
+      "bytes": 2315016,
+      "sha256": "d39ab81554409a06019e9877414c6d0e70a118a9737b1eb0d849362fc5d6111f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/EvaluationContext.cpp.o",
+      "bytes": 2707768,
+      "sha256": "0e7852bd0723d5bf1d62754f3491adde18116cd14dcdf9a8b175bd8c6a3d534e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ExistsExpression.cpp.o",
+      "bytes": 342032,
+      "sha256": "5c28421bc6cf812a6683e0ece5ea64362c533317e6a9b5f1ffbfc5f1c72b35ff"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/Expression.cpp.o",
+      "bytes": 2166456,
+      "sha256": "25e86d6070c512740fa3fd9ac7f4f9245943f554a0606d7d8fca522de80e6cea"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ExpressionUtils.cpp.o",
+      "bytes": 2533688,
+      "sha256": "49df45d4fadf9499953c9ea829d65fb35a0d0f31b67d51a0341da1675974849e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/FunctionRegistry.cpp.o",
+      "bytes": 487120,
+      "sha256": "06c0a9971a9d180aed38bcf2ebeefdc8920537e3748ffe7ce110248f46b8c2cf"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/IsNullExpression.cpp.o",
+      "bytes": 286064,
+      "sha256": "a574b5a7e64aeb2796e9a51f8ca91a8eaa99dcc6d8844fd3a23b4156a58098f1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ListComprehensionExpression.cpp.o",
+      "bytes": 369344,
+      "sha256": "577164bfda53f4d1acf0cd45a5f6ee01a331626c5b5c44c9cb6bde51adf98e12"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ListFunctions.cpp.o",
+      "bytes": 1674984,
+      "sha256": "c74d7406a615989db928468d46a9fb6ead838d8aa56838c947c8b6ad6691ae67"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ListLiteralExpression.cpp.o",
+      "bytes": 2363160,
+      "sha256": "179532aa5a7df284f94061ce80029c1c0dab862fb8c349d19098252d71cc1482"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ListSliceExpression.cpp.o",
+      "bytes": 289200,
+      "sha256": "2ade867cb8deed539ffca4349a1bf2aef7faec32076a4fd2c400ae75c569747a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/MathFunctions.cpp.o",
+      "bytes": 542840,
+      "sha256": "7309ae162884571ca335b2473de79efdf9ad1884516a906f5ca5a46b3dadc11c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/PatternComprehensionExpression.cpp.o",
+      "bytes": 344120,
+      "sha256": "1a3b86afd0025c71e7654b6d009abf9a8486c2c62b2421240daa83e9fb156cf5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/QuantifierFunctionExpression.cpp.o",
+      "bytes": 325816,
+      "sha256": "bac1cc43d54e9ed9a02033ea8f5b7ebf7afffd9b5694c56a526746aae6cf1d81"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/ReduceExpression.cpp.o",
+      "bytes": 325264,
+      "sha256": "ddf14596f0697f1e8f150e5f0b98b2a6c2721f8b076d8fcf35ae791b04bf6a1d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/StringFunctions.cpp.o",
+      "bytes": 2180336,
+      "sha256": "001579fb3a0f769deb0a024727ddf5a9940b609aa762c8087a5395a22d4874df"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/TemporalFunctions.cpp.o",
+      "bytes": 600864,
+      "sha256": "9b1a71b70c07c22efe810a151a018f0449820b0ff412d552fe4105f08b522660"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/TypeConversionFunctions.cpp.o",
+      "bytes": 376624,
+      "sha256": "75c0bdbd4c7ba8208d00719ab77d6f3148e4f51652ccfda100c429f0885920e1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/expressions/UtilityFunctions.cpp.o",
+      "bytes": 663808,
+      "sha256": "7f5d3041e1f46a5cdb29879f2883209b8efa393f3882fb4e6d517a0367fbf767"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/gds/LogicalGraphAlgorithms.cpp.o",
+      "bytes": 2246864,
+      "sha256": "5605d8aed0eca020097fc59f0c24eb8121f7be9afb51faace00393807e6f6aeb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/gds/LogicalGraphProjection.cpp.o",
+      "bytes": 3135176,
+      "sha256": "1fa6174a3e5f8eff8524a3d9403f28103ab5b41746c93c687f00d41c50cbd81a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/gds/LogicalProjectionCatalog.cpp.o",
+      "bytes": 2522392,
+      "sha256": "f8b982f78ef93cecded1a9c1c4258a9c8ca80412152b54cddc100cd539a376c9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/gds/LogicalProjectionSpecCodec.cpp.o",
+      "bytes": 1065728,
+      "sha256": "00d53e37af27a3f8fd27dfb6ea44b27c7de8a0cbe63bb091955f7060c2105d47"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/ir/LogicalPlanBuilder.cpp.o",
+      "bytes": 7149720,
+      "sha256": "8964eb7f6f124a8031ca23f26c0b48931e400f46fa8f13d148a353bfcb4e1696"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/ir/SemanticAnalyzer.cpp.o",
+      "bytes": 666856,
+      "sha256": "70c8f5f94c30e553daaf9297366dfda241b2bc291e1a64441adc1cd15fece750"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/logical/LogicalOperator.cpp.o",
+      "bytes": 132152,
+      "sha256": "4018525115e3f32dd2896ca27abef55d378f86f6954385b2dc881a1db992c08d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/optimization/LogicalPlanOptimizer.cpp.o",
+      "bytes": 4669056,
+      "sha256": "e35bd2657bda6107ad62149e29ebf596ca07f390e681ec9693b9697d97748320"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/planner/PipelineValidator.cpp.o",
+      "bytes": 359336,
+      "sha256": "d500cc5ac3da2db201715777a80c379c4538e0d7a27e88caa880bc902fbe0284"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/query/planner/ProcedureRegistry.cpp.o",
+      "bytes": 349392,
+      "sha256": "ae8f05915889f9dff38d0463ada4dd7f7468c26db48a1a58baab9a657fda6821"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/AdjacencyKeyCodec.cpp.o",
+      "bytes": 188016,
+      "sha256": "a78ee513d38ec3aaa8e28103e7e97aa5ca76f9e92221bb5ef2cebae225a8a191"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyIndex.cpp.o",
+      "bytes": 490408,
+      "sha256": "79964e6d01beebf10715b9987313ac28fa786709b2ff280f2fabfd5d8e859210"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyMutationMerger.cpp.o",
+      "bytes": 811024,
+      "sha256": "fbd4d16d0f829ebc843a4fc7f240a766fdca19115ed39b9a23674e26a83e3107"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/AllocatorDirectory.cpp.o",
+      "bytes": 788664,
+      "sha256": "fdaf6564e032f7a75e75edb75dbd744091737cf0b7eb557a181a20a69baa49fb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/AllocatorPage.cpp.o",
+      "bytes": 200360,
+      "sha256": "bb02835d817a2d51e54499c8fbac097be5e2fbf0db710db7f164c3905cc3bafd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/PhysicalSegmentAllocator.cpp.o",
+      "bytes": 891832,
+      "sha256": "d2ef7e38ce0237521092ab06bd3bda00ca8b6e68294988418a404d50e2891901"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SharedPagePool.cpp.o",
+      "bytes": 206008,
+      "sha256": "a4dec76ac681e8736cc2db3b985de7d1110cebf4b388a3ba4460b2cf92a8d7a6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp.o",
+      "bytes": 2186064,
+      "sha256": "f56ced07c12f12ec4ef778ec2569ea831aec4fa34eafb64350699082bd77f9ba"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPage.cpp.o",
+      "bytes": 701656,
+      "sha256": "4de0d2812a3151498c25dc9ebf7a5b7f58dd2f3e40f0ecf90d18710a106782fe"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPagePool.cpp.o",
+      "bytes": 1477072,
+      "sha256": "096859b189bed2ce0095e11ae6ed352ca65f784bff1b227d87cf15b99981a655"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp.o",
+      "bytes": 6612344,
+      "sha256": "9332653cabee40498bf35fc360f8db52d70c9c899acc3678d4c985d8ae384cf5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableStorageBackend.cpp.o",
+      "bytes": 25154920,
+      "sha256": "56656445e22d282f96ba578f02d78f82b6d88cebc4759d8639ac379edaecca8c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/cache/BufferPool.cpp.o",
+      "bytes": 1103456,
+      "sha256": "28443b4e08ccdce44fd0d939ad4a8ef4308ba0f9f908848e0a09fbbf65590007"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityLabelSet.cpp.o",
+      "bytes": 294016,
+      "sha256": "2247136ae320978e54b71ef5ec9b0ab2af73e5af475efb046393c67a9d2113cb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityLabelSetStore.cpp.o",
+      "bytes": 2269552,
+      "sha256": "34593d563687bdb4104372131a254df7f8f71e66eaa48c45024ebddfc9fdb060"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityPage.cpp.o",
+      "bytes": 765320,
+      "sha256": "4ca26a58222778df037e6cdc7543b126bdb69d70dec8fb84952b89750a575820"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityPageStore.cpp.o",
+      "bytes": 10236944,
+      "sha256": "ecca900f1e2cd13df7dcc4241ddb676b8e5654ee1cffe58615dd0d9b11cb3ca5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o",
+      "bytes": 964672,
+      "sha256": "22cff878b250e3e690c25ab6c1f6e005e2a82bcd3f1b3f001b6011a34271ce15"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.cpp.o",
+      "bytes": 686368,
+      "sha256": "adae5468bc3ccdd68ccfcac9c1a29359ef22e862309fcace761b389eccf78950"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeMaterializer.cpp.o",
+      "bytes": 2008448,
+      "sha256": "2e74efbd0dcf790cdd1a16e5828851adbfeb562fcb66dec30af1aac55945b195"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.cpp.o",
+      "bytes": 483192,
+      "sha256": "98152cf63c2dfa8f6308aabef38150827ac1cbbd01ab574f90926d094c89b2b3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunMaterializer.cpp.o",
+      "bytes": 513984,
+      "sha256": "e65c92d31a97e65be4dc6a436eb3c86f0314f79fbe713d0073badc5ffe13ed3e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunPipeline.cpp.o",
+      "bytes": 736592,
+      "sha256": "66a1fdc3d17f731516b08bad1f5acea35c850e8d631ea547d0d789c05f5f80b5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateRunSet.cpp.o",
+      "bytes": 839392,
+      "sha256": "f526a347beeda406f909fe5ea9958a8f9067ba49bff634fa1615ffff19fbc599"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePrivateTokenResolver.cpp.o",
+      "bytes": 777896,
+      "sha256": "8577c76c95572dcf31c57612a4a9d0a6eb6014ab434f804820d5d9a618048bf7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.cpp.o",
+      "bytes": 1618832,
+      "sha256": "5c2f73dc7f89c0d6de105940305b88d7e5d24c836750cc935df270a67c8f465b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRecord.cpp.o",
+      "bytes": 1359848,
+      "sha256": "5344d0d90f5b5226620c3eb412a8507ce14ad84832dcb7bf0dab0904423b035e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRun.cpp.o",
+      "bytes": 699776,
+      "sha256": "d6070613b718ad2b4ade0fb0523111a84422942c9018711916d29353bc4b1f28"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRunReducer.cpp.o",
+      "bytes": 861968,
+      "sha256": "3fae9395e08dcefde616691c23e41d1cd8029f34c8c3be4aefbd7ebba6995595"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeRunStore.cpp.o",
+      "bytes": 1597792,
+      "sha256": "5a4d60384501204661bee64538da91a922ad18dce2a009701295fc84e2996f35"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.cpp.o",
+      "bytes": 1045080,
+      "sha256": "6cbee95e4a9f86182998615a6cad0e596ed407c9cc4d6f131036fe9800c34198"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp.o",
+      "bytes": 9498072,
+      "sha256": "c89c114c189456f29c57ca6f555122b05d2409be6406a70e318477f0d4d357de"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp.o",
+      "bytes": 17473128,
+      "sha256": "a5a626c8b7b888b0d7ebd23cb29887613cada490f93ad4785f16f80f04dd4cb1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeScalarIndexMutationPlanner.cpp.o",
+      "bytes": 1317744,
+      "sha256": "aa130ff33bd55360e5977e6faa3efa3a5c1c2dedc8975ea3692c3ee43c1d1389"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.cpp.o",
+      "bytes": 1979056,
+      "sha256": "abab7ebbc7ee96078b720da63e3ec1830ed1243c462792ef1dc7ee8b81416211"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphCandidateLayout.cpp.o",
+      "bytes": 212080,
+      "sha256": "eb6e9775f0b29d2a23fdd8f36178d75865c4b2d182acf5ed28d8f942eecaa0b3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphCatalogIndexPlanner.cpp.o",
+      "bytes": 885184,
+      "sha256": "e8a2f8f0ca4f22e04550dd5c166e0fa0dc97b54769112f96cfa95edd8f5e32a5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.cpp.o",
+      "bytes": 818032,
+      "sha256": "66fbf1835423e8d1b58c2cb114cdedfe3c1b0a51f16b019be70ccd5b8c8621be"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.cpp.o",
+      "bytes": 517144,
+      "sha256": "a4100d4bbebcc877354a66d0ecee3c7f43e50fce5cf3d5d604ca887c5488620a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.cpp.o",
+      "bytes": 1694296,
+      "sha256": "b44f233730c8d644a3297205332855789b24614cddf3b428f66fee30ece03a7c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueContentRunBuilder.cpp.o",
+      "bytes": 691640,
+      "sha256": "d42c0cdaf434bde17a6016cfb2c336da34e164038348e7a2e5c6911b84c1c318"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.cpp.o",
+      "bytes": 864968,
+      "sha256": "aba36781cd93cd8a29403b6d18bf086b876efb766a02e07714caecfdd439e294"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValuePrivateMaterializer.cpp.o",
+      "bytes": 397392,
+      "sha256": "351e78b4a9776a5ab1f26c009183252adbbcbceae4301333ee8a4bc124f1a4e2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphLargeValueReferenceMapBuilder.cpp.o",
+      "bytes": 723024,
+      "sha256": "78f1ea3c2011e71a73ca3c3f3bca05646732db789f076ee34cf22feffb1e03fa"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphMembershipIndexPlanner.cpp.o",
+      "bytes": 3091680,
+      "sha256": "3e93b843a8ff1f59bded94b80e7e97b7332c1f9a7e0b0411be1b063654a84531"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPageRanges.cpp.o",
+      "bytes": 230072,
+      "sha256": "8ab348c26ff15a8369d09a3010d63ae0cb6ab0e9d7c9523294e3ca83b918dac7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPrivatePreparation.cpp.o",
+      "bytes": 707824,
+      "sha256": "b521f738c74ebee09f4fc3e50a4dca6909fdfde6ce04a50b95b812fc41461c47"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.cpp.o",
+      "bytes": 1215008,
+      "sha256": "b3ea80502277a5a295e32c634a17eac4a271926601901e8c817861ffb65c80a3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationIndexPlanner.cpp.o",
+      "bytes": 663704,
+      "sha256": "e5ba1dd1e575dc995fb952eff3b80796c17adc48b5a2b718dd4ce1bc2de911b1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.cpp.o",
+      "bytes": 244312,
+      "sha256": "385f3186663930745b57f65a5ae4d15e9ba93d537dc8c7662714e4afde1031bd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeStreamedGraphPublicationShape.cpp.o",
+      "bytes": 216040,
+      "sha256": "ac7b51864c528743f5e1577780c12d0713e0e1a27815116695815a8d76bd8da5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeVectorMutationPlanner.cpp.o",
+      "bytes": 714472,
+      "sha256": "f65732602ec6fc17f19a8ad1d6ef94ea45b6d34552e18687dee0eef1b04f494a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedConstraintMutationAdapter.cpp.o",
+      "bytes": 4369536,
+      "sha256": "96a855a6556436fd038446261f10a854841d738d3db2abf936b844916b411469"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp.o",
+      "bytes": 8509688,
+      "sha256": "2fff8076fdcbef9ca5e8635669d9b3d6c56c731bfccd4a2d423bba54183dad61"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp.o",
+      "bytes": 7673952,
+      "sha256": "88244ff264c33f826ac8e9a320a5477723c2d77ace7af68bc2f69da07c5d9717"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/format/Format.cpp.o",
+      "bytes": 178456,
+      "sha256": "376998ff6861d1835cf2b835fb189587d985300d327189398f3469d9c634c133"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/format/Superblock.cpp.o",
+      "bytes": 284296,
+      "sha256": "c30d1ed720ab0f33683b195a7802a2251300243bb08a895d8965bc9a245ca90c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/format/SuperblockFile.cpp.o",
+      "bytes": 204160,
+      "sha256": "97a7d4dcb5755b616749b4a002c15c099b08303347eb7d31139126b69eedfbad"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/format/SuperblockPair.cpp.o",
+      "bytes": 182024,
+      "sha256": "f84f75ed3131be5035a65e45b6a5e2e05a23b0df28aebbddcc4b0c89663c9a5d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreeIndex.cpp.o",
+      "bytes": 1909176,
+      "sha256": "8e3867438fc349511387707bec816d02f074cf2078143f8cbd854952e94698cb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePage.cpp.o",
+      "bytes": 1288336,
+      "sha256": "d92cbbccf9dcfe25956e7c9aa0f3b66233a7af84868931a8d8baedeba69dd6bd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o",
+      "bytes": 7018016,
+      "sha256": "01d5958cb8088189f19b6fc33b69317a887548d73ca7c26cb275bd995dce569a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BulkBTreeBuilder.cpp.o",
+      "bytes": 2046800,
+      "sha256": "7a02c3ac3e45467aab4b38ef60ecb8e650858480f00b1209f80c312ef99a5624"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/ExternalBTreeEntrySorter.cpp.o",
+      "bytes": 1328576,
+      "sha256": "32ceb7bcd45ec39a0f2c3b87d980de75a418aa4dd416417e4e55f939a17a2501"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/IndexKeyCodec.cpp.o",
+      "bytes": 579640,
+      "sha256": "53288d00702d71a996b29a81c04bcccf06cdb24557891e6b9098d9f5e0a07830"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/InitialBTreeBuilder.cpp.o",
+      "bytes": 931296,
+      "sha256": "6095cd017e86642b09f5701482e8e5fb0959ba3f80a931f9c3a2399db7460720"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/NativeBulkRun.cpp.o",
+      "bytes": 3235000,
+      "sha256": "176ac5a885a8549f06d676e979291493fbad241cf96803e6c4a283bd14d49601"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.cpp.o",
+      "bytes": 1522888,
+      "sha256": "053c681c28dd4022c9fbdbd3947fc18511a1990fc30acba6e48bec9888f00d3f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/DerivedObjectReachabilityReclaimer.cpp.o",
+      "bytes": 2243768,
+      "sha256": "4a33b59416dc2bb34b70fe9312b310579b73212da726d72270ccab5ff1614e26"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/LargeValueMaintenanceJournal.cpp.o",
+      "bytes": 681688,
+      "sha256": "55a845a007ab166e1a90c42efca9a907c1b0c9772a5dd3977689589479f3c9b7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.cpp.o",
+      "bytes": 4661944,
+      "sha256": "ca141c94cc9f6a647c0638e233fb20d6337e91e3a5c5fdacdd1ddc3e62cb00e2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineScalarIndexMaterializer.cpp.o",
+      "bytes": 2379056,
+      "sha256": "de922e1fdfda3a5c4ee04d984cfc10ce7d9d72fee75026ee5ea76f1feccaf620"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyQuality.cpp.o",
+      "bytes": 569368,
+      "sha256": "cedf64acce455925c47a6f7d244a06ebcd3544ea33d114a582fd5865e715c4a2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyRebuild.cpp.o",
+      "bytes": 1334136,
+      "sha256": "69ba6d959baad62ed44d375df3186baf9b3acf649a76da9c2b8ca33ac84a7af5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorBaseRebuild.cpp.o",
+      "bytes": 3116984,
+      "sha256": "1be794a0415abc37b73493504a1137396b8b943c01e9861bf95de0a24969a31f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorPqRebuild.cpp.o",
+      "bytes": 2500824,
+      "sha256": "70841d34cf7cbec56c7084f1eee1526392f9ba24504dd7411de65815741866ee"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableCompactionCoordinator.cpp.o",
+      "bytes": 803464,
+      "sha256": "3098fb9a0a56ee6f6f4e282db9614496902b0a76626cd8d69d948e92dad8924d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp.o",
+      "bytes": 7609144,
+      "sha256": "02ea27de933b10be96c9235cd1c0956dfebade1e41a6003fcf4c859e2a891815"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableMaintenanceLoop.cpp.o",
+      "bytes": 503256,
+      "sha256": "05d4619e2ccc29fec475234b100f9307412889ed3d6935e4170b368d62030d32"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableMaintenanceService.cpp.o",
+      "bytes": 1216872,
+      "sha256": "2b13ea0f0a87b15f28e5f637201057dfa3c3e35d8c905c7cf4b6219f41509a2d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatablePageCompactionScheduler.cpp.o",
+      "bytes": 229192,
+      "sha256": "02be3337ed3abc43f494532d8e84469f83515c41067d4897962311c403cdd326"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableSegmentRelocationScheduler.cpp.o",
+      "bytes": 247432,
+      "sha256": "6347eaa4fc2353c624fe6810ffeebb440f77be8e973edb5e6faca071a9f0d973"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorCodebookReachabilityReclaimer.cpp.o",
+      "bytes": 1369728,
+      "sha256": "26e693b76bb4682163fcad5ff7837f7515bd1fe1f8f13bb7c92ba88bf252ab3d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorIndexStateReclaimer.cpp.o",
+      "bytes": 638376,
+      "sha256": "a6500a584310d6c6d72b4a39a9267245afe7f4c138347182f5c1ada0531f4a0a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorPagePoolReclaimer.cpp.o",
+      "bytes": 735216,
+      "sha256": "6528f27d75c8105a6119ae77b8a1ba6504c3050ef53e9a721bb04c3aee396cfb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorRawReachabilityReclaimer.cpp.o",
+      "bytes": 1621056,
+      "sha256": "a6271d8680939557f39bdd27d26d33c1b93085d4950afeb4e62ebbe7ab15bbd0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/NativeStorageAllocationCensus.cpp.o",
+      "bytes": 542680,
+      "sha256": "026a10649f0b0717a1b79a2ef7387e4e46417e1d6a9e773ac0e22c4a9050e6e4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/Catalog.cpp.o",
+      "bytes": 1007520,
+      "sha256": "bfbdb197fa0fa23d5396fff85bdd5c17d78850ab4c1fe9e312bf138ff17e2a96"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogPage.cpp.o",
+      "bytes": 559560,
+      "sha256": "ead4abbd47dae6a7456c4c0f1852d8b198779c37af66e99032d88e4340cd4759"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogRadix.cpp.o",
+      "bytes": 304368,
+      "sha256": "5deda2db011128a749894b3c4878b8f9ee2972c3a2991fc08165964a81937eda"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogRetireQueueReclaimer.cpp.o",
+      "bytes": 646104,
+      "sha256": "a50de5802756ecd76dfcd2e19f017a7ef326fdf511095adee5814831ad89a97e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogSegmentRelocationCoordinator.cpp.o",
+      "bytes": 297024,
+      "sha256": "cd4f871fed369b7912f519d0d483665acc975be1cec402e044c630cf3ff8d005"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogSegmentRetirementCoordinator.cpp.o",
+      "bytes": 628768,
+      "sha256": "42aafd101bbd92db5e004b622a67d15bf481facbc957cd6cd30a9b90655ae2cb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/CatalogTree.cpp.o",
+      "bytes": 1426072,
+      "sha256": "2ed66c53713f3c6c4b28fcdbbc02d1550dfe2604c01e3ea533edbac541a5b28b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/LocationDirectory.cpp.o",
+      "bytes": 3577152,
+      "sha256": "686887c2ed1c9934dcb3e7a496702c881095bbf5a838d53968d2ba45d371278c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp.o",
+      "bytes": 1088288,
+      "sha256": "0d7bdd5cc7186a546921fc189189f8b5016de26901b0e82e78984e3447a08b36"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageFile.cpp.o",
+      "bytes": 2066984,
+      "sha256": "bceafac1c886e81ec0676524190a0dfa27bced19f43e5e8bd0101ef3dc2b9f69"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePool.cpp.o",
+      "bytes": 2314456,
+      "sha256": "bd33dc88ef692652aa9dd426fadf9555782387c816ad44b7c4d09df4a0138721"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageRoute.cpp.o",
+      "bytes": 326144,
+      "sha256": "75e12f40fe6063d21a44d587edddd29830b1ecdf9494b268ffb9d3fa4f12399d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp.o",
+      "bytes": 3093120,
+      "sha256": "38bab626aaf6046cbb6d2b1464b2bb4a274da6014edc96fc748c0a34f008c35c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPoolOwnership.cpp.o",
+      "bytes": 778200,
+      "sha256": "974363441a4b7cd7d063acfa439d0f72d92101b40146500c9e578f57764f3410"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataReservationCoordinator.cpp.o",
+      "bytes": 550920,
+      "sha256": "f5d806b14d57baf15fa67da80729d39d29dfd6a30e73283139218292ff0e809b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataRetirement.cpp.o",
+      "bytes": 203584,
+      "sha256": "f072c443f7c9f187eec66e64c17f037a980538f8b60c7aa567df548619b54b69"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp.o",
+      "bytes": 992280,
+      "sha256": "16f119c122434ffef228a98c044eaa26d630c8ce1e3dfc3f0bdf6d90021aeb43"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataStoreLifecycle.cpp.o",
+      "bytes": 296648,
+      "sha256": "4a3866b293489fff6324f67fe25e38866e9112597fe6a5bd892aac006e4cdcd0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataWriteBatch.cpp.o",
+      "bytes": 1746240,
+      "sha256": "fb7ffc5a31202a5f2d410ad5738f0fe7bbf734c0f3ee4c66b8c0c73b689e3978"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/PageDirectoryBootstrap.cpp.o",
+      "bytes": 201928,
+      "sha256": "5c9daa9becff03b0bc2593b6a380620b661ed1a58ced7b8f8f207b51c0f70cae"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp.o",
+      "bytes": 6088368,
+      "sha256": "2d9ace30741010406e564ec9d3ec5c36a94d0f298452948e16678593c8bc9f6a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp.o",
+      "bytes": 29378072,
+      "sha256": "ae3272ad9be5025144a521747426bb352d01f4b9ee6c2c9063b513d522fd385b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp.o",
+      "bytes": 406256,
+      "sha256": "fc2024da2e8e74a2229f9cdc446d7c44e527abada80b98db65fbef56787739fd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVector.cpp.o",
+      "bytes": 1371648,
+      "sha256": "ac62d529a18e98c9b5e28f723f10d1e83fe3be0c9b91f55e31caaaf435abb09f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp.o",
+      "bytes": 2334568,
+      "sha256": "152fc9f975119b0efa787f4ec63374239be8b19d2abf6254495c97aba8b24670"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/StateRecord.cpp.o",
+      "bytes": 267336,
+      "sha256": "1fea0d51a274c004a8ef076118407e01365d0115e02f612c81bfa7bb8f8d83fb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/StateRecordStore.cpp.o",
+      "bytes": 583488,
+      "sha256": "2163c73d77fd947482630a08978049a07a4c84c4e1674214fbd30e03d63adfe4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreNativePoolRecovery.cpp.o",
+      "bytes": 643928,
+      "sha256": "122112467b8ffbdddcf8576acf768046f4b8aee41a956e4e44f3faabf7bc7122"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePoolAvailability.cpp.o",
+      "bytes": 133712,
+      "sha256": "7ef818b31b3f60d28ee8ee5cdc375363916e326b0c07911977a1bfbf77053e83"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreNativeJournal.cpp.o",
+      "bytes": 126168,
+      "sha256": "3b00fb945fe1ab699d31f8435844bebcfdce141d4a3224e2bc078d523f118cfa"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreStreamedAdjacency.cpp.o",
+      "bytes": 1573936,
+      "sha256": "026dd70ee6c5988e67b737308a6884620177f37e30305f6069a771a213e64338"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/MetadataPagePoolRetirement.cpp.o",
+      "bytes": 342912,
+      "sha256": "febc3c603c54b394478e2e59f32553a87711106385e5b376121d9426cd020159"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp.o",
+      "bytes": 19846912,
+      "sha256": "8c33496668c94c5211b86d45acebd5916f867bf143e80cce66ee75334f0f1571"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/GroupedPropertyRoot.cpp.o",
+      "bytes": 2516736,
+      "sha256": "0812d69be637b53a4f303702d0a06118f121f0cf4f2b1dc9b0c1dd0f7e1511f8"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValue.cpp.o",
+      "bytes": 633896,
+      "sha256": "5223dd95737a8bbb86ca0fd53b1ecb3ee1971ef189e08aaa19f7029ce0b3d6bf"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValueStore.cpp.o",
+      "bytes": 4574976,
+      "sha256": "c69a88247e21fb15e3110343220eaa674515b16e0d98051ac11caf21c448d6a1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyCollectionRoot.cpp.o",
+      "bytes": 2440080,
+      "sha256": "a5e8c4eeb1ad4bd42ecf98d44e9023bf0474d764398aab1ef0cbbbfb9986af17"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyCollectionRootStore.cpp.o",
+      "bytes": 6383608,
+      "sha256": "f4602d242254098853afbf0537ad6a4777c6a66a5c3f3f86ead186667a50d8ad"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyValueCodec.cpp.o",
+      "bytes": 2640368,
+      "sha256": "feb3053b097f06a05ba4fd06946d97e71a8327e8ba73a0bc2752fd386a8c6fed"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintDefinition.cpp.o",
+      "bytes": 562704,
+      "sha256": "554b5f47a6482b7b4dd002e6ba848416360815ec712a1b0f26c361decd66a76c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintMutationValidator.cpp.o",
+      "bytes": 3722184,
+      "sha256": "42aa91eb96a21d0939623a853341edef18b73f7eb7d2b79b9fb99effe9bd3c54"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintSupportTree.cpp.o",
+      "bytes": 206304,
+      "sha256": "dee4778171924b51ff2a70e4aa31c06774deb3e25733e360440dc5a89db58b85"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/IndexDefinition.cpp.o",
+      "bytes": 566640,
+      "sha256": "604ffa0e499b32bcef2140260c999344763303c64017db020ef0337e9e356491"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.cpp.o",
+      "bytes": 1585808,
+      "sha256": "cfeb18ddca0161c0244ea898a9792df491fa9905e373afac9048b96765ce371f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintDefinitionWriter.cpp.o",
+      "bytes": 388168,
+      "sha256": "b5873e89ed422ac7f28a9291d839a20a721b4bffd5b014bb455ba5efbbfef0ba"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintSupportTreeBuilder.cpp.o",
+      "bytes": 5068056,
+      "sha256": "cb523546e7356ce1e2e060de0758ba24fbc7c08669035a9892b5da51d600e086"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/SystemCatalog.cpp.o",
+      "bytes": 5371592,
+      "sha256": "a4e6ff13fff69a59a34545ee5eded23f1dcb81db6ad248f7cdd34b1870f7049e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/TokenDefinition.cpp.o",
+      "bytes": 219600,
+      "sha256": "5c32c3a5d957245ac39d5fab4d7092e70a3e5eb599f9b00b8a8bc5bc34560ae0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/DeterministicProductQuantizer.cpp.o",
+      "bytes": 616672,
+      "sha256": "c4dad464c9e2f337ca76184a3e122fbf6c9bd2d65c5f8e5b49dca8ed1ebbdd0a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/RelocatableVectorSearch.cpp.o",
+      "bytes": 1596936,
+      "sha256": "8a181c5d2c859b07842268748e4265bbf9d93e1c4cf8fd3db597b2b2ff3d7b13"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/RelocatableVectorSemanticScanner.cpp.o",
+      "bytes": 1076960,
+      "sha256": "743e1429a8c4ef48e1721fc9616e510ae83cd86f55dfafb4228694f305cebf11"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacency.cpp.o",
+      "bytes": 246264,
+      "sha256": "f948e0ed3118fe043f563ba919a27e15fc1ef04b74f6fdde0ed86caa5de82773"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyMapping.cpp.o",
+      "bytes": 1050920,
+      "sha256": "75af13bd9d9ed4081b6f242cf2d82f943e7702ebf2a56ad3054fa6505c21aee0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyPageStore.cpp.o",
+      "bytes": 1259056,
+      "sha256": "7bca4cdbd3201947c13fcc93ceb915410fe1004dd1b660059a1a180e38376719"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebook.cpp.o",
+      "bytes": 161248,
+      "sha256": "d1a6677109e9ed8037ef9fc688c3531aa610e4bd9ef72625af03a348f9bf1f1f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebookExtent.cpp.o",
+      "bytes": 416192,
+      "sha256": "4d21881a4578d562c58ccc21406b354217a0f9c5a3c0c6a0a3481da5d9910eb5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorCodebookStore.cpp.o",
+      "bytes": 1658576,
+      "sha256": "7da89d03bcf6f3b58d484a08ccd44d467d1d892eefff569e508884b12d4c0d4f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorDeltaMapping.cpp.o",
+      "bytes": 1185080,
+      "sha256": "05020e7558951cdb71f4972a49888800567cc03ff913ccc504f46e2029ee09de"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestPage.cpp.o",
+      "bytes": 484304,
+      "sha256": "65db7969c2798d8fea7dead5cd8994a11603d4f9c744dcda517b3565c65ada89"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestStore.cpp.o",
+      "bytes": 827256,
+      "sha256": "5cd9ee134c136b069a259930155ffa32b2a1c41d7a5002925fdc83c951873996"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorNodeMapping.cpp.o",
+      "bytes": 337592,
+      "sha256": "59c4d5f4199d235371a4b7d94ec78787878238d59fe3ba28a0717a26122f1e2b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPage.cpp.o",
+      "bytes": 466328,
+      "sha256": "6339e08bb30f5f2f8ba16269a9a93b31047b165bab0dfad1fd1e8b9c0adb3270"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPageStore.cpp.o",
+      "bytes": 1544296,
+      "sha256": "6c30fe9c35fe3bde29295a940b59207aaadc3f938006e7ab97b4216c1c818b3c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPqMapping.cpp.o",
+      "bytes": 1038200,
+      "sha256": "901cfa690f8710c12f865de890e15d5717b1c1b09382eb03fbe23f8dcf3eca42"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorSemanticCodec.cpp.o",
+      "bytes": 445176,
+      "sha256": "eaddcb798eca53cd4b4c4ef1e84c57f1f35a622c82d9973b21add8db17ce4127"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/lib/inputxx/tests/test_Session.cpp.o",
+      "bytes": 1992832,
+      "sha256": "465f8e27eabddc7ea7b91208a086372e4a908eed2d036ac6033dd65ac854d770"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/lib/inputxx/tests/core/test_History.cpp.o",
+      "bytes": 740352,
+      "sha256": "1b034fc6585842f6f91cf1da7a6bff6448aad12f0124f27b9f4875ad978a4a2f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/lib/inputxx/tests/core/test_LineBuffer.cpp.o",
+      "bytes": 1082872,
+      "sha256": "0b82f372364b5711f6a7d874820a20a71cecece95dbc83db85cd79e8d06b8f68"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/lib/inputxx/tests/frontend/test_Editor.cpp.o",
+      "bytes": 2393240,
+      "sha256": "75329c790a2c6aa7e71e51b8bd4e51d3eea3cfa20b3790d151baf8b53bdddccb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/lib/inputxx/tests/io/test_Terminal.cpp.o",
+      "bytes": 500480,
+      "sha256": "24d13aaf23dce5f884965a16e5ea68dca3ccc2f71f52bf9cae4c98533a14401d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_BugVerification.cpp.o",
+      "bytes": 2177408,
+      "sha256": "44e2160f8c5b699f1ac1bbef3867d55a640a1d99b4158d8d96d7a52eac1aaae9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationAggregateProjection.cpp.o",
+      "bytes": 2268640,
+      "sha256": "5e46cb633b12fb3d421c4a30d3bcc65c1db3b843b8e52c01848b0d671b819b74"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationConstraints.cpp.o",
+      "bytes": 1707120,
+      "sha256": "3575ae3a7e2ffc6d80cdfbdf25f73121e732361d0f4a9b1a4eef50d736c8e4f7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCrud.cpp.o",
+      "bytes": 1358600,
+      "sha256": "467d34a4a3464c9f731148c89079b511b942e1ee524973a6f612ea2b0e35a95c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherAdvancedFeatures.cpp.o",
+      "bytes": 2138120,
+      "sha256": "5f7e66bf4fc464af32fb220a79da0b0792ad0aad25adbc3a3c42c63e272914e7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherClauses.cpp.o",
+      "bytes": 2485296,
+      "sha256": "80738eaf6cd39f6e0e6802ee0c71b4698c63290004efe7829f5596922b8ded93"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherCombinations.cpp.o",
+      "bytes": 2534328,
+      "sha256": "74c88316aa838e06570ad5bbc53a328c2922d8e83439055e960a1f2789bbbe41"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherExpressionDepth.cpp.o",
+      "bytes": 2409016,
+      "sha256": "13966caf8dffd4681320142282eb3da8d3cffd54b8ca8698efbdc4a8496304cd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherFiltering.cpp.o",
+      "bytes": 2441144,
+      "sha256": "c00cb0364f4e4b7fd1d829630d824dfbcafcbee1995c4b72cf57329ce59a8a03"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherNewFeatures.cpp.o",
+      "bytes": 2010160,
+      "sha256": "ef86faa92062cb424bd17f9d2ab9145bb011115f41ad9d7d0d16d1e9b5dcbb2a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherPatterns.cpp.o",
+      "bytes": 2478496,
+      "sha256": "47859c8c290f57de5fe9edea1ffbcba502bd4ad32ff670208e0789ece341c5ac"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationCypherWithPipeline.cpp.o",
+      "bytes": 2355000,
+      "sha256": "7bf9fd5822b51fc325dff41f2d7e37531e4abc5536d5a064c4c331d5a67e6e9c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationDatabase.cpp.o",
+      "bytes": 1328592,
+      "sha256": "308705c29a754de2d07c6b88a72669e8b2449651e02592be5ae81656b1fb6932"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationHeterogeneousLists.cpp.o",
+      "bytes": 1721296,
+      "sha256": "3694ff5e7ed70a8f9f2ecd265017d189b9b895f8833c0b24d43193e051769c65"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationPersistence.cpp.o",
+      "bytes": 1331160,
+      "sha256": "3cb49278882b2c1523b76dc13a2a20973fdb030336ec0509a898afbba840377e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_IntegrationTransaction.cpp.o",
+      "bytes": 2778392,
+      "sha256": "83e1230d36cf13a7072e70d1f2a53caa1adc344c538dee52df6ce4893f1c8586"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_ReadOnlyTransaction.cpp.o",
+      "bytes": 1537144,
+      "sha256": "a4beedf71da75f269f59d8cb27547dd9644fe8ceed86477877a92fc2bcabd7b9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_RelationshipExpandCountScan.cpp.o",
+      "bytes": 1695296,
+      "sha256": "98bb6df56f53fbd128a325a3f221032bb411b43509dac7e2625cd3ca75f6df81"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/integration/test_VectorizedNodeScan.cpp.o",
+      "bytes": 2100048,
+      "sha256": "5ca71031fdcc10806cce5aea6d5e973163236f8b5a94356be6b312af6afdd3a5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/test_main.cpp.o",
+      "bytes": 436032,
+      "sha256": "9a3a223d794c45976eaae7495367bab9f656a12fe4925ef6a66c7db058161928"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiConcurrentExecution.cpp.o",
+      "bytes": 1150600,
+      "sha256": "b5a24a7d229bbd526039e13691a144bda1eac585e6bd81d00e9160318bb3bdee"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiDatabaseImpl_Bytes.cpp.o",
+      "bytes": 1851256,
+      "sha256": "c0ac654ab88db1a3997bf80f696270b37193186d66590091bedd346106d8c65b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiParameterizedQueries.cpp.o",
+      "bytes": 2141536,
+      "sha256": "fe226f21f3fa3a30cff4aad4001ffa2c823da40fa0e9c0969ee6df37ff1b28cb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiPersistence.cpp.o",
+      "bytes": 2741376,
+      "sha256": "fc97db35d3f58a70bd24d39cce97a4e40595b3751c9db607136ca2575d9000e6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiQueryClassification.cpp.o",
+      "bytes": 1615984,
+      "sha256": "18ef3a7080e38496a2313000047ce835f8aba48cfbdd57ea7bd5a1f6e45d9e1c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiResult.cpp.o",
+      "bytes": 2717448,
+      "sha256": "1d3f35c044210f1b243e44110b8e7e2b9470691dbef567c0609d3b33fd094090"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiSequentialExecution.cpp.o",
+      "bytes": 1040224,
+      "sha256": "6bb1f5998ccf97822f6f7d99e99773963ce4853e7ffbac38db1c42c8c72407d9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiTransactionEdgeCases.cpp.o",
+      "bytes": 1050824,
+      "sha256": "799dbd95d28fb0a61ebf260662139c7ba799349aecc75060f9b2086559fc0ab6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_ApiValueConversion.cpp.o",
+      "bytes": 2170648,
+      "sha256": "6f5400d6a281f63994b401e0a986a89a1d90535268c881322e2df82717ec246d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbiAgentMemorySigsegvRepro.cpp.o",
+      "bytes": 860208,
+      "sha256": "910d2ea590bc42a8cbff39895d8d17d96a739c8eb80643802f752a29b9ee1dee"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_Bytes.cpp.o",
+      "bytes": 1162560,
+      "sha256": "16155ba7e61b17d23a906426a443de91b8215912e5dba13bb75ceae366985c15"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_ErrorHandling.cpp.o",
+      "bytes": 1698152,
+      "sha256": "4562c264c55733c3552b1d0d0eaafd618b2a7a48943474837abfab08e465e029"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_GraphValues.cpp.o",
+      "bytes": 1357352,
+      "sha256": "f02143e2e628e618ca5acba17e9ddb9c8976f651425c629e5257f3f9345b2a90"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_IngestRebaseCorruption.cpp.o",
+      "bytes": 1420176,
+      "sha256": "4bd57eaf38f066f35745b4588b68b75ac76450d498861cc3dbe2e89b9ad234f4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_IngestSchemaValidation.cpp.o",
+      "bytes": 672848,
+      "sha256": "5283f43db6b67190efc652adb774d1ade299bd0b2fe0ddcb4f1310932be136b3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_Lifecycle.cpp.o",
+      "bytes": 889088,
+      "sha256": "96a27bab73d76244d54af92d6b5b59f7d25a5bd832cdb04a9f13c0ac658d0213"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_ResultCursor.cpp.o",
+      "bytes": 1304800,
+      "sha256": "6d7c740a1a99b67d471e1a16ec6752de9b9d4117adf93baff4223f0682408521"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_Transactions.cpp.o",
+      "bytes": 1005560,
+      "sha256": "078129afca728c6dc46b9cd462b9a75e96b0dbf11930aed53f978351fd433d61"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/api/test_DriverAbi_ValueBuilders.cpp.o",
+      "bytes": 1305024,
+      "sha256": "5337a62ea768ded7753e742a60f8a344e1c157d3140a7e1fbf32ce3c8ced4a50"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/cli/test_CommandLineInterface.cpp.o",
+      "bytes": 1920136,
+      "sha256": "694b518d99672f7b8148c555bf4c1f65c06a5ea354cfcd07883a513a6d04144a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/cli/test_CypherCompleter.cpp.o",
+      "bytes": 533512,
+      "sha256": "7c16b7b76f3a9d1f0f7f85754f7d9250f02e481f3632df6fe499ac1a0f8f2358"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/cli/test_DebugCommandHandler.cpp.o",
+      "bytes": 953640,
+      "sha256": "7f5610980908afc11aac6784a9b90bdee0aef5aaa16d2ca0e95a429be06ea35d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/common/test_VectorMath.cpp.o",
+      "bytes": 458336,
+      "sha256": "f97909814e5fbf547bed33d33361c6ffc05a1c001e07b9364944390bd17372f3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ParallelExecutionTypes.cpp.o",
+      "bytes": 320672,
+      "sha256": "c3a7c7434626eab40c0c9f7e91c12f4b95f84c7a92d48002da57382aef543340"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ParallelOperatorExecutor.cpp.o",
+      "bytes": 1575368,
+      "sha256": "2848f5b34f7e19394781063f8c554f67493ca2b0696f7ec46f819da52dfb50c4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ParallelScanExecutor.cpp.o",
+      "bytes": 1312392,
+      "sha256": "d465a5ebd5885ea82830f384c647941d2940a5ed223cc73f50937b83f104b044"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ThreadPool.cpp.o",
+      "bytes": 1767616,
+      "sha256": "2cfb717e5f0082fbcc93d6a926268c6b556a5cbd5d715dba31429dbe6b802bb6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ThreadPool_Stopped.cpp.o",
+      "bytes": 1522952,
+      "sha256": "900acaa0a803b18ac5b9eaae2f91672401ca34b37b25c69d421c6279dfff19c3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/concurrent/test_ThreadPool_WorkerLoopDirect.cpp.o",
+      "bytes": 1029976,
+      "sha256": "644b2124e4185f07f9ed29db2a178586e741a038920e733ecb868aff43738e74"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_Edge.cpp.o",
+      "bytes": 1983512,
+      "sha256": "546c06625557b7809f2bcc84ea17cb9246861b86a50ff18ccf14932c193a5549"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_NativeDatabaseLifecycle.cpp.o",
+      "bytes": 2082664,
+      "sha256": "9b3107375d2321013ae94c3169a21708577784571b33f5450d905822c3bb1e49"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_NativeTransaction.cpp.o",
+      "bytes": 2534016,
+      "sha256": "22cf6097bae662985c004ea7fed3830316a9b860de33c05f0c4b337e664039f7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_Node.cpp.o",
+      "bytes": 2520256,
+      "sha256": "efc153243e3c9e2f948eacff6c19391148fbeec691842a974ffd61832b85e202"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_PropertyTypes_Bytes.cpp.o",
+      "bytes": 2706352,
+      "sha256": "e7d72390dbb93f4a63fb7e4bd55b3c697093a9ba45c1697881fa77eec0713ab3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_PropertyTypes_CompositeAndHash.cpp.o",
+      "bytes": 2537952,
+      "sha256": "c0da5cb066b974df14e616496fd9d31979ce94d9f81ca0bf36c5cfc0a228b08e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/core/test_TemporalTypes.cpp.o",
+      "bytes": 1533816,
+      "sha256": "46986d0b9c1cfcbf283767bedab4aca27ede099a9be9ce5eaf204a464e38a44d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/debug/test_PerfTrace.cpp.o",
+      "bytes": 1059072,
+      "sha256": "28f560368a5f49e10b618a00965f2a8518f295497d36799f551bcf7de2ab8f83"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/log/test_Log.cpp.o",
+      "bytes": 1028800,
+      "sha256": "c9aee142a282b2e0b6e974db884620b84d8c7d0504d6b008f31304f2572e98ec"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/test_ExecMode.cpp.o",
+      "bytes": 458784,
+      "sha256": "dae84866ce2fbd264e1983273853a412206174de4fa91b43de0c93c1cd3f01d2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/test_QueryGuard.cpp.o",
+      "bytes": 629296,
+      "sha256": "178e49c103f1b43ef088f6e62f67c2154f84b3c92ccf986c7c09b7c6e33b26f9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_CancellationCheckpoint.cpp.o",
+      "bytes": 286256,
+      "sha256": "9ac954cd939b19b02613fde696b75d4ac6ba2d89651e8040e12302dca071bced"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_PreadHelper.cpp.o",
+      "bytes": 677272,
+      "sha256": "dd473430c8ffe20e017ba2f14379c6b9355c1a7e24f79cfc9085313721a21bb5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_PwriteHelper.cpp.o",
+      "bytes": 763640,
+      "sha256": "20bd9ba8cf2811f6101459ddf20c2682faf359e8336d88b20ab9aa910043263e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_StorageFormat.cpp.o",
+      "bytes": 1287512,
+      "sha256": "9e693b30d78e7b09bb77b8e384b49da94156952c2b7ef855e44d26b2f9dbc686"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/utils/test_ChecksumUtils.cpp.o",
+      "bytes": 677520,
+      "sha256": "7b704fad3bfe23d26b5579b542f37d8b92cf7161dab7a3c383b0b23913e31b2d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/utils/test_CompressUtils.cpp.o",
+      "bytes": 1281120,
+      "sha256": "4be244dbd97bb79d396b72838abbbbd3097a640889873a3c584156575d40e41c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/utils/test_Sha256.cpp.o",
+      "bytes": 444208,
+      "sha256": "e833856f942a03e74d9555a3f05bec4a1b6b5ea6d42b35e7791d816316011d83"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/utils/test_TemporalSerialization.cpp.o",
+      "bytes": 2714960,
+      "sha256": "641a2e5914f55876e4077607cc61edecaa5fac9e2ed12c70e7512366d2a5f8f7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_QueryEnginePublicContracts.cpp.o",
+      "bytes": 1940832,
+      "sha256": "45f1fd8f43b15349451db532d3d93e109964294c79875b16ee6d4aa10cdbc58f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_QueryEngineTypePlanning.cpp.o",
+      "bytes": 1096896,
+      "sha256": "89ec25b5533704833b0386fca6f72deb6a91c5f40258633585394545d8e3e21d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_QueryEngineAnchorPlanning.cpp.o",
+      "bytes": 859400,
+      "sha256": "2c789fcb7f425dea453ef7c7192b9e3269944d7cfb5a861a2d6bc0ea79293696"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/cache/test_PlanCache.cpp.o",
+      "bytes": 2587552,
+      "sha256": "52f2191d27f36499cadb73e3249327283a4d9283b21850c9c63f4f3aeb35f762"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_BoundSlotRegistry.cpp.o",
+      "bytes": 1627696,
+      "sha256": "ce576bdc30d62208032f8ddd22c08a0bc6b32ae334382518e00b5acc7ef4c3c1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_BoundedBatch.cpp.o",
+      "bytes": 1565792,
+      "sha256": "81c5ace62d18ac61748b892f368322a488f0c21a638bc9697e78c54632dd09f9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_BudgetMemoryResource.cpp.o",
+      "bytes": 1799832,
+      "sha256": "1be4a710a52abcd2882bbf8602c5f13441cdcb4ad07d7c4a59e2395e1080764e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_FixedWidthBatch.cpp.o",
+      "bytes": 1344136,
+      "sha256": "69ea5a5da815a78ebd73a4fa5072d94ff456dec49bb2fc47f1ebce495e97cade"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_FixedWidthColumn.cpp.o",
+      "bytes": 1201320,
+      "sha256": "bce3c49aa70a4089ed0896bed41972ee945281fe1297e49ad1bcb8456a9fdb87"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_GuardedIdGather.cpp.o",
+      "bytes": 664256,
+      "sha256": "3939840800d26ec2f37c56e6f40017c2c522d4fe89da8ae77ff028e5cf561593"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_LogicalPropertyPredicate.cpp.o",
+      "bytes": 1787016,
+      "sha256": "bb11c9fe82917b47efa530bffbda9d771479cce8a92ff9e503e2d4db94c7ff65"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_Record.cpp.o",
+      "bytes": 1459896,
+      "sha256": "4aaa1f2d28de4fddf8d4d087c489a0b805a63c1c959f6bac26df7761455b2c5b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_SelectionVector.cpp.o",
+      "bytes": 541832,
+      "sha256": "97b9faba27196a871cd667fdbb4b26cda293a34822fadcf014ddbc41a1b1ef44"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_ExpressionAcceptNonConst.cpp.o",
+      "bytes": 1734128,
+      "sha256": "56b732a50052bc73e86f257aac3d03b73346ba6e688b25e0cd6cb3c813cce1bd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_FunctionRegistry.cpp.o",
+      "bytes": 2026440,
+      "sha256": "e4c2b52231e7b168cf83f1d8840eaad2d71b9e9826a92f39eaafe6dcbca5475a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_FunctionRegistry_TemporalFunctions.cpp.o",
+      "bytes": 2262352,
+      "sha256": "1b9ab4808a0a26a9871f0aa202da20d18e7a7b36c92ab0067fda09974a05b95c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_FunctionRegistry_TypeConversion.cpp.o",
+      "bytes": 2249464,
+      "sha256": "dd7f3151d24d4e1b2675ba83a860718532cfc149597bf12a4f0011cc3032919a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_HeterogeneousLists.cpp.o",
+      "bytes": 2475224,
+      "sha256": "083147aaa19efcbfe4409699e27b971c064499abcb7289ae79ab49050d872581"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_MathFunctions.cpp.o",
+      "bytes": 2056664,
+      "sha256": "ebf6a91eb1bf297101e192ba3f0cea604a1b813dfaf0a220e3b38933201b59bc"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_MathFunctions_NullHandling.cpp.o",
+      "bytes": 2178488,
+      "sha256": "306d0e944e3b6c3f4875414b2ac0f8d9db2db2386b795a90a8699313022041b2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_ShortestPathExpression.cpp.o",
+      "bytes": 1579832,
+      "sha256": "3ad16f4188f6280ce364ec8c4fe3727f8caad40c1f830de28649487b0a4a0cfa"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/expressions/test_TemporalFunctions_Coverage.cpp.o",
+      "bytes": 2141096,
+      "sha256": "a42da5222cace451a531e4a63550116d9d3e76573a58cf18d62c61c2991baabf"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/gds/test_LogicalProjectionSpecCodec.cpp.o",
+      "bytes": 2562976,
+      "sha256": "248757700248a0094cc3b876a513691dac2ebe11e1a600cf403629da1ae2e1c5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/ir/test_SemanticAnalyzer.cpp.o",
+      "bytes": 2124200,
+      "sha256": "84580c313d4576b8bda48350cdf6f179f140782deae86d7e5e99f3f29a041793"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalLimitSkip_NullChild.cpp.o",
+      "bytes": 2747376,
+      "sha256": "c1ff4c448c76dfbd7bcfffe1e864ce409d98ec9f387869373c65e1ed4c1f1225"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalNamedPath.cpp.o",
+      "bytes": 973656,
+      "sha256": "0f69ecc1c9d9849960ea8db558fd4e6d7c9372431927a054c33c1f667bc450ea"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalOpTypeToString.cpp.o",
+      "bytes": 565704,
+      "sha256": "d4d2842b7ef2982bdd975b4ddda5548b57c7f2b1695bd9ecf7ef4d16a2a17efb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalSingleRowAndPlanPrinter.cpp.o",
+      "bytes": 2697184,
+      "sha256": "65e57a4454312b5feae1774dec6fbf1ff95d3c1100a306dd5cac6bb5de660d00"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/planner/test_LogicalPlanBuilderFlags.cpp.o",
+      "bytes": 279968,
+      "sha256": "3face4c5efca139f6a16e6c4fd8cc8937e53377c59cb9662e19dd1558747ee12"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/planner/test_NativeProcedureRegistry.cpp.o",
+      "bytes": 810328,
+      "sha256": "b49d75fb6390e6e9c64d02939b726813c3b6b62f3c5b69eed3cf6dfffd3a5ec8"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/planner/test_PipelineValidator.cpp.o",
+      "bytes": 552336,
+      "sha256": "19a6601e9004a45b7954bdb0d4ac3339fd39253c4c7c7ff5cd2b3fcf0d723f31"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/planner/test_ScopeStack.cpp.o",
+      "bytes": 868712,
+      "sha256": "d8a4eb09d36d86b76bc64779f1e94b533bc146b4855ac38516bf9271030c527b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/operators/test_LogicalTransactionControl.cpp.o",
+      "bytes": 682272,
+      "sha256": "c3f321a23787dff636d123baba273089368ee6fd4209a7922ba112b39318da03"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherASTBuilder_ASTExtraction.cpp.o",
+      "bytes": 1626424,
+      "sha256": "4bb6c15a8be6f8cdad04d2e288c29bb8b82e1aaa3b2d2ce7efb9200fb28e7f4d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherAdmin.cpp.o",
+      "bytes": 2679016,
+      "sha256": "c4b88aedda96535293e5d3571d80084da329d371e367124391eb80f0f1ab97e6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherAggregateContracts.cpp.o",
+      "bytes": 2425080,
+      "sha256": "736b3d7bddb66d486b503b36d5472b99e65bb17e1f5d1ffdeabf692f98d38003"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherAlgo.cpp.o",
+      "bytes": 1985704,
+      "sha256": "60ba34b910957bc9d7452d115dc099880c50cbc2d19e9d4b000a5a09adb6b0c1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherLogicalOnlyParser.cpp.o",
+      "bytes": 580048,
+      "sha256": "d897851686fd9a478f29b0f730248b9f1fc8fb21a6f592de6d3c7210b2f6c25a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherParserImpl_Reuse.cpp.o",
+      "bytes": 545944,
+      "sha256": "495d0059f1b48be41e6d32db4e7ad2c66a52c45fbb264e7b61e826606d6cc38c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherTransaction.cpp.o",
+      "bytes": 780240,
+      "sha256": "f08c6ed2b46a56e67d9eaf0267d56ab40fcbdfa68324b399ce23f69c181403d7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherWithAggregationSemantics.cpp.o",
+      "bytes": 1842128,
+      "sha256": "55a531d7c46da6ec901e17cde04af216d7941f03acd215a217b72bb66dfd6f5e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherWithSemantics.cpp.o",
+      "bytes": 2060928,
+      "sha256": "da913be1e9ca6f20bd20caacfb8ca7a7d2ffabaafc22b19d56e89daf93e55710"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/syntax/test_SyntaxAdmin.cpp.o",
+      "bytes": 595936,
+      "sha256": "d40e9fe1bb1d2cbfc6c2051503c1ca01d9e658fa544f77eff35f927bbcbd53b4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/syntax/test_SyntaxAdvanced.cpp.o",
+      "bytes": 631760,
+      "sha256": "d8a2f61f04ae455576f9315a6bbf557684b77f0c5c2e2b67bf2f29254f3d889d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/syntax/test_SyntaxBasic.cpp.o",
+      "bytes": 556280,
+      "sha256": "5a5f59d066a2a648a921290200abc954234581af7a9a86fc305e05efa8f87d34"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/syntax/test_SyntaxVector.cpp.o",
+      "bytes": 488440,
+      "sha256": "dbc57f3217fd166e919a82dba2bb732f0e2aed2e025be999d63a1b9de3a89da0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/adjacency/test_AdjacencyKeyCodec.cpp.o",
+      "bytes": 543104,
+      "sha256": "ca0c9429239639ad8f012bd3ffa933d1a4570c44426f59b73dfe6f8c3066c9db"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/adjacency/test_GlobalAdjacencyIndex.cpp.o",
+      "bytes": 2464752,
+      "sha256": "619aca6672c482a7970ac3d3238eb8280edd15724e85ddf1fb7c26d92efcb58f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/adjacency/test_GlobalAdjacencyIndexCache.cpp.o",
+      "bytes": 1170584,
+      "sha256": "55781021f7d02fc375bb4655bb166419de97c050981cb3fd71920a0a4c204ab3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/adjacency/test_GlobalAdjacencyMutationMerger.cpp.o",
+      "bytes": 651432,
+      "sha256": "54b67d0e32755e533dd9d07759b8e6ddcc9e364d287d027de9a3eb0a62224b8f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_AllocatorDirectory.cpp.o",
+      "bytes": 2574080,
+      "sha256": "5230913a486f602f661062b93e69deb1bba08e412ee6c9028aeea066929c4500"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_AllocatorPage.cpp.o",
+      "bytes": 870728,
+      "sha256": "9c1cc289761ce1a9cb67bc68404487c9c0e5b1e155b6fca5fbcbc83a5240f6b5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocatorTypedIO.cpp.o",
+      "bytes": 1114328,
+      "sha256": "5f875a27cfe9f036ebb5695a3d1e3ade0d5883c3878dd9ae506924e2e4e60d19"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_PoolPreparationBatchPrototype.cpp.o",
+      "bytes": 824248,
+      "sha256": "12206ca94fcdd93023732ffbf792cc9430562fef46abb3fba948ad3c6ccbb5b7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_SharedPagePool.cpp.o",
+      "bytes": 890168,
+      "sha256": "294c594215b83bc9879aa5844cb260a87d99bc5550b542874e5e295699d90e9c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp.o",
+      "bytes": 1825928,
+      "sha256": "39c8b1863cbe764f3ebae4e8d137fe03d992b70602a650718b2aa7bea763028e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_SlottedPage.cpp.o",
+      "bytes": 2070744,
+      "sha256": "44c4d25bfbe78b4feaca0de10c5231ed09291b335d8de9225c5e7de6bbd28f1f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_PhysicalSegmentAllocatorEmergencyReserve.cpp.o",
+      "bytes": 1263480,
+      "sha256": "db8bea674cae7a900e5cee10810f019a329472be07d87c4712ce86143a08a2ac"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatablePublicApiAlgorithms.cpp.o",
+      "bytes": 2650288,
+      "sha256": "d45cfb0c8de4a6f5105c02c15dc627f2265d67e1f2067bc9ee808f1e0737f620"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendOnlineIndexBounds.cpp.o",
+      "bytes": 1854720,
+      "sha256": "63e9085098a3a04bc0d42c698f77b6e8db3717bcac167ab064b5e35ff5e82676"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_LifecycleContracts.cpp.o",
+      "bytes": 2656752,
+      "sha256": "c82731b990194203a0e48c8f991879a0a0ebb6943806c9586b9b9082f0b04e0a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeAllocatorFaults.cpp.o",
+      "bytes": 2568880,
+      "sha256": "14e2ad59b3b8c29804f928799993d20c42cf63a3b0c1f78f57ef61c55b106a28"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableLabelAccessLocality.cpp.o",
+      "bytes": 2747648,
+      "sha256": "937ddfd7710a3b14f11872be0e0bb853f97a96a55d987e70fbfb4bd9b6087fae"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp.o",
+      "bytes": 2609768,
+      "sha256": "535ea452f29291d56c233f520f36946dd2b59323bfb196904f2cdc51f2042115"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatablePropertyCohortAdmission.cpp.o",
+      "bytes": 733496,
+      "sha256": "277415d41eb5132dacf03a89309405d3a8138de69a2ee74279aabfdd25210e69"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityLabelSet.cpp.o",
+      "bytes": 948576,
+      "sha256": "42ba301fc6d41e7abb5c231df07b7734ee0b08b58e866b5411164b61973aaac1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityLabelSetStore_PublicContracts.cpp.o",
+      "bytes": 2708904,
+      "sha256": "ae942d4dcf179a49816f2d218be4055775a3ff3c3825a00ab2f73ea435f570ab"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityPage.cpp.o",
+      "bytes": 2560440,
+      "sha256": "f37bdbe5aa5d4a78d6b210e73d724eb7a8c9440937b8638c89863feb09966d90"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityPageAuxiliaryMutation.cpp.o",
+      "bytes": 595344,
+      "sha256": "d8ba5cdad4f19a772dd0c37a0bbd1d960b50a91bfd681b95ff5db9c0780240a0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityPageStoreSortedBudget.cpp.o",
+      "bytes": 1212080,
+      "sha256": "3b158e967d4006fec1f3b511b29f98efb6afc677f5e36e2089d20cd625adf343"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_EntityPageStore_CheckedBatch.cpp.o",
+      "bytes": 1221976,
+      "sha256": "94e9e9a3dc1df145e616ba77b8cecfa267fb72167c5acc08124123abcd68be3d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgeAdjacencyRunBuilder.cpp.o",
+      "bytes": 2330808,
+      "sha256": "8e6c04d7c88aa39dec9a13f17af36046a58e71ea08de161c0ffe59fd8ad29c13"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgeEntityPageBatcher.cpp.o",
+      "bytes": 2371336,
+      "sha256": "1fea094b77c6bc41aa4b7174debea5aaa88d65eb9bcc5fcd109313433f5e2897"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateFamilyMaterializer.cpp.o",
+      "bytes": 2580856,
+      "sha256": "f0310c47bc092f27ab83c349c2eb5010cb9d6da5f8a52e19c2c8d4d417230395"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateRunMaterializer.cpp.o",
+      "bytes": 1555672,
+      "sha256": "a8bb7c1c9903d228c1181dfcc8564fced7ca309d571ac0d70b8f7276e7cad061"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateRunPipeline.cpp.o",
+      "bytes": 1447552,
+      "sha256": "f22ce35c1e2de2542c7a622b0ef0fd95bcb4438987443b537268e6a1cb755a00"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateRunPipelineSizing.cpp.o",
+      "bytes": 304648,
+      "sha256": "2d9a7ae3de91afea52383e7088db524b3fc2d2d8bda96e72c166badcbd4c4feb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateRunSet.cpp.o",
+      "bytes": 1687984,
+      "sha256": "287658ba36a4ebb847a4314313a2e283d74514b0c08cedfa0cc9c41980668ff7"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgePrivateTokenResolver.cpp.o",
+      "bytes": 1983360,
+      "sha256": "1cdccf7d1ff649171bc48aba09bb11f5f3dd968a47e32f0449aa9f1ec8ae6ce4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgeRun.cpp.o",
+      "bytes": 2618120,
+      "sha256": "0ee99868f5034e9c6ae86a2b31e9e150c6300229c011ef7d18201c0bbea85060"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgeRunReducer.cpp.o",
+      "bytes": 1399312,
+      "sha256": "45262bf040bf9ddc025411a0349436acf5f569e8357e8eed0e7f2b4e160786f3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeBulkEdgeTokenRunBuilder.cpp.o",
+      "bytes": 2280736,
+      "sha256": "36aca16717246354fc3f7e28012a3f1b392055ddb936456b9951ac97a6ada56e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_FreshPoolReplacement.cpp.o",
+      "bytes": 1498696,
+      "sha256": "88909c8a2fe9c8b6ef555f7a3e05eecef898f1bc01aa7306f0a6288bd58cf8ae"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_LeaseRecovery.cpp.o",
+      "bytes": 1789088,
+      "sha256": "9dea7f3c51e59b83762f01b6baa77548d070d0cb77936653e3dec6cd85034cc0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeGraphWritePlanner_SharedPoolFallback.cpp.o",
+      "bytes": 1922840,
+      "sha256": "f3c3f7051b04fcdaf333fd1c38be39ba79b2258e4352988f7c31f2b728440fce"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphCandidateLayout.cpp.o",
+      "bytes": 431944,
+      "sha256": "3eeedfcff4692a30045a5773e71c379384d5dbc31bdac2e3dd346f966b522689"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphCatalogIndexPlanner.cpp.o",
+      "bytes": 2191536,
+      "sha256": "6e123f22edbb05d9e437d4f65e8c36783bbf5a98f7746f437cbff1d0d29ed449"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphDeferredPublication.cpp.o",
+      "bytes": 2326280,
+      "sha256": "a01c817753828ad8e814db501e5b783a375947e7335b78646c7d15662136e24b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphEntityPageMaterializer.cpp.o",
+      "bytes": 1872624,
+      "sha256": "6862fe27c3508a81cfd3ef99cb0ad978359c16ae216beb601ba8bd0c0c49b02e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphLargeValueContentIndexPlanner.cpp.o",
+      "bytes": 2284736,
+      "sha256": "a577c2cdf08ca5c479de185ffe31e4d6ead9bcd5493d1f31d42c9348d9c75cb9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeStreamedGraphLargeValuePrivateMaterializer.cpp.o",
+      "bytes": 2578408,
+      "sha256": "68d5df15f5397fcf2105d50be3cd1b8cb65efa877b1c0593431709f7fbdf11d2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_PropertyColumnPhysicalGrouping.cpp.o",
+      "bytes": 2648008,
+      "sha256": "cac81346b00ffbefed878231f1cf50ac5f67cc06fb5dff811504ded60e0a7f18"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_Format.cpp.o",
+      "bytes": 1021416,
+      "sha256": "358e79a2c7d1ee648cc78cc700af1cce3dcf7f384d9bd1c095acbe66ff1c125f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_AdjacencyMaintenance.cpp.o",
+      "bytes": 2323760,
+      "sha256": "ff838fe178cfaf2ccce84ea299439bbfc89927d2420889ca55669aa75e3cf8e6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_BTree.cpp.o",
+      "bytes": 2761752,
+      "sha256": "7c93271830b6bf67fa38408d90ae0af9f77d5bad2afbafd18f24a32e17e45f64"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_Ddl.cpp.o",
+      "bytes": 2597928,
+      "sha256": "b45d83be3201016a9aac80da7083ca9e1ce5b9bb69ab64a6cdf625f9b3ddda07"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_LargeValue.cpp.o",
+      "bytes": 1605088,
+      "sha256": "ce9e7ddbc5ff250744bb9901f8e717013c7dfdd0374ee5387673abe548a07539"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_LargeValueMaintenance.cpp.o",
+      "bytes": 2387464,
+      "sha256": "b444dae7c41a0a7eaff735b31319b5c699adcf7cb54ab12506a27d16fda39c08"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_RelocatableProcessCrash_SharedPagePool.cpp.o",
+      "bytes": 1241160,
+      "sha256": "959a0cb0c26996560980582229ed42a44603d4d477b0d857bde95422a9849230"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_Superblock.cpp.o",
+      "bytes": 1803912,
+      "sha256": "939899b474ce6fafb42f6dc84fcccbf4ed71762337332259e87491746bc023eb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_SuperblockFile.cpp.o",
+      "bytes": 1205440,
+      "sha256": "6e5d560a99a021f620193fa807bec5e6c74347b767d013cfa355f6e9624c7231"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/format/test_SuperblockPair.cpp.o",
+      "bytes": 578952,
+      "sha256": "5182bb0cd38062890e71e9162d9a6800bbe2c5cde74f579894c714960e4f3fb2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreeIndex.cpp.o",
+      "bytes": 2501640,
+      "sha256": "b4c90f142003fd6639b7282407659a2d33bad47ae23a9bb248644b086e8b8a24"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreeIndexScanCache.cpp.o",
+      "bytes": 2489376,
+      "sha256": "d23080232bf3785a94af07e08ae36ebbf7a8d46d07ca505beba8b88d6951c637"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp.o",
+      "bytes": 2181216,
+      "sha256": "c5d34f81a140f17970acf5749ec5496791bfb8b929a2deefc2ee105c79f97198"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStoreBulkMaterialization.cpp.o",
+      "bytes": 2096376,
+      "sha256": "2bbe8fa770af194bd9905a9d5a75ecd25a37c053d0b68f6db0edcde78a18e178"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BulkBTreeBuilder.cpp.o",
+      "bytes": 2763416,
+      "sha256": "bb52d613ca0e20b2d2cdcffaff7e616e127b56d7e9ba47c935d6c2f1c3835a1f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_ExternalBTreeEntrySorter.cpp.o",
+      "bytes": 1392864,
+      "sha256": "14a070af40981aed9e3bbe005f5285d1897292b745395029947a36f1ea7e9bea"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_IndexKeyCodec.cpp.o",
+      "bytes": 2270528,
+      "sha256": "b711188ec7deec58470c0ed0ee36a86bdea0c7c93f1221a2f211f243d3a9c885"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp.o",
+      "bytes": 1231600,
+      "sha256": "2dbcc56abd4539521e67bf0c6e6ed62b84c00db82fc9ef0c421959c544dc990f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStoreOverlayCosts.cpp.o",
+      "bytes": 2094696,
+      "sha256": "c39e94633cc241fb81b69dd55d843d7c2e8f20008877f39ce16407f748eae2bb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_LargeValueMaintenanceJournal.cpp.o",
+      "bytes": 995256,
+      "sha256": "e1e16cfabd8f5c463605aeb2e01ebe162667f32d7c77b1b7077c14a30c8daf47"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_OfflineVectorAdjacencyQuality.cpp.o",
+      "bytes": 1184056,
+      "sha256": "c7a0b87f0104820e0397a195e9f7f1621e807dec5bf3bd74c32f09c26d2f92a3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatableCompactionObservation.cpp.o",
+      "bytes": 826552,
+      "sha256": "9ceecd73266efdf4fc9412bfda88ab567acb9cf6449b4843c7c9a8093cd7a7ff"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatableCompactionWorkload.cpp.o",
+      "bytes": 1409576,
+      "sha256": "106481dfb4c797cfcabced0dacaaae9d2f302799cc619d7c980a4b9a0a5e71a1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatableMaintenanceLoop.cpp.o",
+      "bytes": 1257960,
+      "sha256": "8c20ec53a98eedf6e994996cdd0ae5600914571d0176cd5209f06fc2766610d3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatablePageCompactionScheduler.cpp.o",
+      "bytes": 1169016,
+      "sha256": "5f2d20569533270f26941d902a09e693ac0d8c253e2a9eddb36c282a7a3b1171"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatableSegmentRelocationScheduler.cpp.o",
+      "bytes": 1270816,
+      "sha256": "d0133ff96e8cd5ea308d72c3113d69a1eb8c1dc319ad59af2263e417e7a53f46"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_RelocatableTailTruncation.cpp.o",
+      "bytes": 1549472,
+      "sha256": "366139b7c87f1a7a1866e349194913905bf968117242d4d8a96e054f0257d3bb"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_SingleWriterSaturatingCounter.cpp.o",
+      "bytes": 320264,
+      "sha256": "03aeeb88d6f37f5d2d8962a5845a5aee86078f89e53e021a249dca86d4b99255"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_VectorCodebookReachabilityCorruption.cpp.o",
+      "bytes": 1157000,
+      "sha256": "b7d6bd8bb46542374b8d4ea302cc89de333b6eee78ce12d915f6496eabddf10b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_Catalog.cpp.o",
+      "bytes": 1261680,
+      "sha256": "6cdf2b37a9c57848ef8cfad0375bbfc712ee0f54ea2da1b84394095470c65779"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogPage.cpp.o",
+      "bytes": 1299864,
+      "sha256": "ce8e33e090da531a2220764251c2d53e0eca7323c6a564047e358beccf5fe45c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogRadix.cpp.o",
+      "bytes": 1450272,
+      "sha256": "f6fa1482e0ec19fab5b0f09c36b6b6e1f7b9fe04de370cf49cdf8619820b651b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogRetireQueueReclaimer.cpp.o",
+      "bytes": 1584176,
+      "sha256": "7f046469b6a2c3e2d42ed49096d6d4dba4ef07f2c25e627245960e2684309cc5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogSegmentRelocationCoordinator.cpp.o",
+      "bytes": 1827624,
+      "sha256": "95986bedba99d1976d05903766d68d0b7499df2646377edc34daeed0e67899a2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_LocationDirectoryRootGrowth.cpp.o",
+      "bytes": 2244880,
+      "sha256": "5e592bd178464139919b96db6698cbf732428a17dcbb105598d75351f4e2812d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_LocationDirectoryScanCache.cpp.o",
+      "bytes": 1728280,
+      "sha256": "a27034f03856285493dca7f3a2e8ec85b30f293cb7cb51e6068e1cf523848e34"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_LocationDirectory_RouteValidation.cpp.o",
+      "bytes": 1834784,
+      "sha256": "0b8c8b28a210f060e8c60e84cb87180e116b74ebf5373ad3ba6764b1ec009433"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataDirectoryEvacuation.cpp.o",
+      "bytes": 2167232,
+      "sha256": "85ef4515617b0d207aed68ede17d56fa985af7e3590186c68be68e3fd2e19472"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataEmergencyReserveExhaustion.cpp.o",
+      "bytes": 1162216,
+      "sha256": "1917f7093fce729fc4fa9ab45a19ab973d96df95de492f79174f6b0465b11ddd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPageFile.cpp.o",
+      "bytes": 2721216,
+      "sha256": "3bf78fe2e4025b122484257ea0763967c1df94afda8576997fd9035c0487ee02"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPagePoolEmergencyReserve.cpp.o",
+      "bytes": 1052384,
+      "sha256": "5e067a4a894f09e936804294ac406c31b9dab161e81e0664a92aaf535a4de0d0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPagePoolRecovery.cpp.o",
+      "bytes": 1558864,
+      "sha256": "8a1cf209c4e20d6e9950b10309eb47b5101f98e312813631c4c0d464d80edcd9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPagePoolTypedIO.cpp.o",
+      "bytes": 1349448,
+      "sha256": "fbbd69cb97e7b4f57305c6e3558ef98abf59e24b6498ad8efda8cdb979ddf7b9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPagePool_AllocationAvailability.cpp.o",
+      "bytes": 1391760,
+      "sha256": "ce49eed7619a51d3d5eb9abf19512eab4fb1d8b26d3bb1605047bcb24270b7a0"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPageRoute.cpp.o",
+      "bytes": 787888,
+      "sha256": "6365370731f509b803821fc52dddcd12b0b0be12a11809da52b25b402d18ae3b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPoolOwnership.cpp.o",
+      "bytes": 1643184,
+      "sha256": "f7176981c601e800e323212de5741c61f7c210789047fa754906fceb635a5934"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataReservationCoordinator.cpp.o",
+      "bytes": 1749864,
+      "sha256": "4363ff0236b6865c9e81aca9ae56c4ccf9895a9636836663f7762e1645de1e78"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataRetirement.cpp.o",
+      "bytes": 1470936,
+      "sha256": "68520aa0c9e05c66b88ddce468e86c9d82da08f6324629c22f48bb84b30faa57"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataStoreLifecycle.cpp.o",
+      "bytes": 968088,
+      "sha256": "b497b045a33675886c5945bd7f04d051154f8a0fc2e92020718702227f414b35"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_PageDirectoryBootstrap.cpp.o",
+      "bytes": 731200,
+      "sha256": "190daae4c0b43112dc1a62fbc6e25d93115ab01cba89e7d3a163a30b723fad63"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreEvacuationNativeFaults.cpp.o",
+      "bytes": 1389360,
+      "sha256": "96a16957600bae32bad787a816553f85155bd1b1f7e6d5df7c9ad06f683c7339"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreEvacuationValidation.cpp.o",
+      "bytes": 1151600,
+      "sha256": "e5f45167f2bddd483b0bf545d12d36004d8502a81863bad4eecc52f24f415ca6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreIdentity.cpp.o",
+      "bytes": 912640,
+      "sha256": "b7a590b537057e7b54ecd90565dde2d3fe52def025a2f0ea12cbf79b1e314328"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreMembershipAuthorization.cpp.o",
+      "bytes": 1635376,
+      "sha256": "e9232711c2307b8350c26933191f605330a76d98c0ba55891c91e350e95252b5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreTokenFloors.cpp.o",
+      "bytes": 1087152,
+      "sha256": "b0b06d77e2ac23e2b6066d9c2adfb2755f52ede967dade0075322f36170f53ce"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_Boundaries.cpp.o",
+      "bytes": 2411256,
+      "sha256": "6e26bbdf197af37a5f92bf033b8f0fcb577f13fdbba9e326b3e710fa3b4b5a2f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_CompactionObservation.cpp.o",
+      "bytes": 977296,
+      "sha256": "f1be4614e6f25d92af5a357987ba080c30a984b85f2691af2ec3b6f52c36cd0e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_StateRecord.cpp.o",
+      "bytes": 709528,
+      "sha256": "862a2c2762e312a68d8bf6f6e8a7d1a3dfdc64a681ab3edbba6e60659e369301"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_StateRecordStore.cpp.o",
+      "bytes": 2170888,
+      "sha256": "7a3ff80cf8f3355cca04a2bb7e53a3197f76c19654f57a75bf901650f2d13fe2"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPagePoolRetirement.cpp.o",
+      "bytes": 1482568,
+      "sha256": "78f6e12725d8142aa00c1e251faa6ef3bb295e1ae92f311ebab30132007c7a73"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataImmutableLookup.cpp.o",
+      "bytes": 1059360,
+      "sha256": "6df223d7ca3c8d1efab41b08959b74ac80bdc7c77a8736f0d4632070d442758c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_MetadataPageRouteDirectoryReuse.cpp.o",
+      "bytes": 2086264,
+      "sha256": "060cbc3779fb2ace3da95c5899ea1ada4ae07c01bf7df1fefd500bc3ad51dacd"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogSlotHistory.cpp.o",
+      "bytes": 1120152,
+      "sha256": "e46c628879b0dcae0c527937c3a300f9d4e58ae36909580036a3ae6b10063c78"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_EntityPropertyLargeValueReference.cpp.o",
+      "bytes": 599424,
+      "sha256": "07302810005af27f0a8d6ee44bc160289f4749678d8d0fbf11917a6110c9f0fc"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueReadCounters.cpp.o",
+      "bytes": 1043312,
+      "sha256": "6e57aee077ab81d75ec5c279170436a158bfa662ab2963ec4bff768ab966a56a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_ContentIndexValidation.cpp.o",
+      "bytes": 1045112,
+      "sha256": "c35450abae96f2d6528f230e37c7fc00bfc8eb16742e0e07c3259b51ab7cfaf9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_IdentityValidation.cpp.o",
+      "bytes": 1391432,
+      "sha256": "4970fefa59ad03dbbb250f719624040c178bc829afe4ddc3af6d16197fc6fd5b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_Maintenance.cpp.o",
+      "bytes": 1229464,
+      "sha256": "265eab486242455ac6f7d361055c77b4a2a4d0d2c5274abad16739d86c10884d"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_RangeReuse.cpp.o",
+      "bytes": 1421832,
+      "sha256": "e6cdb6cdf31f75c11f69d9853b3af2e5d323bee2a32a51d64ca8b88bb0da805f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_PropertyBatchOrder.cpp.o",
+      "bytes": 838472,
+      "sha256": "4c788dfaa9c093b0920682ac38658a7c07408bd26dbba3d3529006902e6c5424"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_PropertyBlockOwnerSlotsPrototype.cpp.o",
+      "bytes": 1581256,
+      "sha256": "290b163c11945f2eb076a57dae11a1a350c7d9543d0decf8427f30d7f99f181f"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_PropertyBorrowedSelection.cpp.o",
+      "bytes": 1726976,
+      "sha256": "85468d66234a1865a23bd30644e6e5d5ebd22b44b6cea346bd98368558dcf6c3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp.o",
+      "bytes": 2497192,
+      "sha256": "a4ea598233f4dc6ddb93f847b3a48140f54b04f0a80741012eaf27b40a7f07f4"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLabeledDeletion.cpp.o",
+      "bytes": 2548280,
+      "sha256": "c82d833103db87549f80cc8be171fb8d6cbb111647bcdc2f17cd6a443848963a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp.o",
+      "bytes": 2384920,
+      "sha256": "7db0e6e5070261a0f992ef7e8a6e39b9588def20e3278edf6e1a0b56fce5a20b"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyCompactMembershipLifecycle.cpp.o",
+      "bytes": 230248,
+      "sha256": "354b30ef45e8f45820daaf40f3599f85a32ce73897abd0b44e717ca28f4866b1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp.o",
+      "bytes": 832848,
+      "sha256": "64b97ba3dab35bc9b4efb4534655f1b05ef81d3e87f77f5455bbf804ff996655"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyAllocationCosts.cpp.o",
+      "bytes": 2698768,
+      "sha256": "118bf485152ea68a378d6999153cfdbac259f14d34980468980f64257701d7c3"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyColumnReadReuse.cpp.o",
+      "bytes": 232656,
+      "sha256": "09b1f93e6e99e63f9aeb4703ac4556b98a4b2d2d04771393ab8549e670a38639"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLogicalIds.cpp.o",
+      "bytes": 2265080,
+      "sha256": "16298f8b90fcbafd13f98b63b0db3e1f01a56c3fff01360fa7358816db6c115a"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPlan.cpp.o",
+      "bytes": 2704024,
+      "sha256": "473faeab6c21063fe4c9cae30e9549c6f5782d61c9c370a9dcf2381cefa31d42"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_LargeValueStore_Verification.cpp.o",
+      "bytes": 1545896,
+      "sha256": "035d2b4a6ebf923f768ab7cb9814d851c19a20ed4198faa8e2031f3e9a4bbd8e"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_PropertySubblockMapMutation.cpp.o",
+      "bytes": 2155736,
+      "sha256": "f47a7b633942bf1166a9b21a7a3644ea89804106fee20c36e288353370bc87be"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargePublication.cpp.o",
+      "bytes": 218080,
+      "sha256": "6a6be3e9c53c808720a042439067960a46b3ee8a3694327bfa138a37d4018846"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp.o",
+      "bytes": 436064,
+      "sha256": "5fca92a6f103b8420ebd40c503e2d5cfaed956c37ba2c09db974706e2126bdd6"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyCohortAdmission.cpp.o",
+      "bytes": 2486400,
+      "sha256": "00fa8a91745d211ca29102c7ef2b64214ecb3ecb0b080c8c53e3e31d7a1414b5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp.o",
+      "bytes": 229640,
+      "sha256": "2acaba867c3891b19e7c40f726c87c4a4bba1deaf860d3d4edcef70671b04b92"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyColumnMembership.cpp.o",
+      "bytes": 1097872,
+      "sha256": "6cb5bbde105d5f5230dcf1e1b0e71a49fc39a59f08c98a065c7c5c7f08accf98"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOwnerInsertionPublication.cpp.o",
+      "bytes": 288640,
+      "sha256": "b186b443e924904f4ed6c8d4095e06ade0bb3a4730f9216646c17bc18c522f29"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp.o",
+      "bytes": 1562416,
+      "sha256": "ecb18599ba462560114acf8c9bc99eff00d6b92d03e3f3313026c6997d2582b8"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp.o",
+      "bytes": 1911728,
+      "sha256": "e79b743bdadc3edbb36f5f818aa774498d9f00a1d5bd0f32a0359e618dabe7ae"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyOwnerDeletion.cpp.o",
+      "bytes": 2701016,
+      "sha256": "c42b418a7c9f6ffe569d026864023d7c363faa67e4fda9d480192876eaf21083"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyLargeOwnership.cpp.o",
+      "bytes": 2322944,
+      "sha256": "3dbef0ec946b5fa627a6a3438a0bbcdbe5cb220e0735134db1686abb39de8d21"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_ConstraintDefinition.cpp.o",
+      "bytes": 1251944,
+      "sha256": "141f60221c9297e9c063195cba4c20ff02071b19a660af17ec78391ae8ff7db1"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_ConstraintSupportTree.cpp.o",
+      "bytes": 1452824,
+      "sha256": "2f14cf51e12e41fcb750c5a07be8a1c20fc31d74f8e6ee31fbd6d63c0844bf10"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_IndexDefinition.cpp.o",
+      "bytes": 1116984,
+      "sha256": "61a502fe4f5fa6e7a55cd8fab586f5858ba8104c1e73e26f7b9f940541cae55c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_NativeBulkEdgeCatalogTokenMaterializer.cpp.o",
+      "bytes": 2776088,
+      "sha256": "9119cfedbb11ac654a0bfc11d335dc7093a8fd278a110bf5e20b03bb8c923c11"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_SystemCatalogIndexEnumeration.cpp.o",
+      "bytes": 1907056,
+      "sha256": "a7b6f10b38e7b3f7a27b0c3dce155b8a75a3d1a85e0ac9550373ed82fdb6cfd5"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_SystemCatalogTokenCardinality.cpp.o",
+      "bytes": 2171872,
+      "sha256": "ba426437db8dce883f01e1f2e7738e79b508317cd6f5f9e12575cbb4584a3a90"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_TokenDefinition.cpp.o",
+      "bytes": 611408,
+      "sha256": "c0a0407999fd3f367d2ec27a2fe13167e30db8c300ba20f0cc586693952ae57c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_DeterministicProductQuantizer.cpp.o",
+      "bytes": 962600,
+      "sha256": "64cb061fc6ea40350a98d1bc4531fcdf802bc34ae7be20ae8eec9f0124fc5a66"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorAdjacency.cpp.o",
+      "bytes": 692824,
+      "sha256": "0fe640ba35d7a02aaebfadab2049190f8b10b871fd85b18147cdbae699182101"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorAdjacencyMapping.cpp.o",
+      "bytes": 1297168,
+      "sha256": "f9f9b8e36074e50d4cc504a0d9d22dac5ce6244462772e470871636449783145"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorAdjacencyPageStore.cpp.o",
+      "bytes": 2310968,
+      "sha256": "681bd554e8af31f0b6c86e047d6b47c630f8e6bb0b46d9ad4bda0c6a0f3a38d8"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorDeltaMapping.cpp.o",
+      "bytes": 1892504,
+      "sha256": "fed65e7165fb4e0be5880a4c801113c8ef256f12b577026d0be6499088fc677c"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorManifestPage.cpp.o",
+      "bytes": 1193760,
+      "sha256": "d08b36b6aa8cd23c802973eedf1934622505abfc8c057487a5e4261041979ee9"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorNodeMapping.cpp.o",
+      "bytes": 1682272,
+      "sha256": "8109b2efef3373c086230858ae3105882f080650315145e869df2276c3052d35"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorPage.cpp.o",
+      "bytes": 1814464,
+      "sha256": "92980b70efb8a66bfbb78d383af7296f7f69559e96963f2990135b6da845d962"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorPqMapping.cpp.o",
+      "bytes": 1305992,
+      "sha256": "92d1626c12ab8319b0b7f894783fa42aa46704250891871dba3a68d59f72f050"
+    },
+    {
+      "path": "buildDir/CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/vector/test_VectorSemanticCodec.cpp.o",
+      "bytes": 1826784,
+      "sha256": "ae2585474d8e880bb25d0bcd433d55e9b9c79901cdf3d8de8fe7967cfa0ac8e4"
+    },
+    {
+      "path": "benchmarks/architecture-design/results/20261020-work-resume/r33-pool-tail-controls-candidate-tests",
+      "bytes": 188241712,
+      "sha256": "a04931b1dd4a261929d828f3ea6b3ebe54674adc04eefacf374adc048be2514f"
+    }
+  ],
+  "available_before": 719159296,
+  "available_after": 1557258240
+}

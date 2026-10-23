@@ -1,0 +1,19 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "property_tests": 76,
+  "related_lifecycle_tests": 404,
+  "latest_public_contract_tests": 35,
+  "retained_library": "/workspace/zyx-property-identity-candidate/libzyx_core.a",
+  "library_sha256": "242cc6ea92c660833af0015a94fcb90859385ebfb9a43713a73d87bd9f1bc3df",
+  "purpose": "retain existing property slot identity and omit unchanged EntityPropertyDirectory COW after all source/image validations",
+  "mechanism": "public transaction preserves property location and property-directory root while changing actual physical data page; coalesced growth overflow, stale plan rejection, old pins, reopen and delete/reinsert ABA tested",
+  "performance": "one bounded medium SET pair has no material latency improvement; not a final P95 or Kuzu acceptance",
+  "patch_sha256": "bd67837f8dd680d650bb7b101074fb62fde3aa0ac0caf84ab20e15bc8c73688f",
+  "untracked_engine_source": {
+    "path": "include/graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp",
+    "sha256": "59439b5dcfc2211693cd13e8073664e71a3d7a4725cb997b29a161c2b7d3ac3d",
+    "archive": "additional-source.tar.gz"
+  }
+}

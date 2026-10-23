@@ -1,0 +1,44 @@
+{
+  "tests": 2,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-23T12:16:32Z",
+  "time": "0.027s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "BufferModes\/RelocatablePropertyRunTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-23T12:16:32Z",
+      "time": "0.027s",
+      "testsuite": [
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/0",
+          "value_param": "67108864",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 190,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T12:16:32Z",
+          "time": "0.015s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest"
+        },
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/1",
+          "value_param": "4096",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 190,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-23T12:16:32Z",
+          "time": "0.011s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest"
+        }
+      ]
+    }
+  ]
+}

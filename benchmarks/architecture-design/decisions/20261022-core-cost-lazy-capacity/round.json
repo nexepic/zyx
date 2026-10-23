@@ -1,0 +1,20 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "property_tests_from_unchanged_property_implementation": 73,
+  "related_lifecycle_tests": 401,
+  "medium_set_p50_ms": {
+    "before": 11.4013755,
+    "after": 8.2647805
+  },
+  "medium_set_p95_ms": {
+    "before": 13.312758,
+    "after": 10.129812
+  },
+  "library_sha256": "9f7f15c79887f1c8c3f83ed90845d68996db85e729c155af2fdcf232ace6fb97",
+  "retained_library": "/workspace/zyx-lazy-capacity-candidate/libzyx_core.a",
+  "patch_sha256": "73252d34e56ff67f413c0f38b27b7cf0c6ca19af4f06bef4c85b5893ddef5faf",
+  "scope": "demand-driven entity pool discovery/capacity with exact selected-pool validation; same reclamation/reservation/atomicity; no format/header ABI change; no commit/push without acceptance progress"
+}

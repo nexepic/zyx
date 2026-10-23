@@ -158,7 +158,11 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Retire Queue reclamation requires a checkpoint LSN");
 		}
-		MetadataWriteGuard writer = beginWrite();
+		// This entry consumes only already durable retirement records. The
+		// reclaimer authenticates Catalog/allocator ownership and every active
+		// snapshot; it never discovers new field retirement or changes hybrid
+		// authority. Keep other unadapted writes behind their existing guard.
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
 		const std::vector<RetireQueueEntry> reclaimable = retire_queue_reclaimer_.collectReclaimable(current, writer);
 		if (reclaimable.empty()) {
@@ -167,6 +171,9 @@ namespace graph::storage {
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		retire_queue_reclaimer_.prepareReclamation(batch, reclaimable);
+		// The authenticated queue is the complete scope of this physical-only
+		// publication; no caller-supplied field or descriptor images are admitted.
+		batch.hybrid_property_publication_ = true;
 		publishBatch(batch, writer, options);
 		return {batch.candidate(), static_cast<uint64_t>(reclaimable.size())};
 	}

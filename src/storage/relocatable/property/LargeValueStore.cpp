@@ -767,6 +767,11 @@ namespace graph::storage {
 		content_index_pages_(std::make_unique<SlottedPagePool>(io, metadata, openMode)),
 		content_index_(std::make_unique<BTreePageStore>(*content_index_pages_, metadata)), io_(std::move(io)) {}
 
+    LargeValueStore::LargeValueStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+        const MetadataSnapshotPin &snapshot) : allocator_(io, metadata, snapshot), metadata_(metadata),
+        content_index_pages_(new SlottedPagePool(io, metadata, snapshot)),
+        content_index_(std::make_unique<BTreePageStore>(*content_index_pages_, metadata)), io_(std::move(io)) {}
+
 	LargeValueStore::~LargeValueStore() = default;
 
 	BTreePageStore &LargeValueStore::contentIndex() const { return *content_index_; }

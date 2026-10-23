@@ -1372,7 +1372,12 @@ namespace graph::storage {
         // The pool control header is mutable even while snapshot-visible data
         // pages are immutable. Copy its bounded image under the cache lock;
         // only the immutable data page below may escape with a read pin.
-        if (io_->bufferPoolStats().capacity_bytes == 0U) return std::nullopt;
+        const auto capacity = io_->bufferPoolStats().capacity_bytes;
+        // A sequential visitor may read another page before its scan advances.
+        // With one resident frame, retain the existing bounded owned fallback
+        // rather than pinning the only frame across that consumer callback.
+        if (capacity == 0U || (hint == BufferPoolReadHint::BPRH_SEQUENTIAL && capacity <= RSS_PAGE_SIZE))
+            return std::nullopt;
         std::array<std::byte, RSS_PAGE_SIZE> poolImage{};
         if (io_->readAt(poolKey, poolImage.data(), poolImage.size()) != RSS_PAGE_SIZE) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,

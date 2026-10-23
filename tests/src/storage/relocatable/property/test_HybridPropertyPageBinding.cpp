@@ -359,3 +359,83 @@ TEST_F(HybridPropertyPhysicalReaderTest, ValidChecksumsDoNotAuthorizeForeignOwne
     }
 }
 #endif
+
+TEST(HybridPropertyPageBindingTest, RowRemainderGroupUsesAuthenticatedSamePageMembershipInBorrowedView) {
+    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+    HybridPropertyGroupRecord g{EntityPropertyOwnerKind::EPOK_NODE,
+        HybridPropertyGroupMode::HPGM_HYBRID, 1, Generation(8), UINT64_MAX, 0, 0};
+    HybridPropertyColumnMembership matrix;
+    matrix.owner_kind = g.owner_kind; matrix.group_id = g.group_id;
+    matrix.semantic_generation = g.semantic_generation; matrix.live = g.live; matrix.row_remainder = true;
+    const auto membership = image.appendColumnMembership(matrix, g, Generation(9));
+    g.mode = HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER; g.column_membership = membership;
+    const auto groupSlot = image.appendGroup(g);
+    auto bound = std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9));
+    const auto payload = bound.serializeOwned(memory);
+    MaterializedByteReservation held(memory.get()); held.set(memory->available());
+    const auto view = HybridPropertyFieldView::open(owner(), payload, Generation(9), LogSequenceNumber(9));
+    EXPECT_EQ(view.readGroup(groupSlot, g.owner_kind, 1, Generation(9)), g);
+    EXPECT_EQ(view.readColumnMembership(membership, g, Generation(9)), matrix);
+    auto wrong = g; wrong.column_membership.page_id = PageId(42);
+    EXPECT_THROW(view.readColumnMembership(membership, wrong, Generation(9)), FormatException);
+    wrong = g; wrong.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+    EXPECT_THROW(view.readColumnMembership(membership, wrong, Generation(9)), FormatException);
+}
+
+TEST(HybridPropertyPageBindingTest, ColdRowsValidateGroupOwnedMaskGlobalHotAuthorityAndAccountBeforeExposure) {
+    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+    auto g = group(); auto c = column();
+    const auto hot = image.appendColumn(c, g, Generation(9));
+    const auto makeCold = [&](uint32_t token) {
+        const auto root = EntityPropertyCollectionRootCodec::encode({49, graph::Node::typeId,
+            {{token, PropertyValue("user-000048")}}});
+        const HybridColdRowInput row{48, 1, false, root};
+        return HybridPropertyColdRowBlock::encode(g.owner_kind, 1, Generation(8), std::span(&row, 1), memory, false);
+    };
+    const auto coldBytes = makeCold(2);
+    const auto cold = image.appendColdRows(coldBytes, g.owner_kind, 1);
+    const auto conflictingBytes = makeCold(1);
+    const auto conflicting = image.appendColdRows(conflictingBytes, g.owner_kind, 1);
+    auto matrix = HybridPropertyColumnMembership::fromColumns(g, std::span(&c, 1));
+    matrix.row_remainder = true; matrix.locators[0] = hot;
+    matrix.cold_fields = 1; matrix.cold_rows.owners = UINT64_C(1) << 48; matrix.cold_rows.roots[48] = cold;
+    const auto membership = image.appendColumnMembership(matrix, g, Generation(9));
+    g.mode = HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER; g.column_membership = membership;
+    const auto groupSlot = image.appendGroup(g);
+    auto bound = std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9));
+    const auto payload = bound.serializeOwned(memory);
+    const auto view = HybridPropertyFieldView::open(owner(), payload, Generation(9), LogSequenceNumber(9));
+    EXPECT_EQ(view.readGroup(groupSlot, g.owner_kind, 1, Generation(9)), g);
+    const auto baseline = memory->used();
+    {
+        const auto decoded = view.readColdRows(cold, g, matrix, Generation(9), memory);
+        ASSERT_TRUE(decoded.row(48)); EXPECT_FALSE(decoded.row(47));
+        EXPECT_EQ(EntityPropertyCollectionRootCodec::decodeSelected(decoded.row(48)->root, 2)->value,
+            PropertyValue("user-000048"));
+        EXPECT_GT(memory->used(), baseline);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    auto wrong = matrix; wrong.cold_rows.roots[48] = conflicting;
+    // Slot 48 has no hot membership. The token still belongs to the hot column
+    // globally and must never fall back to its conflicting cold root.
+    EXPECT_FALSE(wrong.contains({g.owner_kind, 49}, 1));
+    EXPECT_THROW(view.readColdRows(conflicting, g, wrong, Generation(9), memory), FormatException);
+    EXPECT_EQ(memory->used(), baseline);
+    wrong = matrix; wrong.cold_rows.owners |= 1; wrong.cold_rows.roots[0] = cold; wrong.cold_fields = 2;
+    auto larger = g; ++larger.memberships;
+    EXPECT_THROW(view.readColdRows(cold, larger, wrong, Generation(9), memory), FormatException);
+    auto stale = cold; ++stale.generation;
+    EXPECT_THROW(view.readColdRows(stale, g, matrix, Generation(9), memory), FormatException);
+    auto tiny = std::make_shared<MaterializedByteBudget>(1);
+    EXPECT_THROW(view.readColdRows(cold, g, matrix, Generation(9), tiny), MaterializedByteLimitExceeded);
+    EXPECT_EQ(tiny->used(), 0U); EXPECT_EQ(memory->used(), baseline);
+    struct Stop final : CancellationCheckpoint {
+        void check() const override { throw std::runtime_error("cancelled cold read"); }
+    } cancelled;
+    EXPECT_ANY_THROW(view.readColdRows(cold, g, matrix, Generation(9), memory, &cancelled));
+    EXPECT_EQ(memory->used(), baseline);
+}

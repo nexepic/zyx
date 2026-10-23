@@ -1,0 +1,11 @@
+{
+  "deliberate_before_fix_control": true,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "progress_percent": 90,
+  "returncode": 1,
+  "source_sha256": "a72948d9d471d3dbd25550fed1053b60320dfc78a86ab4521ae44eb6f61922e3",
+  "binary_sha256": "d6c5490e7854f3eafde42cb9e76e1bf9c665c556e9b65f3e4ae1623b1490c5e1",
+  "baseline_library_sha256": "d0031fd521bb48befd57e90e09177924e3fd4419c680588163482b2f1bb434b9",
+  "expected_failure": "Constraint violation for unchanged cold field: old derived-source route reads empty durable ROW source instead of candidate source"
+}

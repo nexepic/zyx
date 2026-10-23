@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/current-cpu/cpu-probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx",
+    "/tmp/zyx-p7-cpu-label_scan_filter-control.zyx",
+    "label_scan_filter",
+    "0",
+    "32"
+  ],
+  "sampled": false,
+  "formal_benchmark": false,
+  "purpose": "attribute rejected frozen candidate CPU, not latency acceptance",
+  "library_sha256": "842f2e1c2fcd722688e8a7c6fb6cb8e6bba443b2668a15c2db0e6bec1a7be98a",
+  "probe_sha256": "eba7544dfc2dff08933af49b558d97be4484bbb343b78ae2941ab2fb643c73b7"
+}

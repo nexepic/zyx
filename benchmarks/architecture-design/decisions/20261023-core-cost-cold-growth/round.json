@@ -1,0 +1,66 @@
+{
+  "recorded_at_utc": "2026-10-23T03:26:49.079127+00:00",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-growth-legacy-": {
+      "tests": 491,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-growth-compact-": {
+      "tests": 491,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 153,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted-growth-": {
+      "tests": 15,
+      "failures": 0,
+      "skipped": 0
+    },
+    "codec-hybrid": {
+      "tests": 19,
+      "failures": 0,
+      "skipped": 0
+    },
+    "codec-default": {
+      "tests": 19,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "0d67b5921c77ae4b644af48c8d4144412f6b1e1a39f218039a2ffe2d83a6371b",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "551c74d0c49f6927705a0c66e4cb4164f0e1f5d930fdcf32830c9fdaa5b9ddfb",
+      "binary_preserved": false
+    }
+  },
+  "implemented": [
+    "Shared source/owner merging for single and complete multi-block repack results",
+    "Original4KiB/physical record and original-generation fences, no prefix escapes on failure",
+    "Same-slot overwrite when fitting; otherwise original batch private IDs/PageImages and exact cold owner bindings",
+    "Actual group/membership co-location after growth relocation with GroupDirectory upsert",
+    "Existing Native directory overlay now consumes group upserts; publication guards remain closed",
+    "Valid63owner growth/relocation fixture with unchanged unrelated cold root and source files/roots/epoch, original account refunds"
+  ],
+  "remaining": [
+    "Same-batch multiple affected blocks/owners and new values",
+    "Global hot demotion, owner liveness/delete/inverse",
+    "Actual Native field dispatch/schema/index/constraint and public atomic publication/lifecycle",
+    "Whole-space admission and final P7 performance matrix"
+  ]
+}

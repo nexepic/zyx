@@ -109,6 +109,55 @@ TEST_F(HybridPropertyCohortAdmissionTest, SharedGrantExhaustionKeepsAllRootsAndR
     EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), expected(1));
     EXPECT_EQ(properties_->readEntity(old, {NODE, 512}), expected(512));
 }
+TEST_F(HybridPropertyCohortAdmissionTest, NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent) {
+    seed(NODE, 512, 0);
+    NativeGraphWritePlanner row(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement());
+    for (uint64_t first = 1; first <= 512; first += 64) {
+        auto tx = row.beginTransaction();
+        for (uint64_t id = first; id < first + 64; ++id)
+            tx.replaceNodeProperty({id, graph::Node::typeId,
+                {{1, PropertyValue(id % 2 ? "US" : "DE")}, {2, PropertyValue(int64_t(id))}}});
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    const auto old = metadata_->openSnapshot(); const auto before = old.superblock();
+    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement(true));
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    auto tx = writer.beginTransaction(); stage(tx, memory);
+    struct Costs {
+        int64_t row = 0, candidate = 0, peak = 0, refused = 0;
+        int64_t field_frames = 0, index_frames = 0, fresh_pool_bytes = 0;
+    } costs;
+    {
+        graph::debug::PerfTrace::ScopedObserver observe(&costs, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+            auto &c = *static_cast<Costs *>(owner);
+            if (key == "native_graph.hybrid.allocation_row_bytes") c.row = value;
+            if (key == "native_graph.hybrid.allocation_candidate_bytes") c.candidate = value;
+            if (key == "native_graph.hybrid.allocation_peak_bytes") c.peak = value;
+            if (key == "native_graph.hybrid.allocation_admission_insufficient_saving") c.refused += value;
+            if (key == "native_graph.hybrid.private_field_frames") c.field_frames += value;
+            if (key == "native_graph.hybrid.private_index_frames") c.index_frames += value;
+            if (key == "native_graph.hybrid.private_data_pool_bytes") c.fresh_pool_bytes += value;
+        });
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    RecordProperty("row_steady_bytes", std::to_string(costs.row));
+    RecordProperty("candidate_steady_bytes", std::to_string(costs.candidate));
+    RecordProperty("peak_allocated_bytes", std::to_string(costs.peak));
+    RecordProperty("prepared_field_frames", std::to_string(costs.field_frames));
+    RecordProperty("prepared_index_frames", std::to_string(costs.index_frames));
+    RecordProperty("fresh_pool_bytes", std::to_string(costs.fresh_pool_bytes));
+    ASSERT_GT(costs.row, 0); ASSERT_GT(costs.candidate, costs.row / 10 * 9);
+    ASSERT_EQ(costs.refused, 1); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    for (uint64_t id = 1; id <= 512; ++id) {
+        auto pin = metadata_->openSnapshot(); ASSERT_TRUE(metadata_->findEntityPropertyLocationOptional(pin, {NODE, id}));
+        const auto value = properties_->readEntity(pin, {NODE, id});
+        EXPECT_EQ(value, properties_->readEntity(old, {NODE, id}));
+        ASSERT_EQ(value.entries.size(), 2U);
+        EXPECT_EQ(value.entries.front().value, PropertyValue(id % 2 ? "US" : "DE"));
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
+}
 TEST_F(HybridPropertyCohortAdmissionTest, CancellationAfterCompleteCostPreparationKeepsAllRowRoots) {
     struct Cancel final : CancellationCheckpoint { bool prepared = false; void check() const override {
         if (prepared) throw std::runtime_error("cohort cancelled before admission");
@@ -151,5 +200,47 @@ TEST_F(HybridPropertyCohortAdmissionTest, PartialAndCompleteInactiveSlotRecoverT
         }
         EXPECT_EQ(memory->used(), 0U);
     }
+}
+TEST_F(HybridPropertyCohortAdmissionTest, InverseOneGroupPreservesOtherGroupAuthorityAndOldPins) {
+    prepare();
+    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
+    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement(true));
+    auto tx = writer.beginTransaction(); stage(tx, memory); ASSERT_TRUE(tx.commit().committed());
+    const auto old = metadata_->openSnapshot();
+    ASSERT_TRUE(old.superblock().hybrid_property_descriptor_root.isValid());
+    HybridPropertyReadContext context(io_, *slotted_pages_, *metadata_, old);
+    HybridPropertyFieldPageStore fields(io_, *metadata_, old);
+    std::vector<PageId> shared;
+    std::vector<PageId> firstPages, otherPages;
+    for (uint64_t groupId = 1; groupId <= 8; ++groupId) {
+        SlottedSlotReference reference;
+        const auto group = context.groupRecord({NODE, (groupId - 1) * 64 + 1}, {}, &reference);
+        ASSERT_TRUE(group); ASSERT_TRUE(group->usesColumnMembership());
+        auto &pages = groupId == 1 ? firstPages : otherPages;
+        pages.push_back(reference.page_id);
+        pages.push_back(group->column_membership.page_id);
+        const auto page = fields.read(old, group->column_membership.page_id);
+        const auto matrix = page.view().readColumnMembership(group->column_membership, *group,
+            old.superblock().generation);
+        for (size_t i = 0; i < matrix.column_count; ++i)
+            pages.push_back(matrix.columnLocator(matrix.tokens[i]).page_id);
+    }
+    for (const auto id : firstPages)
+        if (std::ranges::find(otherPages, id) != otherPages.end() &&
+            std::ranges::find(shared, id) == shared.end()) shared.push_back(id);
+    RecordProperty("shared_field_pages", std::to_string(shared.size()));
+    auto inverse = request(NODE, memory); inverse.conversion->publish_candidate = true;
+    inverse.conversion->direction = NativeHybridPropertyConversionDirection::NHPCD_HYBRID_TO_ROW;
+    ASSERT_NO_THROW(run(inverse));
+    const auto current = metadata_->openSnapshot();
+    for (const auto id : shared) {
+        EXPECT_NE(metadata_->findPageLocation(current, id), metadata_->findPageLocation(old, id));
+    }
+    for (uint64_t id : {1U, 64U, 65U, 128U, 449U, 512U}) {
+        EXPECT_EQ(properties_->readEntity(current, {NODE, id}), expected(id));
+        EXPECT_EQ(properties_->readEntity(old, {NODE, id}), expected(id));
+        EXPECT_EQ(metadata_->findEntityPropertyLocationOptional(current, {NODE, id}).has_value(), id <= 64);
+    }
+    EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
 }
 #endif

@@ -1,0 +1,148 @@
+{
+  "measurement_status": "passed",
+  "processes": 99,
+  "failed_processes": [],
+  "implementation_progress_percent": 100,
+  "P7_accepted": true,
+  "Kuzu_objective_met": false,
+  "formal_benchmark_cold_adoption": false,
+  "public_cold_conversion_available": true,
+  "primary_gates": [
+    {
+      "scale": "holdout",
+      "case": "edge_batch_1000",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "holdout",
+      "case": "fresh_import",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "holdout",
+      "case": "property_set",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": true
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "edge_batch_1000",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "fresh_import",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    },
+    {
+      "scale": "medium",
+      "case": "property_set",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": true
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": false
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "Kuzu_P50_passed": false,
+      "baseline_5x_passed": null
+    }
+  ],
+  "scope_closed": "Bounded public cold conversion and whole-database admission are delivered and verified. Complete the objective report under the updated user instruction, without forcing Kuzu superiority or opening another migration/optimization project.",
+  "baseline_sha256": "d59dc4b7f6009ea7244f4b6d27f43aff64e07ecde9edb61c413ad7b0e0faad10",
+  "performance_objectives_are_completion_conditions": false,
+  "user_contract": "Complete documented implementation, necessary verification and objective comparison; Kuzu superiority is not required.",
+  "regression_guards_passed": true,
+  "original_guard_p95_exceedances": [
+    {
+      "scale": "large",
+      "case": "large_patch"
+    },
+    {
+      "scale": "large",
+      "case": "large_selected"
+    },
+    {
+      "scale": "skew",
+      "case": "skew_twohop"
+    }
+  ],
+  "targeted_guard_confirmation_processes": 18,
+  "module_checks": {
+    "public": {
+      "tests": 12,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "hybrid-legacy": {
+      "tests": 576,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "hybrid-compact": {
+      "tests": 576,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "b0a5cb4415491ff75a4e2f4918f1446032b3eb27b77bc021bf526355823d8604"
+    },
+    "default": {
+      "tests": 155,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a"
+    },
+    "oneframe": {
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a"
+    }
+  },
+  "whole_database_space_example": {
+    "row_steady_bytes": 1441792,
+    "candidate_steady_bytes": 1048576,
+    "saving_fraction": 0.2727272727272727,
+    "gate_fraction": 0.1,
+    "scope": "512 real ordinary ROW owners, five fields including long id and cold text; all8 groups prepared privately and switched together; this is not an allocation claim for medium/holdout",
+    "peak_limit_bytes": 33554432,
+    "conversion_budget_bytes": 1048576
+  },
+  "benchmark_profile": "Default5/31; public bounded cold conversion is opt-in experimental13/39. No claim that medium/holdout adopted cold layout.",
+  "historical_5x_objective_met": false,
+  "delivery_contract": "delivery.json; final revision/push outcome in Git history"
+}

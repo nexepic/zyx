@@ -284,9 +284,17 @@ TEST_F(HybridPropertyOrdinaryConversionTest, CompleteBoundedDenseGroupPreparesAl
     }
     std::sort(rowPools.begin(), rowPools.end());
     const auto rowPoolCount = size_t(std::unique(rowPools.begin(), rowPools.end()) - rowPools.begin());
-    const auto stats = prepareWithStats(request(NODE, memory));
+    const auto conversion = request(NODE, memory);
+    const auto stats = prepareWithStats(conversion);
     EXPECT_GT(stats.fields, 0); EXPECT_GT(stats.indexes, 0);
-    EXPECT_GT(stats.pool_bytes, int64_t(rowPoolCount * RSS_SEGMENT_SIZE));
+    if (conversion.conversion->compact_column_memberships) {
+        // This dense fixture needs two ROW pools. Direct compact locators
+        // need one field pool plus one Group directory pool, without the old
+        // OwnerMap/FieldDirectory pools. Equality is not the 10% adoption gate.
+        EXPECT_EQ(rowPoolCount, 2U); EXPECT_EQ(stats.indexes, 1);
+        EXPECT_LE(stats.fields, int64_t(RSS_PAGE_POOL_DATA_FRAME_COUNT));
+        EXPECT_EQ(stats.pool_bytes, int64_t(rowPoolCount * RSS_SEGMENT_SIZE));
+    } else EXPECT_GT(stats.pool_bytes, int64_t(rowPoolCount * RSS_SEGMENT_SIZE));
     EXPECT_EQ(stats.pool_bytes % RSS_SEGMENT_SIZE, 0);
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     EXPECT_EQ(properties_->readEntity(pin, {NODE, 64}), original);
@@ -1482,7 +1490,24 @@ TEST_F(HybridPropertyOrdinaryConversionTest, FieldMapPlanningQuotaAndBothCancell
     NativeHybridPropertyColumnWrite write{before.database_id, before.generation, before.hybrid_property_descriptor_root,
         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
     const auto epoch = io_->dataMutationEpoch();
-    EXPECT_THROW((void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)), graph::query::execution::MaterializedByteLimitExceeded);
+    // A compact map can legitimately fit the old128KiB fixture cap. Keep
+    // that cap and exhaust its remaining credit at the real map boundary,
+    // before physical publication; the legacy path may already refuse sooner.
+    graph::utils::OwnedHeapReservation pressure(small);
+    struct QuotaState { graph::utils::OwnedHeapReservation *pressure; MaterializedByteBudget *memory; bool injected = false, unexpected = false; }
+        quota{&pressure, small.get()};
+    {
+        graph::debug::PerfTrace::ScopedObserver observer(&quota,
+            [](void *owner, std::string_view key, int64_t, bool) noexcept {
+                auto &state = *static_cast<QuotaState *>(owner);
+                if (key != "native_graph.hybrid.private_map_images" || state.injected) return;
+                try { state.pressure->set(state.memory->available()); state.injected = true; }
+                catch (...) { state.unexpected = true; }
+            });
+        EXPECT_THROW((void)metadata_->mutateHybridPropertyColumns(write, LogSequenceNumber(before.checkpoint_lsn.value() + 1)), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    pressure.set(0); EXPECT_FALSE(quota.unexpected);
+    if (conversion.conversion->compact_column_memberships) EXPECT_TRUE(quota.injected);
     EXPECT_EQ(small->used(), 0U); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     write.memory = memory;
     for (const auto boundary : {std::string_view("native_graph.hybrid.private_map_images"), std::string_view("native_graph.hybrid.pool_frames_prepared")}) {

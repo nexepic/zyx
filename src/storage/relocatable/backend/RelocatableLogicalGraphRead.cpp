@@ -139,6 +139,23 @@ namespace graph::storage {
                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
                     sink, &read_session_, &admission, &scalars, &texts);
             }
+            bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
+                std::span<const std::string_view> keys, const PropertyCellSink &values,
+                const PropertyColumnBatchReadSinks &batches, const std::function<void(size_t)> &admission) const override {
+                if (!values || !batches.scalars || !batches.texts || !admission)
+                    throw std::invalid_argument("Property runs require sinks and admission");
+                // These singleton fallbacks remain synchronous for complex,
+                // native-field and unborrowable-page producer paths.
+                const PropertyScalarReadSink scalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+                    batches.scalars(std::span(&row, 1U), column, type, std::span(&bits, 1U));
+                };
+                const PropertyTextReadSink text = [&](size_t row, size_t column, std::string_view value) {
+                    batches.texts(std::span(&row, 1U), column, std::span(&value, 1U));
+                };
+                native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                    values, &read_session_, &admission, &scalar, &text, &batches);
+                return true;
+            }
 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
 			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
 					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {

@@ -12,9 +12,9 @@ projectOrder: 1
 
 # Core Performance Refactoring Plan
 
-Updated: 2026-10-22. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation progress is 90%; P1/P2/P3/P4/P5/P6 are accepted and the Kuzu performance objective is unmet.**
+Updated: 2026-10-23. Plan ID: `core-cost-20261022`. **This is the sole active optimization checklist. Implementation acceptance is100%; P1–P7 are complete. Report measured Kuzu gaps without claiming superiority.**
 
-Eliminate the work amplification behind order-of-magnitude gaps and meet or exceed Kuzu on core workloads with equivalent semantics, durability, and resources. Code, tests, or archives do not substitute for that objective. Previous tasks, completed items, chronological logs, and percentages have been removed from this plan. Existing capabilities, failure evidence, and format contracts remain valid and must not be deleted with the old checklist.
+Acceptance follows the user's updated 2026-10-23 instruction: complete implementation and necessary verification, then report before/after/Kuzu results objectively without requiring superiority. Progress measures delivered work, not a latency multiplier. Preserve the previous5x/Kuzu targets as measured observations and explicitly report unmet results. Keep all validation, durability, resource and space requirements.
 
 ## 1. Scope and invariants
 
@@ -51,13 +51,13 @@ Execute **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7**. P1/P2 together 
 | P4 | Cost-selected label/candidate scans | 15% | Accepted |
 | P5 | Directly typed batches from storage through filtering/aggregation | 20% | Accepted |
 | P6 | Bulk import reusing the new commit path | 5% | Accepted |
-| P7 | Complete lifecycle, formal performance, and Kuzu objective acceptance | 10% | Core gap in progress; final matrix not run |
+| P7 | Public conversion and admission lifecycle, verification and objective report | 10% | Necessary modules and99/99 workers complete; objective report archived |
 
-Freeze weights after P0. Award an item's weight only after production integration, its mechanism evidence, and necessary tests all pass. Designs, prototypes, cache-hit rates, and lines of code earn no progress. Progress cannot exceed 90% before P7 passes; gap reports, failed candidates, and archives cannot earn the last 10%. Rewriting this document does not increase implementation progress.
+Retain accepted P0–P6 weights. Award P7's final10% only after real public conversion, atomic admission/refusal of the complete specified target, space/resource checks, necessary module tests and final objective reporting are complete. Documentation alone earns no progress; unmet speed targets must remain explicitly unmet.
 
 Each round reports percentage, eliminated work, necessary tests, remaining gaps, and Kuzu objective status. Under the user's authorization, **commit and push to remote `work` only when progress increases**; otherwise do neither. Inspect the remote and worktree first; do not reset/stash away user changes.
 
-If performance targets remain unmet, continue diagnosis and repair within scope rather than adding unrelated tasks. If evidence requires changing durability or public semantics, present a concrete design revision for discussion, retain incomplete status, and never silently weaken acceptance.
+Finish this fixed P7 checklist without follow-on optimization branches. Whole-database10% saving, budgets, validation and durability remain hard adoption gates; retain ROW when they fail, rather than starting a cross-transaction migration protocol to force adoption.
 
 ## 4. P0: Freeze measurement and cost contracts
 
@@ -102,7 +102,7 @@ Short-text kernels preflight types/lengths before consumption. Preserve missing/
 
 Evidence `20261022-core-cost-direct/`: 263 necessary module tests pass. One unchanged traversal-optimizer assertion also fails against the frozen baseline and is recorded separately. Medium filter/group each emit 100000 typed text cells with zero owning fallback in 196 batches. Filter count updates decrease 12500→196; group updates decrease 100000→1568 with unchanged oracles. There are still 100000 selected ROW roots.
 
-A bounded same-executor ROW/compact-field prototype retains Release identities and all samples. It isolates synthetic in-memory representation, excluding actual directories, IO, space and update lifecycle; it grants neither persistent adoption nor Kuzu acceptance. No persistent layout changed. If P7 proves field positioning remains dominant, continue within this core scope. A new layout still requires a prior storage-spec revision and dense/sparse access, random gather, bounded updates, demotion, deletion, old pins, reclamation and file-growth comparison. A prototype without production consumers/lifecycle earns no extra progress.
+The historical same-executor ROW/compact-field synthetic prototype isolates memory representation, excluding actual directories, IO, space and lifecycle. Retain its samples as diagnostic evidence, not authority for persistent adoption, extra progress or Kuzu success. Section 9 records the actual adoption boundary for this round's experimental format.
 
 ## 8. Accepted bounded import contract
 
@@ -112,34 +112,34 @@ Handles for one opened-file identity plus database ID share publication barriers
 
 Evidence `20261022-core-cost-import/`: 262 module tests pass. Three aligned 65-row batches yield three cache hits and zero entity-directory/global metadata traversals. Public 1000-node/1000-edge ingestion uses two ID ranges and verifies indexes, grouping and topology after reopen. Foreign deletion, 20 alternating publications, eviction of old record caches, old-pin reads, drain and integrity pass. Input/batch/durability boundaries remain frozen under P0; import throughput has no final acceptance yet.
 
-## 9. P7: Material improvement and final objectives
+## 9. P7: Final implementation acceptance
 
-### 9.0 Known core gap before final freezing
+### 9.0 Fixed acceptance checklist
 
-Cold insertion still enumerates the Entity Map to find holes: the medium 1000-node diagnostic visits 225000 mappings. Negative caching fixes repeated continuous-import discovery only. **Remove this known population-dependent work before starting the final matrix; do not hide it through warming or moving work outside timing.**
+- [x] **Public ROW-to-hot/cold conversion.** Explicit `stageHybridPropertyConversion(..., coldRowRemainder=true)` reads real ordinary ROW sources through the original Native coordinator. Retain64 IDs/4096 memberships per group, at most8 groups and one shared1MiB conversion account.
+- [x] **Prepare the complete specified target, admit, then publish once.** Reuse private COW field/directory/LargeValue/metadata planning without cross-transaction intermediate roots. Once every requested group is prepared, charge whole-database steady allocation, retired/pinned peak and file length. Switch A/B roots only for at least10% whole-database saving within peak limits. Refusal, cancellation, resource exhaustion or crashes expose no prefix.
+- [x] **Actual converted production consumption and lifecycle.** Cover Node/Edge sources, filter/group/cold long-ID point reads/reopen, hot/cold writes and whole-column demotion, same-batch LargeValue publication, backend sealed birth/deletion, inverse preserving other groups, old pins, GC, field relocation/retirement, cancellation/retry, partial/complete A/B recovery and integrity.
+- [x] **Final necessary module verification.** Include public conversions, existing lifecycle/cohort/directory/format regressions and default-format refusal. No full suite or unexecuted-platform claim.
+- [x] **One final unified matrix and evidence archive.** Preserve P0 inputs/oracles, three independent processes with three warmups and ten measurements, durability and resource contracts. Report every workload's before/after/Kuzu results, P50/P95, CPU/IO/memory/file observations and limitations.
 
-Next implement a durable page-level free-space summary using existing B+Tree/atomic publication, without another backend or WAL. Locate candidates by record kind, free slots and complete PageId. Distinguish complete empty state from missing/stale state. Completeness binds exact entity-directory roots, not counts, addresses alone or hashes. Reserve an internal namespace and reject user index CRUD. The summary is derived; allocation still authenticates current directories, page identity and actual slots.
+The complete target is the explicitly requested cohort, not mandatory conversion of an arbitrary database. Charge space across the entire database; cohort-only savings never substitute for whole-database savings. Narrow data or a small prefix in a large database may be ineligible; retaining ROW is correct. A cross-transaction whole-database migration tool would be a separately designed project, outside this fixed acceptance.
 
-First establish when candidate directory roots become available in the coordinator. Publish summaries, fences, entities/properties/indexes, allocation and retirement in one A/B change. Maintain creation, deletion, relocation and empty-page retirement. Explicit old-file initialization/rebuild must record one-time time, memory, space and failure state; silently migrating at open/ordinary writes is not constant cost. Incomplete initialization cannot certify absence. Reuse existing bounded batches or reject over-budget input. Any necessary new wire format still requires a prior storage-spec revision and no silent reinterpretation.
+### 9.1 Unchanged safety and resource contracts
 
-Acceptance includes cold reopen with fixed k and growing populations, complete empty summaries, sparse holes, type separation, old pins, faults/cancellation, corrupt/missing index entries and file growth. Full integrity checks derived summaries against authoritative pages. Prototypes/initialization earn no extra progress; P7 retains its final all-gates weight.
+Preserve local-access validation plus full integrity, data-before-root, original source fences/actual Entity/competing ROW checks, generations/manifests, sealed creation authority, all field types, old pins and refunds. Ordinary mutations retain batch-wide64 actual changed/migrated owners,64 user replacements and64 total column plans; never reset bounds per group/namespace. Conversion retains4096 memberships per group, at most8 groups and one1MiB account. Maintenance keeps its original separately bounded account.
 
-### 9.1 Measurement windows and acceptance
+Default5/31 and explicit experimental13/39 remain distinct; experimental functionality does not imply default adoption. Missing admission refuses public cold publication before IO. RAW functionality/admission remains available without LZ4, without promising equivalent saving. One-frame4096-byte full queries use the existing bounded copied fallback, without more cache or weaker validation.
 
-Run the complete matrix once for the corrected P0 baseline and once after final P7 freeze. During implementation prefer counters and module tests; allow one bounded prototype diagnostic per core route when deciding whether to invest in its complete lifecycle. Add targeted measurements only for new failures or contradictory evidence; never rerun the matrix after every commit.
+### 9.2 Report measured performance
 
-Use at least 3 independent processes with 3 warmups and 10 measurements per query process. Import once per process, with at least 3 independent imports. Preserve per-process and pooled P50/P95, every sample, correctness, CPU, I/O, memory, and file growth. The maximum of 3 imports is not a reliable tail percentile. Write counts follow the frozen contract; preparation and verification have explicit excluded boundaries.
+Preserve all six core workloads and every guard. Show both equal1000-row import transaction boundaries and production Kuzu COPY separately. Retain per-process/pooled P50/P95, all samples, failures and N/A; never remove slow samples. Three-import maxima are not reliable P95. Historical CPU attribution is not a new profile; sampled file peaks are not an exact allocation census.
 
-**Structural improvement gate:** on both datasets, single-property SET, ordinary label filtering, and actual single-key grouping must each achieve at least 5-fold P50 speedup over the corrected ZYX baseline. This is a target to validate, not a promise or existing result. Small gains require further dominant-cost investigation; counters cannot substitute for latency.
+Compare against the historical5x benefit, Kuzu and5% regression observations, but no speedup/superiority is required for this acceptance. Semantic, safety/resource failures or stable regressions still require correction.
 
-**Kuzu objective gate:** on both datasets, all six frozen core workloads must have final ZYX P50 no higher than the equivalent Kuzu control; reliably estimated query/write P95 must also be no higher. Equality means parity, not superiority; superiority requires consistently lower results across independent processes. Judge import using the equal-transaction control while also displaying production COPY results. Missing, failing, or slower core cases leave the objective unmet and P7 incomplete.
+### 9.3 Final delivery
 
-Guard workloads should not regress by more than 5% in P50/P95 against the corrected baseline. Investigate excesses with targeted confirmation; fix stable regressions. Use all preregistered processes, retain slow samples, and never use cross-process extreme envelopes or average speedups to hide individual failures. Increasing resource limits is not acceptance.
+Synchronize the [storage specification](native-single-file-storage-plan) and [capability matrix](native-capability-acceptance-matrix). Preserve the revised contract, whole-database conversion allocation evidence, source/library identities, necessary tests, raw measurements and complete comparisons in `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. The preceding closeout archive remains historical; its undelivered-conversion/failed-P7 status no longer drives current implementation.
 
-### 9.2 Lifecycle and final evidence
+After the final two items pass, mark implementation acceptance100%, commit/push once to remote `work` under the user's progress rule, and stop without adding optimization tasks.100% does not imply Kuzu superiority or cold-layout eligibility for every database.
 
-Affected modules must cover old pins and post-release reclamation, reopen, fault injection, allocation failure, cancellation, corruption, indexes/constraints, overlays, and cross-path equivalence. Measure space with long-lived snapshots and after they drain; a short plateau is not indefinite steady state. Mechanism tests verify scaling and actual work, not merely mirror implementation.
-
-Preserve source/library identity, commands, input SHA, mechanism counters, necessary tests, raw samples, failures, and limitations in a new directory under `benchmarks/architecture-design/decisions/`. Do not commit large databases or build products; provide reproducible input generation and execution. Formal evidence must not exist only in ignored output or temporary `/workspace` paths.
-
-P7 synchronizes actual changes into the [storage specification](native-single-file-storage-plan) and [capability matrix](native-capability-acceptance-matrix), and publishes per-workload before/after/Kuzu tables. **Mark this plan 100% only when mechanisms, correctness, structural gains, the Kuzu objective, and regression guards all pass.** Otherwise retain incomplete status and identify the next evidenced core cost; reporting the gap is not completion.
+Implementation acceptance is complete (100%): public12, both experimental modes576 each, default155 and both full-query cache modes2 pass; all99 matrix workers and complete comparisons are archived. The commit/push target is recorded in delivery.json; Git history records the actual revision. Stop at this fixed checklist without follow-on tasks.

@@ -1,0 +1,59 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BufferModes/RelocatablePropertyRunTest.*/1
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BufferModes/RelocatablePropertyRunTest
+[ RUN      ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/1
+/tmp/closeout-oneframe-throw-trace.so + 0x1285 __cxa_throw
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4c9739 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4c8f9a 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4c9b56 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x1160c1 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x9a4b04 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4f5f38 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4f8d9e 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6d81fb 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6d7886 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6d2c20 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6d410e 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x72fa52 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x4e1005 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x5a0ac4 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x5bd201 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x41ab50 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x211444 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x1fcec0 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x1f98ea 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x20258f 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x209ae5 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x32d5c7 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x208ce4 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x123444 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x11e626 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x11cc24 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x11c857 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x7d2aa 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa62f07 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa4f5e6 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa4f775 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa4fe4f 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa590dc 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa635c7 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0xa4f802 
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6b5f4 
+/lib/x86_64-linux-gnu/libc.so.6 + 0x29ca8 
+/lib/x86_64-linux-gnu/libc.so.6 + 0x29d65 __libc_start_main
+benchmarks/architecture-design/results/20261022-core-cost/closeout-oneframe-default/module-tests + 0x6bfb1 
+unknown file: Failure
+C++ exception with description "buffer pool has no unpinned page available for eviction" thrown in the test body.
+
+[  FAILED  ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/1, where GetParam() = 4096 (13 ms)
+[----------] 1 test from BufferModes/RelocatablePropertyRunTest (13 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (13 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BufferModes/RelocatablePropertyRunTest.NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback/1, where GetParam() = 4096
+
+ 1 FAILED TEST

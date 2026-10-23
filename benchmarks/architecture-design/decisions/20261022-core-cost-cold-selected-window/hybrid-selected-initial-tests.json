@@ -1,0 +1,333 @@
+{
+  "tests": 30,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T23:50:58Z",
+  "time": "0.093s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdRowOwnershipTest",
+      "tests": 17,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T23:50:58Z",
+      "time": "0.066s",
+      "testsuite": [
+        {
+          "name": "ForwardAndReverseAuditDistinctRawBlocksWithoutMaterializingValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 31,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ColdOnlyGroupsKeepExactOwnerAndPhysicalRecordOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 43,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "EdgeNamespaceRawColdRecordsAndRealLargeRootsEnumerateTheirExactReferenceOnce",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 53,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "IncorrectOwnerToBlockBindingCannotPassForwardOrReverseChecks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 65,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "GlobalColdCountIsSummedAcrossBlocksRatherThanTrustedFromLocalBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "UnreferencedDuplicateColdRecordRequiresTheReversePhysicalPhase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 84,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "UnreferencedDuplicateMembershipDoesNotAcquireItsGroupsAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 92,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "CompleteAuditInspectsActualValuesBeyondCanonicalDirectoriesAndValidOuterChecksums",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "LargeReferenceMustNotBeNewerThanItsColdBlockEvenWhenTheGroupIsNewer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ActualLargeStoreIsRequiredAndReferenceConsumerExceptionsDoNotReplayOrWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 126,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "QuotaAndCancellationRefuseWithoutLosingTemporaryOwnershipAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 139,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ReferenceMarkingBorrowsOneWholeRootWithoutFieldMaterialization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ReferenceMarkingRejectsFutureBlockReferenceBeforeCallingSink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ReferenceSinkFailureDoesNotReplayAndReleasesItsWindow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 184,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ScannerResumesAfterOneWholeRootAndOneReferenceFreeBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ScannerAdvancesInlineColdOnlyEdgeGroupWithoutFieldEnumeration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 217,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        },
+        {
+          "name": "ScannerCannotGrantExhaustionWhenMetadataOrOwnerBudgetIsAbsent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowOwnership.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowOwnershipTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyColdRowRoutingTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T23:50:58Z",
+      "time": "0.027s",
+      "testsuite": [
+        {
+          "name": "PointValuesPresenceCountsAndFullCollectionsShareExactHotColdAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 20,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "WholeRootLargeValuesKeepTheSamePointEnumerationAndFullReadBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 44,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "HotReadsDoNotTouchCorruptUnvisitedColdBlockAndColdReadsFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 54,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "CompetingOrdinaryRowStillRejectsEvenAnOtherwiseValidHotRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "CompetingExplicitSelectorCannotOverrideAGroupGlobalMissingHotCell",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 67,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ColdEnumerationRejectsGloballyHotTokenEvenWhereThatOwnerHasNoHotMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 72,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ColdRepresentationHandoffRunsBeforeDecodeAndLeaseRestoresParentOnFailure",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 80,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "GroupedHotRunsAuthenticateAllOwnersWithoutReadingAnyColdRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "TypedColdTextBorrowAndMutationRefusalNeverMaterializeAnOwningValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 134,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ScalarFallbackUsesMetadataPresenceAndNeverReadsAnUnrequestedColdRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 157,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ColdSelectedWindowDecodesSharedBlockOnceAndPreservesOrderedMissingCells",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ColdSelectedWindowFailureNeverReplaysEarlierOutputAndRefundsItsBody",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 209,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        },
+        {
+          "name": "ColdSelectedWindowPreflightsCompetingRoutesBeforeAnyOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdRowRouting.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T23:50:58Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyColdRowRoutingTest"
+        }
+      ]
+    }
+  ]
+}

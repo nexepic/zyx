@@ -126,6 +126,27 @@ public:
                                                 uint64_t block, uint32_t type, std::span<const uint32_t> tokens) const {
   return readSelectedImpl(snapshot,root,block,type,tokens,true);
  }
+ // Actual native manifest/data-page supply for the existing lab representation.
+ // The visitor cannot retain borrowed text or encoded complex spans.
+ void visitSelectedColumn(const MetadataSnapshotPin &snapshot, const LargeValueRef &root,
+                          uint64_t block, uint32_t type, uint32_t token,
+                          const TypedPropertyBlock::ColumnVisitor &visitor,
+                          const std::function<void()> &checkpoint = {}) const {
+  if (!token || !visitor) fail("invalid native borrowed-column request");
+  if (checkpoint) checkpoint();
+  auto loaded = readRoot(snapshot, root, block, type);
+  const size_t rows = LittleEndianCodec::readU16(loaded.image.metadata, 6);
+  for (size_t column = 0; column < loaded.references.size(); ++column) {
+   if (checkpoint) checkpoint();
+   const size_t d = TypedPropertyBlock::HEADER + rows * 8 + column * TypedPropertyBlock::DESCRIPTOR;
+   if (LittleEndianCodec::readU32(loaded.image.metadata, d) == token) {
+    loaded.image.columns[column] = std::make_shared<const std::vector<std::byte>>(
+        native_.read(snapshot, loaded.references[column]));
+    break;
+   }
+  }
+  TypedPropertyBlock::visitSelectedColumn(loaded.image, block, type, token, visitor, checkpoint);
+ }
  PropertyCollectionRoot readOwner(const MetadataSnapshotPin &snapshot,const LargeValueRef &root,
                                   const PropertyBlockOwnerSlots::Route &route,std::span<const uint32_t> tokens) const {
   auto loaded=readRoot(snapshot,root,route.block,route.type);

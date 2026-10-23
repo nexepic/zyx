@@ -258,7 +258,7 @@ TEST_F(RelocatableCatalogTreeTest, PublishesOneBatchIntoSharedLeavesAndSurvivesR
 			  PhysicalSlotId(103));
 }
 
-TEST_F(RelocatableCatalogTreeTest, LogicalizesAnOwnedCandidateRootBeforeBootstrapRoutePublication) {
+TEST_F(RelocatableCatalogTreeTest, MaterializesLogicalCandidateOnceBeforeBootstrapRoutePublication) {
 	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock current = snapshot.superblock();
@@ -274,10 +274,13 @@ TEST_F(RelocatableCatalogTreeTest, LogicalizesAnOwnedCandidateRootBeforeBootstra
 
 	tree.prepareUpsert(batch, std::span(&added, 1U));
 	ASSERT_TRUE(batch.ownsAllocatedPage(batch.candidate().catalog_root));
-	EXPECT_FALSE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
-
-	tree.prepareLogicalRootChildren(batch);
 	EXPECT_TRUE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
+	const auto root = batch.candidate().catalog_root;
+	const auto allocated = batch.allocatedPageCount();
+	tree.prepareLogicalRootChildren(batch);
+	EXPECT_EQ(batch.candidate().catalog_root, root);
+	EXPECT_EQ(batch.allocatedPageCount(), allocated);
+	EXPECT_TRUE(pages.readMetadataRadixUnresolved(root).logical_children_enabled);
 }
 
 TEST_F(RelocatableCatalogTreeTest, NativeCandidateShortWriteRetainsOldGenerationAndAllowsRetryAfterReopen) {

@@ -42,6 +42,27 @@ public:
         utils::OwnedHeapReservation tokenCredit(memory), boundaryCredit(memory);
         const auto tokensAdmission = [&](size_t bytes) { tokenCredit.set(bytes); };
         const auto boundary = [&](size_t bytes) { boundaryCredit.set(bytes); };
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+        // Count, admission passes and value construction borrow the same cold
+        // body. A completed collection leaves the lease before escaping.
+        const std::array<EntityPropertyKey, 1> selected{owner};
+        std::optional<CollectionResult> windowResult;
+        bool producing = false, consumed = false;
+        try { consumed = context.visitColdWindowSorted(selected, {}, true, [&](size_t, size_t) {
+            producing = true;
+            windowResult = readCollection(context, snapshot, owner, ownerType, largeValues, admission, slotsAdmission);
+        }, std::ref(boundary));
+        } catch (const query::execution::MaterializedByteLimitExceeded &) {
+            if (producing) throw;
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            if (producing) throw;
+        }
+        boundaryCredit.set(0);
+        if (consumed) {
+            hybrid_property_detail::require(bool(windowResult), "cold collection window produced no result");
+            return std::move(*windowResult);
+        }
+#endif
         const auto tokens = context.tokens(owner, tokensAdmission, boundary);
         if (!tokens) return {};
         if (tokens->empty()) return {true, std::nullopt};
@@ -56,6 +77,7 @@ public:
                 case HybridPropertyScalarKind::HPSK_INT64: return PropertyValue(std::bit_cast<int64_t>(cell.word));
                 case HybridPropertyScalarKind::HPSK_DOUBLE: return PropertyValue(std::bit_cast<double>(cell.word));
                 case HybridPropertyScalarKind::HPSK_BOOL: return PropertyValue(bool(cell.word));
+                case HybridPropertyScalarKind::HPSK_SHORT_TEXT7: return PropertyValue(HybridPropertyShortText::decode(cell.word));
                 default: throw FormatException(FormatError::FERR_INVALID_ENUM, "unknown hybrid scalar kind");
             }
         };
@@ -109,12 +131,15 @@ public:
         std::span<std::optional<size_t>> counts = {}, LargeValueStore *largeValues = nullptr,
         const SelectedPropertyReadAdmission *admission = nullptr,
         const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr,
-        const PropertyScalarReadSink *scalars = nullptr) {
+        const PropertyScalarReadSink *scalars = nullptr, const PropertyTextReadSink *texts = nullptr,
+        const PropertyColumnBatchReadSinks *batches = nullptr) {
         hybrid_property_detail::require(context.usesSnapshot(snapshot), "hybrid selected batch requires its original pin");
         hybrid_property_detail::require((tokens.empty() || owners.size() <= (std::numeric_limits<size_t>::max)() / tokens.size()) &&
             (sink ? (bool(*sink) && values.empty()) : values.size() == owners.size() * tokens.size()) && (counts.empty() || counts.size() == owners.size()),
             "hybrid selected batch requires rectangular outputs");
         hybrid_property_detail::require(!scalars || (sink && bool(*scalars)), "hybrid scalar cells require an owning fallback sink");
+        hybrid_property_detail::require(!batches || (sink && scalars && texts && batches->scalars && batches->texts),
+            "hybrid runs require typed and owning fallbacks");
         uint64_t previousOwner = 0;
         for (const auto owner : owners) {
             hybrid_property_detail::require(owner.isValid() && owner.directoryId() > previousOwner,
@@ -131,16 +156,143 @@ public:
         utils::OwnedHeapReservation boundaryCredit(memory), referenceCredit(memory);
         const auto boundary = [&](size_t bytes) { boundaryCredit.set(bytes); };
         bool allHybrid = true;
+        [[maybe_unused]] size_t attemptedGroupEnd=0;
         for (size_t i = 0; i < owners.size(); ++i) {
             context.checkpoint();
+#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+            if (!(sink && scalars && texts && tokens.size() == 1 && counts.empty())) {
+                size_t end = i + 1;
+                while (end < owners.size() && owners[end].owner_kind == owners[i].owner_kind &&
+                    hybridPropertyGroupFor(owners[end]) == hybridPropertyGroupFor(owners[i])) ++end;
+                bool producing = false, consumed = false;
+                try { consumed = context.visitColdWindowSorted(owners.subspan(i, end - i), tokens, !counts.empty(),
+                    [&](size_t first, size_t last) {
+                        const auto offset = i + first, length = last - first;
+                        const auto owning = [&](size_t row, size_t column, auto value) {
+                            producing = true; (*sink)(offset + row, column, std::move(value));
+                        };
+                        const auto scalar = [&](size_t row, size_t column, auto type, uint64_t word) {
+                            producing = true; (*scalars)(offset + row, column, type, word);
+                        };
+                        const auto text = [&](size_t row, size_t column, std::string_view value) {
+                            producing = true; (*texts)(offset + row, column, value);
+                        };
+                        const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> owningSink = std::ref(owning);
+                        const PropertyScalarReadSink scalarSink = std::ref(scalar);
+                        const PropertyTextReadSink textSink = std::ref(text);
+                        // The stack lease prevents recursive window creation.
+                        // Borrow the existing output rectangle and original account.
+                        const auto output = sink ? values : values.subspan(offset * tokens.size(), length * tokens.size());
+                        const auto outputCounts = counts.empty() ? counts : counts.subspan(offset, length);
+                        if (!sink || !counts.empty()) producing = true;
+                        const bool complete = readSelected(context, snapshot, owners.subspan(offset, length), tokens,
+                            output, outputCounts, largeValues, admission, sink ? &owningSink : nullptr,
+                            scalars ? &scalarSink : nullptr, texts ? &textSink : nullptr, nullptr);
+                        hybrid_property_detail::require(complete, "cold window changed native routing");
+                        // Owning rectangles/counts are also observable output.
+                        producing = true;
+                    }, std::ref(boundary));
+                } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                    if (producing) throw;
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    if (producing) throw;
+                }
+                boundaryCredit.set(0);
+                if (consumed) { i = end - 1; continue; }
+            }
+            if (sink && scalars && texts && tokens.size() == 1 && counts.empty()) {
+                size_t end = i + 1;
+                while (end < owners.size() && owners[end].owner_kind == owners[i].owner_kind &&
+                    hybridPropertyGroupFor(owners[end]) == hybridPropertyGroupFor(owners[i])) ++end;
+                // No decline/retry after a callback: exceptions propagate with
+                // their existing ordinal and release the sole decoded body.
+                bool consumed = false, producing = false;
+                try { consumed = context.visitColdOwnersSorted(owners.subspan(i, end - i), tokens.front(),
+                    [&](size_t relative, std::optional<std::span<const std::byte>> bytes) {
+                        producing = true;
+                        const auto ordinal = i + relative;
+                        if (!bytes) { (*sink)(ordinal, 0, std::nullopt); return; }
+                        if (admission) (*admission)(sizeof(uint32_t) + bytes->size());
+                        const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(*bytes);
+                        context.checkpoint();
+                        if (primitive) {
+                            if (primitive->type == PropertyType::STRING) (*texts)(ordinal, 0, primitive->text);
+                            else (*scalars)(ordinal, 0, primitive->type, primitive->bits);
+                        } else {
+                            size_t offset = 0;
+                            auto value = CanonicalPropertyValueCodec::decodeNext(*bytes, offset);
+                            hybrid_property_detail::require(offset == bytes->size(), "cold grouped value has trailing bytes");
+                            (*sink)(ordinal, 0, PropertyCollectionRootEntry{tokens.front(), std::move(value)});
+                        }
+                    }, std::ref(boundary), largeValues);
+                } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                    if (producing) throw;
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    if (producing) throw;
+                }
+                boundaryCredit.set(0);
+                if (consumed) { i = end - 1; continue; }
+            }
+            if(batches && tokens.size()==1 && counts.empty() && i>=attemptedGroupEnd) {
+                size_t end=i+1;
+                while(end<owners.size() && owners[end].owner_kind==owners[i].owner_kind &&
+                    hybridPropertyGroupFor(owners[end])==hybridPropertyGroupFor(owners[i]))++end;
+                attemptedGroupEnd=end;
+                bool consumed=false,producing=false;
+                try {consumed=context.visitColumnOwnersSorted(owners.subspan(i,end-i),tokens.front(),
+                    [&](const auto &,const HybridPropertyColumnRecord &column,const auto &,const auto &){
+                        producing=true; // callback failures may never replay this group
+                        std::array<size_t,64> ordinals{};std::array<uint64_t,64> words{};
+                        std::array<std::array<char,HybridPropertyShortText::MAX_BYTES>,64> buffers{};
+                        std::array<std::string_view,64> text{};
+                        const auto typeAt=[&](size_t row){
+                            const auto bit=UINT64_C(1)<<hybridPropertySlotFor(owners[row]);
+                            if(column.nulls&bit)return PropertyType::NULL_TYPE;
+                            switch(column.identity.scalar_kind) {
+                                case HybridPropertyScalarKind::HPSK_INT64:return PropertyType::INTEGER;
+                                case HybridPropertyScalarKind::HPSK_DOUBLE:return PropertyType::DOUBLE;
+                                case HybridPropertyScalarKind::HPSK_BOOL:return PropertyType::BOOLEAN;
+                                case HybridPropertyScalarKind::HPSK_SHORT_TEXT7:return PropertyType::STRING;
+                            }
+                            throw FormatException(FormatError::FERR_INVALID_ENUM,"unknown grouped column kind");
+                        };
+                        size_t first=i;
+                        while(first<end) {
+                            const auto bit=UINT64_C(1)<<hybridPropertySlotFor(owners[first]);
+                            if(!(column.presence&bit)) {context.checkpoint();(*sink)(first++,0,std::nullopt);continue;}
+                            const auto type=typeAt(first);size_t count=0;
+                            while(first+count<end) {
+                                const auto row=first+count;const auto slot=hybridPropertySlotFor(owners[row]);
+                                if(!(column.presence&(UINT64_C(1)<<slot)) || typeAt(row)!=type)break;
+                                if((count%(type==PropertyType::STRING?4U:16U))==0)context.checkpoint();
+                                ordinals[count]=row;words[count]=column.words[slot];
+                                size_t payload=type==PropertyType::NULL_TYPE?0U:type==PropertyType::BOOLEAN?1U:8U;
+                                if(type==PropertyType::STRING) {text[count]=HybridPropertyShortText::copy(words[count],buffers[count]);payload=text[count].size();}
+                                if(admission)(*admission)(sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+payload);
+                                ++count;
+                            }
+                            if(type==PropertyType::STRING)(*batches).texts(std::span(ordinals).first(count),0,std::span(text).first(count));
+                            else (*batches).scalars(std::span(ordinals).first(count),0,type,std::span(words).first(count));
+                            context.checkpoint();first+=count;
+                        }
+                    },std::ref(boundary));
+                } catch(const query::execution::MaterializedByteLimitExceeded &) {
+                    if(producing)throw;
+                    debug::PerfTrace::addValue("native_graph.hybrid.grouped_column_declined_admission",1);
+                } catch(const query::execution::detail::ResourceAdmissionDenied &) {
+                    if(producing)throw;
+                    debug::PerfTrace::addValue("native_graph.hybrid.grouped_column_declined_admission",1);
+                }
+                boundaryCredit.set(0);
+                if(consumed) {i=end-1;continue;}
+            }
+#endif
             std::optional<bool> hasFields;
             if (counts.empty()) {
                 // Selected-only consumers need root presence, not a full field
                 // count. Stop after the first actual membership; unrequested
                 // fields remain the responsibility of their reads/integrity.
-                const auto first = context.visitOwner(owners[i], 1,
-                    [](uint32_t, HybridPropertySource) { return false; }, std::ref(boundary));
-                if (first.routed) hasFields = first.fields != 0;
+                hasFields = context.hasFields(owners[i], std::ref(boundary));
             } else {
                 const auto count = context.count(owners[i], std::ref(boundary));
                 if (count) { counts[i] = *count; hasFields = *count != 0; }
@@ -154,6 +306,15 @@ public:
                         boundaryCredit.set(0);
                         PropertyType type = PropertyType::NULL_TYPE;
                         size_t payloadBytes = 0;
+                        if(!cell.is_null && cell.kind==HybridPropertyScalarKind::HPSK_SHORT_TEXT7) {
+                            if(!texts)return; // legacy consumers retain the owning boundary
+                            if(admission)(*admission)(sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+(cell.word>>56U));
+                            context.checkpoint();
+                            std::array<char,HybridPropertyShortText::MAX_BYTES> buffer{};
+                            // Never queue this stack view: consume it synchronously.
+                            (*texts)(i,column,HybridPropertyShortText::copy(cell.word,buffer));
+                            emitted=true;return;
+                        }
                         if (!cell.is_null) switch (cell.kind) {
                             case HybridPropertyScalarKind::HPSK_INT64: type = PropertyType::INTEGER; payloadBytes = 8; break;
                             case HybridPropertyScalarKind::HPSK_DOUBLE: type = PropertyType::DOUBLE; payloadBytes = 8; break;
@@ -166,8 +327,18 @@ public:
                         emitted = true;
                     };
                     const auto reference = [&](size_t bytes) { boundaryCredit.set(0); referenceCredit.set(bytes); };
+                    const auto encoded = [&](std::span<const std::byte> bytes) {
+                        const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes);
+                        if (!primitive || (primitive->type == PropertyType::STRING && !texts)) return;
+                        if (admission) (*admission)(sizeof(uint32_t) + bytes.size());
+                        context.checkpoint();
+                        if (primitive->type == PropertyType::STRING) (*texts)(i, column, primitive->text);
+                        else (*scalars)(i, column, primitive->type, primitive->bits);
+                        emitted = true;
+                    };
                     const auto route = context.visitField(owners[i], tokens[column], std::ref(scalar),
-                        [](const HybridPropertyExtensionView &) {}, std::ref(boundary), std::ref(reference));
+                        [](const HybridPropertyExtensionView &) {}, std::ref(boundary), std::ref(reference),
+                        {}, std::ref(encoded), largeValues);
                     boundaryCredit.set(0); referenceCredit.set(0);
                     hybrid_property_detail::require(route != HybridPropertyReadContext::FieldRoute::HFR_ROW,
                         "hybrid scalar owner changed routing within its pinned batch");
@@ -219,8 +390,12 @@ public:
             HybridPropertyLargeFieldInspection inspection(context, snapshot, field, *largeValues, memory);
             present = !inspection.isNull();
         };
+        const auto encoded = [&](std::span<const std::byte> bytes) {
+            boundaryCredit.set(0);
+            present = !requireNonNull || !CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size());
+        };
         const auto route = context.visitField(owner, token, std::ref(scalar), std::ref(extension),
-            std::ref(boundary), std::ref(reference));
+            std::ref(boundary), std::ref(reference), {}, std::ref(encoded), largeValues);
         if (route == HybridPropertyReadContext::FieldRoute::HFR_ROW) return {};
         return route == HybridPropertyReadContext::FieldRoute::HFR_FOUND && present;
     }
@@ -242,6 +417,7 @@ public:
                     case HybridPropertyScalarKind::HPSK_INT64: value = PropertyValue(std::bit_cast<int64_t>(cell.word)); break;
                     case HybridPropertyScalarKind::HPSK_DOUBLE: value = PropertyValue(std::bit_cast<double>(cell.word)); break;
                     case HybridPropertyScalarKind::HPSK_BOOL: value = PropertyValue(bool(cell.word)); break;
+                    case HybridPropertyScalarKind::HPSK_SHORT_TEXT7: value = PropertyValue(HybridPropertyShortText::decode(cell.word)); break;
                     default: throw FormatException(FormatError::FERR_INVALID_ENUM, "unknown hybrid scalar kind");
                 }
             }
@@ -286,8 +462,17 @@ public:
             };
             result.value = field.decodeLargePayload(payload, std::ref(admitValue), std::ref(admitDirectory), std::ref(checkpoint));
         };
+        const auto encoded = [&](std::span<const std::byte> bytes) {
+            boundaryCredit.set(0);
+            if (admission) (*admission)(sizeof(uint32_t) + bytes.size());
+            if (mode == ReadMode::HRM_ADMISSION_ONLY) return;
+            size_t offset = 0;
+            auto value = CanonicalPropertyValueCodec::decodeNext(bytes, offset);
+            hybrid_property_detail::require(offset == bytes.size(), "cold ROW selected value has trailing bytes");
+            result.value = PropertyCollectionRootEntry{token, std::move(value)};
+        };
         result.route = context.visitField(owner, token, std::ref(scalar), std::ref(extension),
-            std::ref(boundary), std::ref(reference));
+            std::ref(boundary), std::ref(reference), {}, std::ref(encoded), largeValues);
         return result;
     }
 };

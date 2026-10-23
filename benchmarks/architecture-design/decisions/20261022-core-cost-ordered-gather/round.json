@@ -1,0 +1,30 @@
+{
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "full_suite": false,
+  "typed_module_tests": 264,
+  "mechanism": {
+    "rows": [
+      64,
+      512,
+      4096
+    ],
+    "unique_checkpoints": [
+      128,
+      1024,
+      8192
+    ],
+    "ordered_duplicate_checkpoints": [
+      256,
+      2048,
+      16384
+    ],
+    "budget_refunded": true
+  },
+  "formal_performance_measurement": false,
+  "library_sha256": "19fe1be3fcf8a3626fd04ae51085748d7e8b2ca4c636a68c8425803f69f58680",
+  "retained_library": "/workspace/zyx-ordered-gather-candidate/libzyx_core.a",
+  "patch_sha256": "cb20b4c3ab042f14b0cd986c84317964427fcf79f5733796bc7f3963415c5a3e",
+  "scope": "identity mapping for strictly ordered owners; linear sorted duplicate grouping; original unsorted gather fallback; no persisted format/public header/cache quota change; no commit/push without acceptance progress"
+}

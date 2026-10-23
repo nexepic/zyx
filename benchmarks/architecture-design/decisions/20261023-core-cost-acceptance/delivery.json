@@ -1,0 +1,12 @@
+{
+  "progress_before": 90,
+  "progress_after": 100,
+  "commit_count_authorized_for_this_increase": 1,
+  "remote": "origin",
+  "remote_ref": "refs/heads/work",
+  "force_push": false,
+  "expected_parent": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "status_at_receipt_creation": "Acceptance verified; commit and push follow. Git history and the final chat response identify the actual revision and delivery outcome.",
+  "verify_remote_command": "git ls-remote origin refs/heads/work",
+  "commit_identity": "The Git revision containing this file; no self-referential commit hash is embedded."
+}

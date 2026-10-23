@@ -1,0 +1,71 @@
+{
+  "recorded_at_utc": "2026-10-23T08:37:59.672523+00:00",
+  "base_head": "efb9cb457cb03770e9cab50640119ca72339fa3e",
+  "progress_percent": 90,
+  "P7_accepted": false,
+  "full_suite": false,
+  "timing_benchmark": false,
+  "commit_push": false,
+  "checks": {
+    "hybrid-cold-global-demotion-final-legacy-": {
+      "tests": 514,
+      "failures": 0,
+      "skipped": 0
+    },
+    "hybrid-cold-global-demotion-final-compact-": {
+      "tests": 514,
+      "failures": 0,
+      "skipped": 0
+    },
+    "default-final": {
+      "tests": 154,
+      "failures": 0,
+      "skipped": 0
+    },
+    "targeted": {
+      "tests": 36,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "libraries": {
+    "hybrid": {
+      "path": "/workspace/zyx-build-core-hybrid/libzyx_core.a",
+      "sha256": "088081f432bb2a81a2d8665f1e9d044028502c9ae19189d4b28a9176646a775b",
+      "binary_preserved": false
+    },
+    "default": {
+      "path": "/workspace/zyx-build-core-candidate/libzyx_core.a",
+      "sha256": "4dfb4bc04ec1d40f3962ff1ae68c6b4e946f647a0305b009bee77f72b7d635a1",
+      "binary_preserved": false
+    }
+  },
+  "limits": {
+    "actual_owners": 64,
+    "native_user_replacements": 64,
+    "total_column_plans": 64,
+    "actual_emitted_memberships": 4096,
+    "conversion_groups": 8,
+    "bytes": 1048576,
+    "default_non_demotion_combined_change_limit": 64
+  },
+  "deliberate_control": {
+    "tests": 1,
+    "failures": 1,
+    "difference": "omit only original cold-directory authentication during global hot authority removal",
+    "current_source_passes_same_case": true
+  },
+  "implemented": [
+    "Explicit preparation-only column demotion/merge; defaults and all liveness/public guards preserved",
+    "Original Native producer constructs final roots for all original/final column owners and exact cold-field changes",
+    "Remove column/membership, compare every demoted canonical value and merge affected cold blocks in same private batch",
+    "Original cold directories/Entity/ROW/selector/manifests authenticated under original hot set and block generation even for unrepacked blocks",
+    "Node/Edge, NULL, absent fields, actual8193byte carrier, merged17-removal threshold, missing-hot incompatible insertion, live propertyless group and source/value refusal coverage"
+  ],
+  "remaining": [
+    "Atomic physical installation and other existing schema combinations",
+    "Pending/new/deleted-owner/liveness/final-group/inverse lifecycle, including actual public conversion",
+    "Whole-space/staged-target bootstrap and full public lifecycle",
+    "Remaining primary query costs and final P7 matrix"
+  ]
+}

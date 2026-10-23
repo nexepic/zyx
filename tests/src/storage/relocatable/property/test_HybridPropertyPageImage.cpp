@@ -56,6 +56,32 @@ TEST(HybridPropertyPageImageTest, SharedNativeImagePacksGroupsColumnsAndFieldsWi
     }
     EXPECT_EQ(memory->used(), 0U);
 }
+TEST(HybridPropertyPageImageTest, RemovingOneGroupFromSharedImagePreservesOtherGroupSlotsAndSource) {
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    {
+        auto original = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+        auto first = group(); first.memberships = 48; first.columns = 1;
+        const auto firstGroup = original.appendGroup(first);
+        const auto firstColumn = original.appendColumn(column(), first, Generation(9));
+        auto second = first; second.group_id = 2;
+        auto secondColumn = column(); secondColumn.identity.group_id = 2;
+        const auto keptGroup = original.appendGroup(second);
+        const auto keptColumn = original.appendColumn(secondColumn, second, Generation(9));
+        const auto before = original.serialize();
+        auto privateImage = original.clone(Generation(10), memory);
+        privateImage.erase(firstGroup); privateImage.erase(firstColumn);
+        EXPECT_EQ(privateImage.liveSlotCount(), 2U);
+        EXPECT_EQ(privateImage.readGroup(keptGroup, second.owner_kind, 2, Generation(10)), second);
+        EXPECT_EQ(privateImage.readColumn(keptColumn, secondColumn.identity, second, Generation(10)), secondColumn);
+        EXPECT_THROW(privateImage.erase(firstColumn), FormatException);
+        EXPECT_EQ(original.serialize(), before);
+        const auto bytes = privateImage.serialize();
+        auto reopened = HybridPropertyPageImage::open(bytes, PageId(41), Generation(1), Generation(10), memory);
+        EXPECT_EQ(reopened.readGroup(keptGroup, second.owner_kind, 2, Generation(10)), second);
+        EXPECT_EQ(reopened.readColumn(keptColumn, secondColumn.identity, second, Generation(10)), secondColumn);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
 TEST(HybridPropertyPageImageTest, PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots) {
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     {
@@ -273,7 +299,9 @@ TEST(HybridPropertyPageImageTest, CompactMembershipSharesAFrameAndSourceCopyReta
     {
         auto source = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
         auto g = group(); const std::array columns{column(), column(true)};
-        const auto matrix = HybridPropertyColumnMembership::fromColumns(g, columns);
+        auto matrix = HybridPropertyColumnMembership::fromColumns(g, columns);
+        for (size_t i = 0; i < columns.size(); ++i)
+            matrix.locators[i] = source.appendColumn(columns[i], g, Generation(9));
         g.column_membership = source.appendColumnMembership(matrix, g, Generation(9));
         g.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
         const auto header = source.appendGroup(g); const auto before = source.serialize();
@@ -297,5 +325,60 @@ TEST(HybridPropertyPageImageTest, CompactMembershipSharesAFrameAndSourceCopyReta
     }
     EXPECT_EQ(memory->used(), 0U);
 }
+TEST(HybridPropertyPageImageTest, DirectColumnLocatorMustAuthenticateTheSelectedTokenBeforeReturningValues) {
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    {
+        auto source = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+        auto g = group(); const std::array columns{column(), column(true)};
+        auto matrix = HybridPropertyColumnMembership::fromColumns(g, columns);
+        for (size_t i = 0; i < columns.size(); ++i)
+            matrix.locators[i] = source.appendColumn(columns[i], g, Generation(9));
+        g.column_membership = source.appendColumnMembership(matrix, g, Generation(9));
+        g.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+        const auto groupSlot = source.appendGroup(g);
+        auto candidate = source.clone(Generation(10), memory);
+        auto next = g; next.semantic_generation = Generation(10);
+        auto aliased = matrix; aliased.semantic_generation = Generation(10);
+        std::swap(aliased.locators[0], aliased.locators[1]);
+        candidate.replaceColumnMembership(g.column_membership, aliased, g, next, Generation(10));
+        candidate.replaceGroup(groupSlot, next, Generation(10));
+        EXPECT_THROW(candidate.readColumn(aliased.columnLocator(columns[0].identity.token),
+            columns[0].identity, next, Generation(10)), FormatException);
+        EXPECT_EQ(source.readColumn(matrix.columnLocator(columns[0].identity.token), columns[0].identity,
+            g, Generation(9)), columns[0]);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
 
 } // namespace
+
+TEST(HybridPropertyPageImageTest, RowRemainderModeKeepsSamePageMembershipThroughCloneReplaceAndReopen) {
+    auto memory = std::make_shared<MaterializedByteBudget>(65536);
+    auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
+    HybridPropertyGroupRecord g{EntityPropertyOwnerKind::EPOK_NODE,
+        HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER, 1, Generation(8), UINT64_MAX, 0, 0};
+    HybridPropertyColumnMembership matrix;
+    matrix.owner_kind = g.owner_kind; matrix.group_id = g.group_id;
+    matrix.semantic_generation = g.semantic_generation; matrix.live = g.live; matrix.row_remainder = true;
+    // The group is provisional until its same-page matrix slot is installed.
+    auto provisional = g; provisional.mode = HybridPropertyGroupMode::HPGM_HYBRID;
+    const auto membership = image.appendColumnMembership(matrix, provisional, Generation(9));
+    g.column_membership = membership;
+    const auto slot = image.appendGroup(g);
+    EXPECT_EQ(image.readColumnMembership(membership, g, Generation(9)), matrix);
+    EXPECT_EQ(image.readGroup(slot, g.owner_kind, 1, Generation(9)), g);
+    const auto original = image.serialize();
+    auto copy = image.clone(Generation(10), memory);
+    auto next = g; next.semantic_generation = Generation(10);
+    copy.replaceGroup(slot, next, Generation(10));
+    const auto bytes = copy.serialize();
+    auto reopened = HybridPropertyPageImage::open(bytes, PageId(41), Generation(1), Generation(10), memory);
+    EXPECT_EQ(reopened.readGroup(slot, g.owner_kind, 1, Generation(10)), next);
+    EXPECT_EQ(image.serialize(), original);
+    auto foreign = g; foreign.column_membership.page_id = PageId(42);
+    EXPECT_THROW(image.appendGroup(foreign), FormatException);
+    EXPECT_THROW(image.readColumnMembership(membership, foreign, Generation(9)), FormatException);
+    auto ordinary = g; ordinary.mode = HybridPropertyGroupMode::HPGM_COLUMN_MEMBERSHIP_BITMAP;
+    EXPECT_THROW(image.replaceGroup(slot, ordinary, Generation(9)), FormatException);
+    EXPECT_EQ(image.serialize(), original);
+}
