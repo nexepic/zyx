@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Batch Scan Path Architecture Optimization Plan
 
-Updated: 2026-10-23. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 5%; editing the plan and historical diagnostics do not count as implementation progress.**
+Updated: 2026-10-23. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 15%; editing the plan and historical diagnostics do not count as implementation progress.**
 
 The previous incremental commits, import work and experimental cold conversion are complete and are removed from the active queue. Historical acceptance remains in `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Historical implementation completion does not establish read-performance acceptance. Do not reintroduce old P1–P7 tasks, stage reports or experimental capability lists as additional work.
 
@@ -92,12 +92,12 @@ Publish fields, membership and primary data atomically. Failure, cancellation or
 
 ## 5. Fixed checklist and progress
 
-Weights measure accepted deliverables, not code volume or performance attainment. Dependency order: S0 → S1 → S2 → S3 → S4 → S5. S0 is accepted; the remaining stages are unaccepted. Documentation, synthetic microbenchmarks and experimental entry-point functionality do not replace production-path acceptance.
+Weights measure accepted deliverables, not code volume or performance attainment. Dependency order: S0 → S1 → S2 → S3 → S4 → S5. S0/S1 are accepted; S2–S5 are unaccepted. Documentation, synthetic microbenchmarks and experimental entry-point functionality do not replace production-path acceptance.
 
 | Stage | Weight | Required deliverable | Status |
 |---|---:|---|---|
 | S0 | 5% | Frozen evidence, inputs, resources, comparison/adoption gates | Accepted |
-| S1 | 10% | Batch contract, candidates, update/maintenance costs and format decision | Unaccepted |
+| S1 | 10% | Batch contract, candidates, update/maintenance costs and format decision | Accepted |
 | S2 | 20% | Bounded complete-scan candidate validation on real persistent data | Unaccepted |
 | S3 | 30% | Selected production read path and required write/recovery lifecycle | Unaccepted |
 | S4 | 20% | Generality, safety, resource and regression validation | Unaccepted |
@@ -149,7 +149,7 @@ Allow 100% only when each primary workload on both datasets reaches 5x, S3/S4 ar
 
 ## 6. Execution discipline and stop conditions
 
-Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity verification and 16 untimed oracle checks across both engines/datasets passed; progress is 5%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/`.
+Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification and the S1 design contract are accepted; progress is 15%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` define the two candidates; the persistent candidate requires a complete wire specification before write implementation. No new scan implementation or performance gain is claimed, and S2 remains unaccepted.
 
 Stop after S5 and final delivery. Do not automatically start import, ordinary-write or other optimization. When selection fails, preserve failure evidence and concrete blockers instead of expanding alternatives indefinitely. Any scope, resource-contract or acceptance-gate change must explicitly record its reason and the user's decision, never silently redefine completion.
 
