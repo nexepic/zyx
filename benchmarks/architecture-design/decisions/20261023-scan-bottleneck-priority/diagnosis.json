@@ -1,0 +1,1928 @@
+{
+  "purpose": "当前性能瓶颈定位与后续路线优先级；不是新的优化实施或正式基准验收",
+  "identity": {
+    "head": "369039dafda8ba6e6764fc7c569ab9b5be7de8b5",
+    "library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a",
+    "probe_sha256": "e549e6aa341f9a0703bcd07561c0ba075a9356236738bd0d0765d2372674ec77",
+    "production_sources_match_acceptance": true,
+    "source_hashes": {
+      "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "cf8be4888856d3e94b8f8a56d2c3ef462199ea6d1d029dfaf6624d08179a9c46",
+      "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": "62605a075cac54639618d849e387198fd3b330077524f5dffda2dbcaf9274dc8",
+      "src/storage/relocatable/index/BTreeIndex.cpp": "c64bf0094bedad666c3b71fce1d4713e249357d3894ac59ef0cdd323b6234b59",
+      "src/storage/relocatable/index/BTreePageStore.cpp": "6d328fcada37185fdbac5306ea01e0bd94ecc6b766f8c4a458c0adb38cb766ea"
+    },
+    "compile": [
+      [
+        "/workspace/zyx-sysroot/usr/bin/clang++-19",
+        "-DR7_COHORT=0",
+        "-I/workspace/zyx",
+        "-DBOOST_ATOMIC_DYN_LINK",
+        "-DBOOST_ATOMIC_NO_LIB",
+        "-DBOOST_FILESYSTEM_DYN_LINK",
+        "-DBOOST_FILESYSTEM_NO_LIB",
+        "-DCOVERAGE_SKIP_ZLIB_ERRORS",
+        "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+        "-DZYX_HAS_LZ4=1",
+        "-DZYX_HAS_ZSTD=1",
+        "-I/workspace/zyx/include",
+        "-I/workspace/zyx/src",
+        "-I/workspace/zyx",
+        "-I/workspace/zyx-build-core-candidate",
+        "-I/workspace/zyx/src/query/parser/cypher",
+        "-I/workspace/zyx/src/query/parser/cypher/generated",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/internal",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/public",
+        "-I/workspace/zyx/lib/inputxx/include",
+        "-isystem",
+        "/workspace/zyx-sysroot/usr/include",
+        "-isystem",
+        "/workspace/antlr4-install/include/antlr4-runtime",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-MD",
+        "-MT",
+        "/workspace/scratch/zyx-current-bottlenecks/PropertyCollectionRootStore.o",
+        "-MF",
+        "/workspace/scratch/zyx-current-bottlenecks/PropertyCollectionRootStore.d",
+        "-o",
+        "/workspace/scratch/zyx-current-bottlenecks/PropertyCollectionRootStore.o",
+        "-c",
+        "/workspace/scratch/zyx-current-bottlenecks/PropertyCollectionRootStore.cpp"
+      ],
+      [
+        "/workspace/zyx-sysroot/usr/bin/clang++-19",
+        "-DR7_COHORT=0",
+        "-I/workspace/zyx",
+        "-DBOOST_ATOMIC_DYN_LINK",
+        "-DBOOST_ATOMIC_NO_LIB",
+        "-DBOOST_FILESYSTEM_DYN_LINK",
+        "-DBOOST_FILESYSTEM_NO_LIB",
+        "-DCOVERAGE_SKIP_ZLIB_ERRORS",
+        "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+        "-DZYX_HAS_LZ4=1",
+        "-DZYX_HAS_ZSTD=1",
+        "-I/workspace/zyx/include",
+        "-I/workspace/zyx/src",
+        "-I/workspace/zyx",
+        "-I/workspace/zyx-build-core-candidate",
+        "-I/workspace/zyx/src/query/parser/cypher",
+        "-I/workspace/zyx/src/query/parser/cypher/generated",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/internal",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/public",
+        "-I/workspace/zyx/lib/inputxx/include",
+        "-isystem",
+        "/workspace/zyx-sysroot/usr/include",
+        "-isystem",
+        "/workspace/antlr4-install/include/antlr4-runtime",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-MD",
+        "-MT",
+        "/workspace/scratch/zyx-current-bottlenecks/PageBackedGraphReadAdapter.o",
+        "-MF",
+        "/workspace/scratch/zyx-current-bottlenecks/PageBackedGraphReadAdapter.d",
+        "-o",
+        "/workspace/scratch/zyx-current-bottlenecks/PageBackedGraphReadAdapter.o",
+        "-c",
+        "/workspace/scratch/zyx-current-bottlenecks/PageBackedGraphReadAdapter.cpp"
+      ],
+      [
+        "/workspace/zyx-sysroot/usr/bin/clang++-19",
+        "-DR7_COHORT=0",
+        "-I/workspace/zyx",
+        "-DBOOST_ATOMIC_DYN_LINK",
+        "-DBOOST_ATOMIC_NO_LIB",
+        "-DBOOST_FILESYSTEM_DYN_LINK",
+        "-DBOOST_FILESYSTEM_NO_LIB",
+        "-DCOVERAGE_SKIP_ZLIB_ERRORS",
+        "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+        "-DZYX_HAS_LZ4=1",
+        "-DZYX_HAS_ZSTD=1",
+        "-I/workspace/zyx/include",
+        "-I/workspace/zyx/src",
+        "-I/workspace/zyx",
+        "-I/workspace/zyx-build-core-candidate",
+        "-I/workspace/zyx/src/query/parser/cypher",
+        "-I/workspace/zyx/src/query/parser/cypher/generated",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/internal",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/public",
+        "-I/workspace/zyx/lib/inputxx/include",
+        "-isystem",
+        "/workspace/zyx-sysroot/usr/include",
+        "-isystem",
+        "/workspace/antlr4-install/include/antlr4-runtime",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-MD",
+        "-MT",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreeIndex.o",
+        "-MF",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreeIndex.d",
+        "-o",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreeIndex.o",
+        "-c",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreeIndex.cpp"
+      ],
+      [
+        "/workspace/zyx-sysroot/usr/bin/clang++-19",
+        "-DR7_COHORT=0",
+        "-I/workspace/zyx",
+        "-DBOOST_ATOMIC_DYN_LINK",
+        "-DBOOST_ATOMIC_NO_LIB",
+        "-DBOOST_FILESYSTEM_DYN_LINK",
+        "-DBOOST_FILESYSTEM_NO_LIB",
+        "-DCOVERAGE_SKIP_ZLIB_ERRORS",
+        "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+        "-DZYX_HAS_LZ4=1",
+        "-DZYX_HAS_ZSTD=1",
+        "-I/workspace/zyx/include",
+        "-I/workspace/zyx/src",
+        "-I/workspace/zyx",
+        "-I/workspace/zyx-build-core-candidate",
+        "-I/workspace/zyx/src/query/parser/cypher",
+        "-I/workspace/zyx/src/query/parser/cypher/generated",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/internal",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/public",
+        "-I/workspace/zyx/lib/inputxx/include",
+        "-isystem",
+        "/workspace/zyx-sysroot/usr/include",
+        "-isystem",
+        "/workspace/antlr4-install/include/antlr4-runtime",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-MD",
+        "-MT",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreePageStore.o",
+        "-MF",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreePageStore.d",
+        "-o",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreePageStore.o",
+        "-c",
+        "/workspace/scratch/zyx-current-bottlenecks/BTreePageStore.cpp"
+      ],
+      [
+        "/workspace/zyx-sysroot/usr/bin/clang++-19",
+        "-DR7_COHORT=0",
+        "-I/workspace/zyx",
+        "-DBOOST_ATOMIC_DYN_LINK",
+        "-DBOOST_ATOMIC_NO_LIB",
+        "-DBOOST_FILESYSTEM_DYN_LINK",
+        "-DBOOST_FILESYSTEM_NO_LIB",
+        "-DCOVERAGE_SKIP_ZLIB_ERRORS",
+        "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+        "-DZYX_HAS_LZ4=1",
+        "-DZYX_HAS_ZSTD=1",
+        "-I/workspace/zyx/include",
+        "-I/workspace/zyx/src",
+        "-I/workspace/zyx",
+        "-I/workspace/zyx-build-core-candidate",
+        "-I/workspace/zyx/src/query/parser/cypher",
+        "-I/workspace/zyx/src/query/parser/cypher/generated",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/internal",
+        "-I/workspace/zyx/src/query/parser/cypher/helpers/public",
+        "-I/workspace/zyx/lib/inputxx/include",
+        "-isystem",
+        "/workspace/zyx-sysroot/usr/include",
+        "-isystem",
+        "/workspace/antlr4-install/include/antlr4-runtime",
+        "-O3",
+        "-DNDEBUG",
+        "-std=c++20",
+        "-fPIE",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-MD",
+        "-MT",
+        "/workspace/scratch/zyx-current-bottlenecks/cpu-probe.o",
+        "-MF",
+        "/workspace/scratch/zyx-current-bottlenecks/cpu-probe.d",
+        "-o",
+        "/workspace/scratch/zyx-current-bottlenecks/cpu-probe.o",
+        "-c",
+        "/workspace/scratch/zyx-current-bottlenecks/cpu-probe.cpp"
+      ]
+    ],
+    "link": [
+      "/workspace/zyx-sysroot/usr/bin/clang++-19",
+      "-O3",
+      "-DNDEBUG",
+      "-Xlinker",
+      "--dependency-file=/workspace/scratch/zyx-current-bottlenecks/cpu-link.d",
+      "/workspace/scratch/zyx-current-bottlenecks/cpu-probe.o",
+      "-o",
+      "/workspace/scratch/zyx-current-bottlenecks/cpu-probe",
+      "/workspace/scratch/zyx-current-bottlenecks/PropertyCollectionRootStore.o",
+      "/workspace/scratch/zyx-current-bottlenecks/PageBackedGraphReadAdapter.o",
+      "/workspace/scratch/zyx-current-bottlenecks/BTreeIndex.o",
+      "/workspace/scratch/zyx-current-bottlenecks/BTreePageStore.o",
+      "libzyx_core.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libz.so",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/liblz4.so.1.10.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libxxhash.so.0.8.3",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libzstd.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.83.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_atomic.so.1.83.0",
+      "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+      "libzyx_inputxx.a",
+      "-ldl",
+      "-lrt"
+    ],
+    "cwd": "/workspace/zyx-build-core-candidate"
+  },
+  "method": {
+    "dataset": "frozen medium, 225000 nodes / 860000 edges",
+    "threads": 1,
+    "engine_format": "default 5/31; same production archive SHA as final acceptance",
+    "observations": "6 scenarios x control/sampled paired processes; 6 single-operation value-only counter checks; import control/sampled pair; Kuzu EXPLAIN for 3 reads",
+    "sampling": "thread CPU timer interrupted leaf PCs; root scope tags in shadow translation units only; nominal 1ms, actual Linux delivery often ~4ms; independent PC percentages reported, overrun-weighted percentages separate",
+    "timing_window": "only query+result consumption or write+commit; file copy/open/postchecks excluded; import window only loadDatabase",
+    "correctness": "all 6 scenario runs and count checks passed original oracle; imports checked loaded row count and reopened node/edge counts",
+    "no_engine_edits": true,
+    "no_full_matrix_or_unit_suite": true
+  },
+  "findings": [
+    {
+      "priority": 1,
+      "confidence": "high for bottleneck location; proposed representation benefits not yet measured",
+      "target": "整条批量扫描路径：候选产生、实体/标签验证、属性根选读与类型列交付",
+      "evidence": "标签过滤 CPU 样本 42.62% 属性批供给、24.54% 实体标签、18.54% 索引候选；单键分组 41.99%/24.77%/19.55%；全节点过滤属性供给59.31%，其余40.69%未细分",
+      "mechanism": "标签过滤/分组100000个属性根、196批；全节点过滤225000个属性根、440批，220000个数值字段；均已使用direct runs。标签查询属性目录refill=1，不能说每行重新遍历整树。",
+      "direction": "设计并验证具有快照身份、存活/成员证明的批或字段块，减少候选、实体验证、属性定位的逐实体工作；连续类型值直接交给现有算子。保留动态属性、NULL、多标签、COW、旧pin与取消/资源合同。",
+      "gate": "在真实持久数据上证明整条生产路径采用，含更新/重开/混合类型；同输入与语义检查端到端。只减少一个局部计数不能作为通过。"
+    },
+    {
+      "priority": 2,
+      "confidence": "high for CPU dominance and repeated batch path; medium for exact subcost order",
+      "target": "生产批量导入的数据/索引构建与发布组织",
+      "evidence": "control load window42.337s, CPU40.886s(~96.6%); BTree apply23.92%+build1.51%+materialize5.08% sampled CPU; default loader slices into1000-row transactions",
+      "direction": "评估共享扫描布局的批量页/字段块构建、排序合并或自底向上索引构建、受资源约束的发布；先拆清元数据/分配/校验剩余成本。不得用取消同步或不同提交合同冒充等价提速。"
+    },
+    {
+      "priority": 3,
+      "confidence": "medium; SET samples insufficient for fine function ordering",
+      "target": "普通写入的页/元数据放大和资源管理成本",
+      "evidence": "1000边：BTree三个阶段合计29.11%，不是历史57%；一次值计数1183744写入字节/163写调用/12变化路由帧。单属性更新201472字节/28写调用/5变化路由帧。",
+      "direction": "按真实变化规模降低页写放大、重复元数据借用与分配/归还工作；单属性更新仅89 CPU样本，不据此指定一个主导函数。"
+    },
+    {
+      "priority": 4,
+      "confidence": "high that it should not precede scan pipeline",
+      "target": "过滤/聚合内核、SIMD、字符串字典及点查细节",
+      "evidence": "单键分组约86.3%处于三个上游供给阶段；部分消费者回调包含在供给阶段中，不能将剩余13.7%直接当作全部聚合成本",
+      "direction": "先验证供给链改善，再剖析剩余算子；不做全局缓存/JIT/换树式泛化工程。"
+    }
+  ],
+  "corrections": [
+    "历史BTree57%不是当前数据，当前写边三个已标记阶段合计29.11%。",
+    "热读CPU主导不排除CPU缓存/内存访问停顿；本次未测硬件cache/TLB计数。",
+    "Kuzu EXPLAIN显示SCAN_NODE_TABLE+FILTER/AGGREGATE，所需country/score列；无额外属性索引算子。EXPLAIN不能证明zone-map实际跳过多少数据。",
+    "实验冷热布局未被本次medium采用；不将其功能验收当性能结论。",
+    "即使属性交付42.6%的CPU成本降为零，其他成本不变时CPU端到端上限约1.74倍；是Amdahl示意上限，不是新方案预测。"
+  ],
+  "limitations": [
+    "单机Linux、medium代表路径；holdout沿用既有正式性能结果，本次未做独立profile。",
+    "每场景一对控制/采样进程，百分比为粗粒度诊断，不报告虚假的精确置信区间。",
+    "root阶段包含下游回调和内存操作；不是纯I/O或纯解码占比。",
+    "libc叶符号未解析：读取约13-17%，写边28%，导入29%；没有调用栈不能把它们都归到分配、复制或某个上游调用者。",
+    "普通SET仅89个中断样本，不足以可靠排列小函数。",
+    "未单独剖析同步等待；CPU/window的差值不是fsync精确计时。",
+    "新诊断时延不替代最终正式99进程矩阵；阶段标记有观察开销，控制/采样使用同一观察器。"
+  ],
+  "raw_summary": [
+    {
+      "case": "aggregation_count_by_group",
+      "independent_samples": 1074,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 4.098901,
+          "system_cpu_seconds": 0.223893,
+          "wall_seconds": 4.323165384,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 4.179828,
+          "system_cpu_seconds": 0.176952,
+          "wall_seconds": 4.357030604,
+          "samples": 1074.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 99.9464475,
+        "sampled": 100.1921485
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 147,
+          "percent": 13.69,
+          "overrun_weighted_percent": 13.77
+        },
+        {
+          "stage": "property batch provider and delivery",
+          "samples": 451,
+          "percent": 41.99,
+          "overrun_weighted_percent": 41.66
+        },
+        {
+          "stage": "entity-label batch validation",
+          "samples": 266,
+          "percent": 24.77,
+          "overrun_weighted_percent": 24.95
+        },
+        {
+          "stage": "BTree candidate generation",
+          "samples": 210,
+          "percent": 19.55,
+          "overrun_weighted_percent": 19.62
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 175,
+          "percent": 16.29
+        },
+        {
+          "name": "linux-vdso.so.1 unresolved",
+          "samples": 96,
+          "percent": 8.94
+        },
+        {
+          "name": "crc32_z",
+          "samples": 81,
+          "percent": 7.54
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 55,
+          "percent": 5.12
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 28,
+          "percent": 2.61
+        },
+        {
+          "name": "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+          "samples": 26,
+          "percent": 2.42
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 26,
+          "percent": 2.42
+        },
+        {
+          "name": "graph::storage::PageBackedGraphReadAdapter::readNodeLabelMatchesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<unsigned long const, 18446744073709551615ul>, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*) const",
+          "samples": 24,
+          "percent": 2.23
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 23,
+          "percent": 2.14
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 22,
+          "percent": 2.05
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 20,
+          "percent": 1.86
+        },
+        {
+          "name": "graph::storage::BTreeIndex::nextRangeCursor(graph::storage::BTreeIndex::RangeCursor::State&, std::function<void (unsigned long)> const&) const",
+          "samples": 19,
+          "percent": 1.77
+        },
+        {
+          "name": "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+          "samples": 14,
+          "percent": 1.3
+        },
+        {
+          "name": "__dynamic_cast",
+          "samples": 14,
+          "percent": 1.3
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 13,
+          "percent": 1.21
+        },
+        {
+          "name": "??",
+          "samples": 12,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 12,
+          "percent": 1.12
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 12,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 11,
+          "percent": 1.02
+        },
+        {
+          "name": "graph::storage::LocationLeafEntry& std::vector<graph::storage::LocationLeafEntry, graph::utils::OwnedPmrAllocator<graph::storage::LocationLeafEntry> >::emplace_back<graph::storage::LocationLeafEntry>(graph::storage::LocationLeafEntry&&)",
+          "samples": 10,
+          "percent": 0.93
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted(graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, bool, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+          "samples": 10,
+          "percent": 0.93
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 10,
+          "percent": 0.93
+        },
+        {
+          "name": "__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > > std::__unguarded_partition<__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}> >(__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}>)",
+          "samples": 10,
+          "percent": 0.93
+        },
+        {
+          "name": "void std::__introsort_loop<__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const::$_0, std::identity>(graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const::$_0&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}> >(__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, long, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const::$_0, std::identity>(graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const::$_0&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}>)",
+          "samples": 10,
+          "percent": 0.93
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(graph::storage::MetadataPageReadContext::Key const&)",
+          "samples": 9,
+          "percent": 0.84
+        },
+        {
+          "name": "std::_Function_handler<void (unsigned long), std::reference_wrapper<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::{lambda(unsigned long, unsigned long)#1}::operator()(unsigned long, unsigned long) const::{lambda(unsigned long)#1} const> >::_M_invoke(std::_Any_data const&, unsigned long&&)",
+          "samples": 9,
+          "percent": 0.84
+        },
+        {
+          "name": "graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "std::pair<std::_Rb_tree_iterator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, bool> std::_Rb_tree<graph::storage::BufferPoolPageKey, std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*>, std::_Select1st<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, graph::storage::BufferPool::OffsetOrder, std::pmr::polymorphic_allocator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> > >::_M_emplace_unique<graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*>(graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*&&)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateEntry(graph::storage::LocationLeafEntry const&, graph::storage::MetadataDirectoryType)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::NodeEntityRecord>, std::pmr::polymorphic_allocator<std::pair<unsigned long const, graph::storage::NodeEntityRecord> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_erase(std::integral_constant<bool, true>, unsigned long const&)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::readSlot(unsigned short) const",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "std::_Function_handler<bool (graph::storage::EntityRef const&, bool), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, graph::storage::EntityRef const&, bool&&)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "std::_Function_handler<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul> >), std::reference_wrapper<graph::storage::PropertyCollectionRootStore::emitSelectedEntityProperties(graph::storage::EntityPropertyKey const&, graph::storage::EntityPropertyLocation const&, graph::storage::StrongUInt64<graph::storage::PageIdTag>, graph::storage::PageOwnerKind, std::span<std::byte const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, unsigned long, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const&, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const&, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*) const::$_0 const> >::_M_invoke(std::_Any_data const&, unsigned long&&, std::optional<std::span<std::byte const, 18446744073709551615ul> >&&)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::query::execution::detail::BatchColumnSource::direct(graph::query::execution::detail::DirectPropertyColumns const&, unsigned long)::{lambda(void const*, graph::query::execution::detail::BatchRowId, unsigned long)#1}::__invoke(void const*, graph::query::execution::detail::BatchRowId, unsigned long)",
+          "samples": 7,
+          "percent": 0.65
+        }
+      ]
+    },
+    {
+      "case": "all_nodes_property_filter",
+      "independent_samples": 1445,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 5.542611,
+          "system_cpu_seconds": 0.255337,
+          "wall_seconds": 5.798503532,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 5.455618,
+          "system_cpu_seconds": 0.349506,
+          "wall_seconds": 5.806088137,
+          "samples": 1445.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 164.870042,
+        "sampled": 164.5015135
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 588,
+          "percent": 40.69,
+          "overrun_weighted_percent": 40.64
+        },
+        {
+          "stage": "property batch provider and delivery",
+          "samples": 857,
+          "percent": 59.31,
+          "overrun_weighted_percent": 59.36
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "linux-vdso.so.1 unresolved",
+          "samples": 198,
+          "percent": 13.7
+        },
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 182,
+          "percent": 12.6
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 138,
+          "percent": 9.55
+        },
+        {
+          "name": "crc32_z",
+          "samples": 135,
+          "percent": 9.34
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 62,
+          "percent": 4.29
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 37,
+          "percent": 2.56
+        },
+        {
+          "name": "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::{lambda(unsigned long, unsigned long)#1}::operator()(unsigned long, unsigned long) const",
+          "samples": 32,
+          "percent": 2.21
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 27,
+          "percent": 1.87
+        },
+        {
+          "name": "graph::query::execution::detail::DirectPropertyColumns::cell(unsigned long, graph::query::execution::detail::BatchRowId) const",
+          "samples": 25,
+          "percent": 1.73
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateEntry(graph::storage::LocationLeafEntry const&, graph::storage::MetadataDirectoryType)",
+          "samples": 25,
+          "percent": 1.73
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 22,
+          "percent": 1.52
+        },
+        {
+          "name": "std::_Function_handler<bool (graph::storage::EntityRef const&, bool), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, graph::storage::EntityRef const&, bool&&)",
+          "samples": 21,
+          "percent": 1.45
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 20,
+          "percent": 1.38
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 19,
+          "percent": 1.31
+        },
+        {
+          "name": "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+          "samples": 19,
+          "percent": 1.31
+        },
+        {
+          "name": "graph::storage::LocationDirectoryRangeCursor::nextAtOrAfter(unsigned long)",
+          "samples": 18,
+          "percent": 1.25
+        },
+        {
+          "name": "std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::NodeEntityRecord>, std::pmr::polymorphic_allocator<std::pair<unsigned long const, graph::storage::NodeEntityRecord> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_erase(std::integral_constant<bool, true>, unsigned long const&)",
+          "samples": 17,
+          "percent": 1.18
+        },
+        {
+          "name": "graph::storage::BufferPool::readPages(graph::storage::BufferPoolPageKey, std::span<std::byte, 18446744073709551615ul>, graph::storage::BufferPoolReadHint)",
+          "samples": 16,
+          "percent": 1.11
+        },
+        {
+          "name": "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+          "samples": 15,
+          "percent": 1.04
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(graph::storage::MetadataPageReadContext::Key const&)",
+          "samples": 14,
+          "percent": 0.97
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::findLocationOptional(graph::storage::MetadataSnapshotPin const&, graph::storage::EntityPropertyKey const&)",
+          "samples": 14,
+          "percent": 0.97
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 13,
+          "percent": 0.9
+        },
+        {
+          "name": "graph::storage::EntityPropertyCollectionRootCodec::visitSelectedEncoded(std::span<std::byte const, 18446744073709551615ul>, unsigned long, unsigned int, std::span<unsigned int const, 18446744073709551615ul>, std::function<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul> >)> const&, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*)",
+          "samples": 13,
+          "percent": 0.9
+        },
+        {
+          "name": "graph::storage::LocationLeafEntry& std::vector<graph::storage::LocationLeafEntry, graph::utils::OwnedPmrAllocator<graph::storage::LocationLeafEntry> >::emplace_back<graph::storage::LocationLeafEntry>(graph::storage::LocationLeafEntry&&)",
+          "samples": 12,
+          "percent": 0.83
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted(graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, bool, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+          "samples": 12,
+          "percent": 0.83
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootStore::emitSelectedEntityProperties(graph::storage::EntityPropertyKey const&, graph::storage::EntityPropertyLocation const&, graph::storage::StrongUInt64<graph::storage::PageIdTag>, graph::storage::PageOwnerKind, std::span<std::byte const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, unsigned long, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const&, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const&, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*) const",
+          "samples": 12,
+          "percent": 0.83
+        },
+        {
+          "name": "graph::storage::LocationDirectoryRangeCursor::Impl::nextEntry()",
+          "samples": 11,
+          "percent": 0.76
+        },
+        {
+          "name": "decltype(auto) std::__do_visit<std::__detail::__variant::__deduce_visit_result<bool>, graph::PropertyValue::operator<(graph::PropertyValue const&) const::{lambda<typename $T0>($T0 const&)#1}, std::variant<std::monostate, bool, long, double, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::vector<graph::PropertyValue, std::allocator<graph::PropertyValue> >, std::unordered_map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, graph::PropertyValue> > >, graph::TemporalDate, graph::TemporalDateTime, graph::TemporalDuration, std::vector<std::byte, std::allocator<std::byte> > > const&>(graph::PropertyValue::operator<(graph::PropertyValue const&) const::{lambda<typename $T0>($T0 const&)#1}&&, std::variant<std::monostate, bool, long, double, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::vector<graph::PropertyValue, std::allocator<graph::PropertyValue> >, std::unordered_map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, graph::PropertyValue> > >, graph::TemporalDate, graph::TemporalDateTime, graph::TemporalDuration, std::vector<std::byte, std::allocator<std::byte> > > const&)",
+          "samples": 10,
+          "percent": 0.69
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateOffsetDirectory(std::span<std::byte const, 18446744073709551615ul>, unsigned long, unsigned int, graph::storage::CancellationCheckpoint const*)",
+          "samples": 10,
+          "percent": 0.69
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 9,
+          "percent": 0.62
+        },
+        {
+          "name": "std::__detail::_List_node_base::_M_transfer(std::__detail::_List_node_base*, std::__detail::_List_node_base*)",
+          "samples": 8,
+          "percent": 0.55
+        },
+        {
+          "name": "std::pair<std::__detail::_Node_iterator<std::pair<unsigned long const, graph::storage::NodeEntityRecord>, false, false>, bool> std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::NodeEntityRecord>, std::pmr::polymorphic_allocator<std::pair<unsigned long const, graph::storage::NodeEntityRecord> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_emplace<unsigned long&, graph::storage::NodeEntityRecord const&>(std::integral_constant<bool, true>, unsigned long&, graph::storage::NodeEntityRecord const&)",
+          "samples": 8,
+          "percent": 0.55
+        },
+        {
+          "name": "graph::storage::EntityPageReadView::validateLayout() const",
+          "samples": 8,
+          "percent": 0.55
+        },
+        {
+          "name": "void graph::storage::NativeReadSession::put<graph::storage::NodeEntityRecord>(std::unordered_map<unsigned long, graph::storage::NodeEntityRecord, std::hash<unsigned long>, std::equal_to<unsigned long>, std::pmr::polymorphic_allocator<std::pair<unsigned long const, graph::storage::NodeEntityRecord> > >&, std::deque<unsigned long, std::pmr::polymorphic_allocator<unsigned long> >&, unsigned long, graph::storage::NodeEntityRecord const&)",
+          "samples": 8,
+          "percent": 0.55
+        },
+        {
+          "name": "std::pair<std::_Rb_tree_iterator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, bool> std::_Rb_tree<graph::storage::BufferPoolPageKey, std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*>, std::_Select1st<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, graph::storage::BufferPool::OffsetOrder, std::pmr::polymorphic_allocator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> > >::_M_emplace_unique<graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*>(graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*&&)",
+          "samples": 8,
+          "percent": 0.55
+        }
+      ]
+    },
+    {
+      "case": "edge_batch_1000",
+      "independent_samples": 529,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 2.051508,
+          "system_cpu_seconds": 0.193999,
+          "wall_seconds": 2.331439472,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 2.007173,
+          "system_cpu_seconds": 0.173269,
+          "wall_seconds": 2.258716532,
+          "samples": 529.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 33.802255,
+        "sampled": 32.785342
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 375,
+          "percent": 70.89,
+          "overrun_weighted_percent": 70.02
+        },
+        {
+          "stage": "BTree overlay apply",
+          "samples": 113,
+          "percent": 21.36,
+          "overrun_weighted_percent": 21.75
+        },
+        {
+          "stage": "BTree overlay build",
+          "samples": 8,
+          "percent": 1.51,
+          "overrun_weighted_percent": 1.61
+        },
+        {
+          "stage": "BTree materialization",
+          "samples": 33,
+          "percent": 6.24,
+          "overrun_weighted_percent": 6.63
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 149,
+          "percent": 28.17
+        },
+        {
+          "name": "crc32_z",
+          "samples": 32,
+          "percent": 6.05
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 22,
+          "percent": 4.16
+        },
+        {
+          "name": "graph::query::execution::detail::PrepaidMemoryResource::reserveUnmanaged(unsigned long)",
+          "samples": 21,
+          "percent": 3.97
+        },
+        {
+          "name": "graph::query::execution::detail::PrepaidMemoryResource::releaseUnmanaged(unsigned long)",
+          "samples": 18,
+          "percent": 3.4
+        },
+        {
+          "name": "__dynamic_cast",
+          "samples": 13,
+          "percent": 2.46
+        },
+        {
+          "name": "_Unwind_GetTextRelBase",
+          "samples": 13,
+          "percent": 2.46
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 11,
+          "percent": 2.08
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 11,
+          "percent": 2.08
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateEntry(graph::storage::LocationLeafEntry const&, graph::storage::MetadataDirectoryType)",
+          "samples": 11,
+          "percent": 2.08
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+          "samples": 9,
+          "percent": 1.7
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 9,
+          "percent": 1.7
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(std::shared_ptr<std::pmr::memory_resource>, std::vector<std::byte, std::allocator<std::byte> > const&)",
+          "samples": 8,
+          "percent": 1.51
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 6,
+          "percent": 1.13
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteEaSERKS3_Qaasr3stdE23is_copy_constructible_vIT_Esr3stdE20is_copy_assignable_vIS6_E",
+          "samples": 6,
+          "percent": 1.13
+        },
+        {
+          "name": "_Unwind_Find_FDE",
+          "samples": 6,
+          "percent": 1.13
+        },
+        {
+          "name": "__cxa_get_globals",
+          "samples": 5,
+          "percent": 0.95
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 5,
+          "percent": 0.95
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 5,
+          "percent": 0.95
+        },
+        {
+          "name": "__gxx_personality_v0",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "graph::storage::CatalogRadixPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "graph::storage::BufferPool::evictOneLocked(bool)::$_0::operator()(std::__cxx11::list<graph::storage::BufferPoolPageKey, std::pmr::polymorphic_allocator<graph::storage::BufferPoolPageKey> >&) const",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "_ZN5graph7storage15EntityPageStore29applyBatchTransactionInternalERKNS0_19MetadataSnapshotPinESt4spanIKNS0_23EntityPageBatchMutationELm18446744073709551615EES5_IKNS0_21EntityPageBatchAppendELm18446744073709551615EES5_IKNS0_22EntityPageBatchNewPoolELm18446744073709551615EES5_IKNS0_30EntityPropertyRootMutationPlanELm18446744073709551615EEPKNS0_27PropertyCollectionRootStoreEPKNS0_34PropertyCollectionRootStoreOptionsEPKNS0_32EntityPageAuxiliaryMutationBatchEPKNS0_31NativeGraphDerivedStateMutationEPKSt8functionIFvRSt6vectorISV_INS0_26IndexTreeMutationPoolBatchESaISW_EESaISY_EEEEPKSU_IFvRSV_INS0_41NativeGraphVectorBootstrapMaterializationESaIS16_EEEEPKSU_IFvRSV_INS0_37NativeGraphVectorDeltaMaterializationESaIS1E_EEEENS0_12StrongUInt64INS0_20LogSequenceNumberTagEEERKNS0_22MetadataPublishOptionsENS0_31NativeGraphLogicalIdReservationEPKSU_IFSV_ISt4byteSaIS1T_EERKNS0_28NativeGraphPrivateSegmentSetEmEEPKSU_IFvS1Y_RKSU_IFS1V_RKNS0_40NativeGraphPrivateSegmentMaterializationEEEEEPKSU_IFNS0_28NativeGraphDeferredIndexPlanERKNS0_39NativeGraphDeferredIndexPlanningContextEEEPKSU_IFvRKNS0_42NativeGraphEarlyPublicationPlanningContextEEEPKNS0_31NativeHybridTopologyPublicationE",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "std::pair<std::_Rb_tree_iterator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, bool> std::_Rb_tree<graph::storage::BufferPoolPageKey, std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*>, std::_Select1st<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, graph::storage::BufferPool::OffsetOrder, std::pmr::polymorphic_allocator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> > >::_M_emplace_unique<graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*>(graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*&&)",
+          "samples": 4,
+          "percent": 0.76
+        },
+        {
+          "name": "std::_Rb_tree_rebalance_for_erase(std::_Rb_tree_node_base*, std::_Rb_tree_node_base&)",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "??",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "void std::vector<std::byte, std::allocator<std::byte> >::_M_assign_aux<__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > > >(__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > >, __gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > >, std::forward_iterator_tag)",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "decltype (::new ((void*)(0)) graph::storage::BTreePageEntry((std::declval<graph::storage::BTreePageEntry>)())) std::construct_at<graph::storage::BTreePageEntry, graph::storage::BTreePageEntry>(graph::storage::BTreePageEntry*, graph::storage::BTreePageEntry&&)",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "_ZZN5graph7storage24RelocatableMetadataStore37mutateNativeGraphPagesWithLargeValuesESt4spanIKNS0_28EntityPageReplacementRequestELm18446744073709551615EES2_IKNS0_28EntityPageAppendBatchRequestELm18446744073709551615EES2_IKNS0_29EntityPageNewPoolBatchRequestELm18446744073709551615EES2_IKNS0_41NativeGraphPropertyPageReplacementRequestELm18446744073709551615EES2_IKNS0_35NativeGraphPropertyPageBatchRequestELm18446744073709551615EES2_IKNS0_29NativeGraphLargeValueMutationELm18446744073709551615EERKNS0_31NativeGraphDerivedStateMutationENS0_12StrongUInt64INS0_20LogSequenceNumberTagEEERKSt8functionIFvS2_INS0_36EntityPageReplacementMaterializationELm18446744073709551615EES2_INS0_36EntityPageAppendBatchMaterializationELm18446744073709551615EES2_INS0_37EntityPageNewPoolBatchMaterializationELm18446744073709551615EES2_INS0_49NativeGraphPropertyPageReplacementMaterializationELm18446744073709551615EES2_INS0_43NativeGraphPropertyPageBatchMaterializationELm18446744073709551615EES2_INS0_31LargeValueMaterializationResultELm18446744073709551615EEEERKSR_IFvRSt6vectorIS18_INS0_26IndexTreeMutationPoolBatchESaIS19_EESaIS1B_EEEERKSR_IFvRS18_INS0_41NativeGraphVectorBootstrapMaterializationESaIS1J_EEEERKSR_IFvRS18_INS0_37NativeGraphVectorDeltaMaterializationESaIS1R_EEEES2_IKNS0_14PageRetirementELm18446744073709551615EES2_IKNSO_INS0_15LargeValueIdTagEEELm18446744073709551615EERKSR_IFvS2_IKNS0_31ExistingPoolPageRetirementBatchELm18446744073709551615EEEERKNS0_22MetadataPublishOptionsENS0_31NativeGraphLogicalIdReservationESt8optionalINSO_INS0_13GenerationTagEEEERKSR_IFS18_ISt4byteSaIS2L_EERKNS0_28NativeGraphPrivateSegmentSetEmEERKSR_IFvS2Q_RKSR_IFS2N_RKNS0_40NativeGraphPrivateSegmentMaterializationEEEEERKSR_IFNS0_28NativeGraphDeferredIndexPlanERKNS0_39NativeGraphDeferredIndexPlanningContextEEERKSR_IFvRKNS0_42NativeGraphEarlyPublicationPlanningContextEEERKSR_IFNS0_29NativeGraphDeferredIndexPlansES39_EERKS2H_INS0_37NativeGraphHybridPropertyRootMutationEERKS2H_INS0_35NativeLargeValueReclamationEvidenceEEPKNS0_29NativeHybridVectorPublicationEPKNS0_31NativeHybridTopologyPublicationEENK4$_63clES2_IKNS0_18EntityPageLocationELm18446744073709551615EENSO_INS0_9PageIdTagEEEbRSt3setImSt4lessImESaImEEPKc",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "graph::storage::EntityPropertyKey::directoryId() const",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "graph::storage::PackedBTreePageCodec::encodedSize(graph::storage::BTreeNodeKind, std::span<graph::storage::BTreePageEntry const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "graph::storage::SlottedPage::insertLocked(std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 3,
+          "percent": 0.57
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::readLeafForOrdinal(graph::storage::MetadataPageFile&, graph::storage::Superblock const&, unsigned long)",
+          "samples": 3,
+          "percent": 0.57
+        }
+      ]
+    },
+    {
+      "case": "fresh_import",
+      "independent_samples": 10513,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 38.971599,
+          "system_cpu_seconds": 1.914343,
+          "wall_seconds": 42.337136662,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 40.183666,
+          "system_cpu_seconds": 1.846407,
+          "wall_seconds": 43.384932616,
+          "samples": 10513.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 42337.132176,
+        "sampled": 43384.923052
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 7305,
+          "percent": 69.49,
+          "overrun_weighted_percent": 69.28
+        },
+        {
+          "stage": "BTree overlay apply",
+          "samples": 2515,
+          "percent": 23.92,
+          "overrun_weighted_percent": 24.09
+        },
+        {
+          "stage": "BTree overlay build",
+          "samples": 159,
+          "percent": 1.51,
+          "overrun_weighted_percent": 1.49
+        },
+        {
+          "stage": "BTree materialization",
+          "samples": 534,
+          "percent": 5.08,
+          "overrun_weighted_percent": 5.14
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 3098,
+          "percent": 29.47
+        },
+        {
+          "name": "crc32_z",
+          "samples": 916,
+          "percent": 8.71
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 409,
+          "percent": 3.89
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 353,
+          "percent": 3.36
+        },
+        {
+          "name": "graph::query::execution::detail::PrepaidMemoryResource::reserveUnmanaged(unsigned long)",
+          "samples": 319,
+          "percent": 3.03
+        },
+        {
+          "name": "graph::query::execution::detail::PrepaidMemoryResource::releaseUnmanaged(unsigned long)",
+          "samples": 308,
+          "percent": 2.93
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 267,
+          "percent": 2.54
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 235,
+          "percent": 2.24
+        },
+        {
+          "name": "__dynamic_cast",
+          "samples": 225,
+          "percent": 2.14
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 181,
+          "percent": 1.72
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 169,
+          "percent": 1.61
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateEntry(graph::storage::LocationLeafEntry const&, graph::storage::MetadataDirectoryType)",
+          "samples": 148,
+          "percent": 1.41
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(graph::storage::MetadataPageReadContext::Key const&)",
+          "samples": 132,
+          "percent": 1.26
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+          "samples": 129,
+          "percent": 1.23
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteEaSERKS3_Qaasr3stdE23is_copy_constructible_vIT_Esr3stdE20is_copy_assignable_vIS6_E",
+          "samples": 116,
+          "percent": 1.1
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(std::shared_ptr<std::pmr::memory_resource>, std::vector<std::byte, std::allocator<std::byte> > const&)",
+          "samples": 110,
+          "percent": 1.05
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 105,
+          "percent": 1.0
+        },
+        {
+          "name": "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+          "samples": 86,
+          "percent": 0.82
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 70,
+          "percent": 0.67
+        },
+        {
+          "name": "std::pair<std::_Rb_tree_iterator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, bool> std::_Rb_tree<graph::storage::BufferPoolPageKey, std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*>, std::_Select1st<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> >, graph::storage::BufferPool::OffsetOrder, std::pmr::polymorphic_allocator<std::pair<graph::storage::BufferPoolPageKey const, graph::storage::BufferPool::Entry*> > >::_M_emplace_unique<graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*>(graph::storage::BufferPoolPageKey&, graph::storage::BufferPool::Entry*&&)",
+          "samples": 70,
+          "percent": 0.67
+        },
+        {
+          "name": "_Unwind_GetTextRelBase",
+          "samples": 69,
+          "percent": 0.66
+        },
+        {
+          "name": "graph::storage::SlottedPage::readSlotLocked(unsigned short) const",
+          "samples": 68,
+          "percent": 0.65
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteE6resizeEmQsr3stdE26is_default_constructible_vIT_E",
+          "samples": 66,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const",
+          "samples": 64,
+          "percent": 0.61
+        },
+        {
+          "name": "void std::vector<std::byte, std::allocator<std::byte> >::_M_assign_aux<__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > > >(__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > >, __gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, std::allocator<std::byte> > >, std::forward_iterator_tag)",
+          "samples": 63,
+          "percent": 0.6
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 62,
+          "percent": 0.59
+        },
+        {
+          "name": "??",
+          "samples": 56,
+          "percent": 0.53
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 50,
+          "percent": 0.48
+        },
+        {
+          "name": "std::__detail::_List_node_base::_M_transfer(std::__detail::_List_node_base*, std::__detail::_List_node_base*)",
+          "samples": 50,
+          "percent": 0.48
+        },
+        {
+          "name": "graph::storage::CatalogRadixPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 48,
+          "percent": 0.46
+        },
+        {
+          "name": "graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 43,
+          "percent": 0.41
+        },
+        {
+          "name": "decltype (::new ((void*)(0)) graph::storage::BTreePageEntry((std::declval<graph::storage::BTreePageEntry>)())) std::construct_at<graph::storage::BTreePageEntry, graph::storage::BTreePageEntry>(graph::storage::BTreePageEntry*, graph::storage::BTreePageEntry&&)",
+          "samples": 38,
+          "percent": 0.36
+        },
+        {
+          "name": "std::optional<graph::storage::MetadataPageReadContext::CachedRoute> graph::storage::MetadataPageReadContext::find<graph::storage::MetadataPageReadContext::CachedRoute>(graph::storage::PhysicalPageRef, unsigned long)",
+          "samples": 37,
+          "percent": 0.35
+        },
+        {
+          "name": "_Unwind_Find_FDE",
+          "samples": 37,
+          "percent": 0.35
+        },
+        {
+          "name": "operator new(unsigned long)",
+          "samples": 35,
+          "percent": 0.33
+        }
+      ]
+    },
+    {
+      "case": "label_scan_filter",
+      "independent_samples": 1084,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 4.039728,
+          "system_cpu_seconds": 0.21676,
+          "wall_seconds": 4.256657738,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 4.165422,
+          "system_cpu_seconds": 0.213857,
+          "wall_seconds": 4.388103871,
+          "samples": 1084.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 98.549827,
+        "sampled": 100.4974435
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 155,
+          "percent": 14.3,
+          "overrun_weighted_percent": 14.07
+        },
+        {
+          "stage": "property batch provider and delivery",
+          "samples": 462,
+          "percent": 42.62,
+          "overrun_weighted_percent": 42.78
+        },
+        {
+          "stage": "entity-label batch validation",
+          "samples": 266,
+          "percent": 24.54,
+          "overrun_weighted_percent": 24.68
+        },
+        {
+          "stage": "BTree candidate generation",
+          "samples": 201,
+          "percent": 18.54,
+          "overrun_weighted_percent": 18.47
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 186,
+          "percent": 17.16
+        },
+        {
+          "name": "linux-vdso.so.1 unresolved",
+          "samples": 86,
+          "percent": 7.93
+        },
+        {
+          "name": "crc32_z",
+          "samples": 86,
+          "percent": 7.93
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 65,
+          "percent": 6.0
+        },
+        {
+          "name": "graph::storage::PageBackedGraphReadAdapter::readNodeLabelMatchesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<unsigned long const, 18446744073709551615ul>, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*) const",
+          "samples": 29,
+          "percent": 2.68
+        },
+        {
+          "name": "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+          "samples": 27,
+          "percent": 2.49
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 27,
+          "percent": 2.49
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 27,
+          "percent": 2.49
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 26,
+          "percent": 2.4
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 25,
+          "percent": 2.31
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 22,
+          "percent": 2.03
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 19,
+          "percent": 1.75
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted(graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, bool, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+          "samples": 18,
+          "percent": 1.66
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 15,
+          "percent": 1.38
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 13,
+          "percent": 1.2
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 12,
+          "percent": 1.11
+        },
+        {
+          "name": "std::_Function_handler<bool (graph::storage::EntityRef const&, bool), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, graph::storage::EntityRef const&, bool&&)",
+          "samples": 12,
+          "percent": 1.11
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 12,
+          "percent": 1.11
+        },
+        {
+          "name": "graph::storage::BTreeIndex::nextRangeCursor(graph::storage::BTreeIndex::RangeCursor::State&, std::function<void (unsigned long)> const&) const",
+          "samples": 11,
+          "percent": 1.01
+        },
+        {
+          "name": "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::{lambda(unsigned long, unsigned long)#1}::operator()(unsigned long, unsigned long) const",
+          "samples": 10,
+          "percent": 0.92
+        },
+        {
+          "name": "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+          "samples": 10,
+          "percent": 0.92
+        },
+        {
+          "name": "??",
+          "samples": 10,
+          "percent": 0.92
+        },
+        {
+          "name": "graph::storage::EntityPropertyCollectionRootCodec::visitSelectedEncoded(std::span<std::byte const, 18446744073709551615ul>, unsigned long, unsigned int, std::span<unsigned int const, 18446744073709551615ul>, std::function<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul> >)> const&, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*)",
+          "samples": 9,
+          "percent": 0.83
+        },
+        {
+          "name": "graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const",
+          "samples": 9,
+          "percent": 0.83
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::findLocationOptional(graph::storage::MetadataSnapshotPin const&, graph::storage::EntityPropertyKey const&)",
+          "samples": 9,
+          "percent": 0.83
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(graph::storage::MetadataPageReadContext::Key const&)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::storage::EntityPageStore::readNodesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long)> const&) const",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validateEntry(graph::storage::LocationLeafEntry const&, graph::storage::MetadataDirectoryType)",
+          "samples": 8,
+          "percent": 0.74
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootStore::emitSelectedEntityProperties(graph::storage::EntityPropertyKey const&, graph::storage::EntityPropertyLocation const&, graph::storage::StrongUInt64<graph::storage::PageIdTag>, graph::storage::PageOwnerKind, std::span<std::byte const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, unsigned long, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const&, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const&, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)> const*, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*) const",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::storage::LocationDirectoryRangeCursor::Impl::resolveFrame(graph::storage::CatalogRadixPage const&, graph::storage::PhysicalPageRef, unsigned long)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::storage::LocationLeafEntry& std::vector<graph::storage::LocationLeafEntry, graph::utils::OwnedPmrAllocator<graph::storage::LocationLeafEntry> >::emplace_back<graph::storage::LocationLeafEntry>(graph::storage::LocationLeafEntry&&)",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::readSlot(unsigned short) const",
+          "samples": 7,
+          "percent": 0.65
+        },
+        {
+          "name": "__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > > std::__unguarded_partition<__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}> >(__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}>)",
+          "samples": 6,
+          "percent": 0.55
+        }
+      ]
+    },
+    {
+      "case": "multi_key_group",
+      "independent_samples": 1114,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 4.332156,
+          "system_cpu_seconds": 0.151664,
+          "wall_seconds": 4.484148858,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 4.323919,
+          "system_cpu_seconds": 0.158662,
+          "wall_seconds": 4.48286668,
+          "samples": 1114.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 127.762326,
+        "sampled": 127.14261400000001
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 258,
+          "percent": 23.16,
+          "overrun_weighted_percent": 23.03
+        },
+        {
+          "stage": "property batch provider and delivery",
+          "samples": 471,
+          "percent": 42.28,
+          "overrun_weighted_percent": 42.3
+        },
+        {
+          "stage": "entity-label batch validation",
+          "samples": 205,
+          "percent": 18.4,
+          "overrun_weighted_percent": 18.38
+        },
+        {
+          "stage": "BTree candidate generation",
+          "samples": 180,
+          "percent": 16.16,
+          "overrun_weighted_percent": 16.29
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 181,
+          "percent": 16.25
+        },
+        {
+          "name": "linux-vdso.so.1 unresolved",
+          "samples": 166,
+          "percent": 14.9
+        },
+        {
+          "name": "crc32_z",
+          "samples": 68,
+          "percent": 6.1
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 57,
+          "percent": 5.12
+        },
+        {
+          "name": "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+          "samples": 25,
+          "percent": 2.24
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 24,
+          "percent": 2.15
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+          "samples": 23,
+          "percent": 2.06
+        },
+        {
+          "name": "std::_Hashtable<std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> >, std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> > const, unsigned long>, std::pmr::polymorphic_allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> > const, unsigned long> >, std::__detail::_Select1st, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> > >, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> > >, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> > const&)",
+          "samples": 20,
+          "percent": 1.8
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 20,
+          "percent": 1.8
+        },
+        {
+          "name": "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_29::operator()(std::span<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, 18446744073709551615ul>, graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector const&, std::span<unsigned long const, 18446744073709551615ul>) const",
+          "samples": 19,
+          "percent": 1.71
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 19,
+          "percent": 1.71
+        },
+        {
+          "name": "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 18,
+          "percent": 1.62
+        },
+        {
+          "name": "graph::storage::PageBackedGraphReadAdapter::readNodeLabelMatchesSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<unsigned long const, 18446744073709551615ul>, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*) const",
+          "samples": 18,
+          "percent": 1.62
+        },
+        {
+          "name": "__dynamic_cast",
+          "samples": 16,
+          "percent": 1.44
+        },
+        {
+          "name": "graph::storage::EntityPropertyCollectionRootCodec::visitSelectedEncoded(std::span<std::byte const, 18446744073709551615ul>, unsigned long, unsigned int, std::span<unsigned int const, 18446744073709551615ul>, std::function<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul> >)> const&, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*)",
+          "samples": 14,
+          "percent": 1.26
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 13,
+          "percent": 1.17
+        },
+        {
+          "name": "graph::storage::BTreeIndex::nextRangeCursor(graph::storage::BTreeIndex::RangeCursor::State&, std::function<void (unsigned long)> const&) const",
+          "samples": 13,
+          "percent": 1.17
+        },
+        {
+          "name": "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+          "samples": 12,
+          "percent": 1.08
+        },
+        {
+          "name": "graph::storage::PropertyCollectionRootScanCursor::findLocationOptional(graph::storage::MetadataSnapshotPin const&, graph::storage::EntityPropertyKey const&)",
+          "samples": 12,
+          "percent": 1.08
+        },
+        {
+          "name": "std::_Function_handler<void (unsigned long), std::reference_wrapper<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue> > > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::{lambda(unsigned long, unsigned long)#1}::operator()(unsigned long, unsigned long) const::{lambda(unsigned long)#1} const> >::_M_invoke(std::_Any_data const&, unsigned long&&)",
+          "samples": 11,
+          "percent": 0.99
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 11,
+          "percent": 0.99
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 10,
+          "percent": 0.9
+        },
+        {
+          "name": "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+          "samples": 10,
+          "percent": 0.9
+        },
+        {
+          "name": "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+          "samples": 8,
+          "percent": 0.72
+        },
+        {
+          "name": "graph::query::execution::detail::BatchColumnSource::direct(graph::query::execution::detail::DirectPropertyColumns const&, unsigned long)::{lambda(void const*, graph::query::execution::detail::BatchRowId, unsigned long)#1}::__invoke(void const*, graph::query::execution::detail::BatchRowId, unsigned long)",
+          "samples": 8,
+          "percent": 0.72
+        },
+        {
+          "name": "graph::storage::LocationDirectoryRangeCursor::Impl::nextEntry()",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::query::QueryGuard::checkSlow()",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > > std::__unguarded_partition<__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}> >(__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__ops::_Iter_comp_iter<std::ranges::__detail::__make_comp_proj<graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}, std::identity>(graph::storage::detail::propertyPageOrder(std::span<std::optional<graph::storage::EntityPropertyLocation> const, 18446744073709551615ul>, graph::storage::CancellationCheckpoint const*, std::function<void (unsigned long)> const*)::{lambda(unsigned long, unsigned long)#1}&, std::identity&)::{lambda(auto:1&&, auto:2&&)#1}>)",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_29::operator()(std::span<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, 18446744073709551615ul>, graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector const&, std::span<unsigned long const, 18446744073709551615ul>) const::{lambda(std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> >&, unsigned long, graph::query::execution::detail::BatchRowId)#1}::operator()(std::__cxx11::basic_string<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char> >&, unsigned long, graph::query::execution::detail::BatchRowId) const",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::query::execution::detail::DirectPropertyColumns::cell(unsigned long, graph::query::execution::detail::BatchRowId) const",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::storage::BufferPool::readPages(graph::storage::BufferPoolPageKey, std::span<std::byte, 18446744073709551615ul>, graph::storage::BufferPoolReadHint)",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+          "samples": 7,
+          "percent": 0.63
+        },
+        {
+          "name": "??",
+          "samples": 7,
+          "percent": 0.63
+        }
+      ]
+    },
+    {
+      "case": "property_set",
+      "independent_samples": 89,
+      "cpu": {
+        "control": {
+          "user_cpu_seconds": 0.389677,
+          "system_cpu_seconds": 0.042887,
+          "wall_seconds": 0.488891947,
+          "samples": 0.0
+        },
+        "sampled": {
+          "user_cpu_seconds": 0.385867,
+          "system_cpu_seconds": 0.055922,
+          "wall_seconds": 0.496673722,
+          "samples": 89.0
+        }
+      },
+      "diagnostic_p50_ms": {
+        "control": 4.643518,
+        "sampled": 4.683441999999999
+      },
+      "root_stages": [
+        {
+          "stage": "remaining executor/binding/other",
+          "samples": 89,
+          "percent": 100.0,
+          "overrun_weighted_percent": 100.0
+        }
+      ],
+      "top_leaf_functions": [
+        {
+          "name": "/lib/x86_64-linux-gnu/libc.so.6 unresolved",
+          "samples": 24,
+          "percent": 26.97
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+          "samples": 5,
+          "percent": 5.62
+        },
+        {
+          "name": "_Unwind_GetTextRelBase",
+          "samples": 4,
+          "percent": 4.49
+        },
+        {
+          "name": "crc32_z",
+          "samples": 4,
+          "percent": 4.49
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 3,
+          "percent": 3.37
+        },
+        {
+          "name": "graph::query::execution::detail::PrepaidMemoryResource::releaseUnmanaged(unsigned long)",
+          "samples": 3,
+          "percent": 3.37
+        },
+        {
+          "name": "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+          "samples": 3,
+          "percent": 3.37
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::writeU64(std::span<std::byte, 18446744073709551615ul>, unsigned long, unsigned long)",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::validatePage(graph::storage::CatalogRadixPage const&)",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "graph::storage::CatalogRadixPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "__dynamic_cast",
+          "samples": 2,
+          "percent": 2.25
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::AllocatorLeafPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::LittleEndianCodec::readU16(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteE6resizeEmQsr3stdE26is_default_constructible_vIT_E",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::_Function_handler<void (unsigned long), graph::storage::(anonymous namespace)::exactCandidateBufferAdmission(unsigned long&, unsigned long&, unsigned long)::$_0>::_M_invoke(std::_Any_data const&, unsigned long&&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry> >, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::find(graph::storage::MetadataPageReadContext::Key const&) const",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "_ZN5graph7storage24RelocatableMetadataStore37mutateNativeGraphPagesWithLargeValuesESt4spanIKNS0_28EntityPageReplacementRequestELm18446744073709551615EES2_IKNS0_28EntityPageAppendBatchRequestELm18446744073709551615EES2_IKNS0_29EntityPageNewPoolBatchRequestELm18446744073709551615EES2_IKNS0_41NativeGraphPropertyPageReplacementRequestELm18446744073709551615EES2_IKNS0_35NativeGraphPropertyPageBatchRequestELm18446744073709551615EES2_IKNS0_29NativeGraphLargeValueMutationELm18446744073709551615EERKNS0_31NativeGraphDerivedStateMutationENS0_12StrongUInt64INS0_20LogSequenceNumberTagEEERKSt8functionIFvS2_INS0_36EntityPageReplacementMaterializationELm18446744073709551615EES2_INS0_36EntityPageAppendBatchMaterializationELm18446744073709551615EES2_INS0_37EntityPageNewPoolBatchMaterializationELm18446744073709551615EES2_INS0_49NativeGraphPropertyPageReplacementMaterializationELm18446744073709551615EES2_INS0_43NativeGraphPropertyPageBatchMaterializationELm18446744073709551615EES2_INS0_31LargeValueMaterializationResultELm18446744073709551615EEEERKSR_IFvRSt6vectorIS18_INS0_26IndexTreeMutationPoolBatchESaIS19_EESaIS1B_EEEERKSR_IFvRS18_INS0_41NativeGraphVectorBootstrapMaterializationESaIS1J_EEEERKSR_IFvRS18_INS0_37NativeGraphVectorDeltaMaterializationESaIS1R_EEEES2_IKNS0_14PageRetirementELm18446744073709551615EES2_IKNSO_INS0_15LargeValueIdTagEEELm18446744073709551615EERKSR_IFvS2_IKNS0_31ExistingPoolPageRetirementBatchELm18446744073709551615EEEERKNS0_22MetadataPublishOptionsENS0_31NativeGraphLogicalIdReservationESt8optionalINSO_INS0_13GenerationTagEEEERKSR_IFS18_ISt4byteSaIS2L_EERKNS0_28NativeGraphPrivateSegmentSetEmEERKSR_IFvS2Q_RKSR_IFS2N_RKNS0_40NativeGraphPrivateSegmentMaterializationEEEEERKSR_IFNS0_28NativeGraphDeferredIndexPlanERKNS0_39NativeGraphDeferredIndexPlanningContextEEERKSR_IFvRKNS0_42NativeGraphEarlyPublicationPlanningContextEEERKSR_IFNS0_29NativeGraphDeferredIndexPlansES39_EERKS2H_INS0_37NativeGraphHybridPropertyRootMutationEERKS2H_INS0_35NativeLargeValueReclamationEvidenceEEPKNS0_29NativeHybridVectorPublicationEPKNS0_31NativeHybridTopologyPublicationE",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::pair<std::__detail::_Node_iterator<std::pair<unsigned long const, graph::storage::SegmentState>, false, false>, bool> std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::SegmentState>, std::allocator<std::pair<unsigned long const, graph::storage::SegmentState> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_emplace<unsigned long, graph::storage::SegmentState&>(std::integral_constant<bool, true>, unsigned long&&, graph::storage::SegmentState&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::_Hashtable<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::unordered_map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, graph::PropertyValue> > > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::unordered_map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, graph::PropertyValue, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, graph::PropertyValue> > > > >, std::__detail::_Select1st, std::equal_to<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::hash<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, false, true> >::find(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::query::execution::MaterializedByteBudget::do_deallocate(void*, unsigned long, unsigned long)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::(anonymous namespace)::canonicalEntityRoot(graph::storage::PropertyCollectionRoot const&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::BufferPool::Pin::Pin(graph::storage::BufferPool::Pin&&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char> >, long)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteEC2ERKS3_Qaasr3stdE23is_copy_constructible_vIT_Esr3stdE20is_copy_assignable_vIS6_E",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "void graph::storage::MetadataPageReadContext::put<graph::storage::CatalogRadixPage>(graph::storage::PhysicalPageRef, graph::storage::CatalogRadixPage const&, unsigned long, unsigned long)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::MetadataPageRoute& std::vector<graph::storage::MetadataPageRoute, graph::utils::OwnedPmrAllocator<graph::storage::MetadataPageRoute> >::emplace_back<graph::storage::MetadataPageRoute>(graph::storage::MetadataPageRoute&&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::vector<std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const*, std::pmr::polymorphic_allocator<std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const*> >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const**, std::vector<std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const*, std::pmr::polymorphic_allocator<std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const*> > >, unsigned long, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> const* const&)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "_ZN5graph5utils14OwnedStdVectorISt4byteEaSERKS3_Qaasr3stdE23is_copy_constructible_vIT_Esr3stdE20is_copy_assignable_vIS6_E",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "std::shared_ptr<graph::storage::CatalogRadixPage const> graph::storage::MetadataPageReadContext::findView<graph::storage::CatalogRadixPage>(graph::storage::PhysicalPageRef)",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::BTreeIndex::find(graph::storage::MetadataSnapshotPin const&, std::span<std::byte const, 18446744073709551615ul>) const",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::MetadataPageFile::readPage(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const",
+          "samples": 1,
+          "percent": 1.12
+        },
+        {
+          "name": "graph::storage::BTreePage::validatePackedEnvelope() const",
+          "samples": 1,
+          "percent": 1.12
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    "aggregation_count_by_group-control.command.json",
+    "aggregation_count_by_group-control.jsonl",
+    "aggregation_count_by_group-control.pcs",
+    "aggregation_count_by_group-counts.jsonl",
+    "aggregation_count_by_group-counts.tsv",
+    "aggregation_count_by_group-kuzu-plan.json",
+    "aggregation_count_by_group-sampled.command.json",
+    "aggregation_count_by_group-sampled.jsonl",
+    "aggregation_count_by_group-sampled.pcs",
+    "all_nodes_property_filter-control.command.json",
+    "all_nodes_property_filter-control.jsonl",
+    "all_nodes_property_filter-control.pcs",
+    "all_nodes_property_filter-counts.jsonl",
+    "all_nodes_property_filter-counts.tsv",
+    "all_nodes_property_filter-kuzu-plan.json",
+    "all_nodes_property_filter-sampled.command.json",
+    "all_nodes_property_filter-sampled.jsonl",
+    "all_nodes_property_filter-sampled.pcs",
+    "build-counts.py",
+    "build.py",
+    "edge_batch_1000-control.command.json",
+    "edge_batch_1000-control.jsonl",
+    "edge_batch_1000-control.pcs",
+    "edge_batch_1000-counts.jsonl",
+    "edge_batch_1000-counts.tsv",
+    "edge_batch_1000-sampled.command.json",
+    "edge_batch_1000-sampled.jsonl",
+    "edge_batch_1000-sampled.pcs",
+    "fresh_import-control.command.json",
+    "fresh_import-control.jsonl",
+    "fresh_import-control.pcs",
+    "fresh_import-sampled.command.json",
+    "fresh_import-sampled.jsonl",
+    "fresh_import-sampled.pcs",
+    "identity.json",
+    "import-profile.py",
+    "kuzu-plan.py",
+    "label_scan_filter-control.command.json",
+    "label_scan_filter-control.jsonl",
+    "label_scan_filter-control.pcs",
+    "label_scan_filter-counts.jsonl",
+    "label_scan_filter-counts.tsv",
+    "label_scan_filter-kuzu-plan.json",
+    "label_scan_filter-sampled.command.json",
+    "label_scan_filter-sampled.jsonl",
+    "label_scan_filter-sampled.pcs",
+    "multi_key_group-control.command.json",
+    "multi_key_group-control.jsonl",
+    "multi_key_group-control.pcs",
+    "multi_key_group-counts.jsonl",
+    "multi_key_group-counts.tsv",
+    "multi_key_group-sampled.command.json",
+    "multi_key_group-sampled.jsonl",
+    "multi_key_group-sampled.pcs",
+    "property_set-control.command.json",
+    "property_set-control.jsonl",
+    "property_set-control.pcs",
+    "property_set-counts.jsonl",
+    "property_set-counts.tsv",
+    "property_set-sampled.command.json",
+    "property_set-sampled.jsonl",
+    "property_set-sampled.pcs",
+    "run-counts.py",
+    "run.py",
+    "save-diagnosis.py",
+    "summarize.py",
+    "summary.json"
+  ]
+}

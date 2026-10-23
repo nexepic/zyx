@@ -1,0 +1,96 @@
+{
+  "S0": "accepted",
+  "progress_percent": 5,
+  "input_identities_checked": 10,
+  "source_and_library_matched": true,
+  "preflight": [
+    {
+      "scale": "medium",
+      "engine": "zyx",
+      "cases": [
+        "label_scan_filter",
+        "all_nodes_property_filter",
+        "aggregation_count_by_group",
+        "multi_key_group"
+      ],
+      "oracle": "passed",
+      "timed": false,
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/acceptance/public-baseline",
+        "check-read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r43-identity.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261023-scan-path/s0-medium-zyx.db",
+        "label_scan_filter,all_nodes_property_filter,aggregation_count_by_group,multi_key_group",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "scale": "medium",
+      "engine": "kuzu",
+      "cases": [
+        "label_scan_filter",
+        "all_nodes_property_filter",
+        "aggregation_count_by_group",
+        "multi_key_group"
+      ],
+      "oracle": "passed",
+      "timed": false,
+      "command": [
+        "/workspace/zyx-tools/bin/python",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/kuzu-worker.py",
+        "check-read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/medium-r7-final.kuzu",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261023-scan-path/s0-medium-kuzu.db",
+        "label_scan_filter,all_nodes_property_filter,aggregation_count_by_group,multi_key_group",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "scale": "holdout",
+      "engine": "zyx",
+      "cases": [
+        "label_scan_filter",
+        "all_nodes_property_filter",
+        "aggregation_count_by_group",
+        "multi_key_group"
+      ],
+      "oracle": "passed",
+      "timed": false,
+      "command": [
+        "/workspace/zyx/benchmarks/architecture-design/results/20261022-core-cost/acceptance/public-baseline",
+        "check-read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r43-identity.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261023-scan-path/s0-holdout-zyx.db",
+        "label_scan_filter,all_nodes_property_filter,aggregation_count_by_group,multi_key_group",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "scale": "holdout",
+      "engine": "kuzu",
+      "cases": [
+        "label_scan_filter",
+        "all_nodes_property_filter",
+        "aggregation_count_by_group",
+        "multi_key_group"
+      ],
+      "oracle": "passed",
+      "timed": false,
+      "command": [
+        "/workspace/zyx-tools/bin/python",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/kuzu-worker.py",
+        "check-read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261020-work-resume/r7-inputs/holdout-r7-final.kuzu",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261023-scan-path/s0-holdout-kuzu.db",
+        "label_scan_filter,all_nodes_property_filter,aggregation_count_by_group,multi_key_group",
+        "0",
+        "1"
+      ]
+    }
+  ],
+  "new_performance_matrix": false,
+  "unit_suite_run": false
+}

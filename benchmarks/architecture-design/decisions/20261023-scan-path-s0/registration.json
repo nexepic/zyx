@@ -1,0 +1,174 @@
+{
+  "plan": "scan-path-20261023",
+  "base_head": "369039dafda8ba6e6764fc7c569ab9b5be7de8b5",
+  "release_library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a",
+  "primary": [
+    "label_scan_filter",
+    "all_nodes_property_filter",
+    "aggregation_count_by_group",
+    "multi_key_group"
+  ],
+  "scales": [
+    "medium",
+    "holdout"
+  ],
+  "baseline": [
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "zyx_p50_ms": 76.27682999999999,
+      "zyx_p95_ms": 79.300604,
+      "kuzu_p50_ms": 1.8804709980031475,
+      "kuzu_p95_ms": 2.2049279941711575,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 15.255365999999999
+    },
+    {
+      "scale": "holdout",
+      "case": "all_nodes_property_filter",
+      "zyx_p50_ms": 119.399156,
+      "zyx_p95_ms": 138.437666,
+      "kuzu_p50_ms": 0.39069101330824196,
+      "kuzu_p95_ms": 0.4673310031648725,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 23.8798312
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "zyx_p50_ms": 74.6470935,
+      "zyx_p95_ms": 79.783288,
+      "kuzu_p50_ms": 1.1388025159249082,
+      "kuzu_p95_ms": 1.7751440173014998,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 14.9294187
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "zyx_p50_ms": 96.3261395,
+      "zyx_p95_ms": 101.355397,
+      "kuzu_p50_ms": 2.7461130230221897,
+      "kuzu_p95_ms": 3.3232060086447746,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 19.2652279
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "zyx_p50_ms": 102.1458035,
+      "zyx_p95_ms": 108.551167,
+      "kuzu_p50_ms": 2.4705660034669563,
+      "kuzu_p95_ms": 5.5276849889196455,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 20.4291607
+    },
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "zyx_p50_ms": 164.0376395,
+      "zyx_p95_ms": 186.893829,
+      "kuzu_p50_ms": 0.425685488153249,
+      "kuzu_p95_ms": 0.5598429997917265,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 32.807527900000004
+    },
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "zyx_p50_ms": 101.541688,
+      "zyx_p95_ms": 105.507082,
+      "kuzu_p50_ms": 1.4517740055453032,
+      "kuzu_p95_ms": 2.985886996611953,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 20.308337599999998
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "zyx_p50_ms": 126.9404515,
+      "zyx_p95_ms": 148.442013,
+      "kuzu_p50_ms": 3.470557989203371,
+      "kuzu_p95_ms": 3.6440120020415634,
+      "samples": 30,
+      "adoption_maximum_p50_ms": 25.388090299999998
+    }
+  ],
+  "final_protocol": {
+    "processes_per_case_engine": 3,
+    "warmup": 3,
+    "measured": 10,
+    "threads": 1,
+    "ordering": [
+      [
+        "zyx",
+        "kuzu"
+      ],
+      [
+        "kuzu",
+        "zyx"
+      ],
+      [
+        "zyx",
+        "kuzu"
+      ]
+    ],
+    "guard_threshold_fraction": 0.05,
+    "minimum_speedup_each_primary": 5,
+    "no_full_unit_suite": true,
+    "full_matrix": "only once after S4; reuse verified baseline now"
+  },
+  "resources": {
+    "address_space_bytes": 6442450944,
+    "registered_file_limit_bytes": 2147483648,
+    "worker_timeout_seconds": 1200,
+    "raw_buffer_pool_bytes": 67108864,
+    "metadata_cache_entries": 128,
+    "metadata_cache_charged_bytes": 1048576,
+    "conversion_bytes": 1048576,
+    "maintenance_workspace_bytes": 8388608,
+    "query_budget": "unchanged production defaults; source hashes frozen; no added standalone cache allowance"
+  },
+  "candidate_limits": {
+    "count": 2,
+    "correction_rechecks": 1,
+    "holdout_policy": "freeze rules before measurement; no holdout tuning",
+    "construction_cost": "reported separately, plus first-use total; never hidden from total-cost assessment"
+  },
+  "generality_registration": {
+    "seed": 20261023,
+    "owners": 16384,
+    "labels": [
+      "alpha",
+      "beta"
+    ],
+    "overlap_every": 3,
+    "fields": {
+      "dense_integer": "all owners; deterministic ordinal",
+      "sparse_number": "every 16th owner, alternating integer/double",
+      "mixed": "integer,text,NULL,missing alternating by ordinal mod4",
+      "text": "lengths 0,2,63,1024 by ordinal mod4; include embedded NUL"
+    },
+    "mutations": "update every 8th; remove every 16th; delete every 32nd; label changes every 7th; old pin held and then released",
+    "cache_pressure": "same generated input with 4096-byte configured raw cache; no increased budget; not physical cold-disk claim"
+  },
+  "guards": [
+    "point_lookup_indexed",
+    "graph_full_point",
+    "graph_full_neighbors",
+    "one_hop_expand",
+    "two_hop_expand",
+    "property_set",
+    "edge_batch_1000",
+    "property_noop",
+    "edge_create_delete",
+    "large_selected",
+    "large_full",
+    "large_patch",
+    "skew_out",
+    "skew_both",
+    "skew_twohop"
+  ],
+  "baseline_reused": true,
+  "baseline_reason": "exact accepted library/source/input identity matched; no environment/input/build evidence requires a new full matrix"
+}
