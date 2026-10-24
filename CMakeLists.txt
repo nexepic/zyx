@@ -16,6 +16,10 @@ option(ZYX_BUILD_STATIC_LIBRARY "Build the public static ZYX library" OFF)
 option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
 option(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT "Build isolated hybrid-property format prototype" OFF)
+option(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT "Build isolated complete-scan format prototype" OFF)
+if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT)
+    message(FATAL_ERROR "Scan-path format requires the hybrid-property format option")
+endif()
 option(ZYX_INSTALL_PKGCONFIG "Install pkg-config metadata" ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -82,7 +86,8 @@ target_include_directories(zyx_core
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 target_compile_definitions(zyx_core PUBLIC COVERAGE_SKIP_ZLIB_ERRORS
-    ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT}>)
+    ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT}>
+    ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT}>)
 target_link_libraries(zyx_core
     PUBLIC
         zyx_project_options

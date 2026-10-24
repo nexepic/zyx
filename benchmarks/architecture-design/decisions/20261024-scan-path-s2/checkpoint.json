@@ -1,0 +1,79 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "accepted_progress_percent": 15,
+  "full_suite_run": false,
+  "new_performance_measurements": false,
+  "frozen_library_sha256": "6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a",
+  "isolated_core_build": {
+    "result": "passed",
+    "library_sha256": "8508adee44f3c2832fe2b286003984f6e4578dcb9e04bdc34dd0e2b79467d1ee",
+    "public_open": "refused_until_lifecycle_installed"
+  },
+  "targeted_results": {
+    "query-tests.json": {
+      "tests": 77,
+      "failures": 1,
+      "disabled": 0
+    },
+    "membership-tests.json": {
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0
+    },
+    "default-format-tests.json": {
+      "tests": 10,
+      "failures": 0,
+      "disabled": 0
+    },
+    "hybrid-format-tests.json": {
+      "tests": 10,
+      "failures": 0,
+      "disabled": 0
+    },
+    "scan-format-tests.json": {
+      "tests": 15,
+      "failures": 0,
+      "disabled": 0
+    }
+  },
+  "known_failure": {
+    "name": "LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop",
+    "reproduced_with_frozen_baseline": true
+  },
+  "fixed_regression": "Indivisible LargeValue above certified source workspace retains existing query-budgeted owning fallback",
+  "source_hashes": {
+    "CMakeLists.txt": "0c3fc4afd7b5d5b947a7d34718f2c07a85276a0ff82768b45db4fff123fe2013",
+    "include/graph/storage/LogicalGraphNodeScan.hpp": "2a6f5dcb6fb854dfa9ef1d3a5b6528d270c12e9db7cfd1a3d613853950c88cc5",
+    "include/graph/storage/relocatable/entity/ScanBlockMembership.hpp": "25df3f6c4c698db7b08ac4140d20abe32f5da8eff437af5c7a5cee2ec0f662a1",
+    "include/graph/storage/relocatable/format/Format.hpp": "8b49079b034a9d6f90456e8289c92dfc2baf8b063715b3e67c79c306ff5c8c49",
+    "include/graph/storage/relocatable/format/Superblock.hpp": "409fb335989b9e92cd14814f16af9a97f35edc77466cf78d3724bb19cbd3da8f",
+    "include/graph/storage/relocatable/format/ScanFormatCloneCodec.hpp": "b1c2e9d71e764cdaaddbff791e0285be4dab2ea7ebd593847c5775899a460b91",
+    "include/graph/storage/relocatable/format/ScanBuildingClone.hpp": "af7eae24f477617b26858ab738444d2ca217c993733e48349b7a234b15c1e848",
+    "include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp": "3c7cb5a8dad591f1ed9dfa2d4541dc7e478c19cbb66d402c6a42c34565acf76b",
+    "include/graph/storage/relocatable/property/HybridPropertyIndexIds.hpp": "8eaf989d37024cdc081bdc3704ee73bebc866038fc5c0339c74eeed1d1767d41",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "8751dd286aee316bf971e75e78429862767162f725999aeb69806f2500ddf2d2",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "5b1c031543cef1f4d7634a05d987ddb2d261f887827576e4dedbb53ad253654c",
+    "src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp": "46c6512b4c0d6d66b20d8d7229a5f27724f036d05492e8d001fee3b557d9ca4d",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "ccd63d26708c527ea9804dd3aaaf128aa9b0fc63d10d4ce53086591d1d313b4a",
+    "tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp": "efca6d4300db3fe6bcac3edcc3a3cdbda58cacb026230c55964692c427e074f4",
+    "tests/src/storage/relocatable/entity/test_ScanBlockMembership.cpp": "75a728584a1a089a7dd5630a81fbfb49e8695e66ad66488ce50c1ed9f3b81e7f",
+    "tests/src/storage/relocatable/format/test_ScanPathFormat.cpp": "1b9cb510925cb7d4f7162fcd618973611a94d9b96d19cd14f214875353dacb04",
+    "tests/src/storage/relocatable/format/test_ScanFormatCloneCodec.cpp": "c41ffbe232f063c2fb506fe5e39178b1412e5924381fd76eaceb721cf0f54dec",
+    "tests/src/storage/relocatable/format/test_ScanBuildingClone.cpp": "7024f59fc7d4067cff9f191b765f963ed23ec42621dcf1f5fc0001edbfa61bf0",
+    "tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp": "ac38cbf260c0ce466fbc61b50cad37a68f3fc1c9f4b10ec7911fcb995b297be3"
+  },
+  "pending": [
+    "Complete candidate A shared source/certification work and resource/fallback boundaries",
+    "Connect BUILDING clone to private membership/field construction and full integrity",
+    "Persistent B public read/update/reopen chain and whole-file adoption",
+    "One bounded S2 comparison and adoption decision"
+  ],
+  "not_claimed": [
+    "S2 acceptance",
+    "5x speedup",
+    "Kuzu superiority",
+    "Production persistent membership authority"
+  ]
+}

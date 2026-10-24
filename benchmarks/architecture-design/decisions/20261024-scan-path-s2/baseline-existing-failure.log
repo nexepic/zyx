@@ -1,0 +1,23 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from LogicalPlanDirectEdgeRuntimeTest
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop
+/workspace/zyx/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp:197: Failure
+Expected equality of these values:
+  result.rewrite_count
+    Which is: 0
+  1U
+    Which is: 1
+
+[  FAILED  ] LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop (0 ms)
+[----------] 1 test from LogicalPlanDirectEdgeRuntimeTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop
+
+ 1 FAILED TEST

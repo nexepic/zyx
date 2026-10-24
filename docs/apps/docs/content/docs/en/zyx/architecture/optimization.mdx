@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Batch Scan Path Architecture Optimization Plan
 
-Updated: 2026-10-23. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 15%; editing the plan and historical diagnostics do not count as implementation progress.**
+Updated: 2026-10-24. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 15%; editing the plan and historical diagnostics do not count as implementation progress.**
 
 The previous incremental commits, import work and experimental cold conversion are complete and are removed from the active queue. Historical acceptance remains in `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Historical implementation completion does not establish read-performance acceptance. Do not reintroduce old P1–P7 tasks, stage reports or experimental capability lists as additional work.
 
@@ -46,7 +46,7 @@ Current diagnostics and reproduction materials are in `benchmarks/architecture-d
 
 ### 2.1 Formal baseline reference
 
-Previous final formal P50 values, in milliseconds. S0 must verify inputs, build and contracts before registering them as the new baseline; diagnostic timings cannot replace them.
+Formal baseline P50 values in milliseconds, already verified and registered by S0 against input, build and contract identities. Diagnostic timings cannot replace them. Medium has 225,000 nodes/860,000 edges; holdout has 163,000 nodes/772,000 edges.
 
 | Workload | medium ZYX / Kuzu | holdout ZYX / Kuzu |
 |---|---:|---:|
@@ -54,6 +54,19 @@ Previous final formal P50 values, in milliseconds. S0 must verify inputs, build 
 | All-node property filter | 164.038 / 0.426 | 119.399 / 0.391 |
 | Single-key group | 102.146 / 2.471 | 76.277 / 1.880 |
 | Multi-key group | 126.940 / 3.471 | 96.326 / 2.746 |
+
+### 2.2 Priorities expressed as work to eliminate
+
+These priorities belong to one scan chain, not unrelated tuning projects. CPU shares locate costs; end-to-end measurements establish gains.
+
+| Order | Work that must change | Implementation boundary and evidence |
+|---|---|---|
+| First | Reduce per-entity property-root location, header/offset parsing and field delivery | Reuse certified locations within one snapshot; supply stable typed fields by block to existing typed columns. Count root visits, parsing, fallbacks and allocations, not just batches |
+| Required in the same stage | Reduce candidate generation followed by repeated entity liveness/label checks | A reuses valid batch proofs; B produces IDs and label selections from certified membership blocks. Cover property-less nodes, overlapping labels and deletion; existing field-group live masks are not complete entity membership |
+| After selection | Complete transactions, recovery, reclamation and adoption on ordinary inputs | Publish under one atomic root; test updates, old snapshots and reopen without a separate consistency mechanism |
+| Last | Evaluate remaining consumer costs and regression guards | Reassess residual costs on the new supply chain. Without new evidence, do not start aggregation rewrites, tree replacement or general caching projects |
+
+Memory holds budgeted batch buffers and short-lived snapshot-bound views; existing caching and COW manage persistent membership/field blocks. Do not hide storage costs through whole-database expansion at startup, resident property replicas or unbounded certification tables. Current evidence supports changing scan representation and access boundaries; it does not establish a need to replace radix/B+Tree, the entire storage engine or transactions.
 
 ## 3. System contracts to preserve
 
@@ -66,7 +79,7 @@ Previous final formal P50 values, in milliseconds. S0 must verify inputs, build 
 
 ## 4. Architecture direction and selection boundaries
 
-These are design requirements, not implemented APIs. S1 records a decision; S2 validates it before full lifecycle implementation.
+These are contracts registered in S1 and awaiting S2 validation, not delivered production capabilities. Complete lifecycle implementation follows S2 validation.
 
 ### 4.1 One logical model and one batch access contract
 
@@ -86,7 +99,7 @@ Audit existing experimental layouts against the batch contract, adoption coverag
 
 First evaluate local block COW. Compare a bounded update layer only after proving unacceptable small-update write amplification; do not automatically add a logging/LSM subsystem.
 
-S1 must specify per-block entity/byte bounds, maximum merge depth per read, change precedence, type changes/demotion, reorganization triggers, temporary-space limits, old-pin retention, cancellation points and budget-denial behavior. Derive and register numeric limits from existing resource contracts and frozen scale; do not leave them unspecified or unbounded under an adaptive label.
+S1 freezes at most 512 entities per batch, 1 MiB each for source workspace and encoded block, and 64 typed fields and 64 labels per block. Preserve general semantics beyond these limits without truncation: fields may use existing fallback; refuse construction until an oversized membership-group fallback is implemented, as specified in the S2 checkpoint. Persistent merge depth is one. Each maintenance operation handles at most one block with an 8 MiB workspace. Source workspace is also capped by the caller’s remaining query budget; old pins retain versions until safe reclamation. See S1 `contract.json` for the complete contract; adaptive behavior must not exceed these limits.
 
 Publish fields, membership and primary data atomically. Failure, cancellation or crashes must not expose a conversion prefix. Relocation/reclamation reuse version and ownership mechanisms; an independent cache cannot hide consistency issues. Keep ROW when conversion is uneconomic, with observable refusal reasons. Do not relax space gates to force benchmark adoption.
 
@@ -103,23 +116,41 @@ Weights measure accepted deliverables, not code volume or performance attainment
 | S4 | 20% | Generality, safety, resource and regression validation | Unaccepted |
 | S5 | 15% | Final unified performance acceptance, documentation and delivery | Unaccepted |
 
-### S0: Freeze once, without reopening the full matrix
-
-Register formal inputs/oracles, source/library SHAs, Kuzu version, thread count, cache/memory budgets, compiler options and platform. Medium has 225,000 nodes/860,000 edges; holdout has 163,000 nodes/772,000 edges. Reuse accepted input hashes, not newly generated favorable data.
-
-Reuse formal baselines and current diagnostics. Calibrate only when environment/input/build identity cannot be matched. Preregister four primary workloads, oracles, the 5x adoption gate, guards, statistics and resource/space admission. The baseline is the default production path. Experimental layouts must report actual conversion/adoption coverage; do not discard refusals to claim whole-workload gains.
-
-### S1: Produce a reviewable design first
-
-Write a bilingual decision covering layout/identity/ownership, batch validation, logical/physical scan selection, missing/NULL/mixed types, updates/recovery, relocation/reclamation, budgets, complexity and migration. Identify work removed and work still required per entity.
-
-Separate block/page/entity/field work in the cost model. Account for candidates, entity/property-root visits, field bytes, metadata reads, validation, allocations and batches per query. Distinguish complexity improvements from constant-factor reductions. Do not claim general scans can avoid all value comparisons.
+Completed stages remain only in the status table and evidence references, not as tasks to repeat. S0 `registration.json`, `verified-inputs.json` and `acceptance.json` freeze baselines, resources and oracles; S1 `design.en.md`, `contract.json` and `acceptance.json` freeze candidate contracts. Section 6 identifies their directories. Calibrate only necessary environment mismatches; do not reselect inputs or change gates.
 
 ### S2: Bounded selection; insufficient gains stop at this gate
 
 Connect candidates → visibility/membership proofs → field batches → existing filter/group operators → owning outputs on real persistent data. Include reads after updates and reopen. Time the actual production chain; report conversion/build/maintenance separately rather than hiding them in preparation.
 
 Run one bounded comparison window with at most two candidates. Allow one targeted correction/recheck for a demonstrated implementation bug. Develop on medium, freeze rules, then evaluate holdout. Require each primary workload on each dataset to improve at least 5x while satisfying semantics, resource and space contracts. If both candidates fail, retain unresolved-cost evidence and leave the stage unaccepted with a bounded design revision. Do not automatically expand into unrelated optimization or lower the gate.
+
+#### Current checkpoint and next implementation entry
+
+At this documentation review, S2 remains **unaccepted**. Shared batch access, membership encoding, isolated format and private BUILDING cloning have prototypes; public scan-format opening is still refused. There is no complete persistent scan chain or new end-to-end performance conclusion. The checkpoint covers only its recorded source revisions and tests, not acceptance of the current workspace or production lifecycle.
+
+Continue from these gaps without repeating S0/S1 or adding another batch API:
+
+- **Remaining A work:** identify and implement shareable page location, certification and parsing; retain unavoidable per-entity costs. Forwarding existing ROW reads still counts as a prototype.
+- **Remaining B work:** complete the table below against the existing `persistent-format.en.md` and `membership-wire.en.md`, without redesigning settled encodings. Both are in `benchmarks/architecture-design/decisions/20261024-scan-path-s2/`; they specify constraints, not completed implementation.
+
+| Order | Remaining B chain | Required correctness evidence |
+|---|---|---|
+| 1 | Private builder derives membership from real primary Entity records and complete labels; publishes membership root/counts and field roots together | Callers cannot forge certification; property-less nodes are included; source stays read-only; target stays BUILDING; public create/open and unsupported writes refuse before side effects |
+| 2 | Clear BUILDING only after full integrity and whole-database space admission | Bounded merge against primary entities verifies live/label sets, reverse ownership, field references and counts; failures/cancellation expose no partial database; preserve whole-file and peak limits |
+| 3 | Real persistent membership → existing field columns → consumer scan path | Bind proofs to root/snapshot/version; reuse only covered checks, retaining field owner/slot/type validation; account for complex, oversized indivisible and uncovered-field fallbacks |
+| 4 | Minimum update → read → close → reopen chain | Supported updates keep membership/fields consistent under one root and preserve old snapshots; unsupported mutations refuse before I/O; S3 completes all mutation types |
+
+Membership groups exceeding 64 labels do not yet have a general fallback-entry encoding. Until implemented, refuse the entire candidate construction and count that refusal; never truncate labels or claim fallback support. Field/value limits use existing general reads. Complete membership coverage and property fallback are distinct requirements.
+
+#### S2 execution order and required evidence
+
+1. **Validate the shared batch boundary first.** Connect `LogicalGraphReadSnapshot` to `DirectPropertyColumns` and existing filter/group consumers with bounded supply, reusing snapshot, owner and incarnation mechanisms. IDs, visibility, membership proofs and fields must describe the same version. Borrows remain within the agreed callback lifetime; returned results own their data. Cancellation or consumer exceptions must not replay an emitted prefix. Deny admission or split bounded batches before output on budget exhaustion.
+2. **Candidate A must remove actual repeated work.** Inspect the connections among `visitNativeNodeLabelCandidates`, `readNodeLabelMatchesSorted`, `readNodePropertyCellsSorted` and `PropertyCollectionRootScanCursor`. Identify page locations, identity checks and property-directory parsing reusable within one immutable version. Wrapping existing per-entity loops in a batch API is not completion. If ROW still requires per-entity property-root access, retain that cost and assess its limit honestly.
+3. **Candidate B must cover the complete supply chain.** Persistent scan blocks supply live entity IDs, label membership and typed fields together, with general ROW fallback for uncovered fields. Experimental format 13/39 does not provide complete membership proof and cannot count as this candidate. Specify versions, encoding, validation, publication and recovery before writing real files. Build an explicit offline destination with a read-only source; an incomplete destination must not open as a complete database. Require at least 10% whole-database steady-space savings and at most 2 GiB across source, destination and temporary files. Partial conversion cannot substitute for whole-database admission.
+4. **Correctness precedes one candidate comparison.** Run affected module tests for batch boundaries, overlapping labels, missing/NULL/mixed types, old snapshots, update/reopen, budget denial and cancellation/exceptions. Then compare S0’s four workloads on both datasets with three independent processes, each with three warmups and ten measurements. This is not a repeated full performance matrix.
+5. **Deliver a reviewable selection decision.** For each candidate, report end-to-end P50/P95, result oracles, candidate/entity/property-root/batch counts, allocations, source workspace, actual adoption/fallback coverage and construction cost. Compare against the frozen baseline and distinguish eliminated work from batch wrappers. Neither microbenchmarks nor CPU shares establish actual speedups. Only a candidate meeting adoption and total-cost gates proceeds to S3.
+
+Priority remains: complete scan supply chain → required lifecycle of the selected design → generality and regressions → final comparison. Aggregation kernels, tree replacement and independent write optimization cannot jump ahead because they are easier to implement. Revising this scope requires new evidence overturning current attribution and the process in section 6.
 
 Do not implement the entire migration/maintenance framework at this stage. Passing establishes that the design merits implementation, not production safety; S3 must complete the lifecycle.
 
@@ -149,7 +180,7 @@ Allow 100% only when each primary workload on both datasets reaches 5x, S3/S4 ar
 
 ## 6. Execution discipline and stop conditions
 
-Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification and the S1 design contract are accepted; progress is 15%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` define the two candidates; the persistent candidate requires a complete wire specification before write implementation. No new scan implementation or performance gain is claimed, and S2 remains unaccepted.
+Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification and the S1 design contract are accepted; progress is 15%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` define the two candidates; the persistent candidate now has S2 wire specifications, which still need to be implemented across construction, publication, reads and full integrity. S2 shared batch integration and a membership-codec prototype have targeted test evidence (`benchmarks/architecture-design/decisions/20261024-scan-path-s2/checkpoint.json`). The persistent candidate and selection comparison remain incomplete; this is not production delivery or a performance claim, and S2 remains unaccepted.
 
 Stop after S5 and final delivery. Do not automatically start import, ordinary-write or other optimization. When selection fails, preserve failure evidence and concrete blockers instead of expanding alternatives indefinitely. Any scope, resource-contract or acceptance-gate change must explicitly record its reason and the user's decision, never silently redefine completion.
 

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
 #include <array>
 #include "graph/core/OwnedPropertyValue.hpp"
 #include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
@@ -1180,7 +1181,7 @@ namespace graph::storage {
         DatabaseId expected_database_id{};
         PhysicalPageRef expected_root{};
         NativeHybridPropertyRootMode mode = NativeHybridPropertyRootMode::NHPRM_REPLACE;
-        std::array<uint64_t, 8> replacement_index_ids{};
+        std::array<uint64_t, RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT> replacement_index_ids{};
         std::optional<NativeGraphHybridPropertyConversion> conversion;
     };
 

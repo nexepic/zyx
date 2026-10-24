@@ -1,3 +1,4 @@
+#include "graph/storage/LogicalGraphNodeScan.hpp"
 #include "query/execution/OrderByComparison.hpp"
 #include "query/execution/DeferredReferenceRowVisitor.hpp"
 #include "query/execution/ProcedurePayloadAdmission.hpp"
@@ -11255,6 +11256,7 @@ namespace graph::query::execution {
                             state.shared.context && state.shared.context->resource_account, sizeof(PendingNodeRef));
 			pending.reserve(batchCapacity);
 			bool continueVisitor = true;
+            const storage::LogicalGraphNodeScanProvider::NodeScanPropertySource *certifiedSource = nullptr;
 			const auto flushPending = [&]() {
 				if (pending.empty()) {
 					return continueVisitor;
@@ -11323,7 +11325,8 @@ namespace graph::query::execution {
 									sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
 								};
                                 bool deliveredRuns = false;
-                                if (state.shared.snapshot.hasImmutableReadIdentity() && nodeIds.size() > 1U && keyViews.size() == 1U) {
+                                bool generalSourceFallback = false;
+                                if (certifiedSource || (state.shared.snapshot.hasImmutableReadIdentity() && nodeIds.size() > 1U && keyViews.size() == 1U)) {
                                     bool emitted = false;
                                     const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                                         emitted = true; emitValue(row, column, std::move(value));
@@ -11337,11 +11340,32 @@ namespace graph::query::execution {
                                             std::span<const std::string_view> texts) {
                                         emitted = true; direct->appendTextRun(rows, column, texts, directGuard);
                                     };
-                                    deliveredRuns = state.shared.snapshot.tryReadNodePropertyColumnBatchesSortedWithAdmission(
+                                    if (certifiedSource) {
+                                        try {
+                                            (*certifiedSource)(nodeIds, std::ref(owning), runs, std::ref(admitSource));
+                                        } catch (const storage::LogicalGraphBufferPressure &) {
+                                            if (guardFailed) throw;
+                                            // Split private batches first. An indivisible large value
+                                            // retains the existing general owning path and query budget;
+                                            // it is not admitted as a bounded certified-source batch.
+                                            if (nodeIds.size() > 1U) throw NodeColumnBytePressure{};
+                                            direct.reset();
+                                            sourceScratch.reset();
+                                            direct.emplace(state.shared.snapshot, nodeIds.size(), keyViews.size(),
+                                                state.shared.materialized_budget);
+                                            state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(
+                                                nodeIds, keyViews, std::ref(emitValue), std::ref(emitScalar),
+                                                std::ref(emitText), std::ref(admitSource));
+                                            generalSourceFallback = true;
+                                            debug::PerfTrace::addValue("logical_plan.certified_scan.general_value_fallback", 1);
+                                        }
+                                        deliveredRuns = true;
+                                    } else deliveredRuns = state.shared.snapshot.tryReadNodePropertyColumnBatchesSortedWithAdmission(
                                         nodeIds, keyViews, std::ref(owning), runs, std::ref(admitSource));
                                     if (!deliveredRuns && emitted)
                                         throw std::invalid_argument("unsupported Property batch emitted partial cells");
-                                    if (deliveredRuns) debug::PerfTrace::addValue("logical_plan.direct_property.run_batches", 1);
+                                    if (deliveredRuns && !generalSourceFallback)
+                                        debug::PerfTrace::addValue("logical_plan.direct_property.run_batches", 1);
                                 }
                                 if (!deliveredRuns)
                                     state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
@@ -11536,6 +11560,44 @@ namespace graph::query::execution {
 				pending.clear();
 				return continueVisitor;
 			};
+
+            const auto *scanProvider = dynamic_cast<const storage::LogicalGraphNodeScanProvider *>(&state.shared.snapshot);
+            if (scanProvider && columnReceiver && columnReceiver->consumeDirect &&
+                state.shared.snapshot.hasImmutableReadIdentity()) {
+                MaterializedByteReservation batchSourceBytes(&state.shared.materialized_budget);
+                detail::BudgetMemoryResource sourceKeyMemory(state.shared.materialized_budget);
+                std::pmr::vector<std::string_view> sourceKeys(&sourceKeyMemory);
+                bool emittedBatch = false;
+                std::optional<bool> result;
+                try {
+                    sourceKeys.reserve(propertyKeys.size());
+                    for (const auto &key : propertyKeys) sourceKeys.push_back(key);
+                    result = scanProvider->tryVisitNodeScanBatches(
+                        state.shared.bounds.maximum_node_records, batchCapacity, scan.getLabels(), sourceKeys,
+                        [&](std::span<const uint64_t> ids, size_t examined,
+                            const storage::LogicalGraphNodeScanProvider::NodeScanPropertySource &source) {
+                            emittedBatch = true;
+                            if (ids.size() > batchCapacity || examined < ids.size() || examined > batchCapacity)
+                                throw std::runtime_error("certified scan batch changed its bounded cardinality");
+                            checkGuardNow(state);
+                            for (size_t i = 0; i < examined; ++i)
+                                incrementBounded(state.task.stats.nodes_scanned, "logical-plan Node counter overflowed");
+                            for (const auto id : ids) {
+                                if (!id) throw std::runtime_error("certified scan batch returned a zero Node ID");
+                                pending.append(PendingNodeRef{{id, false, 0U, 0U, 0U}});
+                            }
+                            certifiedSource = &source;
+                            try { const bool more = flushPending(); certifiedSource = nullptr; return more; }
+                            catch (...) { certifiedSource = nullptr; throw; }
+                        }, [&](size_t bytes) { batchSourceBytes.set(bytes); });
+                } catch (const MaterializedByteLimitExceeded &) {
+                    if (emittedBatch) throw;
+                    // No source was exposed: the established lower-memory path
+                    // may still execute within the same query budget.
+                }
+                if (result) return *result;
+                if (emittedBatch) throw std::runtime_error("unsupported scan batch emitted a prefix");
+            }
 
 			state.shared.snapshot.visitNodeRefsForLabelPredicate(
 					state.shared.bounds.maximum_node_records, scan.getLabels(),

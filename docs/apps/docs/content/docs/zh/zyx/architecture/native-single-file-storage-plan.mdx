@@ -1007,3 +1007,7 @@ SlottedPagePool 的选页空闲索引从所选池已分配帧的有效 owner ID 
 默认格式 5／31 不变；实验 profile 13／Superblock 39 显式启用，352 字节 header 不变，拒绝旧实验 32／33／35／37 文件。无 LZ4 保持 RAW 回退与同一准入，不承诺压缩收益。当前唯一任务清单是[优化文档](optimization)；其完成率按用户最新要求表示实现／验证／客观报告，不等于超越 Kuzu 或任意数据库都能采用冷布局。
 
 最终证据：`benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`。过时的逐轮状态已移到其中的 historical-storage-notes-zh.md；保留协议合同及原始失败证据，不再把早期“发布关闭／生命周期未完成”当作当前限制。
+
+## 批扫描候选格式 15/41：待实现协议
+
+`scan-path-20261023` 的候选 B 文件协议已登记在 `benchmarks/architecture-design/decisions/20261024-scan-path-s2/persistent-format.zh.md`，成员记录字节见同目录 `membership-wire.zh.md`。协议规定隔离版本、第九个成员目录根、BUILDING 拒绝、独立目标转码与全库准入、同事务成员更新及恢复/完整性规则。当前已有成员/隔离格式编码和未完成目标复制原型及定向测试，但完整 15/41 生命周期尚未实现、普通打开入口仍拒绝；默认 5/31 和实验 13/39 不变。所有写入实现必须先满足协议的检查点，不能将本节作为生产能力声明。

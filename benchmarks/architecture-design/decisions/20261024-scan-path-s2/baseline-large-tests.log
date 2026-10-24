@@ -1,0 +1,12 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace
+[       OK ] RelocatableStorageBackendTest.CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace (23 ms)
+[----------] 1 test from RelocatableStorageBackendTest (23 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (23 ms total)
+[  PASSED  ] 1 test.
