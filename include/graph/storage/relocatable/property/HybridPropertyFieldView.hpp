@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/storage/relocatable/entity/ScanBlockMembership.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyColumnMembership.hpp"
@@ -34,6 +35,12 @@ public:
             owner.committed_lsn.isValid() && owner.committed_lsn <= visibleLsn,
             "hybrid field frame has an invalid owner or visibility");
         return HybridPropertyFieldView(SlottedPageReadView::open(owner, payload), visibleGeneration);
+    }
+    [[nodiscard]] ScanBlockMembership readScanMembership(const SlottedSlotReference &reference,
+        DatabaseId database, uint64_t group, Generation descriptorGeneration) const {
+        hybrid_property_detail::require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() &&
+            descriptorGeneration <= visible_generation_, "scan membership has an unsupported or future descriptor");
+        return ScanBlockMembership::decode(page_.read(reference), database, descriptorGeneration, group);
     }
     [[nodiscard]] HybridPropertyColumnMembership readColumnMembership(const SlottedSlotReference &reference,
         const HybridPropertyGroupRecord &group, Generation descriptorGeneration) const {

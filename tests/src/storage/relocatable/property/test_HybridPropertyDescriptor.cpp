@@ -9,6 +9,10 @@ HybridPropertyDescriptorPage sample() {
     page.descriptor.semantic_generation = Generation(7);
     for (size_t i = 0; i < page.descriptor.roots.size(); ++i)
         page.descriptor.roots[i] = {PageId(101 + i), Generation(3 + i % 4)};
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+    page.descriptor.scan_live_node_count = 65;
+    page.descriptor.scan_membership_group_count = 2;
+#endif
     return page;
 }
 auto decode(std::span<const std::byte> bytes) {
@@ -20,7 +24,7 @@ void reseal(HybridPropertyDescriptorCodec::Bytes &bytes) {
     LittleEndianCodec::writeU32(bytes, 28, 0);
     LittleEndianCodec::writeU32(bytes, 28, graph::utils::calculateCrc(bytes.data(), 32));
 }
-TEST(HybridPropertyDescriptorTest, Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip) {
+TEST(HybridPropertyDescriptorTest, VersionedPayloadAndIndependentLogicalRootsRoundTrip) {
     const auto page = sample(); const auto bytes = HybridPropertyDescriptorCodec::encode(page);
     EXPECT_EQ(bytes.size(), RSS_PAGE_SIZE); EXPECT_EQ(decode(bytes), page);
     EXPECT_EQ(bytes[0], std::byte{'Z'}); EXPECT_EQ(bytes[1], std::byte{'Y'});
@@ -31,8 +35,12 @@ TEST(HybridPropertyDescriptorTest, Exact192BytePayloadAndEightIndependentLogical
     EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 64), 101U);
     EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 176), 108U);
     EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 184), 6U);
-    EXPECT_TRUE(std::all_of(bytes.begin() + 224, bytes.end(), [](auto byte) { return byte == std::byte{}; }));
+    EXPECT_TRUE(std::all_of(bytes.begin() + 32 + RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES, bytes.end(), [](auto byte) { return byte == std::byte{}; }));
     auto empty = page; empty.descriptor.roots = {};
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+    empty.descriptor.scan_live_node_count = 0;
+    empty.descriptor.scan_membership_group_count = 0;
+#endif
     EXPECT_EQ(decode(HybridPropertyDescriptorCodec::encode(empty)), empty);
 }
 TEST(HybridPropertyDescriptorTest, NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals) {
@@ -46,9 +54,15 @@ TEST(HybridPropertyDescriptorTest, NamespaceIndexIdsAreStableDisjointAndRejectUn
         EXPECT_TRUE(isHybridPropertyIndexId(expected[i]));
     }
     for (const auto id : std::array<uint64_t, 8>{0, 7, UINT64_C(0x8000000000000002),
-        UINT64_C(0x8000000000000020), expected.front() - 1, expected.back() + 1,
+        UINT64_C(0x8000000000000020), expected.front() - 1, expected.back() + 2,
         UINT64_C(0xA501000000000030), UINT64_MAX}) EXPECT_FALSE(isHybridPropertyIndexId(id));
-    EXPECT_THROW(hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(8)), FormatException);
+    EXPECT_TRUE(isHybridPropertyIndexId(expected.back() + 1)); // reserved in every profile
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+    EXPECT_EQ(hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN), expected.back() + 1);
+#else
+    EXPECT_THROW((void)hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN), FormatException);
+#endif
+    EXPECT_THROW((void)hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(9)), FormatException);
     EXPECT_THROW(hybridPropertyIndexId(static_cast<HybridPropertyRootOrdinal>(255)), FormatException);
 }
 TEST(HybridPropertyDescriptorTest, ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility) {
@@ -92,7 +106,7 @@ TEST(HybridPropertyDescriptorTest, IndependentTreePoolEpochsAreNotSemanticVisibi
 TEST(HybridPropertyDescriptorTest, ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted) {
     const auto original = HybridPropertyDescriptorCodec::encode(sample());
     for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(32), size_t(36), size_t(38),
-        size_t(56), size_t(95), size_t(224), size_t(4095)}) {
+        size_t(72), size_t(95), size_t(32 + RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES), size_t(4095)}) {
         auto bytes = original; bytes[offset] ^= std::byte{0x40}; reseal(bytes);
         EXPECT_THROW(decode(bytes), FormatException) << offset;
     }

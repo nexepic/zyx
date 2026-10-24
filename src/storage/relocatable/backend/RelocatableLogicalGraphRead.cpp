@@ -1,3 +1,4 @@
+#include "graph/storage/LogicalGraphNodeScan.hpp"
 /**
  * @file RelocatableLogicalGraphRead.cpp
  * @brief relocatable implementation of the format-independent logical graph reader.
@@ -10,6 +11,7 @@
 #include "graph/utils/OwnedPmrObject.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -38,7 +40,7 @@ namespace graph::storage {
 		}
 	} // namespace
 
-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalQueryScratchProvider, public utils::OwnedPmrObject {
+	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider, public utils::OwnedPmrObject {
 	public:
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
@@ -198,6 +200,69 @@ namespace graph::storage {
 						maximumRecords, visitor, &read_session_).has_value()) return;
 				visitNodeRefsWithLabelMatches(maximumRecords, canonical, visitor);
 			}
+
+
+            [[nodiscard]] std::optional<bool> tryVisitNodeScanBatches(size_t maximumRecords,
+                size_t maximumBatchRows, const std::vector<std::string> &labels,
+                std::span<const std::string_view> keys, const NodeScanBatchVisitor &visitor,
+                const std::function<void(size_t)> &admitBatch) const override {
+                constexpr size_t maximumRows = 512U;
+                if (!maximumRecords || !maximumBatchRows || maximumBatchRows > maximumRows ||
+                    keys.empty() || !visitor || !admitBatch)
+                    throw std::invalid_argument("native scan batch requires bounded rows, fields and callbacks");
+                for (const auto key : keys) if (key.empty())
+                    throw std::invalid_argument("native scan batch has an empty Property key");
+                // Both bounded arrays belong to this query's source reservation.
+                // Admit before touching source data or invoking a consumer.
+                admitBatch(2U * maximumRows * sizeof(uint64_t));
+                std::array<uint64_t, maximumRows> ids{}, sortedIds{};
+                size_t selected = 0U, examined = 0U;
+                bool keepGoing = true;
+                const auto flush = [&]() {
+                    if (!examined) return keepGoing;
+                    std::copy_n(ids.begin(), selected, sortedIds.begin());
+                    std::sort(sortedIds.begin(), sortedIds.begin() + selected);
+                    if (std::adjacent_find(sortedIds.begin(), sortedIds.begin() + selected) !=
+                        sortedIds.begin() + selected)
+                        throw std::runtime_error("native scan batch contains duplicate Node IDs");
+                    const NodeScanPropertySource source = [&](std::span<const uint64_t> requested,
+                        const PropertyCellSink &values, const PropertyColumnBatchReadSinks &runs,
+                        const std::function<void(size_t)> &admission) {
+                        if (!values || !runs.scalars || !runs.texts || !admission)
+                            throw std::invalid_argument("native scan source requires typed sinks and admission");
+                        uint64_t previous = 0U;
+                        for (const auto id : requested) {
+                            if (!id || id <= previous || !std::binary_search(sortedIds.begin(),
+                                    sortedIds.begin() + selected, id))
+                                throw std::invalid_argument("native scan source has foreign or unordered IDs");
+                            previous = id;
+                        }
+                        size_t charged = 2U * maximumRows * sizeof(uint64_t);
+                        const std::function<void(size_t)> boundedAdmission = [&](size_t bytes) {
+                            constexpr size_t maximumSourceBytes = 1024U * 1024U;
+                            if (bytes > maximumSourceBytes - charged)
+                                throw LogicalGraphBufferPressure();
+                            admission(bytes); charged += bytes;
+                        };
+                        static_cast<void>(tryReadNodePropertyColumnBatchesSortedWithAdmission(
+                            requested, keys, values, runs, boundedAdmission));
+                    };
+                    debug::PerfTrace::addValue("native_graph.read.certified_scan_batches", 1);
+                    keepGoing = visitor(std::span(ids.data(), selected), examined, source);
+                    selected = examined = 0U;
+                    return keepGoing;
+                };
+                visitNodeRefsForLabelPredicate(maximumRecords, labels,
+                    [&](const EntityRef &reference, bool matches) {
+                        if (!reference.entity_id || reference.is_edge)
+                            throw std::runtime_error("native scan batch contains an invalid Node reference");
+                        ++examined;
+                        if (matches) ids[selected++] = reference.entity_id;
+                        return examined != maximumBatchRows || flush();
+                    });
+                if (keepGoing) flush();
+                return keepGoing;
+            }
 
 			[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
 				return backend_.containsLogicalNode(snapshot_, nodeId, &read_session_);

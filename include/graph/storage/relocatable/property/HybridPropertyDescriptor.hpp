@@ -22,9 +22,9 @@ namespace graph::storage {
 // This is not a generic State record or a routed radix root.
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC = 0x4858595AU; // ZYXH
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC = 0x4458595AU; // ZYXD
-constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = 1;
+constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 2 : 1;
 constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES = 32;
-constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = 192;
+constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = RSS_SCAN_PATH_FORMAT_ENABLED ? 208 : 192;
 struct HybridPropertyTreeRoot {
     PageId page_id{};
     Generation generation{}; // shared-pool physical epoch, not semantic commit generation
@@ -36,6 +36,10 @@ struct HybridPropertyDescriptor {
     // Owner/column/extension/group roots for Node, followed by Edge. Existing
     // ROW routing remains solely in entity_property_directory_root.
     std::array<HybridPropertyTreeRoot, RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT> roots{};
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+    uint64_t scan_live_node_count = 0;
+    uint64_t scan_membership_group_count = 0;
+#endif
     constexpr bool operator==(const HybridPropertyDescriptor &) const = default;
 };
 struct HybridPropertyDescriptorPage {
@@ -59,6 +63,15 @@ class HybridPropertyDescriptorCodec final {
         const auto &descriptor = page.descriptor;
         require(descriptor.database_id.isValid() && descriptor.semantic_generation.isValid() &&
             descriptor.semantic_generation <= page.generation, "hybrid descriptor has an invalid semantic identity");
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        const auto groups = descriptor.scan_membership_group_count;
+        const auto nodes = descriptor.scan_live_node_count;
+        require((groups == 0) == (nodes == 0) && groups <= nodes &&
+            (nodes / 64U + (nodes % 64U != 0U)) <= groups,
+            "scan descriptor has inconsistent membership counts");
+        require(descriptor.roots[8].page_id.isValid() == (groups != 0),
+            "scan descriptor membership root disagrees with its counts");
+#endif
         // Tree epochs belong to independently reused shared pools. Comparing
         // them numerically with metadata/semantic generations is invalid.
         // A routed reader must authenticate each nonempty reference against
@@ -86,6 +99,10 @@ public:
         LittleEndianCodec::writeU16(body, 4, RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION);
         LittleEndianCodec::writeU64(body, 8, page.descriptor.semantic_generation.value());
         LittleEndianCodec::writeU64(body, 16, page.descriptor.database_id.value());
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        LittleEndianCodec::writeU64(body, 24, page.descriptor.scan_live_node_count);
+        LittleEndianCodec::writeU64(body, 32, page.descriptor.scan_membership_group_count);
+#endif
         for (size_t i = 0; i < page.descriptor.roots.size(); ++i) {
             LittleEndianCodec::writeU64(body, 64 + i * 16, page.descriptor.roots[i].page_id.value());
             LittleEndianCodec::writeU64(body, 72 + i * 16, page.descriptor.roots[i].generation.value());
@@ -121,7 +138,7 @@ public:
         if (LittleEndianCodec::readU16(body, 4) != RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION)
             fail(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported hybrid descriptor payload version");
         if (LittleEndianCodec::readU16(body, 6) != 0 ||
-            !std::all_of(body.begin() + 24, body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
+            !std::all_of(body.begin() + (RSS_SCAN_PATH_FORMAT_ENABLED ? 40 : 24), body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
             !std::all_of(bytes.begin() + header.size() + body.size(), bytes.end(),
                 [](std::byte value) { return value == std::byte{}; }))
             fail(FormatError::FERR_RESERVED_BITS, "hybrid descriptor has nonzero reserved bytes");
@@ -130,6 +147,10 @@ public:
         result.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, 16));
         result.descriptor.semantic_generation = Generation(LittleEndianCodec::readU64(body, 8));
         result.descriptor.database_id = DatabaseId(LittleEndianCodec::readU64(body, 16));
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        result.descriptor.scan_live_node_count = LittleEndianCodec::readU64(body, 24);
+        result.descriptor.scan_membership_group_count = LittleEndianCodec::readU64(body, 32);
+#endif
         for (size_t i = 0; i < result.descriptor.roots.size(); ++i)
             result.descriptor.roots[i] = {PageId(LittleEndianCodec::readU64(body, 64 + i * 16)),
                 Generation(LittleEndianCodec::readU64(body, 72 + i * 16))};

@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
  */
 #pragma once
+#include "graph/storage/relocatable/entity/ScanBlockMembership.hpp"
 #include <bitset>
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyColumnMembership.hpp"
@@ -63,6 +64,28 @@ public:
     [[nodiscard]] utils::OwnedVector<std::byte> serialize() const { return page_.serializeOwned(memory_); }
     [[nodiscard]] utils::OwnedVector<std::byte> readRecord(const SlottedSlotReference &reference) const {
         return page_.readOwned(reference, memory_);
+    }
+    [[nodiscard]] SlottedSlotReference appendScanMembership(const ScanBlockMembership &value) {
+        require(RSS_SCAN_PATH_FORMAT_ENABLED && value.semantic_generation <= visible_generation_,
+            "scan membership requires its isolated visible format");
+        std::array<std::byte, ScanBlockMembership::MAX_BYTES> encoded{};
+        const auto bytes = std::span(encoded).first(value.wireSize()); value.encodeInto(bytes);
+        return appendRecord(bytes);
+    }
+    [[nodiscard]] ScanBlockMembership readScanMembership(const SlottedSlotReference &reference,
+        DatabaseId database, uint64_t group, Generation descriptorGeneration) const {
+        require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() && descriptorGeneration <= visible_generation_,
+            "scan membership has an unsupported or future descriptor");
+        return ScanBlockMembership::decode(readRecord(reference), database, descriptorGeneration, group);
+    }
+    void replaceScanMembership(const SlottedSlotReference &reference, const ScanBlockMembership &value,
+        Generation descriptorGeneration) {
+        const auto previous = readScanMembership(reference, value.database_id, value.group_id, descriptorGeneration);
+        require(value.semantic_generation >= previous.semantic_generation && value.semantic_generation <= visible_generation_,
+            "scan membership replacement changes generation backwards or into the future");
+        std::array<std::byte, ScanBlockMembership::MAX_BYTES> encoded{};
+        const auto bytes = std::span(encoded).first(value.wireSize()); value.encodeInto(bytes);
+        overwriteRecord(reference, bytes);
     }
     [[nodiscard]] SlottedSlotReference appendGroup(const HybridPropertyGroupRecord &group) {
         group.validate(); require(group.semantic_generation <= visible_generation_, "hybrid group is not visible");
@@ -246,7 +269,12 @@ private:
         const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission) const {
         require(bytes.size() >= sizeof(uint32_t), "hybrid private slot has no typed record envelope");
         const auto magic = LittleEndianCodec::readU32(bytes, 0);
-        if (magic == RSS_HYBRID_GROUP_MAGIC) {
+        if (magic == ScanBlockMembership::MAGIC) {
+            require(RSS_SCAN_PATH_FORMAT_ENABLED && bytes.size() >= ScanBlockMembership::HEADER_BYTES,
+                "scan membership is unsupported or truncated");
+            static_cast<void>(ScanBlockMembership::decode(bytes, DatabaseId(LittleEndianCodec::readU64(bytes, 8)),
+                visible_generation_, LittleEndianCodec::readU64(bytes, 24)));
+        } else if (magic == RSS_HYBRID_GROUP_MAGIC) {
             require(bytes.size() >= 64, "hybrid private group record is truncated");
             const auto group = HybridPropertyGroupRecord::decode(bytes,
                 EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])), LittleEndianCodec::readU64(bytes, 8),

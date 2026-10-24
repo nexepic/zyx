@@ -1,3 +1,4 @@
+#include "graph/storage/LogicalGraphNodeScan.hpp"
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "query/execution/DirectPropertyColumns.hpp"
 #include "graph/query/api/QueryEngine.hpp"
@@ -85,6 +86,7 @@ TEST_F(RelocatableStorageBackendTest, NativeDirectFilterGroupAndDistinctReturnEx
         EXPECT_EQ(row.at("distincts").asPrimitive(), PropertyValue(static_cast<int64_t>(entry.distinct.size())));
         EXPECT_EQ(row.at("total").asPrimitive(), PropertyValue(entry.sum));
     }
+    ASSERT_TRUE(trace.contains("native_graph.read.certified_scan_batches"));
     ASSERT_TRUE(trace.contains("native_graph.read.direct_property_batches"));
     EXPECT_GE(trace.at("native_graph.read.direct_property_batches").totalValue, 2);
     ASSERT_TRUE(trace.contains("logical_plan.aggregate.direct_input_rows"));
@@ -296,4 +298,91 @@ TEST_F(RelocatableStorageBackendTest, PropertyRunsKeepComplexLargeValueNullAndMi
         EXPECT_EQ(std::get<int64_t>(columns.cell(0U, columns.rowId(5U)).data), 3);
     }
     EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, CertifiedScanBatchesBoundRowsAndValidateSubsetsBeforeDelivery) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    std::vector<LogicalGraphNodeCreateRequest> inputs;
+    for (int64_t i = 0; i < 513; ++i)
+        inputs.push_back({{"ScanBatch"}, {{"rank", PropertyValue(i)}, {"text", PropertyValue("x")}}});
+    const auto created = backend.createLogicalNodes(inputs);
+    auto snapshot = backend.openLogicalGraphReadSnapshot();
+    const auto *provider = dynamic_cast<const LogicalGraphNodeScanProvider *>(snapshot.get());
+    ASSERT_NE(provider, nullptr);
+    const std::array<std::string_view, 3> keys{"rank", "text", "rank"};
+    size_t calls = 0, count = 0, sourceBytes = 0;
+    const auto complete = provider->tryVisitNodeScanBatches(1000, 512, {"ScanBatch"}, keys,
+        [&](std::span<const uint64_t> ids, size_t examined, const auto &source) {
+            ++calls; count += ids.size(); EXPECT_EQ(ids.size(), examined);
+            EXPECT_LE(ids.size(), 512U); EXPECT_TRUE(std::is_sorted(ids.begin(), ids.end()));
+            size_t delivered = 0;
+            LogicalGraphReadSnapshot::PropertyCellSink owning = [&](size_t, size_t, std::optional<PropertyValue>) { ++delivered; };
+            PropertyColumnBatchReadSinks runs;
+            runs.scalars = [&](std::span<const size_t> rows, size_t column, graph::PropertyType type, std::span<const uint64_t> bits) {
+                EXPECT_TRUE(column == 0 || column == 2); EXPECT_EQ(type, graph::PropertyType::INTEGER);
+                EXPECT_EQ(rows.size(), bits.size()); delivered += rows.size();
+            };
+            runs.texts = [&](std::span<const size_t> rows, size_t column, std::span<const std::string_view> texts) {
+                EXPECT_EQ(column, 1U); EXPECT_EQ(rows.size(), texts.size()); delivered += rows.size();
+            };
+            const std::array<uint64_t, 1> foreign{created.back() + 1};
+            EXPECT_THROW(source(foreign, owning, runs, [](size_t) {}), std::invalid_argument);
+            const std::array<uint64_t, 2> duplicate{ids.front(), ids.front()};
+            EXPECT_THROW(source(duplicate, owning, runs, [](size_t) {}), std::invalid_argument);
+            EXPECT_EQ(delivered, 0U);
+            source(ids, owning, runs, [&](size_t bytes) { sourceBytes += bytes; });
+            EXPECT_EQ(delivered, ids.size() * keys.size());
+            return true;
+        }, [](size_t bytes) { EXPECT_EQ(bytes, 8192U); });
+    ASSERT_TRUE(complete.has_value()); EXPECT_TRUE(*complete);
+    EXPECT_EQ(count, 513U); EXPECT_EQ(calls, 2U); EXPECT_GT(sourceBytes, 0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, CertifiedScanAdmissionAndConsumerStopDoNotReplay) {
+    materializeNativeGraphFixture();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    backend.createLogicalNodes({{{"NewScan"}, {{"alpha", PropertyValue(int64_t{9})}}}});
+    const std::array<std::string_view, 1> keys{"alpha"};
+    const auto *provider = dynamic_cast<const LogicalGraphNodeScanProvider *>(old.get());
+    ASSERT_NE(provider, nullptr);
+    size_t calls = 0;
+    const auto stop = [&](auto, size_t, const auto &) { ++calls; return false; };
+    EXPECT_THROW((void)provider->tryVisitNodeScanBatches(100, 1, {}, keys, stop,
+        [](size_t) { throw std::runtime_error("admission denied"); }), std::runtime_error);
+    EXPECT_EQ(calls, 0U);
+    auto result = provider->tryVisitNodeScanBatches(100, 1, {}, keys, stop, [](size_t) {});
+    ASSERT_TRUE(result.has_value()); EXPECT_FALSE(*result); EXPECT_EQ(calls, 1U);
+    calls = 0;
+    EXPECT_THROW((void)provider->tryVisitNodeScanBatches(100, 1, {}, keys,
+        [&](auto, size_t, const auto &) -> bool { ++calls; throw std::runtime_error("consumer stopped"); },
+        [](size_t) {}), std::runtime_error);
+    EXPECT_EQ(calls, 1U);
+    size_t oldMatches = 0;
+    result = provider->tryVisitNodeScanBatches(100, 512, {"NewScan"}, keys,
+        [&](auto ids, size_t, const auto &) { oldMatches += ids.size(); return true; }, [](size_t) {});
+    ASSERT_TRUE(result.has_value()); EXPECT_TRUE(*result); EXPECT_EQ(oldMatches, 0U);
+    auto current = backend.openLogicalGraphReadSnapshot();
+    provider = dynamic_cast<const LogicalGraphNodeScanProvider *>(current.get());
+    ASSERT_NE(provider, nullptr);
+    size_t newMatches = 0;
+    result = provider->tryVisitNodeScanBatches(100, 512, {"NewScan"}, keys,
+        [&](auto ids, size_t, const auto &) { newMatches += ids.size(); return true; }, [](size_t) {});
+    EXPECT_EQ(newMatches, 1U);
+}
+
+TEST_F(RelocatableStorageBackendTest, CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    const std::string large(1024U * 1024U + 256U, 'q');
+    backend->createLogicalNodes({{{"LargeScan"}, {{"text", PropertyValue(large)}}}});
+    graph::query::QueryEngine engine(backend);
+    const auto result = engine.execute("MATCH (n:LargeScan) RETURN n.text AS text, count(*) AS rows");
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(result.getRows().front().at("rows").asPrimitive(), PropertyValue(int64_t{1}));
+    EXPECT_EQ(result.getRows().front().at("text").asPrimitive(), PropertyValue(large));
 }

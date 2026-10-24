@@ -2880,6 +2880,11 @@ namespace graph::storage {
 	RelocatableStorageBackend::~RelocatableStorageBackend() { releaseResources(); }
 
 	void RelocatableStorageBackend::open() {
+        // The isolated codec is not a production format until its complete
+        // construction, update and recovery lifecycle has been installed.
+        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED)
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                "complete-scan format lifecycle is not installed");
 		if (isOpen()) {
 			return;
 		}
