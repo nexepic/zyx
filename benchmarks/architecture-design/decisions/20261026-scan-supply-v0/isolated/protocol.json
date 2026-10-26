@@ -1,0 +1,14 @@
+{
+  "question": "separate observer cost from between-process/cache drift",
+  "interval_ms": 50,
+  "ordering": "two sampled then two control query windows, repeated in same process",
+  "warmups": 4,
+  "measured": 40,
+  "scope": [
+    "all_nodes_property_filter",
+    "label_scan_filter"
+  ],
+  "quality_target_percent": 5,
+  "no_concurrent_builds_or_tests_during_measurement": true,
+  "uses_existing_production_library": true
+}

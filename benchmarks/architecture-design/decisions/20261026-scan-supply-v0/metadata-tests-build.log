@@ -1,0 +1,66 @@
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:120:44: error: expected ';' after expression
+  120 |                 StorageIO::ScopedNativeReadHookForTesting noUnreachableTailScan(
+      |                                                          ^
+      |                                                          ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:120:14: error: no member named 'ScopedNativeReadHookForTesting' in 'graph::storage::StorageIO'
+  120 |                 StorageIO::ScopedNativeReadHookForTesting noUnreachableTailScan(
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:120:45: error: use of undeclared identifier 'noUnreachableTailScan'
+  120 |                 StorageIO::ScopedNativeReadHookForTesting noUnreachableTailScan(
+      |                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:468:45: error: expected ';' after expression
+  468 |                 StorageIO::ScopedNativeWriteHookForTesting shortRoutePage(
+      |                                                           ^
+      |                                                           ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:468:14: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  468 |                 StorageIO::ScopedNativeWriteHookForTesting shortRoutePage(
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:468:46: error: use of undeclared identifier 'shortRoutePage'
+  468 |                 StorageIO::ScopedNativeWriteHookForTesting shortRoutePage(
+      |                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:503:45: error: expected ';' after expression
+  503 |                 StorageIO::ScopedNativeWriteHookForTesting failRoutePage(
+      |                                                           ^
+      |                                                           ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:503:14: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  503 |                 StorageIO::ScopedNativeWriteHookForTesting failRoutePage(
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:503:46: error: use of undeclared identifier 'failRoutePage'
+  503 |                 StorageIO::ScopedNativeWriteHookForTesting failRoutePage(
+      |                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:543:44: error: expected ';' after expression
+  543 |                 StorageIO::ScopedNativeSyncHookForTesting failPublicationFence([&syncCalls](file_handle_t fd) {
+      |                                                          ^
+      |                                                          ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:543:14: error: no member named 'ScopedNativeSyncHookForTesting' in 'graph::storage::StorageIO'
+  543 |                 StorageIO::ScopedNativeSyncHookForTesting failPublicationFence([&syncCalls](file_handle_t fd) {
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:543:45: error: use of undeclared identifier 'failPublicationFence'
+  543 |                 StorageIO::ScopedNativeSyncHookForTesting failPublicationFence([&syncCalls](file_handle_t fd) {
+      |                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2125:45: error: expected ';' after expression
+ 2125 |                 StorageIO::ScopedNativeWriteHookForTesting shortRelocatedCatalogTarget(
+      |                                                           ^
+      |                                                           ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2125:14: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+ 2125 |                 StorageIO::ScopedNativeWriteHookForTesting shortRelocatedCatalogTarget(
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2125:46: error: use of undeclared identifier 'shortRelocatedCatalogTarget'
+ 2125 |                 StorageIO::ScopedNativeWriteHookForTesting shortRelocatedCatalogTarget(
+      |                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2182:45: error: expected ';' after expression
+ 2182 |                 StorageIO::ScopedNativeWriteHookForTesting failRelocatedCatalogTarget(
+      |                                                           ^
+      |                                                           ;
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2182:14: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+ 2182 |                 StorageIO::ScopedNativeWriteHookForTesting failRelocatedCatalogTarget(
+      |                 ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2182:46: error: use of undeclared identifier 'failRelocatedCatalogTarget'
+ 2182 |                 StorageIO::ScopedNativeWriteHookForTesting failRelocatedCatalogTarget(
+      |                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp:2244:44: error: expected ';' after expression
+ 2244 |                 StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+      |                                                          ^
+      |                                                          ;
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.

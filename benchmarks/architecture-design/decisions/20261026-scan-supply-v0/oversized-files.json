@@ -1,0 +1,132 @@
+[
+  {
+    "file": "benchmarks/architecture-design/decisions/20261021-r32-native-scratch-allocation/head-metadata-control/RelocatableMetadataStore.cpp",
+    "lines": 4335,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261022-core-cost-buffer/post-buffer-index-cpu/BTreePageStore.cpp",
+    "lines": 4187,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "lines": 4727,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/index/BTreePageStore.cpp",
+    "lines": 4321,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp",
+    "lines": 4443,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "lines": 6058,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-governed-metadata-work/source-snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "lines": 4719,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-node-supply-proof/source-snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "lines": 8574,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-public-scan-lifecycle/source-snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "lines": 8571,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261025-public-scan-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "lines": 6042,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/source/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "lines": 8582,
+    "historical": true
+  },
+  {
+    "file": "benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/source/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "lines": 4740,
+    "historical": true
+  },
+  {
+    "file": "docs/apps/docs/home/data/imdb-seed.ts",
+    "lines": 5058,
+    "historical": false
+  },
+  {
+    "file": "docs/apps/docs/public/wasm/zyx.js",
+    "lines": 4230,
+    "historical": false
+  },
+  {
+    "file": "src/query/execution/LogicalPlanMutationRuntime.cpp",
+    "lines": 4160,
+    "historical": false
+  },
+  {
+    "file": "src/query/execution/LogicalPlanProcedureRuntime.cpp",
+    "lines": 4127,
+    "historical": false
+  },
+  {
+    "file": "src/query/execution/LogicalPlanReadRuntime.cpp",
+    "lines": 17900,
+    "historical": false
+  },
+  {
+    "file": "src/query/parser/cypher/generated/CypherParser.cpp",
+    "lines": 11109,
+    "historical": false
+  },
+  {
+    "file": "src/storage/LogicalGraphTransactionOverlay.cpp",
+    "lines": 3617,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "lines": 8582,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "lines": 4771,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/index/BTreePageStore.cpp",
+    "lines": 4321,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/metadata/LocationDirectory.cpp",
+    "lines": 3178,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp",
+    "lines": 4443,
+    "historical": false
+  },
+  {
+    "file": "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "lines": 6058,
+    "historical": false
+  },
+  {
+    "file": "tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp",
+    "lines": 3162,
+    "historical": false
+  }
+]

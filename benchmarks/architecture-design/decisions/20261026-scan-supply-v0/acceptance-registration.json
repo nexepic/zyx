@@ -1,0 +1,34 @@
+{
+  "plan": "scan-supply-20261026",
+  "stage": "V0",
+  "stage_exit": "passed",
+  "cumulative_progress_percent": 15,
+  "candidate_A": "bounded typed-run admission, reusable scan-window pages and direct typed consumption; existing persistent format",
+  "candidate_B_gate": "only if residual measured location/page/decode cost dominates A and modeled opportunity exceeds preregistered gain",
+  "performance_gates": {
+    "primary_geomean_control_over_candidate_min": 2.0,
+    "all_node_filter_each_dataset_speedup_min": 2.0,
+    "other_primary_p50_regression_review_percent": 5,
+    "guard_p50_p95_regression_review_percent": 5,
+    "reproducible_material_regression": "must fix or restrict adoption; not silently waive",
+    "kuzu_target": "report all eight primary ratios separately; superiority only if candidate P50 <= Kuzu for every primary, with P95 and process spread disclosed"
+  },
+  "resources": {
+    "threads": 1,
+    "address_space_bytes": 6442450944,
+    "file_limit_bytes": 2147483648,
+    "query_materialized_budget_bytes": 67108864,
+    "buffer_pool_bytes": 67108864,
+    "point_write_p50_p95_review_percent": 5,
+    "candidate_file_growth_review_percent": 5,
+    "memory_peak_review_percent": 5
+  },
+  "measurement": "No repeated full matrix during development. Final three-way comparison after source and module tests freeze. Diagnostic timings are not acceptance. No threshold relaxation after candidate observation.",
+  "remaining_uncertainty": [
+    "No hardware cycle/cache/DRAM counters",
+    "leaf samples not call stacks; unresolved library leaves stay unassigned",
+    "layer callback includes predicate: not pure field I/O",
+    "initial window process dispersion requires paired final controls",
+    "holdout initial baseline observed, candidate tuning restricted to medium and separate synthetic fixtures"
+  ]
+}

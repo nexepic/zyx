@@ -1,0 +1,31 @@
+{
+  "statements": 5051,
+  "ordered_statements_sha256": "37dbfb15b97d3ddca530960d18b4eaaf7deb27aa6950ca5b469d233b8d03d86f",
+  "byte_identical_ordered_statements": true,
+  "parts": [
+    {
+      "name": "genres",
+      "statements": 21
+    },
+    {
+      "name": "people",
+      "statements": 1538
+    },
+    {
+      "name": "movies",
+      "statements": 400
+    },
+    {
+      "name": "directed",
+      "statements": 441
+    },
+    {
+      "name": "cast",
+      "statements": 1600
+    },
+    {
+      "name": "movie-genres",
+      "statements": 1051
+    }
+  ]
+}

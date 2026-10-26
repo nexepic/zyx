@@ -1,5 +1,5 @@
 ---
-title: Batch Scan Path Architecture Optimization Plan
+title: Scan Supply Architecture Optimization Plan
 description: Focus on candidate generation, entity validation and property batch supply, gated by general architecture and real end-to-end gains.
 category: Performance
 categoryOrder: 5
@@ -10,214 +10,158 @@ projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
 
-# Batch Scan Path Architecture Optimization Plan
+# Scan Supply Architecture Optimization Plan
 
-Updated: 2026-10-26. Plan ID: `scan-path-20261023`. **This records the completed implementation roadmap for this round, focused on the highest-priority batch scan bottleneck. Roadmap delivery progress is 100%; editing the plan and historical diagnostics do not count as implementation progress.**
+Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 accepted, V1 pending. **Cumulative progress is 15%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
 
-The previous incremental commits, import work and experimental cold conversion are complete and are removed from the active queue. Historical acceptance remains in `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Historical implementation completion does not establish read-performance acceptance. Do not reintroduce old P1–P7 tasks, stage reports or experimental capability lists as additional work.
+This is the sole active optimization roadmap. The former `scan-path-20261023` text is preserved under repository `benchmarks/architecture-design/archive/20261026-completed-scan-path/`. Historical evidence remains intact. Old stage numbers, 100% status, waivers and timing order do not govern this plan. Update this plan and the decision record before expanding its scope.
 
-## 1. Objective and scope
+## 1. Objective and core problem
 
-One workstream: **connect candidate generation, entity/label validation, property reads and operator consumption into an efficient end-to-end batch scan path**. Preserve the general property graph and reduce repeated per-entity work. Do not specialize on query text, label names, fixed properties or benchmark distributions.
+Reduce work per useful field in complete queries and substantially narrow the Kuzu gap. Diagnose all-node property filtering first, cross-check label filtering, and validate generality with single-key and multi-key aggregation. Beating Kuzu remains the long-term objective; no unmeasured speedup is promised and the old fixed 5x gate is not reinstated.
 
-Cover label filters, untyped property filters, actual single-/multi-key grouping and their shared projection/property supply. The objective is to substantially reduce the Kuzu gap. On 2026-10-26 the user explicitly removed the fixed 5x requirement. Selection now uses real end-to-end gains on both datasets against both same-machine controls, complete semantics and the unchanged resource/space contracts. Historical failed-gate evidence is preserved. Beating Kuzu remains the objective and must be reported separately; selection acceptance does not establish superiority.
+**Core hypothesis: typed column interfaces still carry substantial fine-grained location, authentication, resource-management and delivery work. Amortize that work at block, batch and snapshot boundaries.** Confirm this with current-version attribution and public end-to-end comparisons; it does not establish physical layout as the root cause.
 
-On 2026-10-26 the user further clarified that completing this roadmap is sufficient for delivery; beating Kuzu is not a current completion requirement and the remaining gap may be optimized later. Report roadmap delivery separately from performance maturity. Never label known regressions as passes or expand this round indefinitely to catch Kuzu. Experimental-format adoption must account for scan gains, conversion cost, and point/write costs; the default ROW format is not automatically migrated.
+New interfaces, cache entries, counters or isolated function fixes do not substitute for architectural gains. Necessary correctness fixes remain mandatory but are not standalone performance milestones.
 
-The user's latest execution instruction overrides stage timing order: one initial ZYX/Kuzu calibration is complete; implementation now runs necessary module tests without further performance tests. Combine S2 candidate comparison and S5 comprehensive timing into the final window after all optimization code and necessary tests are complete. Do not accept S2 or adopt a default production path before performance evidence; required lifecycle implementation may continue in the isolated experimental format. Fixed weights, two candidates, adoption gates, resource limits and frozen holdout rules remain unchanged.
+## 2. Facts and evidence limits
 
-**Out of scope:** independent bulk-import redesign, ordinary transaction optimization, vector dimensions, radix/B+Tree replacement, general caching, WAL/LSM, JIT, additional threads and whole-backend replacement. Existing import only prepares real frozen inputs. Updates, recovery and maintenance required by the selected read representation are in scope; a new COPY product entry point is not.
+- Historical formal medium all-node filter: ZYX 232.544 ms, Kuzu 1.153 ms; all eight primary gaps span approximately 15.2–201.7x. Repository evidence: `benchmarks/architecture-design/decisions/20261026-roadmap-delivery/`. Read timings belong to archived c8b37bc3 binaries, not a fresh measurement of HEAD.
+- Current column batches group at most 64 owners, still call admission per value and build temporary position/value arrays. Query admission invokes guard checks and budget updates. Their causal CPU share is unknown.
+- Metadata cache hits still involve lookup, locking and LRU; I/O mutation epochs invalidate caches/proofs. Locks do not establish contention, and mixed-write invalidation does not explain every read-only gap.
+- Native columns, runs, batch proofs and cross-group directory read-ahead already exist. Inspect adoption before implementing duplicate wrappers.
+- Preliminary evidence: `benchmarks/architecture-design/decisions/20261026-architecture-validation/`. Existing module binaries passed 113/25/89 rerun tests and 30 public outputs passed complete oracles. Sampled/control medians were 635.385/405.104 ms, approximately 57% disturbance: inadmissible for precise attribution or selection. Unknown libc/vdso samples remain unresolved.
+- Historical integrity, conversion, write and snapshot evidence applies to its recorded versions; acceptance is not inherited by new candidates.
 
-## 2. Current evidence and attribution boundaries
+### 2.1 Current baseline and limits
 
-The following diagnostic attribution comes from the historical AMD environment and does not provide current Intel acceptance latency. Current performance gates use the frozen same-machine initial and 369 controls, with Kuzu measured separately.
+An initial comparison of the frozen control exists under `benchmarks/architecture-design/decisions/20261026-scan-supply-v0/baseline/`: `freeze.json`, raw samples and `summary.json`. Values below are P50 milliseconds; ratios are ZYX/Kuzu, lower is better.
 
-Starting commit: `369039dafda8ba6e6764fc7c569ab9b5be7de8b5`, default production format 5/31, release archive SHA256 `6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a`.
+| Query | medium ZYX / Kuzu | Ratio | holdout ZYX / Kuzu | Ratio |
+|---|---|---|---|---|
+| All-node property filter | 490.262 / 2.782 | 176.2x | 302.878 / 2.125 | 142.5x |
+| Label property filter | 238.214 / 6.237 | 38.2x | 155.730 / 5.254 | 29.6x |
+| Single-key grouping | 212.428 / 9.094 | 23.4x | 160.321 / 8.134 | 19.7x |
+| Multi-key grouping | 284.877 / 13.715 | 20.8x | 232.806 / 14.219 | 16.4x |
 
-Current diagnostics and reproduction materials are in `benchmarks/architecture-design/decisions/20261023-scan-bottleneck-priority/`: `diagnosis.json`, `summary.json`, `identity.json`, `diagnostic-evidence.tar.gz`. The archive contains build/run scripts, shadow instrumented sources, raw PCs, controls, operation counters and Kuzu EXPLAIN. Recorded absolute paths identify the original environment; future reproduction may relocate them.
+These are pre-optimization observations, not candidate gains. Process medians and P95 vary substantially: medium all-node ZYX P95 is 1594.303 ms. Do not subtract absolute times across measurement windows to claim regression or improvement. Remeasure frozen control, candidate and Kuzu in the same final window. Documentation cleanup does not require repeating the existing initial baseline.
 
-| medium workload | Property batch supply/delivery CPU | Entity/label validation CPU | Index candidate generation CPU | Remaining unpartitioned CPU |
-|---|---:|---:|---:|---:|
-| Label filter | 42.6% | 24.5% | 18.5% | 14.3% |
-| Actual single-key group | 42.0% | 24.8% | 19.6% | 13.7% |
-| Multi-key group | 42.3% | 18.4% | 16.2% | 23.2% |
-| All-node property filter | 59.3% | Not separately partitioned | No samples in this stage | 40.7% |
+### 2.2 Order for validating the core problem
 
-- Label workloads still process 100,000 property roots in 196 batches. The all-node filter processes 225,000 roots in 440 batches and delivers 220,000 numeric fields. Direct typed columns and runs already operate; adding a batch API is not a new optimization.
-- Label workloads have one property-directory refill and reuse their cursor. They do not restart the entire directory tree for each entity. Per-entity record-header, identity, offset-directory and field-selection work remains.
-- Warm query windows are CPU dominated. Disk waiting is not the leading supported explanation; hardware cache/TLB counters were not measured, so CPU memory stalls remain possible.
-- The three supply stages account for about 86% of label-filter/single-key-group samples. Eliminating the filter's 42.6% property-supply cost with everything else fixed gives only about 1.74x theoretical speedup. A column layout alone is insufficient if the other supply stages remain.
-- Stages include downstream callbacks and allocations, not just decoding or I/O. The remaining bucket is not all aggregation work. Each workload has one control/sampled process pair, for coarse attribution; about 13–17% of read samples are unresolved libc leaves and must not be assigned invented callers.
-- Kuzu EXPLAIN shows node-table scans of required properties, without extra property-index operators. EXPLAIN does not establish actual zone-map skipping. New profiling primarily covers medium; holdout timings remain the historical formal measurements, not a new holdout profile.
+1. **Establish where time goes.** Separate candidate/label generation, property location/authentication, field delivery, filtering/aggregation and result materialization. High counts do not establish time shares. Report cost per input entity, useful field and batch, alongside actual reads.
+2. **Remove systematic per-entity administration first.** A batch interface may still perform per-value admission, checks, mapping and copying. Make fixed administration scale with batches or necessary pages, while necessary decoding scales with useful fields.
+3. **Then determine whether layout limits the ceiling.** Enter V2 contiguous field blocks only when group-level random location and page distribution dominate the low-overhead supply path. If operators dominate, improve typed consumption; larger groups cannot solve operator costs.
+4. **Reject marginal work using an upper bound.** If removable work occupies fraction p of total time, eliminating it entirely yields at most `1 / (1 - p)` speedup. A 10% share permits only about 1.11x. Derive p from credible attribution. If the ceiling cannot meet the frozen target, address the shared supply path or revise the design instead of accumulating micro-optimizations.
 
-### 2.1 Formal baseline reference
+## 3. Architecture boundaries and change order
 
-Formal baseline P50 values in milliseconds, already verified and registered by S0 against input, build and contract identities. Diagnostic timings cannot replace them. Medium has 225,000 nodes/860,000 edges; holdout has 163,000 nodes/772,000 edges.
+Retain the single file, COW, pinned snapshots, atomic root publication and public API/ABI. Retain B+Tree point/location responsibilities while reducing repeated tree entry during scans. Do not automatically switch default ROW storage.
 
-| Workload | medium ZYX / Kuzu | holdout ZYX / Kuzu |
-|---|---:|---:|
-| Label filter | 101.542 / 1.452 | 74.647 / 1.139 |
-| All-node property filter | 164.038 / 0.426 | 119.399 / 0.391 |
-| Single-key group | 102.146 / 2.471 | 76.277 / 1.880 |
-| Multi-key group | 126.940 / 3.471 | 96.326 / 2.746 |
+Prioritize the storage-to-operator batch contract and implementation, then evaluate layout. Generic optimizer replacement, WAL/LSM, backend rewrites, JIT, SIMD, parallel expansion and independent import/vector/adjacency redesign are outside scope. Expand only through a documented revision when attribution demonstrates a shared foundation blocks all candidates.
 
-### 2.2 Priorities expressed as work to eliminate
+### 3.1 Separate three granularities
 
-These priorities belong to one scan chain, not unrelated tuning projects. CPU shares locate costs; end-to-end measurements establish gains.
-
-| Order | Work that must change | Implementation boundary and evidence |
+| Granularity | Meaning | Treatment |
 |---|---|---|
-| First | Reduce per-entity property-root location, header/offset parsing and field delivery | Reuse certified locations within one snapshot; supply stable typed fields by block to existing typed columns. Count root visits, parsing, fallbacks and allocations, not just batches |
-| Required in the same stage | Reduce candidate generation followed by repeated entity liveness/label checks | A reuses valid batch proofs; B produces IDs and label selections from certified membership blocks. Cover property-less nodes, overlapping labels and deletion; existing field-group live masks are not complete entity membership |
-| After selection | Complete transactions, recovery, reclamation and adoption on ordinary inputs | Publish under one atomic root; test updates, old snapshots and reopen without a separate consistency mechanism |
-| Last | Evaluate remaining consumer costs and regression guards | Reassess residual costs on the new supply chain. Without new evidence, do not start aggregation rewrites, tree replacement or general caching projects |
+| Persisted field group | 64 consecutive entity-ID slots, possibly sparse; one machine-word bitmap | Retain initially; small size alone is not a defect |
+| Scan window | Cross-group location, authentication, reading and reuse | Amortize within access order and memory bounds |
+| Execution batch | Rows consumed by filtering/aggregation | May span multiple persisted groups |
 
-Memory holds budgeted batch buffers and short-lived snapshot-bound views; existing caching and COW manage persistent membership/field blocks. Do not hide storage costs through whole-database expansion at startup, resident property replicas or unbounded certification tables. Current evidence supports changing scan representation and access boundaries; it does not establish a need to replace radix/B+Tree, the entire storage engine or transactions.
+Sixteen groups supplying up to 1024 rows is an experimental option, not a prescribed optimum. Compare density, field width, selectivity and budgets; report peaks and fallback. Repeating old calls inside a larger loop does not qualify. Changing persisted capacity requires codec, bitmap, point-read, update, reclaim and migration evidence; do not simply change 64.
 
-## 3. System contracts to preserve
+### 3.2 Target batch contract
 
-- Preserve dynamic properties, multiple labels, stable logical IDs, missing versus NULL, type changes, complex values and LargeValue, plus Cypher, transaction, Driver ABI, binding and operator semantics.
-- Preserve strict single-file storage, COW, A/B Superblock, data-before-root, durable acknowledgement, read-your-writes, old snapshots, cancellation, unified resource budgets and safe reclamation. Do not disable synchronization, cancellation or validation for speed.
-- Retain the user-approved local-access validation plus complete integrity contract: validate accessed pages/new paths; discover unrelated corruption on first access or full inspection. Reused validation must bind immutable physical versions, generation, snapshot and applicable I/O epoch, not logical ID or pointer alone.
-- Field blocks/memory views must not form an unaccounted second database. Account for durable/transient/index/old-pin/maintenance costs separately. Do not silently increase cache, query-memory or temporary-space limits.
-- Preserve macOS/Linux/Windows and WASM compatibility; list platforms actually tested. Linux diagnostic observers stay outside portable production code.
-- Update the [storage specification](native-single-file-storage-plan) before a format change, documenting versions, old-file reading/rejection, explicit conversion and failure fallback. Never overwrite users' original files or bypass existing experimental whole-database space, peak or atomicity gates.
+Explicitly carry entity IDs/order/uniqueness, snapshot and source identity, visibility and label selection, field types and missing/NULL masks, selection vectors, ownership/lifetime, budget ownership and fallback state.
 
-## 4. Architecture direction and selection boundaries
+Borrowed views remain within valid pins and invocation lifetimes; escaping outputs own their data or extend their owner explicitly. Reuse proven order/identity within its authority, never across invalid snapshots or uncontrolled writes. Preserve fallback for mixed types, complex values, transaction overlays and sparse fields. Fallback cannot replay an emitted prefix.
 
-These are contracts registered in S1 and awaiting S2 validation, not delivered production capabilities. Complete lifecycle implementation follows S2 validation.
+### 3.3 Code boundaries and required changes
 
-### 4.1 One logical model and one batch access contract
+These are current entry points, not prescribed future filenames. Confirm real adoption along the call chain; unused new interfaces do not qualify.
 
-- Separate stable logical IDs from physical placement. Bounded groups are not fixed label tables. Multiple labels must not duplicate logical entities, and type changes must not become schema errors.
-- The batch contract carries entity IDs/order, visibility, label membership, column types, missing/NULL masks, required selection sets and borrowed-data owner/version/lifetime.
-- Establish shareable identity, visibility and field-location proofs at block/batch boundaries. Keep necessary per-value type/range/semantic checks. Certified membership must publish atomically with creation, deletion, label changes and recovery.
-- Use one entry for filtering, projection and actual single-/multi-key grouping; no shadow executor for COUNT or fixed fields.
-- Feed the existing typed batch interface. Primitive values must not rebuild generic PropertyValue matrices or per-row property maps. Define and count fallback costs for complex/mixed/missing values.
+| Responsibility | Current entry points | Required evidence |
+|---|---|---|
+| Candidates, labels and batch identity | `include/graph/storage/LogicalGraphNodeScan.hpp`, `src/storage/relocatable/backend/RelocatableStorageBackend.cpp` | Avoid unnecessary candidate/selection generation; public queries adopt reusable snapshot, order and uniqueness proofs |
+| Group directories, membership and fields | `include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp`, `HybridPropertyValueReader.hpp` | Continuous cursors and authentication reuse reduce repeated location; bounded fixed-width reservation replaces per-value admission |
+| Typed columns and consumers | `src/query/execution/DirectPropertyColumns.hpp`, `LogicalPlanReadRuntime.cpp` | Filtering/grouping consume typed runs with fewer intermediate arrays/generic values; complex fallback stays correct |
+| Pages and resources | `src/storage/StorageIO.cpp`, `src/query/QueryGuard.cpp` and existing budget accounts | Lifecycle justification for amortized caching/checks; complete memory accounting, corruption detection and cancellation |
 
-### 4.2 At most two candidates; do not assume columns win
+For each candidate, the V0 decision records the confirmed hotspot, operations and complexity to remove, affected contracts, module test selection, end-to-end threshold, point/write/space ceilings, fallback and stop conditions. Mark unquantified hotspots unverified; they cannot justify layout replacement.
 
-Compare two bounded candidates: A, reusable block/batch location and validation views over current ROW; B, persistent typed blocks for stable dense fields, with general representations for sparse/complex properties. Both must connect candidate generation and entity validation. Comparing a bare in-memory array with a complete production query is invalid.
+## 4. Stages and delivery gates
 
-Audit existing experimental layouts against the batch contract, adoption coverage and total costs before reuse. Existing code is not a selection criterion. Width, type stability, density, update rate and observed access costs drive selection, never `User`, `country`, node counts or query text. Freeze selection rules before holdout validation.
+Fixed weights: V0 15%, V1 30%, V2 25%, V3 20%, V4 10%. Award cumulative progress only on stage exit. Do not commit merely to inflate percentages. Authorized milestone commits/pushes include evidence; merging main is not automatic.
 
-### 4.3 Updates and maintenance are part of read design
+| Stage | Cumulative exit progress | Current state |
+|---|---|---|
+| V0 Attribution and freeze | 15% | Passed; see scan-supply-v0 decision |
+| V1 Supply path | 45% | Pending |
+| V2 Layout decision | 70% | Pending |
+| V3 Lifecycle and generality | 90% | Pending |
+| V4 Formal comparison | 100% | Pending |
 
-First evaluate local block COW. Compare a bounded update layer only after proving unacceptable small-update write amplification; do not automatically add a logging/LSM subsystem.
+### V0: Current attribution and experiment freeze (15%)
 
-S1 freezes at most 512 entities per batch, 1 MiB each for source workspace and encoded block, and 64 typed fields and 64 labels per block. Preserve general semantics beyond these limits without truncation: fields use existing fallback; oversized label groups now retain complete live bits in explicit versioned records and reread complete primary labels when predicates need them, as specified in the latest S2 checkpoint. Persistent merge depth is one. Each maintenance operation handles at most one block with an 8 MiB workspace. Source workspace is also capped by the caller’s remaining query budget; old pins retain versions until safe reclamation. See S1 `contract.json` for the complete contract; adaptive behavior must not exceed these limits.
+Freeze source, options, binaries, inputs, queries, oracles, threads and budgets. Reuse validated input where possible; confirm equivalent semantics and timing boundaries for formal comparisons.
 
-Publish fields, membership and primary data atomically. Failure, cancellation or crashes must not expose a conversion prefix. Relocation/reclamation reuse version and ownership mechanisms; an independent cache cannot hide consistency issues. Keep ROW when conversion is uneconomic, with observable refusal reasons. Do not relax space gates to force benchmark adoption.
+Inspect all-node and label paths, native/fallback fractions, candidate counts and useful fields. Inspect Kuzu plans and observable work; EXPLAIN does not prove actual block skipping.
 
-## 5. Fixed checklist and progress
+Observe native field reading, supply plus operators, and complete public queries with identical fields, visibility and result semantics. Layer experiments locate costs; subtracting times does not establish exact causality.
 
-Weights measure accepted deliverables, not code volume or performance attainment. Dependency order: S0 → S1 → S2 → S3 → S4 → S5. S0–S5 are complete under the latest user instruction to deliver the roadmap; 100% denotes roadmap delivery, with performance maturity and the Kuzu gap reported separately. Documentation, synthetic microbenchmarks and experimental entry-point functionality do not replace production-path acceptance.
+Collect CPU leaves/stacks where available, allocations, directory accesses, decodes, admission callbacks, cancellation checks, copies and invalidations. Distinguish counters from measured traffic: sizeof is not DRAM traffic; cache misses are not physical disk waits.
 
-| Stage | Weight | Required deliverable | Status |
-|---|---:|---|---|
-| S0 | 5% | Frozen evidence, inputs, resources, comparison/adoption gates | Accepted |
-| S1 | 10% | Batch contract, candidates, update/maintenance costs and format decision | Accepted |
-| S2 | 20% | Bounded complete-scan candidate validation on real persistent data | Accepted under the explicit user gate revision; B selected, all eight cases improve against both controls, space/correctness passed |
-| S3 | 30% | Selected production read path and required write/recovery lifecycle | Accepted; B selected, A cross-batch pin removed, public lifecycle/converter and three-format checks passed |
-| S4 | 20% | Generality, safety, resource and regression validation | Roadmap validation complete; functional/budget/compatibility checks pass and measured costs/regressions remain explicit experimental-adoption limits |
-| S5 | 15% | Final unified performance comparison, documentation and delivery | Complete; original window, targeted corrections, Kuzu gap and adoption limits delivered |
+Pair sampled and unsampled runs with alternating order. Target at most 5% observer disturbance; reduce frequency or split observations otherwise. If noise prevents classification, mark evidence uncertain and exclude it from selection. Unavailable hardware counters are reported, not grounds to disable correctness protections.
 
-Completed stages remain only in the status table and evidence references, not as tasks to repeat. S0 `registration.json`, `verified-inputs.json` and `acceptance.json` freeze baselines, resources and oracles; S1 `design.en.md`, `contract.json` and `acceptance.json` freeze candidate contracts. Section 6 identifies their directories. Calibrate only necessary environment mismatches; do not reselect inputs or change gates.
+Exit: reproducible cost model, evidence-quality statement and prioritized removable work. Preregister candidates, outcome thresholds and resource ceilings using the valid baseline/model, constraining both end-to-end gain and point/write costs. Never lower thresholds after results. Without credible attribution, fix observation before changing formats.
 
-### S2: Bounded selection; insufficient gains stop at this gate
+### V1: Low-overhead end-to-end scans with retained layout (30%)
 
-Connect candidates → visibility/membership proofs → field batches → existing filter/group operators → owning outputs on real persistent data. Include reads after updates and reopen. Time the actual production chain; report conversion/build/maintenance separately rather than hiding them in preparation.
+Reserve fixed-width budgets per bounded batch; admit variable-sized allocations using actual sizes before allocation. Preserve overflow, release, exception and nested-call accounting.
 
-Run one bounded comparison window with at most two candidates. Allow one targeted correction/recheck for a demonstrated implementation bug. Develop on medium, freeze rules, then evaluate holdout. Under the latest explicit user instruction, require real end-to-end gains with semantics, resource and space contracts intact, without a fixed 5x threshold. If both candidates fail, retain unresolved-cost evidence and leave the stage unaccepted with a bounded design revision. Do not automatically expand into unrelated optimization or lower the gate.
+Place cancellation, timeout and resource checks at boundaries with explicit maximum work, retaining large-value checkpoints. No disabled limits or unbounded cancellation latency.
 
-#### Historical S2/S3 acceptance checkpoint
+Reuse query layouts, buffers and selections; avoid repeated sorting/mapping for certified ordered unique sources; defer generic values and full entities.
 
-S2 is accepted under the explicit 2026-10-26 user instruction removing the fixed 5x requirement, bringing progress to 35%; subsequent S3 acceptance brought progress to 65% at S3. Select corrected B: 24 independent processes and 960 measured samples passed complete oracles, and all eight primary combinations improve against both same-machine initial and 369 controls (1.91–3.84x versus 369). Whole-file savings are 17.25% and 14.57%, with unchanged budgets. Earlier failed 5x evidence is preserved. This decision reuses existing measurements and runs no additional benchmark. Kuzu remains faster in all eight comparisons. S3 completed abandoned A cleanup and public lifecycle delivery; S4/S5 were pending at that checkpoint; final delivery is in section 8. See `20261026-user-gate-revision/s2-acceptance.json`.
+Advance directory and field-page cursors across groups, reusing authentication and bounded views. Inspect existing eight-group directory windows and single-page cursors, proving actual reductions in location/rereads.
 
-Historical candidate A retained a ROW pool pin across batches and was not selected. S3 removed that cross-batch pin. Ordinary ROW fallback retains the established single owned page and per-entity validation, with I/O epoch invalidation intact. B retains its separate bounded native field window.
+Let filter/count/aggregation consume typed runs directly, reducing repeated temporary words/ordinal/destination copying. Necessary copies require an ownership rationale and work counters.
 
-Candidate B builds persistent Node membership from real primary Entity records and complete labels, including property-less nodes, deletion and overlapping labels. Groups exceeding 64 labels use explicit version 2 primary-label fallback. Proofs bind complete roots, descriptors, physical versions and mutation epochs, and reuse covered validation only within the synchronous selected-ID scope. Field owner/slot/type/CRC checks remain. Complex, sparse and oversized fields use generic reads. Construction converts eligible Node fields; Edge fields retain ROW and participate in final full-graph integrity and whole-file space accounting.
+Exit: native/fallback adoption and before/after work evidence, relevant modules and complete public results pass. Connect candidate production, membership/field supply and consumption; removing a few calls is insufficient. Targeted performance evidence may be collected in the final window; do not benchmark every edit.
 
-Completed images support public modification and reopen; direct creation and BUILDING opening remain refused. Node creation/deletion/label changes publish membership and fields atomically under one root. Grouped tests cover property type changes, NULL/removal, lists, large values, scalar/unique/trained-vector indexes, old pins, cancellation, recovery and reclamation. Invalidated proofs fall back before output; reopen verifies again. Source/maintenance accounts, cache and file limits are unchanged.
+### V2: Layout decision and minimum complete candidate (25%)
 
-The real holdout image completed at 222,035,968 / 259,915,776 bytes, saving 14.57%. All four public SDK primary cases passed the complete CSV oracle without latency collection. Medium v11 exposed metadata-capacity exception safety; after the fix and 98 experimental, 3 default and 3 compatible related cases passed, v12 restarted from the original source and completed publication at 256,507,904 / 309,985,280 bytes, saving 17.25%; all four public SDK primary cases passed the complete oracle. The first formal S2 comparison failed the adoption gate; see `results/20261024-work-scan/final-comparison/selection-gate.json`. Section 7 indexes evidence and failed attempts.
+At most two candidates: A is V1 with retained layout; B is a local contiguous field-block design. Implement B only if A's remaining dominant cost is group location, page distribution or decoding and the cost model supports substantial potential gain.
 
-#### S2 execution order and required evidence
+B specifies block size, types/NULL/sparsity, ID location, visibility, update granularity and maintenance. Base plus bounded delta is only an option: define merge reads, delta bounds, consolidation triggers, old snapshots, atomic publication, recovery and reclaim together. An update-free array scan cannot win selection.
 
-1. **Validate the shared batch boundary first.** Connect `LogicalGraphReadSnapshot` to `DirectPropertyColumns` and existing filter/group consumers with bounded supply, reusing snapshot, owner and incarnation mechanisms. IDs, visibility, membership proofs and fields must describe the same version. Borrows remain within the agreed callback lifetime; returned results own their data. Cancellation or consumer exceptions must not replay an emitted prefix. Deny admission or split bounded batches before output on budget exhaustion.
-2. **Candidate A must remove actual repeated work.** Inspect the connections among `visitNativeNodeLabelCandidates`, `readNodeLabelMatchesSorted`, `readNodePropertyCellsSorted` and `PropertyCollectionRootScanCursor`. Identify page locations, identity checks and property-directory parsing reusable within one immutable version. Wrapping existing per-entity loops in a batch API is not completion. If ROW still requires per-entity property-root access, retain that cost and assess its limit honestly.
-3. **Candidate B must cover the complete supply chain.** Persistent scan blocks supply live entity IDs, label membership and typed fields together, with general ROW fallback for uncovered fields. Experimental format 13/39 does not provide complete membership proof and cannot count as this candidate. Specify versions, encoding, validation, publication and recovery before writing real files. Build an explicit offline destination with a read-only source; an incomplete destination must not open as a complete database. Require at least 10% whole-database steady-space savings and at most 2 GiB across source, destination and temporary files. Partial conversion cannot substitute for whole-database admission.
-4. **Correctness precedes one candidate comparison.** Run affected module tests for batch boundaries, overlapping labels, missing/NULL/mixed types, old snapshots, update/reopen, budget denial and cancellation/exceptions. Then compare S0’s four workloads on both datasets with three independent processes, each with three warmups and ten measurements. This is not a repeated full performance matrix.
-5. **Deliver a reviewable selection decision.** For each candidate, report end-to-end P50/P95, result oracles, candidate/entity/property-root/batch counts, allocations, source workspace, actual adoption/fallback coverage and construction cost. Compare against the frozen baseline and distinguish eliminated work from batch wrappers. Neither microbenchmarks nor CPU shares establish actual speedups. Only a candidate meeting adoption and total-cost gates proceeds to S3.
+If A meets preregistered benefit/cost gates and evidence does not justify B, a documented retain-layout decision completes this stage. Do not change format for progress. If both fail, preserve failure and revise the design; neither declare performance success nor add unlimited candidates.
 
-Priority remains: complete scan supply chain → required lifecycle of the selected design → generality and regressions → final comparison. Aggregation kernels, tree replacement and independent write optimization cannot jump ahead because they are easier to implement. Revising this scope requires new evidence overturning current attribution and the process in section 6.
+Version/page-bound cache reuse covers in-place writes, page reuse, cross-file and invalidation cases. Keep checksums and corruption detection; do not just delete epoch checks. Report opening/full-authentication separately from hot queries and preparation.
 
-Do not implement the entire migration/maintenance framework at this stage. Passing establishes that the design merits implementation, not production safety; S3 must complete the lifecycle.
+### V3: Lifecycle, generality and adoption cost (20%)
 
-### S3: Complete the production lifecycle
+Relevant module tests cover missing/NULL, type changes, deletion/labels, complex/large values, native/ROW mixtures, read-your-writes, old/new snapshots, budget pressure, cancellation, non-replaying fallback, faults and reopen. Add meaningful regressions at changed fault boundaries; never weaken oracles.
 
-Implement one selected public batch access path and remove abandoned candidate branches. Record default/experimental/fallback/conversion eligibility so future production inputs can actually use it. A benchmark-only installer is not delivery.
+Use real persistent dense, sparse, mixed-type, skewed and untuned holdout inputs. Freeze selection rules before holdout. Exercise repeated updates, long-lived pins, maintenance after pin release, space recovery and working sets beyond cache. Record read deterioration, version retention, write amplification, consolidation and memory peaks.
 
-Complete insertion/deletion, property addition/removal/type changes, label changes, transaction overlays, old snapshots/read-your-writes, LargeValue/complex fallback, local update/demotion, reorganization, reopen, A/B recovery, field/membership consistency, relocation and post-pin reclamation. Specify the format and explicit conversion entry; avoid permanently duplicating transaction or query semantics.
+No enlarged budgets or hidden conversion. Guard point/full-entity/adjacency reads, property updates and batch writes. P50/P95 above 5% versus same-window control triggers review, not automatic proof of stable regression. Fix repeatable material regressions or restrict adoption explicitly; no default promotion.
 
-### S4: Validate generality and total cost
+Code files must not exceed 3,000 lines. Split by responsibility, updating source lists and generators so regeneration preserves the limit. Historical source evidence may be archived losslessly, never rewritten. Verify semantic preservation with affected modules; splitting alone is not a performance gain.
 
-Run only affected module unit tests and necessary integration cases, never the full unit suite. Test semantic/failure boundaries rather than assertions mirroring implementation.
+Run relevant module tests only, never the full unit suite. Preserve Linux/macOS/Windows and existing WASM contracts; list executed platforms and do not claim unexecuted validation.
 
-- Queries: empty input, all/no matches, missing/NULL, mixed numeric/text types, NaN/overflow, empty/embedded-NUL strings, long values, multi-key tuples and duplicates.
-- Lifecycle: the updates above, old pins, cancellation, budget/conversion refusal, partial/complete root-write failures, recovery and full integrity.
-- Generality: preregister at least one different density/width/type-distribution and overlapping-label input in S0. Include update-heavy and sparse data, plus working sets larger than the configured cache budget. Do not select inputs after observing wins or call cache-budget pressure physical cold-disk testing.
-- Total cost: record queries, point/adjacency reads, SET, 1000-edge writes, conversion and maintenance separately. Include every structure, old version and auxiliary index in memory/steady/peak disk accounting. Preserve existing space/resource limits.
-- Performance guards: retain point/full-entity/adjacency/large-value/write cases under equivalent conditions. Explain and fix stable P50/P95 regressions above 5%. Alternate baseline/current repeats only for suspect cases, retaining original results rather than deleting slow samples.
+### V4: Frozen formal comparison and architecture decision (10%)
 
-### S5: One final unified acceptance
+After source and necessary tests stabilize, run one formal window: four primary queries, both datasets and necessary guards; three independent processes with three warmups and ten measured samples each. Report per-process and pooled P50/P95, failures and complete oracles. Compare same-machine frozen ZYX control and Kuzu with equivalent threads, output consumption and semantics. During development use only question-driven targeted diagnostics, not repeated full matrices; retest failures narrowly.
 
-After code and necessary tests are frozen, run the registered matrix once, not every round. Preserve semantics, threads/budgets and warm-cache definitions. Use three independent processes with three warmups and ten measured samples each; report per-process/pooled P50/P95, samples, failures and N/A. Do not repeat the full matrix without material new changes.
+Account separately for open/authentication, conversion, maintenance, space, RSS and memory accounts. Process wall minus query time is not precise I/O attribution. Sampled binaries cannot supply formal acceptance timings. Identify changed binaries/inputs; never describe composite measurements as one uniform campaign.
 
-Report starting/final ZYX and equivalent Kuzu, result oracles, candidate/entity/property-root/batch work, CPU/wait boundaries, adoption coverage, build/maintenance costs, steady/peak space and tested platforms. Never sum nested timers, present sizeof sums as DRAM traffic, or treat process RSS high-water/file polling as exact peak allocation.
+Exit: choose retained layout, local layout replacement or a foundation-design revision with evidence, compatibility/migration and adoption limits. Report 100% only when all exits pass; separately report performance gates and Kuzu attainment. Documentation, functional success and old roadmap completion cannot replace new performance acceptance.
 
-The latest user instruction makes roadmap delivery the completion criterion and does not require beating Kuzu now. 100% covers implementation, necessary tests, benchmark comparison and documentation, not universal performance acceptance. The 5% guard threshold still exposes adoption costs: retain failed point/property/fallback comparisons and restrict experimental adoption rather than relabeling them as passes. Default ROW adoption is unchanged. The Kuzu gap and further performance work remain future work.
+## 5. Evidence and work discipline
 
-## 6. Execution discipline and stop conditions
+Store the new protocol, commands, source/input hashes, test selections, raw samples, complete oracles, failures and decisions in a separate plan directory under repository `benchmarks/architecture-design/decisions/`. Preserve historical reports unchanged.
 
-Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification, the S1 design contract, revised S2 selection and S3 public lifecycle contribute 65%; S4 contributes 20% and S5 15%, bringing roadmap delivery to 100%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` freeze both candidates. Section 7 indexes stage evidence; section 8 records final evidence and completion scope, with S0–S5 counted.
+Each round reports new verified facts, eliminated work, necessary tests, cumulative progress and remaining risks. Documentation cleanup and repeated old tests do not count as performance implementation.
 
-Stop after S5 and final delivery. Do not automatically start import, ordinary-write or other optimization. When selection fails, preserve failure evidence and concrete blockers instead of expanding alternatives indefinitely. Any scope, resource-contract or acceptance-gate change must explicitly record its reason and the user's decision, never silently redefine completion.
-
-Related: [storage specification](native-single-file-storage-plan), [capability matrix](native-capability-acceptance-matrix). Planned features are not supported capabilities; synchronize actual capabilities only after acceptance.
-
-## 7. Current implementation evidence
-
-Paths below are under `benchmarks/architecture-design/decisions/`. Checkpoints establish their recorded source and tests only. Test groups can overlap and are not added as unique coverage. No full unit suite was run.
-
-| Delivery or check | Evidence directories and limits |
-|---|---|
-| Initial calibration, inputs and contracts | `20261023-scan-path-s0/`, `20261023-scan-path-s1/`, `20261024-scan-source-authentication/`; new Intel calibration does not reuse historical AMD latency |
-| A ROW page reuse | `20261024-row-page-reuse/`; per-entity costs remain |
-| Private construction and full-graph integrity | `20261024-scan-image-builder/`, `20261024-scan-field-construction/`, `20261024-integrity-streaming/`, `20261024-private-image-completion/` |
-| B reads and field delivery | `20261025-certified-scan-read/`, `20261025-column-window-page-reuse/`, `20261025-node-supply-proof/`; Node supply proofs do not authorize ROW Edge records |
-| Updates, labels and public lifecycle | `20261025-completed-field-update/`, `20261025-membership-label-fallback/`, `20261025-atomic-scan-membership/`, `20261025-public-scan-lifecycle/` |
-| Governed memory and generality | `20261025-governed-metadata-work/`, `20261025-bounded-offline-lifecycle/`, `20261025-scan-generality/`; 16,384 nodes, 512 mixed batches, old pins, full property/label and NULL/missing/binary-text/intersection oracles, full integrity and 4 KiB cache reopen passed |
-| Physical space and ownership | `20261025-row-tail-relocation/`, `20261025-index-tail-packing/`, `20261025-mixed-index-preflight/`; ROW movement and same-owner pool-tail packing retain mixed-owner sources; 78 scan/construction and 18 compatible relocation cases passed |
-| Capacity failure rollback | `20261025-capacity-rollback/`; later pool creation failure rolls back this call's private pools and provisional suffix while preserving prior pools; failed rollback poisons writes; 98 experimental metadata, 3 default and 3 compatible cases passed |
-| Real-image admission | `20261025-real-scan-admission/`; holdout v11 and medium v12 completed with 14.57% and 17.25% savings; all four public primary result checks passed |
-| First formal comparison | `20261025-final-scan-comparison/`; 30 primary processes, 1,200 samples and complete oracles finished; A/B failed 5x; S5 guards incomplete |
-| One targeted correction | `20261026-bounded-scan-batch-correction/`; 83 scan/build, 64 compatible read and five default insertion tests passed; 24-process/960-sample recheck still failed 5x and Kuzu goals; see `result.md` in that directory |
-
-Real construction failures remain in `benchmarks/architecture-design/results/20261024-work-scan/diagnostics/`: v6 correctly refused at the 2 GiB combined length limit; current ROW pages blocked v8 tail reclamation; v9 remained above 90% of source length; the strict coordinator refused v10 mixed-owner Index sources; strict tail validation refused v11 medium after failed capacity preparation left unpublished pool registration. Failed targets were identified before removal and original inputs are unchanged. Fixes reuse between-transaction reclamation, bounded physical relocation, governed pool-tail placement and exception rollback, without weakening ownership, space or budgets. Large/Skew isolated-conversion refusals and ROW non-adoption remain explicit and do not count as native B adoption.
-
-Explicit user gate revision and S2 acceptance: `20261026-user-gate-revision/`; original measurements preserved, no additional timing, and 35% does not establish the Kuzu objective.
-
-Historical S3 source acceptance: `20261026-s3-production-lifecycle/acceptance.json`; 108 scan/build/cache, 25 default-cache and 89 compatible read/cache tests passed per configuration, plus ten untimed public checks across both real datasets and 16,384-node generality. Construction cost and illustrative payback are separate, never free preparation. Progress was 65% at that checkpoint; S4/S5 delivery is now complete in section 8.
-
-Historical functional-delivery checkpoint: **75%**. The S4 functional/resource subdeliverable contributes 10/20%, including native ROW placement, negative-group reuse, exhausted-pool COW fallback, and five added regressions. Final 113/25/89 module tests, ten complete public-oracle checks on both real images, and 16384-owner/512-batch generality with old pins and a 4 KiB-cache reopen all pass. Evidence: `20261026-s4-native-write-cost/functional-acceptance.json`. The remaining 10% of S4 and S5 were pending at that checkpoint; section 8 records their completion.
-
-## 8. Final roadmap delivery: 100% (2026-10-26)
-
-The latest user instruction permits delivery when this roadmap is complete and leaves the remaining Kuzu gap for later optimization. The remaining S4 cost/guard review (10%) and S5 final comparison/documentation (15%) bring progress from 75% to **100%**. Earlier 65%/75% checkpoints are historical records, not pending work.
-
-Final module checks pass 113/25/89 tests across the three profiles. Ten complete public-oracle checks on both real images and the preregistered 16384-owner/512-mutation-batch generality case, old pins, integrity and 4 KiB-cache reopen pass. No full unit suite ran. The original 171-process final window retains nine failed Skew workers whose input lacked its registered edges. A fresh copy restores the registered 512 edges without changing the oracle. A 33-process/510-sample correction window covers only two changed write cases and the repaired Skew fixture. Explicit replacement provenance reconciles 171 valid process records and 3660 complete-oracle samples; original failures remain intact and the full matrix was not repeated.
-
-The two windows execute 204 processes in total and retain original failures and superseded records. Primary read timings identify the archived original final-window binaries and c8b37bc3 read implementation. The final three source changes affect writes only; earlier reads are not represented as measurements of new binaries. Corrected writes and the repaired input have their own source/binary/input freeze. All eight primary cases improve against both initial and control ZYX; **Kuzu remains faster in all eight**. Of 42 guard combinations, 33 exceed the 5% review threshold in at least one statistic, including native-format costs and process variation. This does not establish every excess as a confirmed stable regression, and universal guard acceptance is not claimed. Initial converted-image whole-file savings are 17.25% for medium and 14.57% for holdout; they are not a post-update file-growth guarantee. Conversion remains about 207/136 minutes and must be amortized against measured scan reuse and point/write costs.
-
-Full P50/P95, samples, provenance and limits: `benchmarks/architecture-design/decisions/20261026-roadmap-delivery/{README.md,report.json,summary.csv}`. Targeted protocol/evidence: `20261026-s4-correction-window/`. Fixes and module validation: `20261026-s4-native-write-cost/`. Linux was executed; macOS/Windows were not. Default 5/31, 13/39 compatibility and explicit experimental 15/41 offline adoption remain unchanged. Completion does not automatically start another performance project.
+V0 exit evidence and frozen gates: `benchmarks/architecture-design/decisions/20261026-scan-supply-v0/README.md` and adjacent `acceptance-registration.json`. The registration requires at least 2x primary geometric-mean and all-node gains on both datasets; these are gates, not achieved gains or Kuzu superiority.

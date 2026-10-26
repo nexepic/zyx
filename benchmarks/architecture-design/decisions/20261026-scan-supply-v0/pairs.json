@@ -1,0 +1,62 @@
+[
+  {
+    "round": 0,
+    "sampled": false,
+    "median_ms": 305.74647200000004,
+    "oracle": "passed",
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/probe",
+      "read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+      "/tmp/zyx-v0-0-False.zyx",
+      "all_nodes_property_filter",
+      "3",
+      "10"
+    ]
+  },
+  {
+    "round": 0,
+    "sampled": true,
+    "median_ms": 329.20532149999997,
+    "oracle": "passed",
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/probe",
+      "read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+      "/tmp/zyx-v0-0-True.zyx",
+      "all_nodes_property_filter",
+      "3",
+      "10"
+    ]
+  },
+  {
+    "round": 1,
+    "sampled": true,
+    "median_ms": 285.0524095,
+    "oracle": "passed",
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/probe",
+      "read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+      "/tmp/zyx-v0-1-True.zyx",
+      "all_nodes_property_filter",
+      "3",
+      "10"
+    ]
+  },
+  {
+    "round": 1,
+    "sampled": false,
+    "median_ms": 1184.285933,
+    "oracle": "passed",
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/probe",
+      "read",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+      "/tmp/zyx-v0-1-False.zyx",
+      "all_nodes_property_filter",
+      "3",
+      "10"
+    ]
+  }
+]

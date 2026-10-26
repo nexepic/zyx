@@ -1,0 +1,183 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 87 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 87 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership
+[       OK ] RelocatableMetadataStoreTest.EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ObservesCompactionStateWithoutRetainingSnapshots
+[       OK ] RelocatableMetadataStoreTest.ObservesCompactionStateWithoutRetainingSnapshots (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SerializesCatalogPublicationSnapshotsReclamationAndReopen
+[       OK ] RelocatableMetadataStoreTest.SerializesCatalogPublicationSnapshotsReclamationAndReopen (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReopenFollowsPublishedRootsInsteadOfScanningAnUnreachableTailSlot
+[       OK ] RelocatableMetadataStoreTest.ReopenFollowsPublishedRootsInsteadOfScanningAnUnreachableTailSlot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction
+[       OK ] RelocatableMetadataStoreTest.PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen
+[       OK ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication
+[       OK ] RelocatableMetadataStoreTest.CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication (23 ms)
+[ RUN      ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow
+[       OK ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication
+[       OK ] RelocatableMetadataStoreTest.AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen
+[       OK ] RelocatableMetadataStoreTest.UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication
+[       OK ] RelocatableMetadataStoreTest.LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication
+[       OK ] RelocatableMetadataStoreTest.LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease
+[       OK ] RelocatableMetadataStoreTest.ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate
+[       OK ] RelocatableMetadataStoreTest.InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SerializesAllocatorReservationAndReusesReleasedSnapshotPages
+[       OK ] RelocatableMetadataStoreTest.SerializesAllocatorReservationAndReusesReleasedSnapshotPages (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.BootstrapReservationExhaustionDoesNotPublishPartialGeneration
+[       OK ] RelocatableMetadataStoreTest.BootstrapReservationExhaustionDoesNotPublishPartialGeneration (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot
+[       OK ] RelocatableMetadataStoreTest.BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot
+[       OK ] RelocatableMetadataStoreTest.BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AllocatesLogicalNodeAndEdgeIdsDurablyAndIndependently
+[       OK ] RelocatableMetadataStoreTest.AllocatesLogicalNodeAndEdgeIdsDurablyAndIndependently (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReservesDerivedPageAndSegmentIdentityBatchesDurably
+[       OK ] RelocatableMetadataStoreTest.ReservesDerivedPageAndSegmentIdentityBatchesDurably (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AllocatesOnlineVectorAndTokenIdsDurablyAndIndependently
+[       OK ] RelocatableMetadataStoreTest.AllocatesOnlineVectorAndTokenIdsDurablyAndIndependently (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EntityPropertyPoolPublicationIsAtomicAcrossCatalogAndDirectories
+[       OK ] RelocatableMetadataStoreTest.EntityPropertyPoolPublicationIsAtomicAcrossCatalogAndDirectories (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ValidatesAndRemovesOwnerKeyedPropertyLocationsThroughThePublicDirectoryBoundary
+[       OK ] RelocatableMetadataStoreTest.ValidatesAndRemovesOwnerKeyedPropertyLocationsThroughThePublicDirectoryBoundary (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ExistingPoolAppendRejectsMissingCallbacksStalePoolsAndInvalidPageIds
+[       OK ] RelocatableMetadataStoreTest.ExistingPoolAppendRejectsMissingCallbacksStalePoolsAndInvalidPageIds (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ExistingPoolReplacementRejectsInvalidInputsAndPublishesOnlyCallbackFrame
+[       OK ] RelocatableMetadataStoreTest.ExistingPoolReplacementRejectsInvalidInputsAndPublishesOnlyCallbackFrame (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EvacuatesOnePageAcrossCurrentPoolsInOneDirectoryGeneration
+[       OK ] RelocatableMetadataStoreTest.EvacuatesOnePageAcrossCurrentPoolsInOneDirectoryGeneration (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RetiresADurableVectorManifestWithItsPageDirectoryMapping
+[       OK ] RelocatableMetadataStoreTest.RetiresADurableVectorManifestWithItsPageDirectoryMapping (4 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EvacuatesAVectorManifestAndRebindsItsGenerationInOnePublication
+[       OK ] RelocatableMetadataStoreTest.EvacuatesAVectorManifestAndRebindsItsGenerationInOnePublication (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsIncompleteVectorReservationInputsBeforeAcquiringAPoolSlot
+[       OK ] RelocatableMetadataStoreTest.RejectsIncompleteVectorReservationInputsBeforeAcquiringAPoolSlot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsVectorManifestReservationsOutsideTheirDedicatedPool
+[       OK ] RelocatableMetadataStoreTest.RejectsVectorManifestReservationsOutsideTheirDedicatedPool (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsEveryMalformedVectorManifestReservationTarget
+[       OK ] RelocatableMetadataStoreTest.RejectsEveryMalformedVectorManifestReservationTarget (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsRelocatedSourceReleaseWhenCatalogDestinationLostAllocationOwnership
+[       OK ] RelocatableMetadataStoreTest.RejectsRelocatedSourceReleaseWhenCatalogDestinationLostAllocationOwnership (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesPreparedLocationDataBeforeTheDirectoryRoot
+[       OK ] RelocatableMetadataStoreTest.PublishesPreparedLocationDataBeforeTheDirectoryRoot (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SerializesPoolReconciliationAgainstCurrentReachability
+[       OK ] RelocatableMetadataStoreTest.SerializesPoolReconciliationAgainstCurrentReachability (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReconcilesEveryCurrentSealedCatalogEntryUnderOneWriter
+[       OK ] RelocatableMetadataStoreTest.ReconcilesEveryCurrentSealedCatalogEntryUnderOneWriter (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsCurrentPageDirectoryLocationsOutsideSharedPools
+[       OK ] RelocatableMetadataStoreTest.RejectsCurrentPageDirectoryLocationsOutsideSharedPools (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsEmptyOrFailingPreparedLocationPublicationWithoutPublishing
+[       OK ] RelocatableMetadataStoreTest.RejectsEmptyOrFailingPreparedLocationPublicationWithoutPublishing (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AtomicallyPublishesNewCatalogPoolAndInitialPageLocation
+[       OK ] RelocatableMetadataStoreTest.AtomicallyPublishesNewCatalogPoolAndInitialPageLocation (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesAVectorManifestMappingForAnAlreadyDurableManifestPage
+[       OK ] RelocatableMetadataStoreTest.PublishesAVectorManifestMappingForAnAlreadyDurableManifestPage (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInvalidCombinedLocationBeforePreparingOrPublishingData
+[       OK ] RelocatableMetadataStoreTest.RejectsInvalidCombinedLocationBeforePreparingOrPublishingData (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.PublishesCombinedExtentLocationsAndRejectsForeignExtentGenerations
+[       OK ] RelocatableMetadataStoreTest.PublishesCombinedExtentLocationsAndRejectsForeignExtentGenerations (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RelocatesACodebookExtentWithItsCatalogGeneration
+[       OK ] RelocatableMetadataStoreTest.RelocatesACodebookExtentWithItsCatalogGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.BootstrapAndEmergencyPoolsAreDurablyAllocatedAndNeverReturnedToUserReservations
+[       OK ] RelocatableMetadataStoreTest.BootstrapAndEmergencyPoolsAreDurablyAllocatedAndNeverReturnedToUserReservations (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AtomicallyPublishesAndRecoversAdditionalCatalogPoolOwnership
+[       OK ] RelocatableMetadataStoreTest.AtomicallyPublishesAndRecoversAdditionalCatalogPoolOwnership (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.OpenFailsClosedWhenCatalogMetadataPoolIdentityIsCorrupted
+[       OK ] RelocatableMetadataStoreTest.OpenFailsClosedWhenCatalogMetadataPoolIdentityIsCorrupted (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReclaimsAnEmptyCatalogMetadataPoolOnlyAfterSnapshotReleaseAndReusesItsSlot
+[       OK ] RelocatableMetadataStoreTest.ReclaimsAnEmptyCatalogMetadataPoolOnlyAfterSnapshotReleaseAndReusesItsSlot (14 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EvacuatesASparseMetadataPoolThenReclaimsAndReusesItsSlot
+[       OK ] RelocatableMetadataStoreTest.EvacuatesASparseMetadataPoolThenReclaimsAndReusesItsSlot (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationPreservesTheOldRootBeforePublication
+[       OK ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationPreservesTheOldRootBeforePublication (7 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens
+[       OK ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens (21 ms)
+[ RUN      ] RelocatableMetadataStoreTest.EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool
+[       OK ] RelocatableMetadataStoreTest.EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool (28 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation
+[       OK ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation (53 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen
+[       OK ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen (477 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry
+[       OK ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry (21 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry
+[       OK ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry (28 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute
+[       OK ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute (22 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen
+[       OK ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen (24 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute
+[       OK ] RelocatableMetadataStoreTest.NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute (15 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication
+[       OK ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot
+[       OK ] RelocatableMetadataStoreTest.NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot (9 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState
+[       OK ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationClonesEveryTypedDirectoryRoot
+[       OK ] RelocatableMetadataStoreTest.SparseMetadataPoolEvacuationClonesEveryTypedDirectoryRoot (19 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReopeningBeforeMetadataPoolReclamationPublicationRestoresItsOwnership
+[       OK ] RelocatableMetadataStoreTest.ReopeningBeforeMetadataPoolReclamationPublicationRestoresItsOwnership (16 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReopeningAfterMetadataPoolReclamationPublicationKeepsTheSlotFree
+[       OK ] RelocatableMetadataStoreTest.ReopeningAfterMetadataPoolReclamationPublicationKeepsTheSlotFree (15 ms)
+[ RUN      ] RelocatableMetadataStoreTest.DiscardsUnpublishedAdditionalCatalogPoolAndReopensThePriorGeneration
+[       OK ] RelocatableMetadataStoreTest.DiscardsUnpublishedAdditionalCatalogPoolAndReopensThePriorGeneration (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.KeepsReservedUserSlotSeparateFromExistingCatalogMetadataPools
+[       OK ] RelocatableMetadataStoreTest.KeepsReservedUserSlotSeparateFromExistingCatalogMetadataPools (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.KeepsCombinedReservationDataSlotSeparateFromCatalogMetadataPools
+[       OK ] RelocatableMetadataStoreTest.KeepsCombinedReservationDataSlotSeparateFromCatalogMetadataPools (6 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries
+[       OK ] RelocatableMetadataStoreTest.RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries (64 ms)
+[ RUN      ] RelocatableMetadataStoreTest.OpenIgnoresAnUnownedEmptyCatalogPoolLeftBeforePublication
+[       OK ] RelocatableMetadataStoreTest.OpenIgnoresAnUnownedEmptyCatalogPoolLeftBeforePublication (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReadOnlyOpenIgnoresAnUnreachablePoolWithoutRepairingIt
+[       OK ] RelocatableMetadataStoreTest.ReadOnlyOpenIgnoresAnUnreachablePoolWithoutRepairingIt (3 ms)
+[ RUN      ] RelocatableMetadataStoreTest.OpenRejectsReachableCatalogPoolWithoutFreeSpaceOwnership
+[       OK ] RelocatableMetadataStoreTest.OpenRejectsReachableCatalogPoolWithoutFreeSpaceOwnership (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AtomicallyPublishesCatalogMappingAndAllocatorReservation
+[       OK ] RelocatableMetadataStoreTest.AtomicallyPublishesCatalogMappingAndAllocatorReservation (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AtomicallyPublishesMultipleCatalogMappingsAndSlotReservations
+[       OK ] RelocatableMetadataStoreTest.AtomicallyPublishesMultipleCatalogMappingsAndSlotReservations (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RunsPreparedDataWriteOnlyInsideTheUnpublishedReservationBoundary
+[       OK ] RelocatableMetadataStoreTest.RunsPreparedDataWriteOnlyInsideTheUnpublishedReservationBoundary (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.DiscardsPreparedReservationWhenTheDataWriteFails
+[       OK ] RelocatableMetadataStoreTest.DiscardsPreparedReservationWhenTheDataWriteFails (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RejectsRelocationWithoutADataCopyPreparationCallback
+[       OK ] RelocatableMetadataStoreTest.RejectsRelocationWithoutADataCopyPreparationCallback (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MultiSegmentReservationHasNoPartialPublicationOrInvalidRequestState
+[       OK ] RelocatableMetadataStoreTest.MultiSegmentReservationHasNoPartialPublicationOrInvalidRequestState (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.AtomicReservationDiscardsPrePublicationWorkAndRetainsDurableInterruptedWork
+[       OK ] RelocatableMetadataStoreTest.AtomicReservationDiscardsPrePublicationWorkAndRetainsDurableInterruptedWork (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LeasesLogicalGraphIdsFromDurableRangesWithoutReuse
+[       OK ] RelocatableMetadataStoreTest.LeasesLogicalGraphIdsFromDurableRangesWithoutReuse (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LogicalGraphIdLeasesRejectInvalidRequestsWithoutPublication
+[       OK ] RelocatableMetadataStoreTest.LogicalGraphIdLeasesRejectInvalidRequestsWithoutPublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.LogicalGraphIdLeasesServeFullyCachedReservationsWithoutRepublishing
+[       OK ] RelocatableMetadataStoreTest.LogicalGraphIdLeasesServeFullyCachedReservationsWithoutRepublishing (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.ReadOnlyMetadataStoreRejectsLeasesAndRefreshWithoutPublication
+[       OK ] RelocatableMetadataStoreTest.ReadOnlyMetadataStoreRejectsLeasesAndRefreshWithoutPublication (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased
+[       OK ] RelocatableMetadataStoreTest.RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased (2 ms)
+[----------] 87 tests from RelocatableMetadataStoreTest (1008 ms total)
+
+[----------] Global test environment tear-down
+[==========] 87 tests from 1 test suite ran. (1009 ms total)
+[  PASSED  ] 87 tests.

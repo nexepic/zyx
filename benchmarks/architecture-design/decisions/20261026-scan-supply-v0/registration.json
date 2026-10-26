@@ -1,0 +1,13 @@
+{
+  "status": "attribution_in_progress",
+  "source_commit": "70b1dc633cdff1e50e6d43aaeb4b494c75e0afa9",
+  "observer_interval_ms": 10,
+  "comparison": "paired unsampled and sampled with alternating order; no formal performance claim",
+  "quality_limit_percent": 5,
+  "scope": [
+    "all_nodes_property_filter",
+    "label_scan_filter"
+  ],
+  "no_full_suite": true,
+  "progress": 0
+}

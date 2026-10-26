@@ -1,0 +1,22 @@
+{
+  "paired_ratios": [
+    1.076726476503709,
+    0.24069559686309303
+  ],
+  "within_five_percent": false,
+  "formal_performance": false,
+  "status": "blocked_at_V0",
+  "implementation_progress": 0,
+  "unsampled_medians_ms": [
+    305.74647200000004,
+    1184.285933
+  ],
+  "unsampled_ratio": 3.8734246882822574,
+  "attribution_admissible": false,
+  "limitations": [
+    "One initial control may overlap a failed test compilation; not a clean measurement window.",
+    "Baseline variability prevents separating observer overhead from host/process effects.",
+    "No causal environment diagnosis or precise hotspot share accepted."
+  ],
+  "required_next_action": "Establish isolated repeatable unsampled timing before further sampling or architecture selection."
+}

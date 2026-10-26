@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/isolated/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-v0-isolated-all_nodes_property_filter.zyx",
+    "all_nodes_property_filter",
+    "4",
+    "40"
+  ],
+  "before": {
+    "time_ns": 1793006181747586094,
+    "cpu_stat": "usage_usec 12005133297\nuser_usec 10622041992\nsystem_usec 1383091304\nnice_usec 0\nnr_periods 135379\nnr_throttled 3141\nthrottled_usec 95350893\nnr_bursts 0\nburst_usec 0\n",
+    "loadavg": "0.48 0.55 0.38 1/153 23823\n"
+  },
+  "after": {
+    "time_ns": 1793006220472169314,
+    "cpu_stat": "usage_usec 12044057577\nuser_usec 10657710519\nsystem_usec 1386347058\nnice_usec 0\nnr_periods 135767\nnr_throttled 3141\nthrottled_usec 95350893\nnr_bursts 0\nburst_usec 0\n",
+    "loadavg": "0.73 0.61 0.41 1/153 23824\n"
+  },
+  "oracle": "passed",
+  "sampled_median": 486.9423315,
+  "control_median": 508.7619085,
+  "ratio": 0.957112400446151,
+  "within_five_percent": true,
+  "formal_performance": false,
+  "events": 40
+}

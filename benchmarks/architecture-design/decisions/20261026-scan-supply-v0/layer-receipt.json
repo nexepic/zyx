@@ -1,0 +1,35 @@
+{
+  "identity": {
+    "input_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+    "binary_sha256": "df776a35dcda2177696c388260512ce03295787b9a189b6435c808eca05ee03c"
+  },
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v0/layer-probe",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx"
+  ],
+  "oracle": "passed",
+  "input_unchanged": true,
+  "formal_performance": false,
+  "summary": {
+    "label_scan_filter": {
+      "examined": 225000,
+      "selected": 100000,
+      "values": 100000,
+      "count": 12500,
+      "admission_calls": 100880,
+      "batches": 440,
+      "source_and_callback_ms": 77.4556,
+      "provider_and_consumer_ms": 87.1589
+    },
+    "all_nodes_property_filter": {
+      "examined": 225000,
+      "selected": 225000,
+      "values": 220000,
+      "count": 10076,
+      "admission_calls": 220880,
+      "batches": 440,
+      "source_and_callback_ms": 226.319,
+      "provider_and_consumer_ms": 246.994
+    }
+  }
+}
