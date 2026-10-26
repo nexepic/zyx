@@ -1,0 +1,14 @@
+{
+  "all-nodes-native": {
+    "samples": 10,
+    "oracle": "passed"
+  },
+  "all-nodes-control": {
+    "samples": 10,
+    "oracle": "passed"
+  },
+  "label-native": {
+    "samples": 10,
+    "oracle": "passed"
+  }
+}

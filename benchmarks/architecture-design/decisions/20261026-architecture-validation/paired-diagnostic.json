@@ -1,0 +1,12 @@
+{
+  "all-nodes-native": {
+    "samples": 10,
+    "diagnostic_median_ms": 635.38522
+  },
+  "all-nodes-control": {
+    "samples": 10,
+    "diagnostic_median_ms": 405.103787
+  },
+  "admissible_for_architecture_selection": false,
+  "reason": "Sampling median overhead approximately 57%; single process per arm; no precise causal attribution accepted"
+}

@@ -1,0 +1,3 @@
+# Architecture validation: interim evidence
+
+In progress; no architecture selection or performance improvement accepted. Existing module binaries passed 113/25/89 tests; no full suite. Three diagnostic streams (10 samples each) passed the unchanged final-comparison complete oracle. The sampled all-node query median was 635.385 ms versus 405.104 ms without sampling. Approximately 57% disturbance and one process per arm preclude precise attribution or selection. Unknown libc/vdso symbols remain unresolved. Initial incompatible ROW input failure is retained. Production code is unchanged. Low-disturbance attribution, storage/delivery isolation, candidate lifecycle evaluation and architecture decision remain outstanding.

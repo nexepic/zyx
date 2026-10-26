@@ -1,0 +1,23 @@
+{
+  "status": "in_progress",
+  "source_commit": "0015e26c4f24c480d0e4e3f6d5b278ed43e330ff",
+  "stages": [
+    "current-source identity and targeted lifecycle regression",
+    "current-library CPU sampling: all_nodes_property_filter and label_scan_filter",
+    "storage versus delivery cost isolation",
+    "bounded layout-preserving candidate; layout alternative only if evidence warrants",
+    "lifecycle and update-amplification verification",
+    "formal comparison and architecture decision"
+  ],
+  "benchmark_policy": "Targeted diagnostics first; no full benchmark repetition or full unit suite",
+  "diagnostic_policy": "Linux observer outside production; samples include warmups; no inferred hardware stall attribution",
+  "acceptance": "No performance improvement claimed from source structure or work counts alone; no adoption before public complete oracle and lifecycle validation",
+  "candidates_limit": 2,
+  "risks": [
+    "64-owner granularity does not prove a bottleneck",
+    "global mutation epoch may invalidate unrelated immutable views",
+    "cache lock cost is not evidence of contention",
+    "startup verification is excluded from hot-query latency"
+  ],
+  "production_changes": false
+}

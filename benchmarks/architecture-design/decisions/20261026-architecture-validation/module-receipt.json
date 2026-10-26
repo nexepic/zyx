@@ -1,0 +1,17 @@
+{
+  "candidate": {
+    "tests": 113,
+    "failures": 0,
+    "binary_sha256": "db9b3debcae0d3f207ff038c1a95c4d1ea07d0b05dd51a592e54959f2316d8dc"
+  },
+  "default": {
+    "tests": 25,
+    "failures": 0,
+    "binary_sha256": "58a48a024c452c764af5c89725eb87bdc3eb8f61da1ce2dec081737caf09618a"
+  },
+  "compat": {
+    "tests": 89,
+    "failures": 0,
+    "binary_sha256": "32b0262ce45c7b5f461e097f4c7aac8c81660a3233b58a589d77e5757948f71e"
+  }
+}
