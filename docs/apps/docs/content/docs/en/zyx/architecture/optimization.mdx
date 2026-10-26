@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Scan Supply Architecture Optimization Plan
 
-Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 accepted, V1 pending. **Cumulative progress is 15%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
+Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 accepted; V1 in progress, not accepted. **Cumulative progress is 15%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
 
 This is the sole active optimization roadmap. The former `scan-path-20261023` text is preserved under repository `benchmarks/architecture-design/archive/20261026-completed-scan-path/`. Historical evidence remains intact. Old stage numbers, 100% status, waivers and timing order do not govern this plan. Update this plan and the decision record before expanding its scope.
 
@@ -26,11 +26,10 @@ New interfaces, cache entries, counters or isolated function fixes do not substi
 
 ## 2. Facts and evidence limits
 
-- Historical formal medium all-node filter: ZYX 232.544 ms, Kuzu 1.153 ms; all eight primary gaps span approximately 15.2–201.7x. Repository evidence: `benchmarks/architecture-design/decisions/20261026-roadmap-delivery/`. Read timings belong to archived c8b37bc3 binaries, not a fresh measurement of HEAD.
-- Current column batches group at most 64 owners, still call admission per value and build temporary position/value arrays. Query admission invokes guard checks and budget updates. Their causal CPU share is unknown.
+- The V0 frozen control groups at most 64 owners, calls admission per value and builds temporary position/value arrays. Query admission invokes guard checks and budget updates. Workspace candidate changes are not yet accepted results; individual administrative costs remain unquantified.
 - Metadata cache hits still involve lookup, locking and LRU; I/O mutation epochs invalidate caches/proofs. Locks do not establish contention, and mixed-write invalidation does not explain every read-only gap.
 - Native columns, runs, batch proofs and cross-group directory read-ahead already exist. Inspect adoption before implementing duplicate wrappers.
-- Preliminary evidence: `benchmarks/architecture-design/decisions/20261026-architecture-validation/`. Existing module binaries passed 113/25/89 rerun tests and 30 public outputs passed complete oracles. Sampled/control medians were 635.385/405.104 ms, approximately 57% disturbance: inadmissible for precise attribution or selection. Unknown libc/vdso samples remain unresolved.
+- Use accepted `20261026-scan-supply-v0` attribution for selection. Earlier high-disturbance diagnostics remain historical evidence only. With 50 ms leaf sampling, all-node/label sampled-to-control median ratios were 0.9571/0.9700, but only 208/71 independent samples were collected; these do not establish precise function time shares.
 - Historical integrity, conversion, write and snapshot evidence applies to its recorded versions; acceptance is not inherited by new candidates.
 
 ### 2.1 Current baseline and limits
@@ -52,6 +51,12 @@ These are pre-optimization observations, not candidate gains. Process medians an
 2. **Remove systematic per-entity administration first.** A batch interface may still perform per-value admission, checks, mapping and copying. Make fixed administration scale with batches or necessary pages, while necessary decoding scales with useful fields.
 3. **Then determine whether layout limits the ceiling.** Enter V2 contiguous field blocks only when group-level random location and page distribution dominate the low-overhead supply path. If operators dominate, improve typed consumption; larger groups cannot solve operator costs.
 4. **Reject marginal work using an upper bound.** If removable work occupies fraction p of total time, eliminating it entirely yields at most `1 / (1 - p)` speedup. A 10% share permits only about 1.11x. Derive p from credible attribution. If the ceiling cannot meet the frozen target, address the shared supply path or revise the design instead of accumulating micro-optimizations.
+
+### 2.3 Confirmed work and unproven root causes
+
+V0 all-node execution processed 225,000 candidates in 440 batches, with 3,516 group/membership decodes, 3,437 column decodes and 83,614 metadata-cache hits. The layer experiment delivered 220,000 field values through 220,880 admissions; the label path delivered 100,000 through 100,880 admissions. **The batch interface has not sufficiently batched resource administration: this structural repetition is the first target.**
+
+The inclusive field-supply/callback interval is substantial, but includes predicate computation and is not pure storage time. Cache-hit counts do not establish contention or disk waits. Evidence does not establish that 64 is too small, that replacing the tree solves the gap, or that a complete rewrite is necessary. Test the retained-layout supply path first; let residual dominant costs govern physical design.
 
 ## 3. Architecture boundaries and change order
 
@@ -95,7 +100,7 @@ Fixed weights: V0 15%, V1 30%, V2 25%, V3 20%, V4 10%. Award cumulative progress
 | Stage | Cumulative exit progress | Current state |
 |---|---|---|
 | V0 Attribution and freeze | 15% | Passed; see scan-supply-v0 decision |
-| V1 Supply path | 45% | Pending |
+| V1 Supply path | 45% | In progress, not accepted |
 | V2 Layout decision | 70% | Pending |
 | V3 Lifecycle and generality | 90% | Pending |
 | V4 Formal comparison | 100% | Pending |
@@ -127,6 +132,20 @@ Advance directory and field-page cursors across groups, reusing authentication a
 Let filter/count/aggregation consume typed runs directly, reducing repeated temporary words/ordinal/destination copying. Necessary copies require an ownership rationale and work counters.
 
 Exit: native/fallback adoption and before/after work evidence, relevant modules and complete public results pass. Connect candidate production, membership/field supply and consumption; removing a few calls is insufficient. Targeted performance evidence may be collected in the final window; do not benchmark every edit.
+
+#### V1 implementation order and item-level evidence
+
+Follow these dependencies as one candidate. Completing the first item alone does not complete the architecture change.
+
+| Order | Implementation requirement | Required evidence |
+|---|---|---|
+| 1. Batch identity and resource ownership | Trace existing identity, order and snapshot proofs from public queries; reuse proven conditions and identify each buffer account and release owner | Actual adoption, stale batch IDs, reentrancy and old snapshots; no duplicate proof interfaces |
+| 2. Bounded typed-run admission | Admit fixed-width or known-size runs before output; retain large-value, overflow and exception checks | Admissions scale with runs for identical value counts; rejection cannot replay partial output; accounts recover on release |
+| 3. Scan working-set reuse | Handle directory, membership and field pages without alternating access evicting each other; safely reuse query layouts and buffers | Before/after locations, decodes, page reads and allocations; small-budget fallback, epoch changes, page reuse and corruption detection |
+| 4. Typed operator consumption | Filter, count and group from typed columns and selections; materialize generic values only when needed | Full equivalence with generic execution; NULL/missing, NaN, mixed types, cancellation and complex fallback; adoption and copy counts |
+| 5. Integration and audit | Prove joint adoption from public entry points and explain remaining per-value work | Complete all-node/label/filter/group oracles, work counts, peak memory and residual-cost inventory |
+
+Written code, source splitting or one passing module establishes implementation status only. Do not claim 2x or Kuzu attainment before the final paired comparison. V1 may exit on correctness and work evidence. V2 performance selection and V3 performance guards may share V4's single formal window and remain pending until evidence exists; stage ordering must not force repeated full matrices.
 
 ### V2: Layout decision and minimum complete candidate (25%)
 
@@ -165,3 +184,12 @@ Store the new protocol, commands, source/input hashes, test selections, raw samp
 Each round reports new verified facts, eliminated work, necessary tests, cumulative progress and remaining risks. Documentation cleanup and repeated old tests do not count as performance implementation.
 
 V0 exit evidence and frozen gates: `benchmarks/architecture-design/decisions/20261026-scan-supply-v0/README.md` and adjacent `acceptance-registration.json`. The registration requires at least 2x primary geometric-mean and all-node gains on both datasets; these are gates, not achieved gains or Kuzu superiority.
+
+### 5.1 Frozen acceptance checklist and handoff
+
+- Gain: geometric mean of the eight control/candidate primary speedups at least 2x, and all-node filtering at least 2x on each dataset. This minimum substantive gain does not establish that the orders-of-magnitude gap is closed.
+- Report Kuzu separately: candidate P50 must be no higher than Kuzu for every primary query to claim attainment under the registration. Disclose P95 and process dispersion; averages cannot hide losing cases.
+- Resources: one thread, 64 MiB each for query materialization and BufferPool, 6 GiB address-space and 2 GiB file limits. Primary/guard P50/P95, peak memory or file growth crossing the registered 5% review line requires explanation and repeatability assessment, never silent relaxation.
+- Tune only on medium or separate synthetic fixtures; freeze selection before candidate holdout execution. Disclose that the initial holdout baseline is already known.
+- Each handoff records source commit or uncommitted scope, candidate, passed and unexecuted modules, raw evidence directory, remaining blockers and next action. Workspace V1 changes are not accepted and inherit neither V0 nor historical test conclusions.
+- If A misses the gain gate, verify public adoption, actual elimination of administration and remaining dominant costs. Implement B only when location/page/decode evidence meets V2 conditions. If operator consumption dominates, continue improving shared execution. Revise the design and retain failures when gates cannot be met; document completion is not performance completion.
