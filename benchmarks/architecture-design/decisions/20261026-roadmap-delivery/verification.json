@@ -1,0 +1,32 @@
+{
+  "status": "passed",
+  "source_freeze_matches": true,
+  "production_artifacts_and_inputs_unchanged": true,
+  "original_measured_artifacts_preserved": true,
+  "targeted_modules": {
+    "candidate": {
+      "tests": 113,
+      "failures": 0,
+      "sha256": "88d1f143d4c28fcf72192cbef1a8e0d5e45b6077a1f891f1ba4a88c51f577683"
+    },
+    "default": {
+      "tests": 25,
+      "failures": 0,
+      "sha256": "738ccf3d3a9e7073a75b6b4ebe7207d775e456177c0a36e2498322b3e3048355"
+    },
+    "compat": {
+      "tests": 89,
+      "failures": 0,
+      "sha256": "11334144dd1b03421ac5ec3ce29769c789154a65c331077a8807d0cd699370a9"
+    }
+  },
+  "public_complete_oracles": 10,
+  "generality_receipt_sha256": "7d3220c732937749f2ee29fc9f30670b35d5ae4f3a8b15a39455d5bcbd0ee87f",
+  "reconciled_processes": 171,
+  "reconciled_samples": 3660,
+  "executed_processes_in_two_windows": 204,
+  "retained_failed_processes": 9,
+  "performance_guards_all_passed": false,
+  "full_unit_suite_run": false,
+  "new_benchmark_run_by_this_verifier": false
+}

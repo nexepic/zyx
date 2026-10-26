@@ -1,0 +1,131 @@
+diff --git a/src/storage/relocatable/allocation/SlottedPagePool.cpp b/src/storage/relocatable/allocation/SlottedPagePool.cpp
+index 7cf3000e..790f7636 100644
+--- a/src/storage/relocatable/allocation/SlottedPagePool.cpp
++++ b/src/storage/relocatable/allocation/SlottedPagePool.cpp
+@@ -392,6 +392,52 @@ namespace graph::storage {
+ 								  "relocatable typed record placement requires candidate pools");
+ 		}
+ 		validateRecordSelectionRequest(recordBytes, ownerKind);
++		// The priority pass can return early, but the whole request must still
++		// satisfy the existing candidate identity contract before any selection.
++		if (std::ranges::any_of(segmentIds, [](SegmentId id) { return !id.isValid(); }))
++			throw FormatException(FormatError::FERR_INVALID_HEADER,
++				"relocatable typed record placement contains an invalid Segment ID");
++		// Completed scan images may have hundreds of native-only pools in the
++		// same numeric owner namespace as ordinary ROW pages. A cold ROW writer
++		// must not authenticate every native payload merely to find one usable
++		// ROW page. A sampled owner is only an ordering hint: a selected pool
++		// still goes through the complete existing placement validation below.
++		// If the priority pass finds nothing (or I/O changes), retain the full
++		// search. BUILDING keeps its global best-fit space policy unchanged.
++		if (RSS_SCAN_PATH_FORMAT_ENABLED && ownerKind == PageOwnerKind::POK_PROPERTY &&
++			snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
++			!(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING)) {
++			const uint64_t epoch = metadata_.dataMutationEpoch();
++			if (epoch != UINT64_MAX) for (const SegmentId segmentId : segmentIds) {
++				if (!segmentId.isValid())
++					throw FormatException(FormatError::FERR_INVALID_HEADER,
++						"relocatable typed record placement contains an invalid Segment ID");
++				if (availableFrameCount(snapshot, segmentId) == 0U) continue;
++				bool nativeHint = false;
++				try {
++					const auto pool = metadata_.findCatalog(snapshot, segmentId);
++					const auto header = pool_.readPoolHeader(pool);
++					for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
++						if (!SharedPagePoolFrameMap::isAllocated(header, frame)) continue;
++						const auto sampled = pool_.readPageOwner(pool, frame);
++						nativeHint = sampled.generation == pool.generation && sampled.kind == PageOwnerKind::POK_HYBRID_PROPERTY;
++						break;
++					}
++				} catch (const FormatException &) {
++					// An undecodable hint cannot exclude a pool. The ordinary index
++					// builder below resolves retired/private versus damaged pages.
++				}
++				if (metadata_.dataMutationEpoch() != epoch) break;
++				if (nativeHint) {
++					debug::PerfTrace::addValue("storage.slotted.native_row_pool_hints", 1);
++					continue;
++				}
++				const auto candidate = findBestFitRecordLocation(snapshot, segmentId, ownerKind, recordBytes);
++				if (metadata_.dataMutationEpoch() != epoch) break;
++				if (candidate) return SlottedPagePlacement{
++					candidate->location.segment_id, candidate->location.page_id, candidate->location.free_bytes};
++			}
++		}
+ 		std::optional<RecordPlacement> best;
+ 		for (const SegmentId segmentId: segmentIds) {
+ 			if (!segmentId.isValid()) {
+diff --git a/src/storage/relocatable/entity/EntityPageStore.cpp b/src/storage/relocatable/entity/EntityPageStore.cpp
+index 6363b48a..f7870495 100644
+--- a/src/storage/relocatable/entity/EntityPageStore.cpp
++++ b/src/storage/relocatable/entity/EntityPageStore.cpp
+@@ -1018,7 +1018,11 @@ namespace graph::storage {
+ 		}
+ 		for (const auto &[segmentId, requiredFrames]: propertyReplacementDemand) {
+ 			const CatalogEntry pool = metadata_.findCatalog(snapshot, SegmentId(segmentId));
+-			if (requiredFrames > allocator_.availableFrameCount(pool)) {
++			// Native Property pools can also contain field pages. Only their
++			// joined metadata writer may reconcile them; its existing fresh-pool
++			// COW fallback handles an exhausted source without this generic pass.
++			if (!snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
++				requiredFrames > allocator_.availableFrameCount(pool)) {
+ 				allocator_.reclaimRetiredFrames(pool.segment_id);
+ 			}
+ 		}
+@@ -2094,7 +2098,7 @@ namespace graph::storage {
+             // This adapter cannot authorize ordinary pool reconciliation for
+             // native graphs. Keep the original publication error; the typed
+             // metadata writer/recovery owns native candidate-frame cleanup.
+-            if (hybridTopology) throw;
++            if (hybridTopology || snapshot.superblock().hybrid_property_descriptor_root.isValid()) throw;
+ 			// A callback may already have written a candidate frame when another pool
+ 			// fails or A/B Superblock publication is interrupted. Once metadata releases
+ 			// its writer guard, reconciliation restores the currently reachable generation.
+diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+index f423bbc7..99f25c05 100644
+--- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
++++ b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+@@ -3452,11 +3452,42 @@ namespace graph::storage {
+         propertyPlans.reserve(properties_.size());
+         std::vector<PropertyCollectionRoot> propertyRoots;
+         propertyRoots.reserve(properties_.size());
++        // An absent immutable source group has no per-owner authority to
++        // authenticate. Reuse only that negative fact within this publication;
++        // existing groups still validate every owner's Entity/competing ROW
++        // route. Never carry this hint across an I/O mutation or a transaction.
++        struct AbsentPropertyGroup {
++            EntityPropertyOwnerKind kind;
++            uint64_t group;
++            uint64_t epoch;
++        };
++        std::optional<AbsentPropertyGroup> absentPropertyGroup;
+         for (const auto &[key, root] : properties_) {
+             const auto owner = EntityPropertyKey::fromDirectoryId(key);
+             utils::OwnedHeapReservation boundary(utils::OwnedAllocationScope::owner());
+             const SelectedPropertyReadAdmission admission = [&](size_t bytes) { boundary.set(bytes); };
+-            const bool native = native_graph_coordinated_ && context_->properties->hasHybridPropertyGroup(snapshot_, owner, nullptr, &admission);
++            bool native = false;
++            if (native_graph_coordinated_) {
++                const uint64_t epoch = context_->metadata->dataMutationEpoch();
++                const uint64_t group = owner.isValid() ? 1U + (owner.entity_id - 1U) / RSS_HYBRID_GROUP_CAPACITY : 0U;
++                bool absent = absentPropertyGroup && owner.isValid() && epoch != UINT64_MAX &&
++                    absentPropertyGroup->epoch == epoch && absentPropertyGroup->kind == owner.owner_kind &&
++                    absentPropertyGroup->group == group && context_->metadata->ownsSnapshot(snapshot_);
++                if (absent) {
++                    debug::PerfTrace::addValue("native_graph.write.group_absence_cache_hits", 1);
++                    // Observers may attempt a write; they cannot retag a hint.
++                    absent = context_->metadata->dataMutationEpoch() == epoch &&
++                        context_->metadata->ownsSnapshot(snapshot_);
++                }
++                if (!absent) {
++                    native = context_->properties->hasHybridPropertyGroup(snapshot_, owner, nullptr, &admission);
++                    debug::PerfTrace::addValue("native_graph.write.group_absence_cache_probes", 1);
++                    if (!native && owner.isValid() && epoch != UINT64_MAX &&
++                            context_->metadata->dataMutationEpoch() == epoch)
++                        absentPropertyGroup = AbsentPropertyGroup{owner.owner_kind, group, epoch};
++                    else absentPropertyGroup.reset();
++                }
++            }
+             boundary.set(0);
+             if (!native) { propertyRoots.push_back(root); continue; }
+             const auto node = nodes_.find(owner.entity_id); const auto edge = edges_.find(owner.entity_id);

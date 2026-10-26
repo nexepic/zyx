@@ -1,0 +1,1262 @@
+{
+  "roadmap_progress_percent": 100,
+  "performance_superiority_claimed": false,
+  "beats_kuzu": false,
+  "fixed_5x_required": false,
+  "kuzu_superiority_required_for_roadmap_delivery": false,
+  "original_window": {
+    "processes": 171,
+    "passed": 162,
+    "failed": 9,
+    "validated_samples": 3390,
+    "freeze_sha256": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3"
+  },
+  "targeted_correction": {
+    "processes": 33,
+    "passed": 33,
+    "samples": 510,
+    "freeze_sha256": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b"
+  },
+  "executed_processes_total": 204,
+  "validated_sample_records_retained_total": 3900,
+  "retained_failed_processes": 9,
+  "reconciled_evidence": {
+    "processes": 171,
+    "validated_samples": 3660,
+    "all_complete_oracles_passed": true,
+    "versions": "Explicit composite: original measured read and unchanged guard binaries plus targeted final write binaries and versioned Skew fixture. This is not a new single-binary full campaign."
+  },
+  "replacement_provenance": [
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "B",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "control",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "B",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "control",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "B",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "control",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "B",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "control",
+        0
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "control",
+        0
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "initial",
+        0
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "legacy",
+        0
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "B",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "control",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "B",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "control",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "B",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "control",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "B",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "control",
+        1
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "control",
+        1
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "initial",
+        1
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "legacy",
+        1
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "B",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_batch_1000",
+        "control",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "B",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "holdout",
+        "edge_create_delete",
+        "control",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "B",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_batch_1000",
+        "control",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "B",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "medium",
+        "edge_create_delete",
+        "control",
+        2
+      ],
+      "original_status": "passed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Native ROW placement and source-pool COW corrections"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "control",
+        2
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "initial",
+        2
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    },
+    {
+      "key": [
+        "skew",
+        "special-read",
+        "legacy",
+        2
+      ],
+      "original_status": "failed",
+      "original_freeze": "1071026258fb7c188cf96a398844e6e3ead4224dcae00ca9c40c804e1bfbd9c3",
+      "replacement_freeze": "ba8e2e9e436a57b69c9d20ddfb938229fededa0932908ae9e7481b82a123860b",
+      "reason": "Restore independently verified registered graph"
+    }
+  ],
+  "primary": [
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 3.110227980856571,
+        "control": 2.802153911719491
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 104.337006,
+      "kuzu_p50_ms": 3.2639915000345354,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 2.1356648047264724,
+        "control": 1.797017989860361
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 232.5440785,
+      "kuzu_p50_ms": 1.1526744999628136,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "valid": true,
+      "speedup": {
+        "initial": 3.308230243426324,
+        "control": 2.6054334318301264
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 104.6847955,
+      "kuzu_p50_ms": 5.61162299982243,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.831138326349849,
+        "control": 2.4778292071414527
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 149.52374600000002,
+      "kuzu_p50_ms": 8.488448999742104,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 2.677069276794332,
+        "control": 2.803639839079245
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 75.363057,
+      "kuzu_p50_ms": 2.890478000153962,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "all_nodes_property_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 1.7818142061033233,
+        "control": 2.102498445122305
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 162.872939,
+      "kuzu_p50_ms": 1.1180189994774992,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.53250613013444,
+        "control": 3.3044668567979176
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 72.635438,
+      "kuzu_p50_ms": 4.406058499853316,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.214774784045055,
+        "control": 2.5670250251409583
+      },
+      "real_gain_both_controls": true,
+      "candidate_p50_ms": 109.8541065,
+      "kuzu_p50_ms": 7.218529500050863,
+      "beats_kuzu": false
+    }
+  ],
+  "guards": [
+    {
+      "scale": "medium",
+      "case": "point_lookup_indexed",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.1349802176169261,
+          "p95_ms": 1.0147626831716503
+        },
+        "control": {
+          "p50_ms": 1.226335483422925,
+          "p95_ms": 1.0531072897464826
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "point_lookup_indexed",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9740991111623937,
+          "p95_ms": 0.7642132075531068
+        },
+        "control": {
+          "p50_ms": 1.0525049563395674,
+          "p95_ms": 0.7930903581114288
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "graph_full_point",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.0819526529194625,
+          "p95_ms": 0.6336931149666494
+        },
+        "control": {
+          "p50_ms": 1.036150333675357,
+          "p95_ms": 1.0190887793762382
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "graph_full_point",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9711562343978677,
+          "p95_ms": 0.5461382058206325
+        },
+        "control": {
+          "p50_ms": 0.9300442617401274,
+          "p95_ms": 0.8782852525859755
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "graph_full_neighbors",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.0769764318466981,
+          "p95_ms": 1.7423398482328811
+        },
+        "control": {
+          "p50_ms": 1.3512111994830214,
+          "p95_ms": 1.8604911340590413
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "graph_full_neighbors",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.7815724659543724,
+          "p95_ms": 0.6810911079906976
+        },
+        "control": {
+          "p50_ms": 0.9805873536102007,
+          "p95_ms": 0.7272771550213509
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "one_hop_expand",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.298234670453265,
+          "p95_ms": 1.3991063842477933
+        },
+        "control": {
+          "p50_ms": 1.1691286632722566,
+          "p95_ms": 1.4095616638458575
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "one_hop_expand",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.0652894091539928,
+          "p95_ms": 0.9501271291031417
+        },
+        "control": {
+          "p50_ms": 0.9593491926135821,
+          "p95_ms": 0.9572272645183768
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "two_hop_expand",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9069081778711952,
+          "p95_ms": 0.8958674982161808
+        },
+        "control": {
+          "p50_ms": 0.9334632916869454,
+          "p95_ms": 0.9332906619068311
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "two_hop_expand",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.8708560205813959,
+          "p95_ms": 0.6939148158918795
+        },
+        "control": {
+          "p50_ms": 0.8963554937452103,
+          "p95_ms": 0.7229017897403524
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "property_set",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.57354538529688,
+          "p95_ms": 2.116503286092738
+        },
+        "control": {
+          "p50_ms": 1.5450015007331774,
+          "p95_ms": 1.757848194147788
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "property_set",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.0075392765298377,
+          "p95_ms": 1.4520512115808863
+        },
+        "control": {
+          "p50_ms": 0.9892626605063105,
+          "p95_ms": 1.2059917964028746
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "edge_batch_1000",
+      "engine": "B",
+      "ratios": {
+        "control": {
+          "p50_ms": 1.0227399898657425,
+          "p95_ms": 1.8159406406634724
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "targeted correction with contemporaneous control; historical initial timings are not a same-window comparator"
+    },
+    {
+      "scale": "medium",
+      "case": "edge_batch_1000",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.1231039923066117,
+          "p95_ms": 0.7834070548153479
+        },
+        "control": {
+          "p50_ms": 0.8748444657680918,
+          "p95_ms": 0.7927125113337286
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "property_noop",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.2105753185424173,
+          "p95_ms": 1.7792642031694392
+        },
+        "control": {
+          "p50_ms": 1.1969376641330414,
+          "p95_ms": 1.5595434137940247
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "property_noop",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9371689625119278,
+          "p95_ms": 1.1522414448763094
+        },
+        "control": {
+          "p50_ms": 0.9266113489226141,
+          "p95_ms": 1.0099515031305522
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "medium",
+      "case": "edge_create_delete",
+      "engine": "B",
+      "ratios": {
+        "control": {
+          "p50_ms": 0.8758907294634498,
+          "p95_ms": 0.7520271998298743
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "targeted correction with contemporaneous control; historical initial timings are not a same-window comparator"
+    },
+    {
+      "scale": "medium",
+      "case": "edge_create_delete",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9229587732344088,
+          "p95_ms": 0.7704346109631235
+        },
+        "control": {
+          "p50_ms": 0.6841267870084811,
+          "p95_ms": 0.5396870026146693
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "point_lookup_indexed",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.8004127392926608,
+          "p95_ms": 2.4551629026180333
+        },
+        "control": {
+          "p50_ms": 1.9532843535327349,
+          "p95_ms": 2.049517604382262
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "point_lookup_indexed",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.2008702440983239,
+          "p95_ms": 2.060424983310922
+        },
+        "control": {
+          "p50_ms": 1.3028351817494017,
+          "p95_ms": 1.7199988120143668
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "graph_full_point",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.7141769800051125,
+          "p95_ms": 1.8776838694681053
+        },
+        "control": {
+          "p50_ms": 1.642541363057191,
+          "p95_ms": 1.7370042097030831
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "graph_full_point",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.3670031360861892,
+          "p95_ms": 1.862802752039192
+        },
+        "control": {
+          "p50_ms": 1.309875946673702,
+          "p95_ms": 1.7232380139981427
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "graph_full_neighbors",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.9668798445718865,
+          "p95_ms": 1.8442978906869623
+        },
+        "control": {
+          "p50_ms": 2.063539435944228,
+          "p95_ms": 2.2255828399345843
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "graph_full_neighbors",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.2768331238905926,
+          "p95_ms": 1.345459359342083
+        },
+        "control": {
+          "p50_ms": 1.3395813229463402,
+          "p95_ms": 1.623615836195397
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "one_hop_expand",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.9365601235793986,
+          "p95_ms": 2.6475511430928114
+        },
+        "control": {
+          "p50_ms": 1.8389616084389644,
+          "p95_ms": 1.9101003985221052
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "one_hop_expand",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.3368855971208253,
+          "p95_ms": 2.3929918534540437
+        },
+        "control": {
+          "p50_ms": 1.2695094038372112,
+          "p95_ms": 1.726446231215442
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "two_hop_expand",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.7454187186245274,
+          "p95_ms": 2.0973204877941147
+        },
+        "control": {
+          "p50_ms": 1.6770876115422777,
+          "p95_ms": 2.4538296814774423
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "two_hop_expand",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.222188442973586,
+          "p95_ms": 1.0573405370930764
+        },
+        "control": {
+          "p50_ms": 1.1743411909186012,
+          "p95_ms": 1.2370706377245795
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "property_set",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.5219968423814003,
+          "p95_ms": 2.325553406745527
+        },
+        "control": {
+          "p50_ms": 1.593319017872377,
+          "p95_ms": 3.7196466239087567
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "property_set",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.8594705825393241,
+          "p95_ms": 0.5820302989334856
+        },
+        "control": {
+          "p50_ms": 0.8997461665683221,
+          "p95_ms": 0.9309384296059912
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "edge_batch_1000",
+      "engine": "B",
+      "ratios": {
+        "control": {
+          "p50_ms": 0.9349822515656052,
+          "p95_ms": 1.2241161682006299
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "targeted correction with contemporaneous control; historical initial timings are not a same-window comparator"
+    },
+    {
+      "scale": "holdout",
+      "case": "edge_batch_1000",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.173071567661982,
+          "p95_ms": 1.8986803866783477
+        },
+        "control": {
+          "p50_ms": 0.8289739185365628,
+          "p95_ms": 1.1309001305476272
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "property_noop",
+      "engine": "B",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.4130669629495867,
+          "p95_ms": 1.4305773736713199
+        },
+        "control": {
+          "p50_ms": 1.283617498099535,
+          "p95_ms": 0.8109376925820949
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "property_noop",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.2524674916440526,
+          "p95_ms": 2.668781377973935
+        },
+        "control": {
+          "p50_ms": 1.1377303625578399,
+          "p95_ms": 1.5128265359783906
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "holdout",
+      "case": "edge_create_delete",
+      "engine": "B",
+      "ratios": {
+        "control": {
+          "p50_ms": 1.1189933498396203,
+          "p95_ms": 1.6933849319997327
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "targeted correction with contemporaneous control; historical initial timings are not a same-window comparator"
+    },
+    {
+      "scale": "holdout",
+      "case": "edge_create_delete",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9973002714016748,
+          "p95_ms": 1.0291421214840246
+        },
+        "control": {
+          "p50_ms": 0.6957030617435922,
+          "p95_ms": 0.21847760812366743
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "large",
+      "case": "large_selected",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.0217021022830928,
+          "p95_ms": 1.484255579846203
+        },
+        "control": {
+          "p50_ms": 1.0531003658764349,
+          "p95_ms": 1.0111012128189714
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "large",
+      "case": "large_full",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.8952048908438944,
+          "p95_ms": 0.9183626186279089
+        },
+        "control": {
+          "p50_ms": 0.9117773095353586,
+          "p95_ms": 1.0920690984174863
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "large",
+      "case": "large_patch",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.9273775251336646,
+          "p95_ms": 0.6222143953108388
+        },
+        "control": {
+          "p50_ms": 0.9785282238754147,
+          "p95_ms": 0.5900078178234465
+        }
+      },
+      "exceeds_five_percent_review_threshold": false,
+      "evidence": "original final window"
+    },
+    {
+      "scale": "skew",
+      "case": "skew_out",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.1077169787896262,
+          "p95_ms": 1.3979754828556878
+        },
+        "control": {
+          "p50_ms": 0.9100363766910765,
+          "p95_ms": 0.9609716815198227
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "repaired registered-graph correction"
+    },
+    {
+      "scale": "skew",
+      "case": "skew_both",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 1.140398068119937,
+          "p95_ms": 1.8261256791633274
+        },
+        "control": {
+          "p50_ms": 1.086539676760392,
+          "p95_ms": 0.16850725086223198
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "repaired registered-graph correction"
+    },
+    {
+      "scale": "skew",
+      "case": "skew_twohop",
+      "engine": "legacy",
+      "ratios": {
+        "initial": {
+          "p50_ms": 0.8269076549814894,
+          "p95_ms": 0.7058366437997877
+        },
+        "control": {
+          "p50_ms": 1.2258653876893988,
+          "p95_ms": 1.41831221568781
+        }
+      },
+      "exceeds_five_percent_review_threshold": true,
+      "evidence": "repaired registered-graph correction"
+    }
+  ],
+  "all_performance_guards_passed": false,
+  "default_format": "5/31 ROW; unchanged automatic adoption policy",
+  "experimental_format": "15/41 explicit offline conversion; evaluate scan reuse and point/write costs before opting in",
+  "space": {
+    "medium": {
+      "row_bytes": 309985280,
+      "scan_bytes": 256507904,
+      "saving_percent": 17.251585623678643
+    },
+    "holdout": {
+      "row_bytes": 259915776,
+      "scan_bytes": 222035968,
+      "saving_percent": 14.573877962682802
+    }
+  },
+  "generality_file_cost": {
+    "source_bytes": 5767168,
+    "after_512_mutation_batches_bytes": 128712704,
+    "long_lived_old_pin": true,
+    "initial_conversion_savings_are_not_a_post_update_growth_guarantee": true
+  },
+  "validation_platforms_executed": [
+    "Linux x86_64 clang 19"
+  ],
+  "platforms_not_executed": [
+    "macOS",
+    "Windows"
+  ],
+  "full_unit_suite_run": false
+}

@@ -1,0 +1,74 @@
+{
+  "status": "complete",
+  "previous_progress_percent": 75,
+  "accepted_progress_percent": 100,
+  "completed_increment_percent": 25,
+  "completed_deliverables": {
+    "S4_remaining_cost_and_guard_review_percent": 10,
+    "S5_final_comparison_and_bilingual_delivery_percent": 15
+  },
+  "stage_weights_percent": {
+    "S0": 5,
+    "S1": 10,
+    "S2": 20,
+    "S3": 30,
+    "S4": 20,
+    "S5": 15
+  },
+  "user_completion_instruction": "完成文档中的优化路线就可以了，不强求一定超过kuzu，当前性能没有kuzu高可以后续优化",
+  "completion_scope": "Implementation roadmap, necessary module validation, measured comparisons, complete-oracle evidence, cost/adoption review, and bilingual delivery. Performance maturity is reported separately.",
+  "performance_maturity": {
+    "beats_kuzu": false,
+    "all_five_percent_guards_passed": false,
+    "guard_combinations": 42,
+    "exceed_review_threshold": 33,
+    "threshold_excess_does_not_prove_each_case_is_a_stable_regression": true,
+    "adoption": "Explicit experimental scan format for measured scan-heavy workloads; default ROW adoption unchanged"
+  },
+  "functional_validation": {
+    "status": "passed",
+    "source_freeze_matches": true,
+    "production_artifacts_and_inputs_unchanged": true,
+    "original_measured_artifacts_preserved": true,
+    "targeted_modules": {
+      "candidate": {
+        "tests": 113,
+        "failures": 0,
+        "sha256": "88d1f143d4c28fcf72192cbef1a8e0d5e45b6077a1f891f1ba4a88c51f577683"
+      },
+      "default": {
+        "tests": 25,
+        "failures": 0,
+        "sha256": "738ccf3d3a9e7073a75b6b4ebe7207d775e456177c0a36e2498322b3e3048355"
+      },
+      "compat": {
+        "tests": 89,
+        "failures": 0,
+        "sha256": "11334144dd1b03421ac5ec3ce29769c789154a65c331077a8807d0cd699370a9"
+      }
+    },
+    "public_complete_oracles": 10,
+    "generality_receipt_sha256": "7d3220c732937749f2ee29fc9f30670b35d5ae4f3a8b15a39455d5bcbd0ee87f",
+    "reconciled_processes": 171,
+    "reconciled_samples": 3660,
+    "executed_processes_in_two_windows": 204,
+    "retained_failed_processes": 9,
+    "performance_guards_all_passed": false,
+    "full_unit_suite_run": false,
+    "new_benchmark_run_by_this_verifier": false
+  },
+  "code_commit": "abfa868a",
+  "read_measurement_code_commit": "c8b37bc3",
+  "new_full_benchmark_matrix_repeated": false,
+  "full_unit_suite_run": false,
+  "evidence": {
+    "report.json": "672e1f44c6b529564e35ea116985cf7690fc6c4ea2eab050ab1ccfaaaf93fb51",
+    "summary.csv": "2e4059c2d115e01b79f0ce367af18e7112d7b0c5fda52f579261bf334c585d22",
+    "process-costs.csv": "666d5b6bd1e71857ddba81a82e621eececc621fa901b01b330be6b28aadb7994",
+    "verification.json": "583983099a362185990b13d777341fed145b22aa771133fd7e8dbb61891d049d",
+    "README.md": "d3d4513b86c26506bf13f2b832c3c320001685206da54ffe71818bba4744cd07",
+    "README.zh.md": "46718b1661f6dcdf0bd9a822d4e74b4d08b8bddf83508104cd93d5759dfc3ade"
+  },
+  "validation_raw_archive_sha256": "9aabe871bc6388f2b5136c030fd91dd148d9bc4debf6eb99a557202c782bf0c5",
+  "correction_raw_archive_sha256": "1ea83b2d1c3ac46477e2c6575f9c10eaa76ee525d08d30ce583f255e2f8e531e"
+}
