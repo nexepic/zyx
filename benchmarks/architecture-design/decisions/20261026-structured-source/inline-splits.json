@@ -1,0 +1,91 @@
+[
+  {
+    "source": "src/storage/relocatable/index/BTreePageStore.cpp",
+    "original_sha256": "58e2b479152e4f2909e2a5085cbd8bd073e533ff5383e9ff3269722fe495aec1",
+    "expanded_sha256": "58e2b479152e4f2909e2a5085cbd8bd073e533ff5383e9ff3269722fe495aec1",
+    "parts": [
+      "src/storage/relocatable/index/btree_mutation/TransactionOverlay.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/storage/LogicalGraphTransactionOverlay.cpp",
+    "original_sha256": "09287ecbb814f923daf4c7a45103ce8b9f5028b4892e60de43f5fad0364f848d",
+    "expanded_sha256": "09287ecbb814f923daf4c7a45103ce8b9f5028b4892e60de43f5fad0364f848d",
+    "parts": [
+      "src/storage/transaction_overlay/ReadSnapshot.inc",
+      "src/storage/transaction_overlay/VectorSnapshot.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/query/execution/LogicalPlanMutationRuntime.cpp",
+    "original_sha256": "097d5e8c9f5b8cd5c56c48939c54c0d37d97bd9266a1c6fea605b3463127f737",
+    "expanded_sha256": "097d5e8c9f5b8cd5c56c48939c54c0d37d97bd9266a1c6fea605b3463127f737",
+    "parts": [
+      "src/query/execution/mutation_runtime/PlanningAndBindings.inc",
+      "src/query/execution/mutation_runtime/CreateAndTransactionalCall.inc",
+      "src/query/execution/mutation_runtime/ResultMaterialization.inc",
+      "src/query/execution/mutation_runtime/MergeExecution.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/query/execution/LogicalPlanProcedureRuntime.cpp",
+    "original_sha256": "c54f4e08cba87acf6b00fa905ba73f9c7a286e8629f82fee09843de1982ac4cd",
+    "expanded_sha256": "c54f4e08cba87acf6b00fa905ba73f9c7a286e8629f82fee09843de1982ac4cd",
+    "parts": [
+      "src/query/execution/procedure_runtime/ExpressionsAndBindings.inc",
+      "src/query/execution/procedure_runtime/BufferedRows.inc",
+      "src/query/execution/procedure_runtime/PrefetchAndResults.inc",
+      "src/query/execution/procedure_runtime/VectorOutputAndTopK.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/query/execution/LogicalPlanReadRuntime.cpp",
+    "original_sha256": "5b1c031543cef1f4d7634a05d987ddb2d261f887827576e4dedbb53ad253654c",
+    "expanded_sha256": "5b1c031543cef1f4d7634a05d987ddb2d261f887827576e4dedbb53ad253654c",
+    "parts": [
+      "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "src/query/execution/read_runtime/EntityValuesAndProperties.inc",
+      "src/query/execution/read_runtime/PatternEvaluation.inc",
+      "src/query/execution/read_runtime/ScalarFunctions.inc",
+      "src/query/execution/read_runtime/ExpressionEvaluation.inc",
+      "src/query/execution/read_runtime/RowBindingAndResults.inc",
+      "src/query/execution/read_runtime/PlanInspectionAndBatching.inc",
+      "src/query/execution/read_runtime/TraversalSupply.inc",
+      "src/query/execution/read_runtime/NodeSupplyAndSorting.inc",
+      "src/query/execution/read_runtime/ScanFilterProjectOperators.inc",
+      "src/query/execution/read_runtime/AggregateOperator.inc",
+      "src/query/execution/read_runtime/JoinAndSubqueryOperators.inc",
+      "src/query/execution/read_runtime/PathOperators.inc",
+      "src/query/execution/read_runtime/RowAndWindowOperators.inc",
+      "src/query/execution/read_runtime/TraversalOperator.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "original_sha256": "b6e25cc1bda9787aa3319460e76371c996b4b50be1e857c9755bbda568ef2213",
+    "expanded_sha256": "b6e25cc1bda9787aa3319460e76371c996b4b50be1e857c9755bbda568ef2213",
+    "parts": [
+      "src/storage/relocatable/backend/backend_runtime/LogicalTransaction.inc",
+      "src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc",
+      "src/storage/relocatable/backend/backend_runtime/VectorSearchAndTraining.inc",
+      "src/storage/relocatable/backend/backend_runtime/SchemaAndAdministration.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  },
+  {
+    "source": "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "original_sha256": "775e814a719674a57ce3e22f0902c5c8219b0d2430b5a8a6a1d50d41c85d6cc6",
+    "expanded_sha256": "775e814a719674a57ce3e22f0902c5c8219b0d2430b5a8a6a1d50d41c85d6cc6",
+    "parts": [
+      "src/storage/relocatable/metadata/graph_mutation/FieldPlanningAndPrivateReservations.inc",
+      "src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc",
+      "src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc"
+    ],
+    "body_preservation": "byte-identical inline expansion; original namespace and RAII lifetimes retained"
+  }
+]

@@ -149,7 +149,7 @@ The project uses CMake, Conan, Ninja, and Google Test. Use the commands in the r
 
 ## WASM And Playground
 
-`ZYX_WASM=ON` configures the Emscripten build. `scripts/build_wasm.sh` produces `build_wasm/zyx.js` and `build_wasm/zyx.wasm`; browser-visible Driver ABI functions must also be listed in its `-sEXPORTED_FUNCTIONS`.
+`ZYX_WASM=ON` configures the Emscripten build. `scripts/build_wasm.sh` produces `build_wasm/zyx.js`, `build_wasm/zyx-filesystem.mjs` and `build_wasm/zyx.wasm`; browser-visible Driver ABI functions must also be listed in its `-sEXPORTED_FUNCTIONS`.
 
 The docs playground uses the Driver ABI and begins read-only transactions with `zyx_driver_txn_begin_read_only` before executing user Cypher. The wrapper contract test is useful but does not replace a real wasm32 build and browser integration test. The normal native format is one database file; new playground/data workflows must not introduce external WAL or SHM sidecars.
 

@@ -102,6 +102,9 @@ echo "Generating Parser..."
 
 popd >/dev/null
 
+# Preserve rule-family boundaries and the 3,000-line limit after regeneration.
+python3 "$SCRIPT_DIR/split_generated_parser.py"
+
 echo ""
 echo "=========================================="
 echo "Generation complete!"

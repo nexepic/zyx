@@ -1,0 +1,15 @@
+[0/2] Re-checking globbed directories...
+-- GLOB mismatch!
+[1/2] Re-running CMake...
+CMake Error at cmake/SourceSets.cmake:672 (message):
+  Project test source is unclassified; add it to ZYX_NATIVE_TEST_SOURCES, a
+  relocatable/inputxx source set, or an explicit HOLD_FOR_PORT list:
+  /workspace/zyx/tests/src/query/execution/test_DirectPrimitiveColumnFilter.cpp
+Call Stack (most recent call first):
+  CMakeLists.txt:36 (include)
+
+
+-- Configuring incomplete, errors occurred!
+FAILED: [code=1] build.ninja 
+/workspace/zyx-tools/lib/python3.12/site-packages/cmake/data/bin/cmake --regenerate-during-build -S/workspace/zyx -B/workspace/zyx/build-scan-candidate
+ninja: error: rebuilding 'build.ninja': subcommand failed

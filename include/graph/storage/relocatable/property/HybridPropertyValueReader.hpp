@@ -264,7 +264,7 @@ public:
                         while(first<end) {
                             const auto bit=UINT64_C(1)<<hybridPropertySlotFor(owners[first]);
                             if(!(column.presence&bit)) {context.checkpoint();(*sink)(first++,outputColumn,std::nullopt);continue;}
-                            const auto type=typeAt(first);size_t count=0;
+                            const auto type=typeAt(first);size_t count=0, admittedBytes=0;
                             while(first+count<end) {
                                 const auto row=first+count;const auto slot=hybridPropertySlotFor(owners[row]);
                                 if(!(column.presence&(UINT64_C(1)<<slot)) || typeAt(row)!=type)break;
@@ -272,9 +272,19 @@ public:
                                 ordinals[count]=row;words[count]=column.words[slot];
                                 size_t payload=type==PropertyType::NULL_TYPE?0U:type==PropertyType::BOOLEAN?1U:8U;
                                 if(type==PropertyType::STRING) {text[count]=HybridPropertyShortText::copy(words[count],buffers[count]);payload=text[count].size();}
-                                if(admission)(*admission)(sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+payload);
+                                // At most 64 fixed/short-text cells: this sum is bounded
+                                // by the persisted group format, with no heap allocation.
+                                admittedBytes += sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+payload;
                                 ++count;
                             }
+                            // Reserve the complete run before exposing any value. The
+                            // callback may cancel/reenter, so recheck the source boundary.
+                            if(admission) {
+                                (*admission)(admittedBytes);
+                                debug::PerfTrace::addValue("native_graph.hybrid.typed_run_admissions", 1);
+                                debug::PerfTrace::addValue("native_graph.hybrid.typed_run_admitted_bytes", static_cast<int64_t>(admittedBytes));
+                            }
+                            context.checkpoint();
                             if(type==PropertyType::STRING)(*batches).texts(std::span(ordinals).first(count),outputColumn,std::span(text).first(count));
                             else (*batches).scalars(std::span(ordinals).first(count),outputColumn,type,std::span(words).first(count));
                             context.checkpoint();first+=count;

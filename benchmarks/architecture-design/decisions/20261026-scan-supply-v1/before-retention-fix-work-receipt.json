@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/values-b",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/medium-work-check.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "0",
+    "1"
+  ],
+  "identity": {
+    "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+    "binary_sha256": "2767984b7185956d39a533a7ebaffa935ecb3ea95d9485e90a2553466a02c592"
+  },
+  "complete_oracles": 4,
+  "input_unchanged": true,
+  "formal_performance": false
+}

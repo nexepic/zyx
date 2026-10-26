@@ -3,7 +3,7 @@
 # ==============================================================================
 # Script Name: build_wasm.sh
 # Purpose: Build ZYX as a WebAssembly module for browser-based Cypher playground.
-# Output: build_wasm/zyx.js + build_wasm/zyx.wasm
+# Output: build_wasm/zyx.js + zyx-filesystem.mjs + zyx.wasm
 # ==============================================================================
 
 set -e
@@ -200,10 +200,13 @@ EOF
     EM_LLVM_ROOT="$FALLBACK_LLVM_ROOT" link_wasm_module
 fi
 
+# Keep the generated filesystem and bootstrap in separate bounded modules.
+python3 "$PROJECT_ROOT/scripts/split_wasm_runtime.py" "$BUILD_DIR/zyx.js"
+
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} WASM Build Successful!                                ${NC}"
 echo -e "${GREEN} Output: $BUILD_DIR/zyx.js                             ${NC}"
 echo -e "${GREEN}         $BUILD_DIR/zyx.wasm                           ${NC}"
 echo -e "${GREEN}======================================================${NC}"
 
-ls -lh "$BUILD_DIR/zyx.js" "$BUILD_DIR/zyx.wasm"
+ls -lh "$BUILD_DIR/zyx.js" "$BUILD_DIR/zyx-filesystem.mjs" "$BUILD_DIR/zyx.wasm"

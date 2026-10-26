@@ -1,0 +1,20 @@
+{
+  "plan": "scan-supply-20261026",
+  "stage": "V1",
+  "stage_exit": "passed",
+  "cumulative_progress_percent": 45,
+  "formal_performance": false,
+  "module_cases": 277,
+  "public_complete_oracles": 4,
+  "adoption": "public certified supply -> bounded run admission -> direct typed primitive/NULL filtering; existing complex/cold fallback",
+  "remaining": "Final performance gates, layout decision and lifecycle/guard acceptance remain pending. Three-frame reuse has no measured work reduction on medium.",
+  "evidence": [
+    "final-module-receipt.json",
+    "work-receipt.json",
+    "admission-comparison.json",
+    "work-comparison.json",
+    "scan/receipt.json",
+    "metadata-row/receipt.json",
+    "hybrid/final-tests.json"
+  ]
+}

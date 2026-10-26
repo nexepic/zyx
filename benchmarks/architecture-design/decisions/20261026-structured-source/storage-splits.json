@@ -1,0 +1,37 @@
+[
+  {
+    "original": "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "sha256": "abc9fd3b00262da8b8eee4477d96af4e4ace3c2f83db059d99aa9d6df4514114",
+    "shared_header": "src/storage/relocatable/entity/NativeGraphWritePlannerContext.hpp",
+    "outputs": [
+      "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+      "src/storage/relocatable/entity/NativeGraphWriteVectorStaging.cpp",
+      "src/storage/relocatable/entity/NativeGraphWriteAdjacencyStaging.cpp",
+      "src/storage/relocatable/entity/NativeGraphWriteCommit.cpp",
+      "src/storage/relocatable/entity/NativeGraphWriteLifecycle.cpp"
+    ],
+    "method_bodies_byte_preserved": true
+  },
+  {
+    "original": "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp",
+    "sha256": "398cca54f4843dfcfbcd8b454917ff7e480a7f46325ac09933d2f3bac3d3fd02",
+    "shared_header": "src/storage/relocatable/metadata/MetadataStoreOperationsInternal.hpp",
+    "outputs": [
+      "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp",
+      "src/storage/relocatable/metadata/MetadataStorePageMutation.cpp",
+      "src/storage/relocatable/metadata/MetadataStoreReclamation.cpp",
+      "src/storage/relocatable/metadata/MetadataStoreLookup.cpp"
+    ],
+    "method_bodies_byte_preserved": true
+  },
+  {
+    "original": "src/storage/relocatable/metadata/LocationDirectory.cpp",
+    "sha256": "0994eb11df8d737aec5ca2696c2b254e5edbbda645a2fdc544e6856754a7f62a",
+    "outputs": [
+      "src/storage/relocatable/metadata/LocationDirectory.cpp",
+      "src/storage/relocatable/metadata/LocationDirectoryTypedAccess.cpp"
+    ],
+    "method_bodies_byte_preserved": true,
+    "cursor_implementation_boundary": "Keep the two batched directory methods with private RangeCursor::Impl; all other typed adapters remain separate. Method bodies unchanged."
+  }
+]

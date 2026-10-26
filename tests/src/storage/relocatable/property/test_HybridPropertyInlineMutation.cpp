@@ -203,13 +203,33 @@ TEST_F(HybridPropertyInlineMutationTest, PackedShortTextColumnsUseTypedSinksAndR
  PropertyColumnBatchReadSinks batches;size_t runCalls=0;
  batches.scalars=[&](auto rows,size_t col,auto type,auto words){++runCalls;for(size_t i=0;i<rows.size();++i)scalars(rows[i],col,type,words[i]);};
  batches.texts=[&](auto rows,size_t col,auto values){++runCalls;for(size_t i=0;i<rows.size();++i)texts(rows[i],col,values[i]);};
+ // Output reservation must be cumulative and precede each run, with the
+ // exact original bytes for short text (including embedded NUL) and NULL.
+ size_t runAdmissionCalls=0, admittedOutputBytes=0, expectedOutputBytes=0;
+ for(const auto &value:expected) expectedOutputBytes += sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+
+     (value.getType()==graph::PropertyType::NULL_TYPE?0U:std::get<std::string>(value.getVariant()).size());
+ const SelectedPropertyReadAdmission outputAdmission=[&](size_t bytes){++runAdmissionCalls;admittedOutputBytes+=bytes;};
  const bool valuesEnabled=graph::debug::PerfTrace::areValuesEnabled();
  struct RestoreTrace {bool enabled;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(enabled);}} restore{valuesEnabled};
  graph::debug::PerfTrace::setValueCollectionEnabled(true);graph::debug::PerfTrace::reset();
  auto cursor=properties_->openScanCursor(columnPin);
- ASSERT_NO_THROW(cursor.readEntityPropertiesOptionalSorted(columnPin,owners,tokens,{},true,nullptr,&owning,&scalars,&texts,&batches));
+ ASSERT_NO_THROW(cursor.readEntityPropertiesOptionalSorted(columnPin,owners,tokens,{},true,&outputAdmission,&owning,&scalars,&texts,&batches));
  const auto trace=graph::debug::PerfTrace::snapshotAndReset();
  EXPECT_EQ(owningCalls,0U);EXPECT_EQ(textCalls,63U);EXPECT_EQ(nullCalls,1U);EXPECT_EQ(runCalls,3U);
+ // The cursor also admits owner/reference scratch. Test exact output accounting
+ // directly at the same reader boundary using the authenticated context.
+ runAdmissionCalls=admittedOutputBytes=0;
+ ASSERT_TRUE(HybridPropertyValueReader::readSelected(context,columnPin,owners,tokens,{}, {},nullptr,
+     &outputAdmission,&owning,&scalars,&texts,&batches));
+ EXPECT_EQ(runAdmissionCalls,3U);EXPECT_EQ(admittedOutputBytes,expectedOutputBytes);
+ size_t deniedOutputs=0;
+ auto deniedBatches=batches;
+ deniedBatches.scalars=[&](auto,size_t,auto,auto){++deniedOutputs;};
+ deniedBatches.texts=[&](auto,size_t,auto){++deniedOutputs;};
+ const SelectedPropertyReadAdmission denied=[](size_t){throw graph::query::execution::MaterializedByteLimitExceeded();};
+ EXPECT_THROW((void)HybridPropertyValueReader::readSelected(context,columnPin,owners,tokens,{}, {},nullptr,
+     &denied,&owning,&scalars,&texts,&deniedBatches),graph::query::execution::MaterializedByteLimitExceeded);
+ EXPECT_EQ(deniedOutputs,0U);
  ASSERT_TRUE(trace.contains("native_graph.hybrid.grouped_column_batches"));
  EXPECT_EQ(trace.at("native_graph.hybrid.grouped_column_batches").totalValue,1);
  EXPECT_EQ(trace.at("native_graph.hybrid.grouped_owner_route_checks").totalValue,64);

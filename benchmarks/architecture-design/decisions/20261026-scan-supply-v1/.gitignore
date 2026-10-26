@@ -1,0 +1,9 @@
+*.o
+modules
+*.d
+public-b
+values-b
+work-counter
+*.db
+generality
+*.zyx

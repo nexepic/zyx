@@ -10,6 +10,7 @@
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
 #include "query/execution/BatchIdentity.hpp"
 #include "query/execution/FixedWidthColumn.hpp"
+#include "query/execution/PrimitiveColumnFilter.hpp"
 #include "graph/query/execution/SelectionVector.hpp"
 
 namespace graph::query::execution::detail {
@@ -360,6 +361,62 @@ public:
             }
             default: return {c.states[i], &c.complex[i]};
         }
+    }
+    // A sealed uniform primitive column is consumed directly from its typed
+    // storage. Preflight cannot alter selection; mixed types retain the exact
+    // generic comparator, including cross-type ordering and NaN behavior.
+    template<class Guard>
+    bool tryFilterPrimitive(const ColumnPredicate &predicate, SelectionVector &selection, Guard guard) const {
+        validateSnapshot(true);
+        if (!sealed_ || selection.size() != rows_) throw std::invalid_argument("primitive filter requires an aligned sealed batch");
+        if (predicate.operation == ColumnPredicateOp::CPO_NON_NULL) {
+            const auto &column = columns_.at(predicate.column);
+            for (size_t row = 0; row < rows_; ++row) {
+                if ((row & 15U) == 0U) guard();
+                if (!immutable_identity_) validateSnapshot();
+                if (selection.includes(row) && column.states[row] != ColumnCellState::CCS_VALUE) selection.reject(row);
+            }
+            validateSnapshot(true); guard();
+            return true;
+        }
+        if (!predicate.expected) return false;
+        const auto type = predicate.expected->getType();
+        if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE && type != PropertyType::BOOLEAN) return false;
+        const auto &column = columns_.at(predicate.column);
+        for (size_t row = 0; row < rows_; ++row) {
+            if ((row & 15U) == 0U) guard();
+            if (selection.includes(row) && column.states[row] == ColumnCellState::CCS_VALUE && column.types[row] != type)
+                return false;
+        }
+        const auto consume = [&](const auto &values, auto expected) {
+            using T = decltype(expected);
+            const auto filter = [&](auto matches) {
+                for (size_t row = 0; row < rows_; ++row) {
+                    if ((row & 15U) == 0U) guard();
+                    if (!immutable_identity_) validateSnapshot();
+                    if (selection.includes(row) && (column.states[row] != ColumnCellState::CCS_VALUE ||
+                        !matches(static_cast<T>(values[row]), expected))) selection.reject(row);
+                }
+            };
+            switch (predicate.operation) {
+                case ColumnPredicateOp::CPO_EQUAL: filter([](T a,T b){return a==b;}); break;
+                case ColumnPredicateOp::CPO_NOT_EQUAL: filter([](T a,T b){return a!=b;}); break;
+                case ColumnPredicateOp::CPO_LESS: filter([](T a,T b){return a<b;}); break;
+                case ColumnPredicateOp::CPO_GREATER: filter([](T a,T b){return b<a;}); break;
+                case ColumnPredicateOp::CPO_LESS_EQUAL: filter([](T a,T b){return !(b<a);}); break;
+                case ColumnPredicateOp::CPO_GREATER_EQUAL: filter([](T a,T b){return !(a<b);}); break;
+                case ColumnPredicateOp::CPO_NON_NULL: filter([](T,T){return true;}); break;
+                default: throw std::invalid_argument("invalid primitive predicate operation");
+            }
+        };
+        switch (type) {
+            case PropertyType::INTEGER: consume(column.integers,std::get<int64_t>(predicate.expected->getVariant())); break;
+            case PropertyType::DOUBLE: consume(column.doubles,std::get<double>(predicate.expected->getVariant())); break;
+            case PropertyType::BOOLEAN: consume(column.booleans,std::get<bool>(predicate.expected->getVariant())); break;
+            default: return false;
+        }
+        validateSnapshot(true); guard();
+        return true;
     }
     // Batch kernel boundary: preflight before any consumer effects. Borrowed
     // strings remain in this sealed owner, and bounded text keeps cancellation

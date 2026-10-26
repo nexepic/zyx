@@ -1,0 +1,38 @@
+{
+  "acceptance": false,
+  "limitation": "linked prior online archive; final relink required. Metadata fixtures require ROW profile; one borrowed-page work assertion remains unresolved.",
+  "suites": {
+    "DirectPrimitiveColumnFilterTest": {
+      "tests": 2,
+      "failures": 0
+    },
+    "RelocatableMetadataStoreTest": {
+      "tests": 87,
+      "failures": 13
+    },
+    "BoundNodeColumnPredicatesTest": {
+      "tests": 11,
+      "failures": 0
+    },
+    "HybridPropertyInlineMutationTest": {
+      "tests": 10,
+      "failures": 0
+    },
+    "HybridPropertyColumnReadReuseTest": {
+      "tests": 8,
+      "failures": 0
+    },
+    "HybridPropertyQueryParityTest": {
+      "tests": 61,
+      "failures": 0
+    },
+    "RelocatableStorageBackendTest": {
+      "tests": 8,
+      "failures": 0
+    },
+    "BufferModes/RelocatablePropertyRunTest": {
+      "tests": 2,
+      "failures": 1
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/values-b",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/medium-work-check.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "0",
+    "1"
+  ],
+  "identity": {
+    "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+    "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+  },
+  "complete_oracles": 4,
+  "input_unchanged": true,
+  "formal_performance": false,
+  "candidate_acceptance": false,
+  "limitation": "Probe relink was still running; binary predates rebuilt candidate core. Retained only as incident evidence."
+}

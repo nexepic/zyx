@@ -1638,10 +1638,11 @@ namespace graph::storage {
 			}
 		}
 		if (runs) runs->flush();
-		// Keep the established one-page owned cursor cache across batches;
-		// never retain a buffer-pool pin beyond this read. Only the final page
-		// is copied, while borrowed slots were decoded directly above.
-		if (pinned.has_value() && store_->metadata_.dataMutationEpoch() == sourceEpoch &&
+        // Typed runs have consumed every borrowed cell at flush above. The
+        // buffer pool already owns their authenticated frames; copying the last
+        // page into a second cursor image provides no remaining borrow lifetime.
+        // Keep owned retention only for the non-run cursor path.
+        if (!batches && pinned.has_value() && store_->metadata_.dataMutationEpoch() == sourceEpoch &&
                 sourceEpoch != std::numeric_limits<uint64_t>::max()) {
             // Results above are already decoded. Retaining an extra image is
             // optional and must not turn a valid bounded read into rejection.

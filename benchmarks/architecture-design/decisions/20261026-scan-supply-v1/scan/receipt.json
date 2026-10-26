@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "tests": 88,
+  "binary_sha256": "99f4dce2479b7d19ceb58506319169052d0e7b9b59cc8d5b5c47949798133dc9",
+  "archive_sha256": "ee5dd16d232d930a4fd911225771f9c8bd2a6ad3f37ec1256a9362480e4e1d1e",
+  "relink_identity_preserved": true
+}

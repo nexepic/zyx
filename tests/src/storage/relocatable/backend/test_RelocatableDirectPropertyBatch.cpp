@@ -244,8 +244,8 @@ TEST_P(RelocatablePropertyRunTest, NativeRunsPreservePageBorrowLifetimeOldPinsAn
     }
     const auto copied = graph::debug::PerfTrace::snapshotAndReset();
     if (GetParam() > RSS_PAGE_SIZE) {
-        // Cross-batch retention now keeps the authenticated view itself;
-        // aliases no longer copy the previously retained final page's slots.
+        // Run sinks consume borrows before their source pin is released;
+        // aliases must not allocate a redundant final-page cursor image.
         EXPECT_FALSE(copied.contains("native_graph.read.property_selected_slot_copy_bytes"));
         EXPECT_FALSE(copied.contains("native_graph.read.property_selected_last_page_cache_copy_bytes"));
         ASSERT_TRUE(copied.contains("native_graph.read.property_selected_borrowed_owners"));
@@ -346,11 +346,11 @@ TEST_F(RelocatableStorageBackendTest, CertifiedScanBatchesBoundRowsAndValidateSu
 }
 
 TEST_F(RelocatableStorageBackendTest, CertifiedScanAdmissionAndConsumerStopDoNotReplay) {
-    materializeNativeGraphFixture();
+    static_cast<void>(materializeNativeGraphFixture());
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend backend(options); backend.open();
     auto old = backend.openLogicalGraphReadSnapshot();
-    backend.createLogicalNodes({{{"NewScan"}, {{"alpha", PropertyValue(int64_t{9})}}}});
+    ASSERT_EQ(backend.createLogicalNodes({{{"NewScan"}, {{"alpha", PropertyValue(int64_t{9})}}}}).size(), 1U);
     const std::array<std::string_view, 1> keys{"alpha"};
     const auto *provider = dynamic_cast<const LogicalGraphNodeScanProvider *>(old.get());
     ASSERT_NE(provider, nullptr);
@@ -384,7 +384,7 @@ TEST_F(RelocatableStorageBackendTest, CertifiedScanKeepsLargeValueFallbackBeyond
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
     const std::string large(1024U * 1024U + 256U, 'q');
-    backend->createLogicalNodes({{{"LargeScan"}, {{"text", PropertyValue(large)}}}});
+    ASSERT_EQ(backend->createLogicalNodes({{{"LargeScan"}, {{"text", PropertyValue(large)}}}}).size(), 1U);
     graph::query::QueryEngine engine(backend);
     const auto result = engine.execute("MATCH (n:LargeScan) RETURN n.text AS text, count(*) AS rows");
     ASSERT_EQ(result.rowCount(), 1U);

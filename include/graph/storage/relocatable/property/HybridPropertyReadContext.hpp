@@ -40,7 +40,11 @@ class HybridPropertyReadContext final {
     };
     struct BatchReadWindow {
         static constexpr size_t GROUPS = 8U;
-        FieldPageCursor field;
+        // Group, membership and column records often alternate between pages.
+        // Three bounded frames avoid evicting each role on every lookup.
+        std::array<FieldPageCursor, 3> fields;
+        size_t next_field = 0;
+        void releaseFields() { for (auto &field : fields) field.page.reset(); }
         std::array<HybridPropertyGroupDirectoryMap::Entry, GROUPS> groups{};
         HybridPropertyGroupDirectoryMap::Key first{};
         EntityPropertyOwnerKind kind = EntityPropertyOwnerKind::EPOK_NODE;
@@ -53,7 +57,14 @@ class HybridPropertyReadContext final {
     auto withFieldPage(PageId id, FieldPageCursor *cursor, Visitor &&visitor) const
         -> std::invoke_result_t<Visitor &, const HybridPropertyFieldPage &> {
         check();
-        if (batch_read_window_) cursor = &batch_read_window_->field;
+        if (batch_read_window_) {
+            auto &window = *batch_read_window_;
+            cursor = nullptr;
+            for (auto &field : window.fields) {
+                if (field.page && field.id == id) { cursor = &field; break; }
+            }
+            if (!cursor) cursor = &window.fields[window.next_field++ % window.fields.size()];
+        }
         if (!cursor) {
             const auto page = fields_.read(snapshot_, id);
             return visitor(page);
@@ -63,7 +74,17 @@ class HybridPropertyReadContext final {
         if (!cursor->page || cursor->id != id || epoch == UINT64_MAX || cursor->epoch != epoch ||
             cursor->sequential != sequential) {
             cursor->page.reset();
-            cursor->page.emplace(fields_.read(snapshot_, id));
+            const auto load = [&] { cursor->page.emplace(fields_.read(snapshot_, id)); };
+            try { load(); }
+            catch (const query::execution::MaterializedByteLimitExceeded &) {
+                if (!batch_read_window_) throw;
+                // Optional reuse may not make a formerly readable page fail.
+                // Drop retained frames and retry with the original single-page footprint.
+                batch_read_window_->releaseFields(); load();
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                if (!batch_read_window_) throw;
+                batch_read_window_->releaseFields(); load();
+            }
             cursor->id = id; cursor->sequential = sequential;
             cursor->epoch = membership_io_->dataMutationEpoch() == epoch ? epoch : UINT64_MAX;
         } else debug::PerfTrace::addValue("native_graph.hybrid.column_window_page_reuses", 1);
@@ -110,7 +131,7 @@ public:
             catch (const query::execution::detail::ResourceAdmissionDenied &) { return; }
             previous_ = context_.batch_read_window_;
             // Reentrant consumers never retain two optional physical views.
-            if (previous_) previous_->field.page.reset();
+            if (previous_) previous_->releaseFields();
             context_.batch_read_window_ = &window_; installed_ = true;
         }
     public:
@@ -1005,7 +1026,7 @@ private:
     void withColdBlock(const HybridPropertyGroupRecord &group, const HybridPropertyColumnMembership &matrix,
         const SlottedSlotReference &reference, Visitor &&visitor) const {
         check();
-        if (batch_read_window_) batch_read_window_->field.page.reset();
+        if (batch_read_window_) batch_read_window_->releaseFields();
         const auto memory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
             (snapshot_.readContext() ? snapshot_.readContext()->memoryOwner() : nullptr);
         require(bool(memory), "cold ROW reading requires the caller's original resource account");

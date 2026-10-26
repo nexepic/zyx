@@ -137,6 +137,10 @@ public:
 		ColumnFilterStats stats; size_t previous = SIZE_MAX;
 		for (const auto &predicate : predicates_) {
 			if (predicate.column != previous) { ++stats.scalar_columns; previous = predicate.column; }
+            if (columns.tryFilterPrimitive(predicate, selection, guard)) {
+                ++stats.typed_columns;
+                continue;
+            }
             if (predicate.expected && predicate.expected->getType() == PropertyType::STRING &&
                 columns.tryVisitShortTextColumn(predicate.column, selection, std::views::iota(size_t{0}, columns.size()),
                     [&](size_t row, std::optional<std::string_view> text) {

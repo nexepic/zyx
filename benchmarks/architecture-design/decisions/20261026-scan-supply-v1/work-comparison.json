@@ -1,0 +1,54 @@
+{
+  "all_nodes_property_filter": {
+    "storage.checksum.bytes": {
+      "control": 23627621,
+      "candidate": 23627621
+    },
+    "storage.checksum.incremental_bytes": {
+      "control": 14870016,
+      "candidate": 14870016
+    },
+    "native_graph.hybrid.column_window_page_reuses": {
+      "control": 6947,
+      "candidate": 6947
+    },
+    "native_graph.hybrid.column_decodes": {
+      "control": 3437,
+      "candidate": 3437
+    },
+    "native_graph.hybrid.typed_run_admissions": {
+      "control": null,
+      "candidate": 3437
+    },
+    "storage.buffer_pool.physical_read_bytes": {
+      "control": 151552,
+      "candidate": 151552
+    }
+  },
+  "label_scan_filter": {
+    "storage.checksum.bytes": {
+      "control": 10622109,
+      "candidate": 10622109
+    },
+    "storage.checksum.incremental_bytes": {
+      "control": 6676992,
+      "candidate": 6676992
+    },
+    "native_graph.hybrid.column_window_page_reuses": {
+      "control": 3119,
+      "candidate": 3119
+    },
+    "native_graph.hybrid.column_decodes": {
+      "control": 1562,
+      "candidate": 1562
+    },
+    "native_graph.hybrid.typed_run_admissions": {
+      "control": null,
+      "candidate": 1562
+    },
+    "storage.buffer_pool.physical_read_bytes": {
+      "control": 147456,
+      "candidate": 147456
+    }
+  }
+}

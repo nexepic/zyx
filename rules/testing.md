@@ -21,7 +21,7 @@
 
 ## Test File Size Limit
 
-Single test files MUST NOT exceed **2000 lines**. When a test file grows beyond this limit, split it:
+Single test files MUST NOT exceed **3000 lines**. When a test file grows beyond this limit, split it:
 
 1. Extract the fixture class into a shared header under `tests/include/<module>/` (e.g., `tests/include/storage/FooTestFixture.hpp`)
 2. Split tests by logical category into separate files with suffix naming (e.g., `test_Foo_Insert.cpp`, `test_Foo_Query.cpp`)

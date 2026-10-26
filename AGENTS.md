@@ -44,8 +44,9 @@ Use the following coverage workflow:
 - Source code bug → Fix the source code
 - Test code wrong → Fix the test code
 
-Coverage goals: 95%+ with focus on branch coverage. Max **2000 lines** per test file — split into category files with
-shared fixture header when exceeded (see `rules/testing.md`).
+Coverage goals: 95%+ with focus on branch coverage. Max **3000 lines** per code file (including tests) — split into category files with
+shared fixture header for tests when exceeded (see `rules/testing.md`). Verify with
+`python3 scripts/check_source_size.py`; keep generated parser and WASM split steps in their generators.
 
 ## Windows Enum Naming
 
@@ -118,7 +119,7 @@ Target for details.
 
 After building, copy outputs to the docs site:
 ```bash
-cp build_wasm/zyx.js build_wasm/zyx.wasm docs/apps/docs/public/wasm/
+cp build_wasm/zyx.js build_wasm/zyx-filesystem.mjs build_wasm/zyx.wasm docs/apps/docs/public/wasm/
 ```
 
 **Key constraints**:

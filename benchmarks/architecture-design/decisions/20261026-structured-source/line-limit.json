@@ -1,0 +1,19 @@
+{
+  "limit": 3000,
+  "code_extensions": [
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".h",
+    ".hpp",
+    ".inc",
+    ".ipp",
+    ".js",
+    ".mjs",
+    ".py",
+    ".ts",
+    ".tsx"
+  ],
+  "oversized_files": []
+}

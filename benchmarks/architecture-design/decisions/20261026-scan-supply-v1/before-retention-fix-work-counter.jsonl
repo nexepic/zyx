@@ -1,0 +1,2 @@
+{"case":"all_nodes_property_filter","iteration":0,"examined":225000,"selected":225000,"values":220000,"count":10076,"admission_calls":4349,"batches":440}
+{"case":"label_scan_filter","iteration":0,"examined":225000,"selected":100000,"values":100000,"count":12500,"admission_calls":2474,"batches":440}

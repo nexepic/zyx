@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "tests": 87,
+  "profile": {
+    "HYBRID": 0,
+    "SCAN": 0
+  },
+  "validation_scope": "Current metadata, directory, BTree and fault-hook StorageIO compiled explicitly; unchanged dependency ROW archive. Not a fully rebuilt ROW core.",
+  "binary_sha256": "d90b7a3bed895de258f5c7b97bfcbe9b5cc7b34302f9c0f3ff6d781cb674ab1b",
+  "archive_sha256": "d7446d504527667a3ef5b32a2881fffd6963757cd8face10f3fb8924d8ea7fdb",
+  "source_hashes": {
+    "/workspace/zyx/src/storage/StorageIO.cpp": "8c55097021b73e6486f11ef83edda446d630de89f85786b2479d55726a513f2b",
+    "/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "2dcca80ad7cb8c3bc7ec143cd0d4fc47095c1fb230a7f16dfa3fe19c4497c021",
+    "/workspace/zyx/src/storage/relocatable/metadata/MetadataStorePageMutation.cpp": "d89f379f85e74e78b10cd4b0a6a2bef7a83bfe36d31e58afde941e89c876013b",
+    "/workspace/zyx/src/storage/relocatable/metadata/MetadataStoreReclamation.cpp": "e52066a0d14ad5b4052a3897ece8559adaffee71d4b8000cd2c88978f1924fdb",
+    "/workspace/zyx/src/storage/relocatable/metadata/MetadataStoreLookup.cpp": "9a37ac3a044038f88e90aae24126b907a6a69d4f98d285550913c50c9e7e1257",
+    "/workspace/zyx/src/storage/relocatable/metadata/LocationDirectory.cpp": "97e33b8165e37d03646d798e0bd4c4db20138e187feced4c586633a7dc58353a",
+    "/workspace/zyx/src/storage/relocatable/metadata/LocationDirectoryTypedAccess.cpp": "cfa33191009d9e78886abe55c5f3d04fab1dea500bc8007771c307550b4c8286",
+    "/workspace/zyx/src/storage/relocatable/index/BTreePageStore.cpp": "fa01087321cb37642511c25ce7a64f946365bed8007f78067457f7c50eeef328",
+    "/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp": "77fff41cb1b13dcad174b00408b56ba33d3ce9d0e762ad3e1edbb08a31aa7fb9",
+    "/workspace/zyx/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreReservations.cpp": "e8fcb53c18fb9ead9893a645f73a59237b02eb607efc1a7bee80304c459e5a10"
+  }
+}

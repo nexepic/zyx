@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Scan Supply Architecture Optimization Plan
 
-Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 accepted; V1 in progress, not accepted. **Cumulative progress is 15%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
+Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 and V1 accepted; V2–V4 pending. **Cumulative progress is 45%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
 
 This is the sole active optimization roadmap. The former `scan-path-20261023` text is preserved under repository `benchmarks/architecture-design/archive/20261026-completed-scan-path/`. Historical evidence remains intact. Old stage numbers, 100% status, waivers and timing order do not govern this plan. Update this plan and the decision record before expanding its scope.
 
@@ -100,7 +100,7 @@ Fixed weights: V0 15%, V1 30%, V2 25%, V3 20%, V4 10%. Award cumulative progress
 | Stage | Cumulative exit progress | Current state |
 |---|---|---|
 | V0 Attribution and freeze | 15% | Passed; see scan-supply-v0 decision |
-| V1 Supply path | 45% | In progress, not accepted |
+| V1 Supply path | 45% | Passed; see scan-supply-v1 decision |
 | V2 Layout decision | 70% | Pending |
 | V3 Lifecycle and generality | 90% | Pending |
 | V4 Formal comparison | 100% | Pending |
@@ -191,5 +191,7 @@ V0 exit evidence and frozen gates: `benchmarks/architecture-design/decisions/202
 - Report Kuzu separately: candidate P50 must be no higher than Kuzu for every primary query to claim attainment under the registration. Disclose P95 and process dispersion; averages cannot hide losing cases.
 - Resources: one thread, 64 MiB each for query materialization and BufferPool, 6 GiB address-space and 2 GiB file limits. Primary/guard P50/P95, peak memory or file growth crossing the registered 5% review line requires explanation and repeatability assessment, never silent relaxation.
 - Tune only on medium or separate synthetic fixtures; freeze selection before candidate holdout execution. Disclose that the initial holdout baseline is already known.
-- Each handoff records source commit or uncommitted scope, candidate, passed and unexecuted modules, raw evidence directory, remaining blockers and next action. Workspace V1 changes are not accepted and inherit neither V0 nor historical test conclusions.
+- Each handoff records source commit or uncommitted scope, candidate, passed and unexecuted modules, raw evidence directory, remaining blockers and next action. V1 is accepted against current source and matching binaries; later candidates do not inherit these results.
 - If A misses the gain gate, verify public adoption, actual elimination of administration and remaining dominant costs. Implement B only when location/page/decode evidence meets V2 conditions. If operator consumption dominates, continue improving shared execution. Revise the design and retain failures when gates cannot be met; document completion is not performance completion.
+
+V1 exit evidence: `benchmarks/architecture-design/decisions/20261026-scan-supply-v1/acceptance.json`. All 277 module cases and four complete public oracles pass. For identical work, total admissions fall from 220,880/100,880 to 4,349/2,474. Work reduction is not query speedup. Page reuse and decodes did not improve on this input; no layout benefit is claimed. V2–V4 and Kuzu attainment remain pending.

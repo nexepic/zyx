@@ -1,0 +1,2622 @@
+{
+  "tests": 189,
+  "failures": 92,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T11:17:56Z",
+  "time": "2.185s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "DirectPrimitiveColumnFilterTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:56Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "MatchesScalarSemanticsForAllComparisonsIncludingNanAndNull",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_DirectPrimitiveColumnFilter.cpp",
+          "line": 7,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "DirectPrimitiveColumnFilterTest"
+        },
+        {
+          "name": "MixedTypesDeclineWithoutSelectionEffectsAndCancellationPropagates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_DirectPrimitiveColumnFilter.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "DirectPrimitiveColumnFilterTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 87,
+      "failures": 13,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:56Z",
+      "time": "0.476s",
+      "testsuite": [
+        {
+          "name": "EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ObservesCompactionStateWithoutRetainingSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 50,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesCatalogPublicationSnapshotsReclamationAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 75,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopenFollowsPublishedRootsInsteadOfScanningAnUnreachableTailSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 195,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.043s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 228,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 336,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 428,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 443,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 457,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:478\nExpected: static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))) throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:480\nValue of: interrupted\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 492,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:518\nExpected: static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))) throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:520\nValue of: interrupted\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 532,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:555\nExpected: static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))) throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:557\nExpected equality of these values:\n  syncCalls.load(std::memory_order_relaxed)\n    Which is: 0\n  2U\n    Which is: 2\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesAllocatorReservationAndReusesReleasedSnapshotPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 593,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapReservationExhaustionDoesNotPublishPartialGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 619,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 653,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.006s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatesLogicalNodeAndEdgeIdsDurablyAndIndependently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 696,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReservesDerivedPageAndSegmentIdentityBatchesDurably",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 713,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AllocatesOnlineVectorAndTokenIdsDurablyAndIndependently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 737,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EntityPropertyPoolPublicationIsAtomicAcrossCatalogAndDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ValidatesAndRemovesOwnerKeyedPropertyLocationsThroughThePublicDirectoryBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 801,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ExistingPoolAppendRejectsMissingCallbacksStalePoolsAndInvalidPageIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 847,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ExistingPoolReplacementRejectsInvalidInputsAndPublishesOnlyCallbackFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 884,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesOnePageAcrossCurrentPoolsInOneDirectoryGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 948,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RetiresADurableVectorManifestWithItsPageDirectoryMapping",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1040,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesAVectorManifestAndRebindsItsGenerationInOnePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsIncompleteVectorReservationInputsBeforeAcquiringAPoolSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1169,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsVectorManifestReservationsOutsideTheirDedicatedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEveryMalformedVectorManifestReservationTarget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsRelocatedSourceReleaseWhenCatalogDestinationLostAllocationOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesPreparedLocationDataBeforeTheDirectoryRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1252,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SerializesPoolReconciliationAgainstCurrentReachability",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1268,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReconcilesEveryCurrentSealedCatalogEntryUnderOneWriter",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1315,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsCurrentPageDirectoryLocationsOutsideSharedPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1345,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsEmptyOrFailingPreparedLocationPublicationWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesNewCatalogPoolAndInitialPageLocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1384,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesAVectorManifestMappingForAnAlreadyDurableManifestPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1415,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsInvalidCombinedLocationBeforePreparingOrPublishingData",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "PublishesCombinedExtentLocationsAndRejectsForeignExtentGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1495,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RelocatesACodebookExtentWithItsCatalogGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "BootstrapAndEmergencyPoolsAreDurablyAllocatedAndNeverReturnedToUserReservations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1576,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesAndRecoversAdditionalCatalogPoolOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1596,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "OpenFailsClosedWhenCatalogMetadataPoolIdentityIsCorrupted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1621,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReclaimsAnEmptyCatalogMetadataPoolOnlyAfterSnapshotReleaseAndReusesItsSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.015s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesASparseMetadataPoolThenReclaimsAndReusesItsSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1739,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationPreservesTheOldRootBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1832,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.021s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1877,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.033s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 1988,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.053s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2057,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.018s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.01s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2146\nExpected: static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT)) throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2148\nValue of: interrupted\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2171,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.012s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2208\nExpected: static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT)) throws an exception of type std::system_error.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2210\nValue of: interrupted\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2233,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.013s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2259\nExpected: (syncCalls.load(std::memory_order_relaxed)) >= (2U), actual: 0 vs 2\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2261\nExpected equality of these values:\n  current.superblock().generation\n    Which is: 8-byte object <09-00 00-00 00-00 00-00>\n  Generation(10U)\n    Which is: 8-byte object <0A-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2270\nExpected equality of these values:\n  persisted.superblock().generation\n    Which is: 8-byte object <09-00 00-00 00-00 00-00>\n  Generation(10U)\n    Which is: 8-byte object <0A-00 00-00 00-00 00-00>\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2279,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.031s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2305\nExpected: (syncCalls.load(std::memory_order_relaxed)) >= (1U), actual: 0 vs 1\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.017s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2364\nExpected: (syncCalls.load(std::memory_order_relaxed)) >= (2U), actual: 0 vs 2\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2366\nExpected equality of these values:\n  current.superblock().generation\n    Which is: 8-byte object <09-00 00-00 00-00 00-00>\n  Generation(10U)\n    Which is: 8-byte object <0A-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2375\nExpected equality of these values:\n  persisted.superblock().generation\n    Which is: 8-byte object <09-00 00-00 00-00 00-00>\n  Generation(10U)\n    Which is: 8-byte object <0A-00 00-00 00-00 00-00>\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2385,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.005s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2404,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.004s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "SparseMetadataPoolEvacuationClonesEveryTypedDirectoryRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.007s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopeningBeforeMetadataPoolReclamationPublicationRestoresItsOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReopeningAfterMetadataPoolReclamationPublicationKeepsTheSlotFree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2628,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.008s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "DiscardsUnpublishedAdditionalCatalogPoolAndReopensThePriorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2655,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsReservedUserSlotSeparateFromExistingCatalogMetadataPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2673,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "KeepsCombinedReservationDataSlotSeparateFromCatalogMetadataPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2697,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.015s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2752\nExpected: static_cast<void>(interrupted->reserveFirstFreeAndUpsertCatalog( requests, PhysicalSlotId(4U), PhysicalSlotId(33U), LogSequenceNumber(3U), withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))) throws an exception of type BootstrapPublishInterrupted.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp:2757\nExpected equality of these values:\n  after.superblock().generation\n    Which is: 8-byte object <02-00 00-00 00-00 00-00>\n  Generation(3U)\n    Which is: 8-byte object <03-00 00-00 00-00 00-00>\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable metadata radix route has no child page\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OpenIgnoresAnUnownedEmptyCatalogPoolLeftBeforePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReadOnlyOpenIgnoresAnUnreachablePoolWithoutRepairingIt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2795,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "OpenRejectsReachableCatalogPoolWithoutFreeSpaceOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2820,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesCatalogMappingAndAllocatorReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2834,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicallyPublishesMultipleCatalogMappingsAndSlotReservations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2861,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RunsPreparedDataWriteOnlyInsideTheUnpublishedReservationBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2887,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "DiscardsPreparedReservationWhenTheDataWriteFails",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2914,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RejectsRelocationWithoutADataCopyPreparationCallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStore.cpp",
+          "line": 2929,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "MultiSegmentReservationHasNoPartialPublicationOrInvalidRequestState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 32,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.002s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "AtomicReservationDiscardsPrePublicationWorkAndRetainsDurableInterruptedWork",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 88,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LeasesLogicalGraphIdsFromDurableRangesWithoutReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalGraphIdLeasesRejectInvalidRequestsWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 144,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "LogicalGraphIdLeasesServeFullyCachedReservationsWithoutRepublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 173,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "ReadOnlyMetadataStoreRejectsLeasesAndRefreshWithoutPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        },
+        {
+          "name": "RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp",
+          "line": 220,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataStoreTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/include\/storage\/relocatable\/metadata\/RelocatableMetadataStoreTestFixture.hpp:44\nExpected equality of these values:\n  error.error()\n    Which is: 1-byte object <01>\n  expected\n    Which is: 1-byte object <09>\nnative recovery found a truncated segment envelope\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreReservations.cpp:232\nExpected: sequentialWriter->refreshAfterExternalPublication() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"native recovery found a truncated segment envelope\".\n",
+              "type": ""
+            },
+            {
+              "failure": "unknown file\nC++ exception with description \"native recovery found a truncated segment envelope\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "BoundNodeColumnPredicatesTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:56Z",
+      "time": "0.013s",
+      "testsuite": [
+        {
+          "name": "BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "UnboundedRangesStillRejectMissingAndNullValues",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "MixedNumericTypesUseExistingVariantOrderingWithoutCoercion",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "InvalidBindingsAndAllocationFailureRefundAllMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 70,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 99,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 141,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.001s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 178,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "ReusedPlanHandlesNullParametersAndChangingPropertyTypes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.01s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyInlineMutationTest",
+      "tests": 10,
+      "failures": 7,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:56Z",
+      "time": "1.571s",
+      "testsuite": [
+        {
+          "name": "DisabledOrUnconvertedComplexWritesAreRejectedWithoutIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 27,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.006s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:56Z",
+          "time": "0.62s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan membership omits a live primary Node group\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "InlineKindsRoundTripAndNoopUsesRecursiveRowEquality",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.102s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp:79\nExpected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeStagingOwnsPayloadAcrossMoveConflictAndRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "BeyondAccountAndHeapHeavyCellsRefuseBeforeIoAndRefundStaging",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyInlineMutationTest"
+        },
+        {
+          "name": "ComplexWriteABRecoveryAndErasePreserveAtomicFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.043s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp:128\nExpected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "CancellationAfterPrivatePreparationRefundsComplexPayloadAndAllowsRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.107s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp:154\nExpected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "RepeatedSmallWritesReusePhysicalFramesWithoutGrowingPropertyPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:57Z",
+          "time": "0.366s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp:171\nExpected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 176,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.036s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan membership omits a live primary Node group\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "GroupedColumnsPreserveSparseMembersAndUnrelatedExtensionAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp",
+          "line": 325,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.268s",
+          "classname": "HybridPropertyInlineMutationTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyInlineMutation.cpp:381\nExpected: (void)RelocatableIntegrityScanner(io_,*metadata_,memory).scan() doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyColumnReadReuseTest",
+      "tests": 8,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:58Z",
+      "time": "0.121s",
+      "testsuite": [
+        {
+          "name": "SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 16,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyColumnReadReuseTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp:48\nExpected: (void)HybridPropertyDirectoryIntegrity::verify(context, pin, workspace) doesn't throw an exception.\n  Actual: it throws graph::storage::FormatException with description \"scan membership omits a live primary Node group\".\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 53,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 71,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.018s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "FullEntityCursorRetainsOnlyItsChargedColumnWindowAcrossOwnersAndMoves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.023s",
+          "classname": "HybridPropertyColumnReadReuseTest",
+          "retained_reader_bytes": "50408",
+          "decoded_columns": "64",
+          "authenticated_owner_routes": "64"
+        },
+        {
+          "name": "CachedScalarOwnsSelectedBitsAcrossReentrantEvictionAndResize",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "FullColumnAdmissionOwnsCellsAcrossReentryAndRejectsBeforeSlots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.017s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        },
+        {
+          "name": "FullColumnCollectionPreservesNullBooleanAndDoubleBits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColumnReadReuse.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyColumnReadReuseTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyQueryParityTest",
+      "tests": 61,
+      "failures": 61,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:58Z",
+      "time": "0.001s",
+      "testsuite": [
+        {
+          "name": "ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 7,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ProductionMixedLongIdsPreserveFilterGroupingAndColdFieldLookup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "RowCreationAfterNativeFieldWriteKeepsPoolNamespacesSeparate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryPlacementNeverGrantsReadOrAllocationAuthorityForNativePools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 132,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointPropertyPublicationCoordinatesNativeAndRowLargeValuesAndNewNames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointPropertyPublicationRelabelsNativeOwnerAndMaintainsItsFieldAndScalarIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointPropertyPublicationMergesNativeAndRowPatchesWithoutDroppingOtherFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointPropertyPublicationRecoversBothLayoutsLargeValuesAndVectorTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 208,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionAndFieldChangeMergeTheSameNativeColumn",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionAndFieldChangeShareThresholdDemotionAndLargeExtension",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesAndDropsScalarIndexWithoutChangingFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 269,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesRequiredAndUniqueConstraintsAndMaintainsTheirSupport",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 280,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleRebuildsVectorDefinitionAndThenCoordinatesNativeUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleRecoversCatalogDefinitionAndScalarRootAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 312,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleCreatesCompositeIndexAndKeepsItsLogicalFieldOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 335,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleRejectsInvalidUniqueDefinitionWithoutPublishingIt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 348,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSchemaLifecycleBuildsEdgeConstraintAndMaintainsItsNativeSupportEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyCreatesAndDeletesRowOwnersOutsideNativeGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 370,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyRelabelPreservesNativeValuesAndMaintainsScalarMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 384,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyRelabelCoordinatesVectorScopeWithoutChangingItsNativeField",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 396,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyReopenSkipsUnusedNativeGroupIdsWithoutChangingItsLiveness",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 409,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePropertyReplacementMaintainsScalarIndexAndPinnedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 421,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 435,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePropertyReplacementEnforcesRequiredFieldsAndPublishesNewTokensAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePropertyReplacementAccepts64OwnersAndPreservesNoopGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 465,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePropertyReplacementCoordinatesMixedRoutesAndPinnedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 484,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeWritableReopenReclaimsOrphanQueryScratchAndPreservesFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 500,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeWritableReopenReclaimsOrphanBulkScratchAndPreservesFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 511,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeBulkScratchRetirementWaitsForOldPinThenRecoversWithoutChangingFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 522,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeActiveLayoutAllowsFreshPrivateScratchWithoutChangingGraphValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeSegmentNamespaceReservationPreservesFieldsAcrossBothBootstrapFaults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePatchUpdatesScalarAndRemovesFieldWithoutChangingOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 569,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePatchErasesAndRecreatesVectorFieldAtomically",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 581,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePatchPreservesUnknownRemovalNoopAndRejectsRequiredFieldRemoval",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 590,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesIsolatedNodeAndKeepsOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeOwnerDeletionMaintainsConvertedEdgeAdjacencyAndCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 613,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesVectorMembershipAndPreservesOldEmbedding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 621,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeOwnerDeletionRemovesComplete64EdgeGroupAndPreservesPinnedRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 631,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionRejectsIncidentNodeAndThenDetachesItsRowEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 642,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionRemovesNativeAndRowNodesWhileOldPinsRemainLive",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 652,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionRemovesNativeAndRowEdgesAndCanonicalAdjacencyTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 668,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "JointOwnerDeletionRecoversNativeRowFieldsAndVectorAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 679,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyRefusesUnknownCatalogControlsBeforeChangingLabels",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 708,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "OrdinaryTopologyProofIsNotGrantedToUncoordinatedNativeTransactions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 715,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativePatchAllocatesNamesAndPreservesTheirIdentityAcrossRemoveAndRestore",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 731,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeReplacementPublishesNewNameAndVectorTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 745,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "InvalidNativeVectorPatchDoesNotPublishItsNewPropertyName",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 755,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeConstraintFailureDoesNotPublishItsStagedNewPropertyToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 767,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeNewPropertyTokenIsSharedBy64OwnersInTheOriginalBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 780,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NewNativeTokenFieldsAndVectorRecoverTogetherAcrossBootstrapWriteFaults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 792,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "RawNativeFieldMutationRejectsTokensMissingFromTheCatalog",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 816,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicMixedNodeEdgeReplacementPublishesOneNewNameInBothNamespaces",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 836,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicMixedNodeVectorAndEdgeColumnPublishTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 852,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "MixedNodeEdgeNewNameAndVectorRecoverTogetherAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 870,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "MixedNodeEdgeConstraintFailurePublishesNeitherNamespaceOrNewToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 904,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicNativeDetachDeletesItsCompleteIncidentClosureAndPreservesOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 925,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicExplicitNodeEdgeDeletionBatchMayRemoveAllIncidentEdgesWithoutDetach",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 937,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeDetachBoundFailureCanRetryTheSameHandleWithoutChangingItsOldSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 946,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeDetachUses64AsAnOperationBoundAndCanProgressAfterASeparateEdgeDelete",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 955,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "MixedDeletionCanDemoteTheRemainingNodeFieldsAndUpdateScalarIndexes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 965,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeDetachEntityFieldsCountsAndVectorRecoverTogetherAcrossBothHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyPublicLifecycle.cpp",
+          "line": 976,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "HybridPropertyQueryParityTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 8,
+      "failures": 8,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:58Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 10,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PropertyRunsKeepComplexLargeValueNullAndMissingFallbacks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 284,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "CertifiedScanBatchesBoundRowsAndValidateSubsetsBeforeDelivery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 308,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "CertifiedScanAdmissionAndConsumerStopDoNotReplay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 348,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 382,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "BufferModes\/RelocatablePropertyRunTest",
+      "tests": 2,
+      "failures": 2,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T11:17:58Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/0",
+          "value_param": "67108864",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/1",
+          "value_param": "4096",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T11:17:58Z",
+          "time": "0s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"scan images require explicit offline construction and whole-file admission\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

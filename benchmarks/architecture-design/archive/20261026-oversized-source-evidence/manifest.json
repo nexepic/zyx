@@ -1,0 +1,74 @@
+[
+  {
+    "path": "benchmarks/architecture-design/decisions/20261021-r32-native-scratch-allocation/head-metadata-control/RelocatableMetadataStore.cpp",
+    "sha256": "68d04ff0cf8ed027b155eb2e6ace6afdecc8df03e69a7008183c8ebd08cd07e5",
+    "bytes": 232587,
+    "lines": 4335
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261022-core-cost-buffer/post-buffer-index-cpu/BTreePageStore.cpp",
+    "sha256": "4ddf9adc75d0964bfccb8976089099f3c770250f4a1800e33c409ee2afda705f",
+    "bytes": 215048,
+    "lines": 4187
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "sha256": "e24c0becefd23ea4f7b43c35be73ea06ca3c7855ae3548bb3776b5d8d753acf8",
+    "bytes": 274991,
+    "lines": 4727
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/index/BTreePageStore.cpp",
+    "sha256": "58e2b479152e4f2909e2a5085cbd8bd073e533ff5383e9ff3269722fe495aec1",
+    "bytes": 223831,
+    "lines": 4321
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp",
+    "sha256": "398cca54f4843dfcfbcd8b454917ff7e480a7f46325ac09933d2f3bac3d3fd02",
+    "bytes": 240277,
+    "lines": 4443
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-bounded-offline-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "sha256": "775e814a719674a57ce3e22f0902c5c8219b0d2430b5a8a6a1d50d41c85d6cc6",
+    "bytes": 383058,
+    "lines": 6058
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-governed-metadata-work/source-snapshot/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "sha256": "85a1966c84e21044f01c797bca6f8141300cd8714de8a00eafbabe67f712366e",
+    "bytes": 274407,
+    "lines": 4719
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-node-supply-proof/source-snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "sha256": "eef549f0f930df8e40a7463adc01fbe1fab3b3bb9966c7380eaf90d7c8691104",
+    "bytes": 453421,
+    "lines": 8574
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-public-scan-lifecycle/source-snapshot/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "sha256": "ed32506a0aefe7d8dbef090ee223f8d652765c66ef173cc2ba94336ba9bc9141",
+    "bytes": 453168,
+    "lines": 8571
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261025-public-scan-lifecycle/source-snapshot/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+    "sha256": "f75a3a3ce380773a4f7b105722b266809c2c590e44b1a6f7663e52d3fd8f629f",
+    "bytes": 381939,
+    "lines": 6042
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/source/src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+    "sha256": "b6e25cc1bda9787aa3319460e76371c996b4b50be1e857c9755bbda568ef2213",
+    "bytes": 454027,
+    "lines": 8582
+  },
+  {
+    "path": "benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/source/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp",
+    "sha256": "6484494e93b2c0ef61a16ebfbebeadc0a0674c24bf25ef8da20679eba91f558c",
+    "bytes": 275800,
+    "lines": 4740
+  }
+]

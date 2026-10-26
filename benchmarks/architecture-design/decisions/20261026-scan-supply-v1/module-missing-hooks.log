@@ -1,0 +1,61 @@
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:219:55: error: expected ';' after expression
+  219 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:219:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  219 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:219:56: error: use of undeclared identifier 'hook'
+  219 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:318:55: error: expected ';' after expression
+  318 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:318:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  318 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:318:56: error: use of undeclared identifier 'hook'
+  318 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:687:55: error: expected ';' after expression
+  687 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:687:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  687 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:687:56: error: use of undeclared identifier 'hook'
+  687 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:798:55: error: expected ';' after expression
+  798 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:798:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  798 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:798:56: error: use of undeclared identifier 'hook'
+  798 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:883:55: error: expected ';' after expression
+  883 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:883:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  883 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:883:56: error: use of undeclared identifier 'hook'
+  883 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:983:55: error: expected ';' after expression
+  983 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                       ^
+      |                                                       ;
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:983:24: error: no member named 'ScopedNativeWriteHookForTesting' in 'graph::storage::StorageIO'
+  983 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |             ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPublicLifecycle.cpp:983:56: error: use of undeclared identifier 'hook'
+  983 |             StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+      |                                                        ^
+18 errors generated.
