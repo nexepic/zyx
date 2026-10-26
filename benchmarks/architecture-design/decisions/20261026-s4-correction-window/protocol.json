@@ -1,0 +1,20 @@
+{
+  "purpose": "Correct final write evidence after native ROW placement/COW fixes and replace nine invalid-input Skew workers with registered-graph checks",
+  "warmup": 3,
+  "iterations": 10,
+  "independent_rounds": 3,
+  "threads": 1,
+  "processes": 33,
+  "expected_samples": 510,
+  "limits": {"address_space_bytes": 6442450944, "file_bytes": 2147483648, "process_timeout_seconds": 1200},
+  "changed_write_cases": ["edge_batch_1000", "edge_create_delete"],
+  "write_engines": ["control", "B"],
+  "write_datasets": ["medium", "holdout"],
+  "skew_engines": ["initial", "control", "legacy"],
+  "skew_input": "guard-skew-complete-v1.zyx",
+  "oracle_changes": false,
+  "original_final_window": "../final-delivery",
+  "old_failures_retained": true,
+  "full_matrix_repeat": false,
+  "unaffected_read_evidence": "Measured original final-delivery binaries and archives; write-only implementation changes do not constitute new read timing measurements. Preserve and identify those versions explicitly."
+}

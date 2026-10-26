@@ -1,0 +1,3 @@
+Usage: zyx-scan-convert SOURCE DESTINATION
+Close all users of SOURCE before conversion. DESTINATION must not exist.
+A failed conversion may leave an incomplete BUILDING destination.

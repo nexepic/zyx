@@ -1,0 +1,46 @@
+{
+  "query_benchmark": false,
+  "checks": [
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-holdout-edge_batch_1000.json",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-holdout-edge_create_delete.json",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-holdout-label_scan_filter.json",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-holdout-property_noop.json",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-holdout-property_set.json",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-medium-edge_batch_1000.json",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-medium-edge_create_delete.json",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-medium-label_scan_filter.json",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-medium-property_noop.json",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "receipt": "benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/final-medium-property_set.json",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    }
+  ],
+  "complete_oracles": true
+}

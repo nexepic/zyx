@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:1457: Failure
+Expected: (counters.descriptors) <= (64), actual: 1024 vs 64
+
+[  FAILED  ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups (11785 ms)
+[----------] 1 test from ScanReadProofTest (11786 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (11786 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups
+
+ 1 FAILED TEST

@@ -1,0 +1,22 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = ScanReadProofTest.Native*:ScanReadProofTest.ExhaustedNativeRowPool*
+[==========] Running 6 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 6 tests from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget
+[       OK ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget (876 ms)
+[ RUN      ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups
+[       OK ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups (12413 ms)
+[ RUN      ] ScanReadProofTest.NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool
+[       OK ] ScanReadProofTest.NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool (11354 ms)
+[ RUN      ] ScanReadProofTest.NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites
+[       OK ] ScanReadProofTest.NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites (788 ms)
+[ RUN      ] ScanReadProofTest.NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch
+[       OK ] ScanReadProofTest.NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch (15814 ms)
+[ RUN      ] ScanReadProofTest.ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin
+[       OK ] ScanReadProofTest.ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin (820 ms)
+[----------] 6 tests from ScanReadProofTest (42069 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 1 test suite ran. (42069 ms total)
+[  PASSED  ] 6 tests.

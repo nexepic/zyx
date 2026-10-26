@@ -3452,11 +3452,42 @@ namespace graph::storage {
         propertyPlans.reserve(properties_.size());
         std::vector<PropertyCollectionRoot> propertyRoots;
         propertyRoots.reserve(properties_.size());
+        // An absent immutable source group has no per-owner authority to
+        // authenticate. Reuse only that negative fact within this publication;
+        // existing groups still validate every owner's Entity/competing ROW
+        // route. Never carry this hint across an I/O mutation or a transaction.
+        struct AbsentPropertyGroup {
+            EntityPropertyOwnerKind kind;
+            uint64_t group;
+            uint64_t epoch;
+        };
+        std::optional<AbsentPropertyGroup> absentPropertyGroup;
         for (const auto &[key, root] : properties_) {
             const auto owner = EntityPropertyKey::fromDirectoryId(key);
             utils::OwnedHeapReservation boundary(utils::OwnedAllocationScope::owner());
             const SelectedPropertyReadAdmission admission = [&](size_t bytes) { boundary.set(bytes); };
-            const bool native = native_graph_coordinated_ && context_->properties->hasHybridPropertyGroup(snapshot_, owner, nullptr, &admission);
+            bool native = false;
+            if (native_graph_coordinated_) {
+                const uint64_t epoch = context_->metadata->dataMutationEpoch();
+                const uint64_t group = owner.isValid() ? 1U + (owner.entity_id - 1U) / RSS_HYBRID_GROUP_CAPACITY : 0U;
+                bool absent = absentPropertyGroup && owner.isValid() && epoch != UINT64_MAX &&
+                    absentPropertyGroup->epoch == epoch && absentPropertyGroup->kind == owner.owner_kind &&
+                    absentPropertyGroup->group == group && context_->metadata->ownsSnapshot(snapshot_);
+                if (absent) {
+                    debug::PerfTrace::addValue("native_graph.write.group_absence_cache_hits", 1);
+                    // Observers may attempt a write; they cannot retag a hint.
+                    absent = context_->metadata->dataMutationEpoch() == epoch &&
+                        context_->metadata->ownsSnapshot(snapshot_);
+                }
+                if (!absent) {
+                    native = context_->properties->hasHybridPropertyGroup(snapshot_, owner, nullptr, &admission);
+                    debug::PerfTrace::addValue("native_graph.write.group_absence_cache_probes", 1);
+                    if (!native && owner.isValid() && epoch != UINT64_MAX &&
+                            context_->metadata->dataMutationEpoch() == epoch)
+                        absentPropertyGroup = AbsentPropertyGroup{owner.owner_kind, group, epoch};
+                    else absentPropertyGroup.reset();
+                }
+            }
             boundary.set(0);
             if (!native) { propertyRoots.push_back(root); continue; }
             const auto node = nodes_.find(owner.entity_id); const auto edge = edges_.find(owner.entity_id);

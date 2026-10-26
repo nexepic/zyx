@@ -1,0 +1,17 @@
+{
+  "query_benchmark": false,
+  "returncode": 0,
+  "source_sha256_before": "5705d1a550a3b739fc59fa55edc3b2ad3a058b2559ca488c8df502a90946c2c0",
+  "source_sha256_after": "5705d1a550a3b739fc59fa55edc3b2ad3a058b2559ca488c8df502a90946c2c0",
+  "target": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/guard-skew-complete-v1.zyx",
+  "target_sha256": "894bc90e677391b80f925728ff3b59d882f2c10e104cdd9588ba59b5bbcb6d00",
+  "diagnosis": "All three previous fixtures contain 32 registered Hubs but zero edges; all controls correctly return zero for that incomplete input.",
+  "restored_registered_nodes": 32,
+  "restored_registered_edges": 512,
+  "expected_out": 89,
+  "expected_both": 92,
+  "expected_twohop_current_registered_walk_semantics": 1012,
+  "registered_graph_multiset_matches": true,
+  "old_oracle_weakened": false,
+  "query_timing_run": false
+}

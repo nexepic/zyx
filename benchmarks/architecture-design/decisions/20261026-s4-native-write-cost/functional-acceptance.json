@@ -1,0 +1,39 @@
+{
+  "stage": "S4 functional/resource subdeliverable",
+  "status": "accepted",
+  "previous_progress_percent": 65,
+  "accepted_progress_percent": 75,
+  "stage_weight_percent": 20,
+  "accepted_stage_weight_percent": 10,
+  "pending_stage_weight_percent": 10,
+  "reason": "Three bounded native ROW write/lifecycle corrections, five new regressions, final three-profile module checks, real-image complete oracles and preregistered generality validated. Performance/cost reconciliation is separate and remains pending.",
+  "targeted_tests": {
+    "candidate": {
+      "tests": 113,
+      "failures": 0
+    },
+    "default": {
+      "tests": 25,
+      "failures": 0
+    },
+    "compat": {
+      "tests": 89,
+      "failures": 0
+    }
+  },
+  "full_unit_suite_run": false,
+  "public_oracles": 10,
+  "generality": "16384 owners, 512 mutation batches, old/current complete oracle, integrity and 4KiB-cache reopen",
+  "engine_source_sha256": {
+    "src/storage/relocatable/allocation/SlottedPagePool.cpp": "da64965c8fcd8db248499c8437247607dd0ffaffd01114c67fd20503c455062c",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "abc9fd3b00262da8b8eee4477d96af4e4ace3c2f83db059d99aa9d6df4514114",
+    "src/storage/relocatable/entity/EntityPageStore.cpp": "670d2744e356cfe1d9dc3a13de74dcd11a7184f0692629b8c5090d33ade30e0f",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "2f57f037d332273336809d234c0b8038596a3dd320e840d700fb34cdc1ff2b6b"
+  },
+  "kuzu_required_for_roadmap_completion": false,
+  "performance_guards_claimed_passed": false,
+  "pending": [
+    "S4 remaining 10%: targeted final cost/guard reconciliation",
+    "S5 15%: final evidence and bilingual delivery"
+  ]
+}

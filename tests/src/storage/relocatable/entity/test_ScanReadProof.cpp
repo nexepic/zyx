@@ -22,7 +22,7 @@ protected:
     std::shared_ptr<graph::query::execution::MaterializedByteBudget> control =
         std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     std::unique_ptr<ScanBuildingImageBuilder> builder;
-    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U) {
+    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false) {
         if (scalarRows) {
             initialize(true, true);
             LargeValueStore values(io, *metadata);
@@ -64,7 +64,14 @@ protected:
                 } else if (i == 0U) row.entries.push_back({3, graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t{7})})});
                 tx.replaceNodeProperty(std::move(row));
             }
-            schema.setGraphCardinalityStatistics({uint64_t(nodeCount), 0U});
+            if (seedRowEdge) {
+                const auto weight = schema.ensurePropertyToken("weight");
+                const auto link = schema.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "LINK");
+                const auto edge = tx.createEdge(1, 2, link);
+                tx.replaceEdgeProperty({edge, graph::Edge::typeId, {{weight, graph::PropertyValue(int64_t{0})}}});
+                schema.setTokenCardinality(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, link, 1U);
+            }
+            schema.setGraphCardinalityStatistics({uint64_t(nodeCount), seedRowEdge ? 1U : 0U});
             if (!oversizedLabels) schema.setTokenCardinality(SystemCatalogSchemaTokenKind::SCSTK_LABEL, label, uint64_t(nodeCount));
             schema.finish();
             ASSERT_TRUE(tx.commit().committed());
@@ -1423,6 +1430,176 @@ TEST_F(ScanReadProofTest, BoundedDerivedSummaryMaintenancePreservesNativeFieldsA
     RelocatableStorageBackend reopened(options);reopened.open();
     auto final=reopened.openLogicalGraphReadSnapshot();EXPECT_EQ(final->readNodeProperty(1,"number"),graph::PropertyValue(int64_t{1}));
     final.reset();reopened.close();
+}
+
+
+TEST_F(ScanReadProofTest, NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 16U, false, 2048U, true));
+    LogicalGraphMutationBatch batch;
+    for (int64_t i = 0; i < 1000; ++i) batch.edge_creates.push_back({
+        {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1},
+        {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 2},
+        "LINK", {{"weight", graph::PropertyValue(i)}}});
+    struct Counters { int64_t descriptors = 0, poolFrames = 0; } counters;
+    NativeGraphMutationExecutionResult result;
+    {
+        auto caller = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
+        graph::utils::OwnedAllocationScope owner(caller);
+        graph::debug::PerfTrace::ScopedObserver observer(&counters,
+            [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+                auto &counts = *static_cast<Counters *>(owner);
+                if (key == "native_graph.read.metadata_decodes.hybrid_descriptor") counts.descriptors += value;
+                if (key == "storage.slotted.free_index.pool_frames") counts.poolFrames += value;
+            });
+        ASSERT_NO_THROW(result = mutateImage(batch));
+    }
+    ASSERT_TRUE(result.committed()); ASSERT_EQ(result.result.created_edge_ids.size(), 1000U);
+    EXPECT_LE(counters.descriptors, 64); // Source descriptors must not be reopened per new ROW owner.
+    EXPECT_LE(counters.poolFrames, int64_t(RSS_PAGE_POOL_DATA_FRAME_COUNT)); // One compatible ROW pool already has space.
+    builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    RelocatableStorageBackend reopened(options); ASSERT_NO_THROW(reopened.open());
+    auto snapshot = reopened.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(snapshot->readNodeProperty(1, "number"), graph::PropertyValue(int64_t{1}));
+    EXPECT_EQ(snapshot->readNodeProperty(2048, "K16"), graph::PropertyValue(int64_t{2063}));
+    size_t seen = 0;
+    for (size_t i = 0; i < result.result.created_edge_ids.size(); ++i) {
+        EXPECT_EQ(snapshot->readEdgeProperty(result.result.created_edge_ids[i], "weight"), graph::PropertyValue(int64_t(i)));
+        ++seen;
+    }
+    EXPECT_EQ(seen, 1000U);
+    snapshot.reset(); EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity())); reopened.close();
+}
+
+TEST_F(ScanReadProofTest, NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 16U, false, 2048U, true));
+    auto pin = store().openSnapshot();
+    const auto seeded = store().findEntityPropertyLocationOptional(pin, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    ASSERT_TRUE(seeded);
+    const auto row = store().findPageLocation(pin, seeded->page_id);
+    std::vector<SegmentId> candidates{row.segment_id};
+    store().visitCatalogEntries(pin, [&](const CatalogEntry &pool) {
+        if (pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL && (pool.state == SegmentState::SGS_BUILDING || pool.state == SegmentState::SGS_SEALED) &&
+                pool.segment_id != row.segment_id) candidates.push_back(pool.segment_id);
+    });
+    ASSERT_GT(candidates.size(), 1U);
+    SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    const auto selectedPoolUpperBound = int64_t(RSS_PAGE_POOL_DATA_FRAME_COUNT - pages.availableFrameCount(pin, row.segment_id));
+    int64_t frames = 0;
+    std::optional<SlottedPagePlacement> selected;
+    {
+        graph::debug::PerfTrace::ScopedObserver observer(&frames,
+            [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+                if (key == "storage.slotted.free_index.pool_frames") *static_cast<int64_t *>(owner) += value;
+            });
+        selected = pages.findBestFitPageForRecord(pin, candidates, PageOwnerKind::POK_PROPERTY, 32U);
+    }
+    ASSERT_TRUE(selected); EXPECT_EQ(selected->segment_id, row.segment_id);
+    EXPECT_LE(frames, selectedPoolUpperBound);
+    candidates.push_back(SegmentId{});
+    EXPECT_THROW(static_cast<void>(pages.findBestFitPageForRecord(pin, candidates,
+        PageOwnerKind::POK_PROPERTY, 32U)), FormatException);
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo(), store(), work).scan()));
+}
+
+TEST_F(ScanReadProofTest, NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 64U, true));
+    LogicalGraphMutationBatch batch;
+    batch.property_replacements.push_back({{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1}, {{"number", graph::PropertyValue(int64_t{999})}}});
+    for (int64_t i = 0; i < 32; ++i) batch.edge_creates.push_back({
+        {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1},
+        {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 2},
+        "LINK", {{"weight", graph::PropertyValue(i)}}});
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
+    graph::utils::OwnedAllocationScope scope(memory);
+    struct Change { StorageIO *io; std::byte original{}; bool changed = false, failed = false; } change{targetIo().get()};
+    change.io->readAt(0, &change.original, 1U);
+    NativeGraphMutationExecutionResult result;
+    {
+        graph::debug::PerfTrace::ScopedObserver observer(&change,
+            [](void *owner, std::string_view key, int64_t, bool duration) noexcept {
+                auto &c = *static_cast<Change *>(owner);
+                if (!duration && !c.changed && key == "native_graph.write.group_absence_cache_hits") {
+                    c.changed = true;
+                    try { c.io->writeAt(0, &c.original, 1U); } catch (...) { c.failed = true; }
+                }
+            });
+        result = mutateImage(batch);
+    }
+    EXPECT_TRUE(change.changed); EXPECT_FALSE(change.failed); ASSERT_TRUE(result.committed());
+    ASSERT_EQ(result.result.created_edge_ids.size(), 32U);
+    builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    RelocatableStorageBackend reopened(options); ASSERT_NO_THROW(reopened.open());
+    auto snapshot = reopened.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(snapshot->readNodeProperty(1, "number"), graph::PropertyValue(int64_t{999}));
+    EXPECT_EQ(snapshot->readNodeProperty(2, "number"), graph::PropertyValue(int64_t{2}));
+    for (size_t i = 0; i < result.result.created_edge_ids.size(); ++i)
+        EXPECT_EQ(snapshot->readEdgeProperty(result.result.created_edge_ids[i], "weight"), graph::PropertyValue(int64_t(i)));
+    snapshot.reset(); EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity())); reopened.close();
+}
+
+TEST_F(ScanReadProofTest, NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 16U, false, 2048U, true));
+    auto pin = store().openSnapshot();
+    const auto seeded = store().findEntityPropertyLocationOptional(pin, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    ASSERT_TRUE(seeded);
+    const auto row = store().findPageLocation(pin, seeded->page_id);
+    std::vector<SegmentId> candidates;
+    store().visitCatalogEntries(pin, [&](const CatalogEntry &pool) {
+        if (pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+            (pool.state == SegmentState::SGS_BUILDING || pool.state == SegmentState::SGS_SEALED) &&
+            pool.segment_id != row.segment_id) candidates.push_back(pool.segment_id);
+    });
+    candidates.push_back(row.segment_id);
+    struct Change { StorageIO *io; std::byte original{}; bool changed = false, failed = false; } change{targetIo().get()};
+    change.io->readAt(0, &change.original, 1U);
+    SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    {
+        graph::debug::PerfTrace::ScopedObserver observer(&change,
+            [](void *owner, std::string_view key, int64_t, bool duration) noexcept {
+                auto &c = *static_cast<Change *>(owner);
+                if (!duration && !c.changed && key == "storage.slotted.native_row_pool_hints") {
+                    c.changed = true;
+                    try { c.io->writeAt(0, &c.original, 1U); } catch (...) { c.failed = true; }
+                }
+            });
+        const auto selected = pages.findBestFitPageForRecord(pin, candidates, PageOwnerKind::POK_PROPERTY, 32U);
+        ASSERT_TRUE(selected); EXPECT_EQ(selected->segment_id, row.segment_id);
+    }
+    EXPECT_TRUE(change.changed); EXPECT_FALSE(change.failed);
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo(), store(), work).scan()));
+}
+
+TEST_F(ScanReadProofTest, ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 64U, true));
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
+    graph::utils::OwnedAllocationScope scope(memory);
+    auto old = store().openSnapshot();
+    const auto original = store().findEntityPropertyLocationOptional(old, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    ASSERT_TRUE(original);
+    for (int64_t value = 1; value <= 40; ++value) {
+        LogicalGraphMutationBatch batch;
+        batch.property_replacements.push_back({{LogicalGraphMutationEntityKind::LGMK_EDGE,
+            LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1}, {{"weight", graph::PropertyValue(value)}}});
+        ASSERT_TRUE(mutateImage(batch).committed());
+    }
+    auto current = store().openSnapshot();
+    const auto final = store().findEntityPropertyLocationOptional(current, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    ASSERT_TRUE(final);
+    EXPECT_EQ(store().findEntityPropertyLocationOptional(old, {EntityPropertyOwnerKind::EPOK_EDGE, 1}), original);
+    SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    LargeValueStore values(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    PropertyCollectionRootStore properties(pages, values, store());
+    const auto before = properties.readEntityOptional(old, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    const auto after = properties.readEntityOptional(current, {EntityPropertyOwnerKind::EPOK_EDGE, 1});
+    ASSERT_TRUE(before); ASSERT_TRUE(after); ASSERT_EQ(before->entries.size(), 1U); ASSERT_EQ(after->entries.size(), 1U);
+    EXPECT_EQ(before->entries.front().value, graph::PropertyValue(int64_t{0}));
+    EXPECT_EQ(after->entries.front().value, graph::PropertyValue(int64_t{40}));
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo(), store(), work).scan()));
 }
 
 #else

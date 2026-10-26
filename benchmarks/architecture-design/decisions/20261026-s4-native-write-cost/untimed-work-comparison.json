@@ -1,0 +1,19 @@
+{
+  "query_benchmark": false,
+  "dataset": "medium",
+  "case": "edge_batch_1000",
+  "counters": {
+    "s3-lifecycle": {
+      "storage.buffer_pool.physical_read_bytes": 120115200,
+      "storage.slotted.free_index.pool_frames": 14815,
+      "native_graph.read.metadata_decodes.hybrid_descriptor": 1019
+    },
+    "s4-native-write-cost": {
+      "storage.buffer_pool.physical_read_bytes": 2613248,
+      "storage.slotted.free_index.pool_frames": 375,
+      "native_graph.write.group_absence_cache_hits": 984,
+      "native_graph.read.metadata_decodes.hybrid_descriptor": 35
+    }
+  },
+  "interpretation": "Work counts, not latency; physical reads refer to the buffer pool and do not establish cold-disk traffic."
+}

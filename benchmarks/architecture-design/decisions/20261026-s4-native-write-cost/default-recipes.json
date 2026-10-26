@@ -1,0 +1,47 @@
+{
+  "compile": [
+    [
+      "/workspace/zyx-sysroot/usr/bin/clang++-19",
+      "-std=c++20",
+      "-O0",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wno-unused-parameter",
+      "-Wno-missing-field-initializers",
+      "-Wno-missing-designated-field-initializers",
+      "-DZYX_HAS_LZ4=1",
+      "-DZYX_HAS_ZSTD=1",
+      "-I/workspace/zyx/include",
+      "-I/workspace/zyx/src",
+      "-I/workspace/zyx/tests/include",
+      "-isystem",
+      "/workspace/zyx-sysroot/usr/include",
+      "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0",
+      "-DZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=0",
+      "-I/workspace/zyx/build-scan-row-production",
+      "-c",
+      "/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp",
+      "-o",
+      "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/default-test_PropertyCollectionRootStoreCache.o"
+    ]
+  ],
+  "link": [
+    "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/default-test_PropertyCollectionRootStoreCache.o",
+    "/workspace/zyx/build-scan-row-production/libzyx_core.a",
+    "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+    "-lgtest_main",
+    "-lgtest",
+    "-lz",
+    "-llz4",
+    "-lxxhash",
+    "-lzstd",
+    "-lboost_filesystem",
+    "-lboost_atomic",
+    "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+    "-pthread",
+    "-o",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/default-tests"
+  ]
+}

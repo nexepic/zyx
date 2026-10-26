@@ -392,6 +392,52 @@ namespace graph::storage {
 								  "relocatable typed record placement requires candidate pools");
 		}
 		validateRecordSelectionRequest(recordBytes, ownerKind);
+		// The priority pass can return early, but the whole request must still
+		// satisfy the existing candidate identity contract before any selection.
+		if (std::ranges::any_of(segmentIds, [](SegmentId id) { return !id.isValid(); }))
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+				"relocatable typed record placement contains an invalid Segment ID");
+		// Completed scan images may have hundreds of native-only pools in the
+		// same numeric owner namespace as ordinary ROW pages. A cold ROW writer
+		// must not authenticate every native payload merely to find one usable
+		// ROW page. A sampled owner is only an ordering hint: a selected pool
+		// still goes through the complete existing placement validation below.
+		// If the priority pass finds nothing (or I/O changes), retain the full
+		// search. BUILDING keeps its global best-fit space policy unchanged.
+		if (RSS_SCAN_PATH_FORMAT_ENABLED && ownerKind == PageOwnerKind::POK_PROPERTY &&
+			snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
+			!(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING)) {
+			const uint64_t epoch = metadata_.dataMutationEpoch();
+			if (epoch != UINT64_MAX) for (const SegmentId segmentId : segmentIds) {
+				if (!segmentId.isValid())
+					throw FormatException(FormatError::FERR_INVALID_HEADER,
+						"relocatable typed record placement contains an invalid Segment ID");
+				if (availableFrameCount(snapshot, segmentId) == 0U) continue;
+				bool nativeHint = false;
+				try {
+					const auto pool = metadata_.findCatalog(snapshot, segmentId);
+					const auto header = pool_.readPoolHeader(pool);
+					for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
+						if (!SharedPagePoolFrameMap::isAllocated(header, frame)) continue;
+						const auto sampled = pool_.readPageOwner(pool, frame);
+						nativeHint = sampled.generation == pool.generation && sampled.kind == PageOwnerKind::POK_HYBRID_PROPERTY;
+						break;
+					}
+				} catch (const FormatException &) {
+					// An undecodable hint cannot exclude a pool. The ordinary index
+					// builder below resolves retired/private versus damaged pages.
+				}
+				if (metadata_.dataMutationEpoch() != epoch) break;
+				if (nativeHint) {
+					debug::PerfTrace::addValue("storage.slotted.native_row_pool_hints", 1);
+					continue;
+				}
+				const auto candidate = findBestFitRecordLocation(snapshot, segmentId, ownerKind, recordBytes);
+				if (metadata_.dataMutationEpoch() != epoch) break;
+				if (candidate) return SlottedPagePlacement{
+					candidate->location.segment_id, candidate->location.page_id, candidate->location.free_bytes};
+			}
+		}
 		std::optional<RecordPlacement> best;
 		for (const SegmentId segmentId: segmentIds) {
 			if (!segmentId.isValid()) {

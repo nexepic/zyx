@@ -1,0 +1,244 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 113 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 42 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery
+[       OK ] BuildingScanMembershipTest.PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery (17 ms)
+[ RUN      ] BuildingScanMembershipTest.DataCompactionSkipsAnOrdinaryMixedOwnerIndexPoolWithoutChangingEitherTree
+[       OK ] BuildingScanMembershipTest.DataCompactionSkipsAnOrdinaryMixedOwnerIndexPoolWithoutChangingEitherTree (19 ms)
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (8 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (3 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup (10 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo (5 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (1 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (5 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (9 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (3 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (2 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (2 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (3 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (15 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (3 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose
+[       OK ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose (42 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (64 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[       OK ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (213 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix (135 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback
+[       OK ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback (6 ms)
+[ RUN      ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication
+[       OK ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication (442 ms)
+[ RUN      ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup
+[       OK ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup (36 ms)
+[ RUN      ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary
+[       OK ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+[       OK ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization (63 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites
+[       OK ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites (16 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget (11 ms)
+[ RUN      ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage
+[       OK ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage (24 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests (2 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots (96 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection (90 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot (185 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority
+[       OK ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority (34 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding
+[       OK ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding (32 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (152 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate
+[       OK ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate (24 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity (291 ms)
+[ RUN      ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes
+[       OK ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes (7 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages
+[       OK ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages (17 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption
+[       OK ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption (37 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (36 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource
+[       OK ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource (117 ms)
+[----------] 42 tests from BuildingScanMembershipTest (2302 ms total)
+
+[----------] 45 tests from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop
+[       OK ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop (51 ms)
+[ RUN      ] ScanReadProofTest.PublicWritableLifecycleFallsBackBeforeOutputAndReopensWithFreshMembershipProof
+[       OK ] ScanReadProofTest.PublicWritableLifecycleFallsBackBeforeOutputAndReopensWithFreshMembershipProof (265 ms)
+[ RUN      ] ScanReadProofTest.PublicPropertyTypeChangesAndLargeValuesPreservePinnedAndReopenedReads
+[       OK ] ScanReadProofTest.PublicPropertyTypeChangesAndLargeValuesPreservePinnedAndReopenedReads (357 ms)
+[ RUN      ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity
+[       OK ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity (24153 ms)
+[ RUN      ] ScanReadProofTest.PublicScalarIndexAndConstraintClosureSurviveNativeUpdatesDeletionAndReopen
+[       OK ] ScanReadProofTest.PublicScalarIndexAndConstraintClosureSurviveNativeUpdatesDeletionAndReopen (856 ms)
+[ RUN      ] ScanReadProofTest.PublicThousandRowEdgesKeepPinnedPropertiesAndDetachWithNativeNodeFields
+[       OK ] ScanReadProofTest.PublicThousandRowEdgesKeepPinnedPropertiesAndDetachWithNativeNodeFields (586 ms)
+[ RUN      ] ScanReadProofTest.SingleRawCachePageUsesOwnedFallbackForWideFieldVerificationAndQueries
+[       OK ] ScanReadProofTest.SingleRawCachePageUsesOwnedFallbackForWideFieldVerificationAndQueries (341 ms)
+[ RUN      ] ScanReadProofTest.NodeProofDoesNotGrantRowEdgeAuthorityAndFullOpenVerificationRemainsExplicit
+[       OK ] ScanReadProofTest.NodeProofDoesNotGrantRowEdgeAuthorityAndFullOpenVerificationRemainsExplicit (866 ms)
+[ RUN      ] ScanReadProofTest.PublicVectorClosurePreservesOldPinAndCoordinatesNativeDeletionAndRowCreation
+[       OK ] ScanReadProofTest.PublicVectorClosurePreservesOldPinAndCoordinatesNativeDeletionAndRowCreation (400 ms)
+[ RUN      ] ScanReadProofTest.AdjacentGroupsCanReuseColdRemainderPoolsWithoutMutationAuthority
+[       OK ] ScanReadProofTest.AdjacentGroupsCanReuseColdRemainderPoolsWithoutMutationAuthority (319 ms)
+[ RUN      ] ScanReadProofTest.TerminalPropertylessNodeRemainsVisibleAndSuppliesAbsentKnownFields
+[       OK ] ScanReadProofTest.TerminalPropertylessNodeRemainsVisibleAndSuppliesAbsentKnownFields (278 ms)
+[ RUN      ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof
+[       OK ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof (214 ms)
+[ RUN      ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership
+[       OK ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership (216 ms)
+[ RUN      ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty
+[       OK ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty (237 ms)
+[ RUN      ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof
+[       OK ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof (282 ms)
+[ RUN      ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots
+[       OK ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots (302 ms)
+[ RUN      ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback
+[       OK ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback (342 ms)
+[ RUN      ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot
+[       OK ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot (286 ms)
+[ RUN      ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge
+[       OK ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge (367 ms)
+[ RUN      ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication
+[       OK ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication (251 ms)
+[ RUN      ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget
+[       OK ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget (258 ms)
+[ RUN      ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership
+[       OK ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership (349 ms)
+[ RUN      ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership
+[       OK ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership (306 ms)
+[ RUN      ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback
+[       OK ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback (323 ms)
+[ RUN      ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether
+[       OK ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether (277 ms)
+[ RUN      ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback
+[       OK ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback (499 ms)
+[ RUN      ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile
+[       OK ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile (37 ms)
+[ RUN      ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority
+[       OK ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority (31 ms)
+[ RUN      ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds
+[       OK ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds (43 ms)
+[ RUN      ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority
+[       OK ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority (45 ms)
+[ RUN      ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification
+[       OK ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification (42 ms)
+[ RUN      ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch
+[       OK ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch (50 ms)
+[ RUN      ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification
+[       OK ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification (174 ms)
+[ RUN      ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues
+[       OK ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues (285 ms)
+[ RUN      ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority
+[       OK ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority (223 ms)
+[ RUN      ] ScanReadProofTest.MultiFieldBatchSharesBoundedDirectoryReadsWithoutLeakingOwnerAuthority
+[       OK ] ScanReadProofTest.MultiFieldBatchSharesBoundedDirectoryReadsWithoutLeakingOwnerAuthority (1014 ms)
+[ RUN      ] ScanReadProofTest.MixedNativeAndColdFieldsDeclineBeforeAnyGroupedPrefixIsExposed
+[       OK ] ScanReadProofTest.MixedNativeAndColdFieldsDeclineBeforeAnyGroupedPrefixIsExposed (200 ms)
+[ RUN      ] ScanReadProofTest.DirectoryBatchWindowCannotKeepAProducerGrantAcrossAnIoEpochChange
+[       OK ] ScanReadProofTest.DirectoryBatchWindowCannotKeepAProducerGrantAcrossAnIoEpochChange (1087 ms)
+[ RUN      ] ScanReadProofTest.CompletionLeavesManagedInsertionSummariesFreshAndActual
+[       OK ] ScanReadProofTest.CompletionLeavesManagedInsertionSummariesFreshAndActual (12915 ms)
+[ RUN      ] ScanReadProofTest.BoundedDerivedSummaryMaintenancePreservesNativeFieldsAndOldPins
+[       OK ] ScanReadProofTest.BoundedDerivedSummaryMaintenancePreservesNativeFieldsAndOldPins (366 ms)
+[ RUN      ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups
+[       OK ] ScanReadProofTest.NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups (14279 ms)
+[ RUN      ] ScanReadProofTest.NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool
+[       OK ] ScanReadProofTest.NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool (9814 ms)
+[ RUN      ] ScanReadProofTest.NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites
+[       OK ] ScanReadProofTest.NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites (473 ms)
+[ RUN      ] ScanReadProofTest.NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch
+[       OK ] ScanReadProofTest.NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch (8620 ms)
+[ RUN      ] ScanReadProofTest.ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin
+[       OK ] ScanReadProofTest.ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin (558 ms)
+[----------] 45 tests from ScanReadProofTest (83263 ms total)
+
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (0 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges
+[       OK ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageReleasesPoolPinsAcrossFailureAndReadModes
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageReleasesPoolPinsAcrossFailureAndReadModes (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageSurvivesPoolDisableAndMoveAssignment
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageSurvivesPoolDisableAndMoveAssignment (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners (1 ms)
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest (50 ms total)
+
+[----------] Global test environment tear-down
+[==========] 113 tests from 4 test suites ran. (85617 ms total)
+[  PASSED  ] 113 tests.

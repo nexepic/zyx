@@ -1,0 +1,10 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPagePool.cpp.o
+/workspace/zyx/src/storage/relocatable/allocation/SlottedPagePool.cpp:703:4: warning: misleading indentation; statement is not part of the previous 'if' [-Wmisleading-indentation]
+  703 |                         if (!rebuilt.pages.pages
+      |                         ^
+/workspace/zyx/src/storage/relocatable/allocation/SlottedPagePool.cpp:702:13: note: previous statement is here
+  702 |             if (native) continue;
+      |             ^
+1 warning generated.
+[2/3] Linking CXX static library libzyx_core.a

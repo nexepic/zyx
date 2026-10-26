@@ -327,3 +327,7 @@ native procedure 行绝不授权删除不相关的 legacy consumer。
 | 性能／完成率 | 按用户新要求完成实施和客观报告，不以超过 Kuzu 为前提；未达到的倍率如实报告 |
 
 完整证据及版本身份见 `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`。默认 5／31 不自动采用实验布局；空间案例不是全体数据的承诺。历史逐轮状态已归档，不再作为当前能力限制。C0 的更广泛 API ledger 完成标准与跨平台发布门禁仍独立，不被本轮 P7 完成代替。
+
+## 当前有界扫描交付（2026-10-26）
+
+`scan-path-20261023` 的 S2/S3 已验收，优化计划进度为 75%；该进度与本页 C0–C7／三平台门禁独立。用户明确取消固定 5 倍要求后，选定 15/41 的持久 Node 成员与类型字段供给，移除 A 的跨批 ROW pin。公开 SDK 的完成镜像读写、标签/属性变化、旧 pin、发布恢复、显式离线转换及完整 integrity 已有针对性证据，见 `20261026-s3-production-lifecycle/acceptance.json`。默认仍为 5/31，原 13/39 边界不变；15/41 需显式实验构建和离线转换，不接纳 BUILDING，不自动迁移。当前仅执行 Linux 验证，未声明 macOS/Windows/WASM 通过。S4/S5 性能守护、最终总成本与 Kuzu 比较仍在进行；不能以 S3 通过宣称性能目标或全部原生能力门禁完成。

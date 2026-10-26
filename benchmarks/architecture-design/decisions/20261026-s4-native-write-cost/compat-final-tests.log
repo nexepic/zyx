@@ -1,0 +1,193 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 89 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 56 tests from HybridPropertyReadContextTest
+[ RUN      ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime
+[       OK ] HybridPropertyReadContextTest.AbsentDurableDescriptorPreservesRowAuthorityAndChecksPinLifetime (1 ms)
+[ RUN      ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext
+[       OK ] HybridPropertyReadContextTest.ReplacingTheCallerPinVariableDoesNotRebindAnExistingContext (2 ms)
+[ RUN      ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot
+[       OK ] HybridPropertyReadContextTest.ExistingPinCanAttachInsideTheMetadataWriterWithoutOpeningAnotherSnapshot (0 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaRequiresTheExperimentalFormatAndARealColumnSource (0 ms)
+[ RUN      ] HybridPropertyReadContextTest.CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions
+[       OK ] HybridPropertyReadContextTest.CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions (11 ms)
+[ RUN      ] HybridPropertyReadContextTest.OwningCompatibilityDecodeRetainsCallerOutputCreditAndRefundsTemporaries
+[       OK ] HybridPropertyReadContextTest.OwningCompatibilityDecodeRetainsCallerOutputCreditAndRefundsTemporaries (17 ms)
+[ RUN      ] HybridPropertyReadContextTest.IndependentLargeFieldAuthenticatesContentAndRetainsOnlyOutputCredit
+[       OK ] HybridPropertyReadContextTest.IndependentLargeFieldAuthenticatesContentAndRetainsOnlyOutputCredit (17 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeRowLargeCarrierWithValidManifestAndHashStillFailsSingleFieldDecode
+[       OK ] HybridPropertyReadContextTest.WholeRowLargeCarrierWithValidManifestAndHashStillFailsSingleFieldDecode (13 ms)
+[ RUN      ] HybridPropertyReadContextTest.MembershipCountsTokensAndPresenceDoNotDecodePropertyValues
+[       OK ] HybridPropertyReadContextTest.MembershipCountsTokensAndPresenceDoNotDecodePropertyValues (12 ms)
+[ RUN      ] HybridPropertyReadContextTest.LargeNonNullProjectionAuthenticatesWithoutMaterializingTheValueTree
+[       OK ] HybridPropertyReadContextTest.LargeNonNullProjectionAuthenticatesWithoutMaterializingTheValueTree (16 ms)
+[ RUN      ] HybridPropertyReadContextTest.MissingSourceAndCompetingRowFailClosed
+[       OK ] HybridPropertyReadContextTest.MissingSourceAndCompetingRowFailClosed (10 ms)
+[ RUN      ] HybridPropertyReadContextTest.FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage
+[       OK ] HybridPropertyReadContextTest.FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage (10 ms)
+[ RUN      ] HybridPropertyReadContextTest.FullCollectionLargeAdmissionDoesNotAllocateDecodedValues
+[       OK ] HybridPropertyReadContextTest.FullCollectionLargeAdmissionDoesNotAllocateDecodedValues (16 ms)
+[ RUN      ] HybridPropertyReadContextTest.SelectedBatchPreservesRowPositionsCountsNullsAndSinkOrdinals
+[       OK ] HybridPropertyReadContextTest.SelectedBatchPreservesRowPositionsCountsNullsAndSinkOrdinals (26 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeScalarBatchBypassesOwningValuesAndRefundsOnRefusalAndRetry
+[       OK ] HybridPropertyReadContextTest.NativeScalarBatchBypassesOwningValuesAndRefundsOnRefusalAndRetry (10 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawBoolColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawBoolColumnPreservesAuthenticatedBitsWithoutOwningValues (9 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawDoubleNaNColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawDoubleNaNColumnPreservesAuthenticatedBitsWithoutOwningValues (9 ms)
+[ RUN      ] HybridPropertyReadContextTest.RawDoubleNegativeZeroColumnPreservesAuthenticatedBitsWithoutOwningValues
+[       OK ] HybridPropertyReadContextTest.RawDoubleNegativeZeroColumnPreservesAuthenticatedBitsWithoutOwningValues (10 ms)
+[ RUN      ] HybridPropertyReadContextTest.SelectedOnlyBatchDoesNotEnumerateUnrequestedFieldMemberships
+[       OK ] HybridPropertyReadContextTest.SelectedOnlyBatchDoesNotEnumerateUnrequestedFieldMemberships (8 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaUsesActualNativeSourceAndRetainsOnlyItsBoundedPlan
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaUsesActualNativeSourceAndRetainsOnlyItsBoundedPlan (7 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaDemotesOnlyTheChangedFieldAndReportsGroupEffects
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaDemotesOnlyTheChangedFieldAndReportsGroupEffects (9 ms)
+[ RUN      ] HybridPropertyReadContextTest.ColumnDeltaKeepsRowDoubleNoopRulesAndExactReplacementBits
+[       OK ] HybridPropertyReadContextTest.ColumnDeltaKeepsRowDoubleNoopRulesAndExactReplacementBits (9 ms)
+[ RUN      ] HybridPropertyReadContextTest.EqualNanColumnBitsStillRequireAChange
+[       OK ] HybridPropertyReadContextTest.EqualNanColumnBitsStillRequireAChange (13 ms)
+[ RUN      ] HybridPropertyReadContextTest.CompatibleColumnWritesCoalesceOwnersAndGroupIntoOneActualPrivateFrame
+[       OK ] HybridPropertyReadContextTest.CompatibleColumnWritesCoalesceOwnersAndGroupIntoOneActualPrivateFrame (11 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeColumnCowQuotaAndLateCancellationRefundImagesForRetry
+[       OK ] HybridPropertyReadContextTest.NativeColumnCowQuotaAndLateCancellationRefundImagesForRetry (13 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityStreamsActualOwnershipWithoutDecodingValues
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityStreamsActualOwnershipWithoutDecodingValues (35 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsValidlyEncodedWrongGroupCounts
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsValidlyEncodedWrongGroupCounts (31 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsSelectorWithoutBodyEvenWhenHeaderCountMatches
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsSelectorWithoutBodyEvenWhenHeaderCountMatches (29 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsColumnDirectoryOutsideRegisteredGroups
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsColumnDirectoryOutsideRegisteredGroups (24 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityAuthenticatesSingleLargeBodyWithoutOwningValueDecode
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityAuthenticatesSingleLargeBodyWithoutOwningValueDecode (65 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsAuthenticatedWholeRowLargeCarrier
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityRejectsAuthenticatedWholeRowLargeCarrier (41 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityVerifiesLargeFieldBeyondItsWorkspaceWithoutOwningBody (94 ms)
+[ RUN      ] HybridPropertyReadContextTest.LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry
+[       OK ] HybridPropertyReadContextTest.LargeAdmissionAndNonNullReadsUseBoundedBuffersAndRefundBeforeRetry (45 ms)
+[ RUN      ] HybridPropertyReadContextTest.DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess
+[       OK ] HybridPropertyReadContextTest.DirectoryIntegrityCancellationAndMissingSourceNeverReturnSuccess (39 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateGroupSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateGroupSlot (35 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateColumnSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateColumnSlot (45 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateExtensionSlot
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsUnroutedDuplicateExtensionSlot (29 ms)
+[ RUN      ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsStaleFreeHintWithoutHidingItAsLogicalCorruption
+[       OK ] HybridPropertyReadContextTest.PhysicalOwnershipRejectsStaleFreeHintWithoutHidingItAsLogicalCorruption (48 ms)
+[ RUN      ] HybridPropertyReadContextTest.EmptyNativePageMayRemainReusableWithoutADescriptor
+[       OK ] HybridPropertyReadContextTest.EmptyNativePageMayRemainReusableWithoutADescriptor (15 ms)
+[ RUN      ] HybridPropertyReadContextTest.LiveNativePageCannotClaimOwnershipWithoutADescriptor
+[       OK ] HybridPropertyReadContextTest.LiveNativePageCannotClaimOwnershipWithoutADescriptor (16 ms)
+[ RUN      ] HybridPropertyReadContextTest.SharedLargeReferenceWalkAuthenticatesMetadataWithinBudgetWithoutReadingBodies
+[       OK ] HybridPropertyReadContextTest.SharedLargeReferenceWalkAuthenticatesMetadataWithinBudgetWithoutReadingBodies (15 ms)
+[ RUN      ] HybridPropertyReadContextTest.NativeReferenceWalkRejectsWrongManifestIdentityBeforeEmission
+[       OK ] HybridPropertyReadContextTest.NativeReferenceWalkRejectsWrongManifestIdentityBeforeEmission (16 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes
+[       OK ] HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes (11 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation
+[       OK ] HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation (14 ms)
+[ RUN      ] HybridPropertyReadContextTest.FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement
+[       OK ] HybridPropertyReadContextTest.FieldDemotionRequiresTheSameBatchLargeFieldResolverForOversizedReplacement (23 ms)
+[ RUN      ] HybridPropertyReadContextTest.MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes
+[       OK ] HybridPropertyReadContextTest.MergedColumnRemovalsApplyTheThresholdToFinalPresenceAndCoordinateAllDirectoryDeletes (17 ms)
+[ RUN      ] HybridPropertyReadContextTest.MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking
+[       OK ] HybridPropertyReadContextTest.MergedColumnReplacementsApplyEverySlotAndRejectOverlapsWithoutLeaking (24 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting
+[       OK ] HybridPropertyReadContextTest.InverseConversionOwnsActualNativeRowsAndTheirAdmissionWithoutWriting (74 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode
+[       OK ] HybridPropertyReadContextTest.InverseConversionPreflightRejectsOversizedMembershipsBeforeAnyValueDecode (8 ms)
+[ RUN      ] HybridPropertyReadContextTest.InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently
+[       OK ] HybridPropertyReadContextTest.InverseConversionRejectsWrongGroupQuotaAndCancellationThenRetriesIndependently (69 ms)
+[ RUN      ] HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges
+[       OK ] HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges (32 ms)
+[ RUN      ] HybridPropertyReadContextTest.MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion
+[       OK ] HybridPropertyReadContextTest.MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion (13 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce (20 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionRetainsQualifiedColumnsAndCanEraseTheFinalGroup (66 ms)
+[ RUN      ] HybridPropertyReadContextTest.WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures
+[       OK ] HybridPropertyReadContextTest.WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures (20 ms)
+[ RUN      ] HybridPropertyReadContextTest.ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns
+[       OK ] HybridPropertyReadContextTest.ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns (13 ms)
+[----------] 56 tests from HybridPropertyReadContextTest (1315 ms total)
+
+[----------] 8 tests from HybridPropertyColumnReadReuseTest
+[ RUN      ] HybridPropertyColumnReadReuseTest.SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource
+[       OK ] HybridPropertyColumnReadReuseTest.SelectedOwnersDecodeOneColumnAndIntegrityStillReadsItsSource (14 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction
+[       OK ] HybridPropertyColumnReadReuseTest.ReentrantColumnVisitorOwnsItsSourceAcrossCacheEviction (13 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner
+[       OK ] HybridPropertyColumnReadReuseTest.OptionalCachePressureUsesUncachedReadsAndRefundsItsOriginalOwner (11 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits
+[       OK ] HybridPropertyColumnReadReuseTest.WriteEpochReauthenticatesPinnedColumnAndCancellationPrecedesHits (14 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullEntityCursorRetainsOnlyItsChargedColumnWindowAcrossOwnersAndMoves
+[       OK ] HybridPropertyColumnReadReuseTest.FullEntityCursorRetainsOnlyItsChargedColumnWindowAcrossOwnersAndMoves (24 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.CachedScalarOwnsSelectedBitsAcrossReentrantEvictionAndResize
+[       OK ] HybridPropertyColumnReadReuseTest.CachedScalarOwnsSelectedBitsAcrossReentrantEvictionAndResize (13 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullColumnAdmissionOwnsCellsAcrossReentryAndRejectsBeforeSlots
+[       OK ] HybridPropertyColumnReadReuseTest.FullColumnAdmissionOwnsCellsAcrossReentryAndRejectsBeforeSlots (20 ms)
+[ RUN      ] HybridPropertyColumnReadReuseTest.FullColumnCollectionPreservesNullBooleanAndDoubleBits
+[       OK ] HybridPropertyColumnReadReuseTest.FullColumnCollectionPreservesNullBooleanAndDoubleBits (17 ms)
+[----------] 8 tests from HybridPropertyColumnReadReuseTest (131 ms total)
+
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (0 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (0 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (0 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges
+[       OK ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageReleasesPoolPinsAcrossFailureAndReadModes
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageReleasesPoolPinsAcrossFailureAndReadModes (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageSurvivesPoolDisableAndMoveAssignment
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedOwnedPageSurvivesPoolDisableAndMoveAssignment (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners (1 ms)
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest (38 ms total)
+
+[----------] Global test environment tear-down
+[==========] 89 tests from 3 test suites ran. (1485 ms total)
+[  PASSED  ] 89 tests.

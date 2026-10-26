@@ -1,0 +1,82 @@
+{
+  "tests": 6,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T06:21:50Z",
+  "time": "42.069s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanReadProofTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T06:21:50Z",
+      "time": "42.069s",
+      "testsuite": [
+        {
+          "name": "NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:21:50Z",
+          "time": "0.876s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NativeRowFallbackAvoidsRebuildingUnrelatedFieldPoolsAndOwnerGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1436,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:21:51Z",
+          "time": "12.413s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NativeRowPlacementStopsAfterAnAuthenticatedCompatiblePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:22:03Z",
+          "time": "11.354s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NativeGroupAbsenceDoesNotRetagMixedNodeAndEdgeWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1503,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:22:15Z",
+          "time": "0.788s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NativePoolHintFallsBackWhenAnObserverChangesTheIoEpoch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1542,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:22:16Z",
+          "time": "15.814s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreservesOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1574,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T06:22:31Z",
+          "time": "0.82s",
+          "classname": "ScanReadProofTest"
+        }
+      ]
+    }
+  ]
+}

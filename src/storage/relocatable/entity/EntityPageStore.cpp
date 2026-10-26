@@ -1018,7 +1018,11 @@ namespace graph::storage {
 		}
 		for (const auto &[segmentId, requiredFrames]: propertyReplacementDemand) {
 			const CatalogEntry pool = metadata_.findCatalog(snapshot, SegmentId(segmentId));
-			if (requiredFrames > allocator_.availableFrameCount(pool)) {
+			// Native Property pools can also contain field pages. Only their
+			// joined metadata writer may reconcile them; its existing fresh-pool
+			// COW fallback handles an exhausted source without this generic pass.
+			if (!snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
+				requiredFrames > allocator_.availableFrameCount(pool)) {
 				allocator_.reclaimRetiredFrames(pool.segment_id);
 			}
 		}
@@ -2094,7 +2098,7 @@ namespace graph::storage {
             // This adapter cannot authorize ordinary pool reconciliation for
             // native graphs. Keep the original publication error; the typed
             // metadata writer/recovery owns native candidate-frame cleanup.
-            if (hybridTopology) throw;
+            if (hybridTopology || snapshot.superblock().hybrid_property_descriptor_root.isValid()) throw;
 			// A callback may already have written a candidate frame when another pool
 			// fails or A/B Superblock publication is interrupted. Once metadata releases
 			// its writer guard, reconciliation restores the currently reachable generation.
