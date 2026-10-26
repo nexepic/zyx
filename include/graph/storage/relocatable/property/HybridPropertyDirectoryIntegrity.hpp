@@ -8,6 +8,8 @@
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyLargeFieldInspection.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
+#include "graph/storage/relocatable/entity/ScanMembershipDirectory.hpp"
+#include "graph/storage/relocatable/entity/ScanMembershipSource.hpp"
 
 namespace graph::storage {
 // Verifies the descriptor-bound logical graph of group/owner/column/extension
@@ -19,6 +21,9 @@ public:
     using LargeValueVisitor = std::function<void(const LargeValueRef &)>;
     struct Report {
         uint64_t groups = 0, memberships = 0, columns = 0, extensions = 0, large_values = 0, directory_selectors = 0, cold_blocks = 0, cold_rows = 0;
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        uint64_t scan_groups = 0, scan_nodes = 0;
+#endif
     };
     [[nodiscard]] static Report verify(const HybridPropertyReadContext &context,
         const MetadataSnapshotPin &snapshot, std::shared_ptr<std::pmr::memory_resource> memory,
@@ -67,6 +72,7 @@ public:
             add(report.columns, local.columns); add(report.extensions, local.extensions); add(report.large_values, local.large_values);
             add(report.cold_blocks, local.cold_blocks); add(report.cold_rows, local.cold_rows);
         }
+        verifyScanMembership(context, snapshot, memory, report);
         context.check();
         return report;
     }
@@ -177,7 +183,22 @@ public:
                     static_cast<void>(authenticated);
                     context.check(); visitLarge(*extension.reference());
                 }
-            } else require(false, "native field page contains an unknown live record type");
+            }
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+            else if (magic == ScanBlockMembership::MAGIC) {
+                const auto group = LittleEndianCodec::readU64(bytes, 24);
+                static_cast<void>(ScanBlockMembership::decode(bytes, snapshot.superblock().database_id,
+                    context.descriptor_->semantic_generation, group));
+                const auto binding = ScanMembershipDirectoryCodec::bind(*context.descriptor_, snapshot);
+                ScanMembershipDirectoryMap map(binding.root.index_id, context.trees_, context.metadata_, binding);
+                utils::OwnedHeapReservation boundary(memory);
+                const auto value = map.find(snapshot, ScanMembershipDirectoryCodec::key(group),
+                    [&](size_t count) { boundary.set(count); }, context.cancellation_);
+                require(value && HybridPropertyDirectoryCodec::decodeLocator(*value) == reference,
+                    "scan membership slot is not owned by its exact directory locator");
+            }
+#endif
+            else require(false, "native field page contains an unknown live record type");
             add(records, 1);
         });
         // Zero-live-slot pages may remain allocated for reuse after the last
@@ -185,6 +206,65 @@ public:
         context.check(); return records;
     }
 private:
+    static void verifyScanMembership(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,
+        const std::shared_ptr<std::pmr::memory_resource> &memory, Report &report) {
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        using Map = ScanMembershipDirectoryMap;
+        constexpr auto ordinal = static_cast<size_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
+        const auto indexId = hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
+        const bool hasRoot = context.descriptor_ && context.descriptor_->roots[ordinal].page_id.isValid();
+        // Both streams retain at most one group and one tree cursor. Reserve
+        // a finite source grant in the caller before opening its local account;
+        // this is prepaid capacity, not a second uncharged query allowance.
+        constexpr size_t sourceCapacity = 256U * 1024U;
+        utils::OwnedHeapReservation sourceGrant(memory, sourceCapacity);
+        if (!sourceGrant.governed() && memory.get() != std::pmr::new_delete_resource())
+            throw std::invalid_argument("scan integrity source requires caller admission authority or the legacy unbounded allocator");
+        utils::OwnedHeapReservation sourceFrontier(memory, 16U * 1024U);
+        require(hasRoot == bool(context.metadata_.findIndexRootOptional(snapshot, indexId)),
+            "scan membership namespace has no matching descriptor ownership");
+        auto sourceMemory = std::make_shared<query::execution::MaterializedByteBudget>(sourceCapacity);
+        EntityPageStore entities(context.source_io_, context.metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        SlottedPagePool sourcePages(context.source_io_, context.metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        EntityLabelSetStore labels(context.source_io_, context.metadata_, sourcePages, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        std::optional<BTreeIndex> tree;
+        std::optional<BTreeIndex::RangeCursor> cursor;
+        if (hasRoot) {
+            tree.emplace(indexId, context.trees_, context.metadata_, BTreeLeafValueLayout::BLVL_EMPTY,
+                ScanMembershipDirectoryCodec::bind(*context.descriptor_, snapshot));
+            cursor.emplace(tree->openRangeCursor(snapshot, std::nullopt, bound(),
+                BufferPoolReadHint::BPRH_SEQUENTIAL, false, context.cancellation_));
+        }
+        utils::OwnedHeapReservation boundary(memory);
+        const auto admit = [&](size_t count) { boundary.set(count); };
+        const auto counts = scan_candidate_detail::streamPrimaryMembership(context.metadata_, entities, labels,
+            snapshot, sourceMemory, [&] { context.check(); }, [&](const ScanBlockMembership &expected) {
+                utils::OwnedAllocationScope destinationOwner(memory);
+                const auto entry = cursor ? cursor->next(std::ref(admit)) : std::nullopt;
+                require(bool(entry), "scan membership omits a live primary Node group");
+                const auto decoded = Map::decode(*entry);
+                require(ScanMembershipDirectoryCodec::decodeKey(decoded.key) == expected.group_id,
+                    "scan membership directory contains missing, duplicate or unordered primary groups");
+                const auto slot = HybridPropertyDirectoryCodec::decodeLocator(decoded.value);
+                const auto page = context.fields_.read(snapshot, slot.page_id);
+                const auto actual = page.view().readScanMembership(slot, snapshot.superblock().database_id,
+                    expected.group_id, context.descriptor_->semantic_generation);
+                require(actual.live == expected.live && actual.labels_from_primary == expected.labels_from_primary &&
+                    actual.label_count == expected.label_count &&
+                    std::equal(expected.labels.begin(), expected.labels.begin() + expected.label_count, actual.labels.begin()),
+                    "scan membership disagrees with complete primary liveness or labels");
+                add(report.scan_groups, 1); add(report.scan_nodes, std::popcount(actual.live));
+            });
+        require(!cursor || !cursor->next(std::ref(admit)), "scan membership has an orphan trailing group");
+        require(counts.groups == report.scan_groups && counts.nodes == report.scan_nodes &&
+            (!context.descriptor_ ? counts.nodes == 0 :
+                counts.groups == context.descriptor_->scan_membership_group_count &&
+                counts.nodes == context.descriptor_->scan_live_node_count),
+            "scan membership descriptor counts disagree with its complete primary coverage");
+#else
+        static_cast<void>(context); static_cast<void>(snapshot); static_cast<void>(memory); static_cast<void>(report);
+#endif
+    }
     template<class Map>
     static void requireLocator(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,
         EntityPropertyOwnerKind kind, size_t role, const typename Map::Key &key,

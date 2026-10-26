@@ -1,0 +1,21 @@
+{
+  "accepted_progress_percent": 15,
+  "source_sha256": {
+    "apps/scan_convert/main.cpp": "ee3f3dc25a881b879647ea315c034f41804e9403ac8a0a9ee965d98c0bf67ffc",
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "d9c22ee4f72f15804e9fc6733c10f98323413095ecc1485786418f5319f82c84",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "c23786f8f484d0b9665322d4bbdf18bae63a86257a68356b326c8fdaae4ff772",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "a53eb08edcea3e0c6433a54414f43aec2ac64037d454632be4b4f54f31bdbc7b"
+  },
+  "scan_module_cases": 76,
+  "scan_failures": 0,
+  "compatible_field_relocation_cases": 18,
+  "compatible_failures": 0,
+  "wrong_format_diagnostic": "An additional 13/39 fixture was compiled for 15/41 without complete membership: 17 of its 18 cases correctly failed full integrity. Raw failures retained; fixture tested in its own 13/39 profile. The 76 scan cases passed in both runs and are counted once.",
+  "v8_stop_evidence": "results/20261024-work-scan/diagnostics/v8-construction/stopped-unadmitted.json",
+  "v8_blocker": "live ROW property page above actual whole-file 90% length boundary; native-only relocation cannot move it",
+  "fix": "Existing single-pool coordinator preserves all ROW logical PageIds/slots, validates owner/CRC/layout, rebinds physical generation/LSN, publishes routes and pin-protected retirement atomically. 13/39 ROW admission stays disabled. Data compaction precedes metadata evacuation.",
+  "tests": "Node/Edge values, binary LargeValue reference, old-pin routes/values, cancellation zero writes, full integrity; compatibility A/B recovery, quotas, physical reuse",
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "real_v9_images": "construction running; not admitted"
+}

@@ -54,13 +54,13 @@ namespace graph::storage {
 		// Once the bootstrap header is published, this replaces the physical-root
 		// collector. Bootstrap pages themselves are validated as traversal state,
 		// but never returned as logical metadata routes.
-		[[nodiscard]] std::vector<MetadataPageRoute>
+		[[nodiscard]] utils::OwnedStdVector<MetadataPageRoute>
 		collectRoutesFromRouteBranch(const Superblock &superblock, PhysicalPageRef root) const;
 		// Returns the physical plumbing frames of one fully validated route branch.
 		// The bootstrap header and all metadata route targets are deliberately
 		// excluded so callers can identify a pool that is safe to refresh as a
 		// whole without relocating typed metadata pages.
-		[[nodiscard]] std::vector<PhysicalPageRef>
+		[[nodiscard]] utils::OwnedStdVector<PhysicalPageRef>
 		collectRouteBranchFrames(const Superblock &superblock, PhysicalPageRef root) const;
 		// Combines the stable current graph with final COW pairs recorded by this
 		// batch. This is the initial migration writer; later publications will

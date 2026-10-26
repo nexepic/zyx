@@ -1,0 +1,7 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:252:21: error: calling a private constructor of class 'graph::storage::LargeValueStore'
+  252 |     LargeValueStore large(targetIo(), store(), pin);
+      |                     ^
+/workspace/zyx/include/graph/storage/relocatable/property/LargeValueStore.hpp:242:9: note: declared private here
+  242 |         LargeValueStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+      |         ^
+1 error generated.

@@ -1,0 +1,14 @@
+source_generation=35261 pool=1025 file_bytes=339083264
+/tmp/zyx-file-limit-throw-trace.so(__cxa_throw+0x46) [0x7fd80de201a6]
+/tmp/zyx-private-metadata-evacuation-probe(+0x1d733) [0x562c1cbaa733]
+/tmp/zyx-private-metadata-evacuation-probe(+0x450c6c) [0x562c1cfddc6c]
+/tmp/zyx-private-metadata-evacuation-probe(+0x453b7e) [0x562c1cfe0b7e]
+/tmp/zyx-private-metadata-evacuation-probe(+0x47ad23) [0x562c1d007d23]
+/tmp/zyx-private-metadata-evacuation-probe(+0x2f57c) [0x562c1cbbc57c]
+/tmp/zyx-private-metadata-evacuation-probe(+0x2f779) [0x562c1cbbc779]
+/tmp/zyx-private-metadata-evacuation-probe(+0x1ea67b) [0x562c1cd7767b]
+/tmp/zyx-private-metadata-evacuation-probe(+0x17017) [0x562c1cba4017]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29ca8) [0x7fd80d755ca8]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x85) [0x7fd80d755d65]
+/tmp/zyx-private-metadata-evacuation-probe(+0x168e1) [0x562c1cba38e1]
+StorageIO configured database file byte limit exceeded: No space left on device

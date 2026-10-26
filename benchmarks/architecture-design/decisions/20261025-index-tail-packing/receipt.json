@@ -1,0 +1,39 @@
+{
+  "accepted_progress_percent": 15,
+  "source_sha256": {
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "0bd7d4d0e76b359ccfc3f8e8a5db941e08dd4f40a30adfb84554b5f63ffe0a3d",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "8fc36647fe8dfb43baa00391de12091940f13686ce86923de9b0a2448a8a848a",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "cdaaa4a6fad28f97810c6fcd96dff1343c5b0a61d276485f177c55154f98a6f2",
+    "tests/src/storage/relocatable/entity/test_BuildingScanIndexPacking.cpp": "562f8394d834bdfd9563cc807694bf28df1d91bca290d910530b08f6fa4f378d"
+  },
+  "module_verification": {
+    "packing_before_early_space_preflight": "77/77 passed",
+    "after_early_space_preflight": "76/77 passed; source-change callback fixture could not reach publication because its source had no space savings",
+    "fixture_correction": "pad legitimate free source tail, run normal compaction/truncation and assert real 10% savings before testing source change during prepared publication",
+    "corrected_affected_cases": "4/4 passed: source-change prepared-publication discard, valid-CRC membership corruption after real space savings, early-space bounded-read/zero-write refusal, occupied-pool cross-generation/pins/A-B packing",
+    "unique_current_cases_confirmed": 77,
+    "compatibility_relocation": "18/18 passed; 13/39 admission unchanged",
+    "integrity_fixture": "Checksummed membership corruption fixture also establishes actual 10% savings so early space refusal cannot masquerade as corruption detection."
+  },
+  "observed_real_copy": {
+    "index_pools_before": 471,
+    "index_pools_after": 391,
+    "metadata_pools_before": 459,
+    "metadata_pools_after": 464,
+    "net_physical_pool_reduction": 75,
+    "status": "unadmitted BUILDING diagnostic; not a production completion or space certificate"
+  },
+  "constraints": {
+    "source_bytes": 1048576,
+    "maintenance_bytes": 7340032,
+    "cache_bytes": 67108864,
+    "disk_bytes": 2147483648,
+    "maximum_source_pool_frames_per_operation": 31,
+    "extra_cache": 0
+  },
+  "v9_stop": "After truncation holdout 239206400 / 259915776 bytes; medium 284557312 / 309985280 bytes. Both exceed 90%; stopped before wasting the final integrity traversal, hashed and removed. Original inputs untouched.",
+  "v10": "fresh construction from original sources running; final integrity and prepared-candidate whole-file gates pending",
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false
+}

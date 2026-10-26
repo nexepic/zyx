@@ -80,6 +80,23 @@ namespace graph::storage {
 			return kind == PageOwnerKind::POK_ENTITY_LABEL;
 		}
 
+        std::vector<std::byte> serializeEntityForOwner(const EntityPage &page, const PageOwnerHeader &owner) {
+            const auto header = page.header();
+            if (header.generation == owner.generation && header.committed_lsn == owner.committed_lsn)
+                return page.serialize();
+            return page.rebindOwner(owner).serialize();
+        }
+
+        std::vector<std::byte> serializeAuxiliaryForOwner(const CatalogEntry &source,
+            std::span<const std::byte> payload, const PageOwnerHeader &destination) {
+            if (source.generation == destination.generation)
+                return {payload.begin(), payload.end()};
+            auto previous = destination; previous.generation = source.generation;
+            auto page = SlottedPage::open(previous, payload);
+            page.rebindOwner(destination);
+            return page.serialize();
+        }
+
 		[[nodiscard]] PageOwnerHeader auxiliaryOwnerFor(PageId pageId, const CatalogEntry &pool, PageOwnerKind kind,
 														LogSequenceNumber checkpointLsn) {
 			return {pageId, pool.owner_id, kind, 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, checkpointLsn};
@@ -1831,9 +1848,8 @@ namespace graph::storage {
 											 "relocatable Entity page batch mixed a retirement into a fresh COW pool");
 									}
 									const EntityPageHeader header = staged.loaded.page.header();
-									initialPages.push_back({ownerFor(header.page_id, work.pool.owner_id,
-																	 work.pool.generation, checkpointLsn),
-															staged.loaded.page.serialize(), 0U});
+									const auto owner = ownerFor(header.page_id, work.pool.owner_id, work.pool.generation, checkpointLsn);
+                                initialPages.push_back({owner, serializeEntityForOwner(staged.loaded.page, owner), 0U});
 									initialLocations.push_back(unpublishedLocation(header.page_id, work.pool.segment_id,
 																				   work.pool.generation));
 									replacementResultOrdinals.push_back(ordinal);
@@ -1850,7 +1866,9 @@ namespace graph::storage {
 									initialPages.push_back(
 											{auxiliaryOwnerFor(staged.expected_location.page_id, work.pool,
 															   staged.owner_kind, checkpointLsn),
-											 staged.payload, staged.free_bytes});
+											 serializeAuxiliaryForOwner(staged.expected_pool, staged.payload,
+                                                     auxiliaryOwnerFor(staged.expected_location.page_id, work.pool,
+                                                         staged.owner_kind, checkpointLsn)), staged.free_bytes});
 									initialLocations.push_back(unpublishedLocation(staged.expected_location.page_id,
 																				   work.pool.segment_id,
 																				   work.pool.generation));
@@ -1964,7 +1982,7 @@ namespace graph::storage {
 																	   work.pool.generation, checkpointLsn);
 								replacements.push_back({staged.loaded.contents.pool, materialization.expected_location,
 														staged.loaded.contents.owner.committed_lsn, owner,
-														staged.loaded.page.serialize(), 0U});
+														serializeEntityForOwner(staged.loaded.page, owner), 0U});
 								replacementLocations.push_back(unpublishedLocation(header.page_id, work.pool.segment_id,
 																				   work.pool.generation));
 								replacementResultOrdinals.push_back(ordinal);
@@ -1983,7 +2001,9 @@ namespace graph::storage {
 														staged.expected_owner_lsn,
 														auxiliaryOwnerFor(staged.expected_location.page_id, work.pool,
 																		  staged.owner_kind, checkpointLsn),
-														staged.payload, staged.free_bytes});
+														serializeAuxiliaryForOwner(staged.expected_pool, staged.payload,
+                                                     auxiliaryOwnerFor(staged.expected_location.page_id, work.pool,
+                                                         staged.owner_kind, checkpointLsn)), staged.free_bytes});
 								replacementLocations.push_back(unpublishedLocation(
 										staged.expected_location.page_id, work.pool.segment_id, work.pool.generation));
 								auxiliaryReplacementResultOrdinals.push_back(ordinal);

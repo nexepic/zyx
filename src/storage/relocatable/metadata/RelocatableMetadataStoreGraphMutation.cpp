@@ -1,3 +1,4 @@
+#include "graph/storage/relocatable/entity/ScanMembershipPublication.hpp"
 /**
  * @file RelocatableMetadataStoreGraphMutation.cpp
  * @brief Atomic native graph metadata publication across typed page stores.
@@ -300,6 +301,7 @@ namespace graph::storage {
             throw FormatException(FormatError::FERR_INVALID_STATE, "native schema publication cannot contain graph or field mutations");
         std::optional<utils::OwnedAllocationScope> hybridAllocation;
         std::optional<utils::OwnedHeapReservation> hybridStoreCredit;
+        bool deferredBuildingAdmission = false;
         if (hybridVectors) {
             const auto &fields = hybridVectors->fields_;
             const auto memory = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(fields.memory);
@@ -358,9 +360,12 @@ namespace graph::storage {
             }
             if (request.conversion) {
                 const auto &conversion = *request.conversion;
-                if (conversion.cold_row_remainder && conversion.publish_candidate && !conversion.allocation_admission)
+                if (conversion.cold_row_remainder && conversion.publish_candidate && !conversion.allocation_admission &&
+                    !RSS_SCAN_PATH_FORMAT_ENABLED)
                     throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
                         "native cold ROW publication requires whole-database allocation admission");
+                deferredBuildingAdmission = conversion.publish_candidate && !conversion.allocation_admission &&
+                    (conversion.cold_row_remainder || conversion.group_count > 1U);
                 if (conversion.cold_row_remainder && (!conversion.compact_column_memberships ||
                     conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID))
                     throw FormatException(FormatError::FERR_INVALID_HEADER,
@@ -369,7 +374,8 @@ namespace graph::storage {
                 constexpr size_t maximumConversionBytes = 1024U * 1024U;
                 if (!conversion.group_count || conversion.group_count > 8U ||
                     conversion.group_id > RSS_HYBRID_MAX_GROUP_ID - (conversion.group_count - 1U) ||
-                    (conversion.group_count > 1U && (!conversion.compact_column_memberships || !conversion.allocation_admission ||
+                    (conversion.group_count > 1U && (!conversion.compact_column_memberships ||
+                        (!conversion.allocation_admission && !RSS_SCAN_PATH_FORMAT_ENABLED) ||
                         !conversion.publish_candidate || conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
                     throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid cohort requires1..8groups and explicit gated compact forward publication");
                 if (conversion.allocation_admission && (!conversion.publish_candidate ||
@@ -939,7 +945,8 @@ namespace graph::storage {
 		// its allocator attaches through openSnapshot(). Actual schema reads below
 		// use the writer-fenced pin, so no stale schema is accepted.
 		std::unique_ptr<SlottedPagePool> deferredSchemaPool;
-		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner || !derivedState.index_images.empty()) {
+		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner || !derivedState.index_images.empty() ||
+            (RSS_SCAN_PATH_FORMAT_ENABLED && !derivedState.entity_free_summary_fences.empty())) {
 			deferredSchemaPool = std::make_unique<SlottedPagePool>(
 					io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 		}
@@ -962,8 +969,21 @@ namespace graph::storage {
             conversionIndexes = std::make_unique<BTreePageStore>(*conversionPages, *this);
             if (hybridVectors || hybridTopology) hybridLabels = std::make_unique<EntityLabelSetStore>(io_, *this, *conversionPages, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
         }
+        const auto requirePrivateBuilding = [&](const Superblock &root) {
+            if (!deferredBuildingAdmission) return;
+            if (!RSS_SCAN_PATH_FORMAT_ENABLED || !(root.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) ||
+                !hybridPropertyRootMutation || root.database_id != hybridPropertyRootMutation->expected_database_id ||
+                root.hybrid_property_descriptor_root != hybridPropertyRootMutation->expected_root ||
+                expectedMetadataGeneration != std::optional(root.generation))
+                throw FormatException(FormatError::FERR_INVALID_STATE,
+                    "whole-file admission can be deferred only within its exact private BUILDING image");
+        };
+        // Check before writer recovery may change storage, then repeat under
+        // the writer guard. Intermediate roots remain unavailable to public open.
+        if (deferredBuildingAdmission) requirePrivateBuilding(bootstrap_.recover());
         MetadataWriteGuard writer = beginWrite(hybridTopology || hybridVectors || reclamationEvidence.has_value() || (hybridPropertyRootMutation && hybridPropertyRootMutation->conversion));
 		const Superblock current = bootstrap_.recover();
+        requirePrivateBuilding(current);
 		// The writer fences this published generation until this call returns.
 		// Reuse only immutable raw decodes through the existing bounded context;
 		// StorageIO mutation epochs invalidate it and candidate generations are excluded.
@@ -2184,11 +2204,21 @@ namespace graph::storage {
             // list even when they do not create a ROW directory entry.
             for (const auto key : touchedPropertyKeys) independent(EntityPropertyKey::fromDirectoryId(key));
         }
+        const bool nativeScanWork = RSS_SCAN_PATH_FORMAT_ENABLED && hybridTopology && !hybridTopology->scan_changes_.empty();
         const bool nativeFieldWork = pendingNativeOwnerCount || (hybridTopology &&
             (!hybridTopology->field_changes_.empty() || !hybridTopology->owner_deletions_.empty()));
-        std::shared_ptr<std::pmr::memory_resource> pendingNativeMemory = nativeFieldWork ?
+        // A Node-only scan transition creates its source account here. Prepay
+        // it from the caller; declaration order keeps that credit until every
+        // child buffer and the metadata batch have been destroyed.
+        std::optional<utils::OwnedHeapReservation> scanSourceCredit;
+        if (nativeScanWork && !hybridTopology->fields_memory_) {
+            scanSourceCredit.emplace(utils::OwnedAllocationScope::owner(), 1024U * 1024U);
+            if (!scanSourceCredit->governed())
+                throw std::invalid_argument("scan graph mutation needs an admitted caller source grant");
+        }
+        std::shared_ptr<std::pmr::memory_resource> pendingNativeMemory = nativeFieldWork || nativeScanWork ?
             (hybridTopology->fields_memory_ ? hybridTopology->fields_memory_ :
-                std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U)) : nullptr;
+                std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U - (nativeScanWork ? 4096U : 0U))) : nullptr;
         MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn,
             pendingNativeMemory ? pendingNativeMemory : hybridVectors ? hybridVectors->fields_.memory : hybridPropertyRootMutation && hybridPropertyRootMutation->conversion ?
                 hybridPropertyRootMutation->conversion->memory : std::shared_ptr<std::pmr::memory_resource>{});
@@ -2217,6 +2247,9 @@ namespace graph::storage {
                 *conversionPages, *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, hybridVectors))
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native Vector publication has no authoritative field transition");
         }
+        std::unique_ptr<PreparedScanMembershipMutation> scanMembership;
+        if (nativeScanWork) scanMembership = prepareScanMembershipMutation(batch, writer, *topologySource,
+            *hybridTopology, pendingNativeMemory, *conversionEntities, *hybridLabels, *conversionIndexes);
         bool nativeFieldsPrepared = false;
         if (nativeFieldWork) {
             utils::OwnedAllocationScope pendingScope(pendingNativeMemory);
@@ -2495,8 +2528,11 @@ namespace graph::storage {
                         const auto locator = groups.find(source, HybridPropertyDirectoryCodec::groupKey(neighbor),
                             [&](size_t bytes) { boundary.set(bytes); }, conversion.cancellation);
                         boundary.set(0); if (!locator) continue;
-                        static_cast<void>(reader.groupRecord({conversion.owner_kind, (neighbor - 1U) * 64U + 1U},
-                            [&](size_t bytes) { boundary.set(bytes); }));
+                        const auto neighborLive = reader.ownerLiveness(
+                            {conversion.owner_kind, (neighbor - 1U) * 64U + 1U},
+                            [&](size_t bytes) { boundary.set(bytes); });
+                        hybrid_property_detail::require(neighborLive.has_value(),
+                            "native neighbor pool has no authenticated group");
                         boundary.set(0);
                         const auto slot = HybridPropertyDirectoryCodec::decodeLocator(*locator);
                         placement.candidate(locations_.findPage(current, slot.page_id).segment_id,
@@ -5215,8 +5251,23 @@ namespace graph::storage {
         for (const auto &fence : derivedState.entity_free_summary_fences) {
             const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
-            if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages))
-                throw FormatException(FormatError::FERR_INVALID_STATE, "free-space marker does not name the resulting entity directory");
+            if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {
+                bool retainedStale = false;
+                if (RSS_SCAN_PATH_FORMAT_ENABLED && root.isValid()) {
+                    auto source = snapshots_.pinCurrentUnderWrite(writer, current);
+                    BTreePageStore sourceTrees(*deferredSchemaPool, *this);
+                    const auto kind = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
+                        EntityPageRecordKind::EPRK_NODE : EntityPageRecordKind::EPRK_EDGE;
+                    const auto proof = EntityFreeSpaceIndex::readProof(*this, sourceTrees, source, kind);
+                    retainedStale = proof && !proof->fresh &&
+                        proof->directory_generation == fence.target_directory_generation.value();
+                }
+                // A stale source marker may stay stale while changed entries
+                // are maintained. It never becomes insertion authority merely
+                // because the physical directory was copied elsewhere.
+                if (!retainedStale)
+                    throw FormatException(FormatError::FERR_INVALID_STATE, "free-space marker does not name the resulting entity directory");
+            }
         }
 		std::vector<EntityPropertyKey> erasedProperties;
 		erasedProperties.reserve(explicitlyErasedEntityProperties.size() + erasedEntityProperties.size());
@@ -5311,6 +5362,10 @@ namespace graph::storage {
             pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
             batch.hybrid_property_publication_ = true;
         }
+        if (scanMembership) {
+            scanMembership->borrowed_placement_ = hybridPlacement.get();
+            materializeScanMembershipMutation(batch, writer, *topologySource, *scanMembership, *conversionIndexes);
+        }
         if (hybridPropertyRootMutation) {
             const auto &request = *hybridPropertyRootMutation;
             if (request.mode == NativeHybridPropertyRootMode::NHPRM_CLEAR) {
@@ -5343,6 +5398,7 @@ namespace graph::storage {
 			publishBatch(batch, writer, options);
 		}
         if (hybridPlacement) hybridPlacement->remember();
+        if (scanMembership && scanMembership->placement_) scanMembership->placement_->remember();
         if (ordinaryIndexPlacement) ordinaryIndexPlacement->remember();
         if (streamedAdjacencyPlacement) streamedAdjacencyPlacement->remember();
         if (streamedMembershipPlacement) streamedMembershipPlacement->remember();

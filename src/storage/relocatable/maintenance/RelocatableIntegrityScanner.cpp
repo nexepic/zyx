@@ -171,7 +171,6 @@ namespace graph::storage {
 			PageLocation location;
 			CatalogEntry pool;
 			PageOwnerHeader owner;
-			utils::OwnedVector<std::byte> payload;
 		};
 
 		[[nodiscard]] bool lessKey(std::span<const std::byte> left, std::span<const std::byte> right) {
@@ -224,16 +223,21 @@ namespace graph::storage {
 			std::optional<utils::OwnedVector<std::byte>> upper_exclusive;
 		};
 
+		template<class PageLookup, class PayloadLoader>
 		[[nodiscard]] utils::OwnedVector<BTreePageEntry>
-		scanIndexTree(const ScanMap<uint64_t, ScannedPage> &pages, const IndexRootLocation &root,
-				  size_t maximumEntries, std::optional<BTreeLeafValueLayout> expectedLeafValueLayout = std::nullopt) {
+		scanIndexTree(const PageLookup &findPage, const PayloadLoader &loadPayload,
+                  const IndexRootLocation &root,
+				  size_t maximumEntries, std::optional<BTreeLeafValueLayout> expectedLeafValueLayout = std::nullopt,
+                  const std::function<void(const BTreePageEntry &)> &visitEntry = {}) {
+            size_t entryCount = 0U;
 			utils::OwnedVector<BTreePageEntry> result;
-			utils::OwnedVector<BTreePageHeader> leaves;
+			std::optional<BTreePageHeader> previousLeaf;
 			ScanSet<PageId> visited;
 			// The full Index Root Directory pass below has already fail-closed on an
 			// absent root page before any manifest mapping reaches this helper.
-			const ScannedPage &rootPage = pages.at(root.root_page_id.value());
-			const BTreePage rootNode = BTreePage::open(rootPage.owner, rootPage.payload);
+			const auto rootPage = findPage(root.root_page_id.value());
+            requireIntegrity(rootPage.has_value(), "relocatable integrity scan found an absent Index root page");
+			const BTreePage rootNode = BTreePage::open(rootPage->owner, loadPayload(*rootPage));
 			const BTreePageHeader rootHeader = rootNode.header();
 			if (rootHeader.left_sibling.isValid() || rootHeader.right_sibling.isValid()) {
 				throwIntegrityError(
@@ -248,16 +252,16 @@ namespace graph::storage {
 				if (!visited.insert(item.page_id).second) {
 					throwIntegrityError("relocatable integrity scan found a cycle in an adjacency mapping tree");
 				}
-				const auto page = pages.find(item.page_id.value());
-				if (page == pages.end()) {
+				const auto page = findPage(item.page_id.value());
+				if (!page) {
 					throwIntegrityError(
 							"relocatable integrity scan found an adjacency mapping child outside an Index page");
 				}
-				if (page->second.owner.kind != PageOwnerKind::POK_INDEX ||
-					page->second.owner.owner_id != root.index_id) {
+				if (page->owner.kind != PageOwnerKind::POK_INDEX ||
+					page->owner.owner_id != root.index_id) {
 					throwIntegrityError("relocatable integrity scan found an Index tree child with foreign ownership");
 				}
-				const BTreePage current = BTreePage::open(page->second.owner, page->second.payload);
+				const BTreePage current = BTreePage::open(page->owner, loadPayload(*page));
 				const BTreePageHeader header = current.header();
 				if (header.level != item.expected_level) {
 					throwIntegrityError(
@@ -280,12 +284,17 @@ namespace graph::storage {
 						throwIntegrityError("relocatable integrity scan found an Index tree with an unexpected leaf layout");
 					}
 					for (const BTreePageEntry &entry: entries) {
-						if (result.size() == maximumEntries) {
+						if (entryCount == maximumEntries) {
 							throwIntegrityError("relocatable integrity scan found too many adjacency mapping entries");
 						}
-						result.push_back(entry);
+                        ++entryCount;
+                        if (visitEntry) visitEntry(entry);
+                        else result.push_back(entry);
 					}
-					leaves.push_back(header);
+					if (header.left_sibling != (previousLeaf ? previousLeaf->page_id : PageId{}) ||
+                            (previousLeaf && previousLeaf->right_sibling != header.page_id))
+                        throwIntegrityError("relocatable integrity scan found non-reciprocal Index leaf links");
+                    previousLeaf = header;
 					continue;
 				}
 				for (size_t childOrdinal = entries.size() + 1U; childOrdinal > 0U; --childOrdinal) {
@@ -304,14 +313,8 @@ namespace graph::storage {
 							{child, static_cast<uint16_t>(header.level - 1U), std::move(lower), std::move(upper)});
 				}
 			}
-			for (size_t ordinal = 0; ordinal < leaves.size(); ++ordinal) {
-				const BTreePageHeader &leaf = leaves[ordinal];
-				const PageId expectedLeft = ordinal == 0U ? PageId{} : leaves[ordinal - 1U].page_id;
-				const PageId expectedRight = ordinal + 1U == leaves.size() ? PageId{} : leaves[ordinal + 1U].page_id;
-				if (leaf.left_sibling != expectedLeft || leaf.right_sibling != expectedRight) {
-					throwIntegrityError("relocatable integrity scan found non-reciprocal adjacency mapping leaf links");
-				}
-			}
+            if (previousLeaf && previousLeaf->right_sibling.isValid())
+                throwIntegrityError("relocatable integrity scan found an unterminated Index leaf chain");
 			return result;
 		}
 
@@ -326,11 +329,18 @@ namespace graph::storage {
 		}
 	}
 
-	RelocatableIntegrityReport RelocatableIntegrityScanner::scan() const {
+	RelocatableIntegrityReport RelocatableIntegrityScanner::scan() const { return scan(nullptr); }
+
+    RelocatableIntegrityReport RelocatableIntegrityScanner::scan(const CancellationCheckpoint *cancellation) const {
+        const auto check = [&] { if (cancellation) cancellation->check(); };
+        check();
         // The owner outlives every workspace and decoded owned payload. Legacy
         // standalone callers retain their existing explicit allocation scope.
         std::optional<utils::OwnedAllocationScope> allocationScope;
         if (workspace_owner_) allocationScope.emplace(workspace_owner_);
+        // Fixed unmanaged copies held by page codecs are covered before I/O.
+        utils::OwnedHeapReservation readerFrontier(workspace_owner_ ? workspace_owner_
+            : utils::OwnedAllocationScope::owner(), 32U * 1024U);
         StorageIO::SequentialReadScope sequentialReads(*io_);
 		const MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const Superblock &superblock = snapshot.superblock();
@@ -338,7 +348,8 @@ namespace graph::storage {
         if (superblock.hybrid_property_descriptor_root.isValid())
             static_cast<void>(metadata_.pages_.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
 		ScanMap<uint64_t, CatalogEntry> catalog;
-		metadata_.catalog_.visit(superblock, [this, &superblock, &report, &catalog](const CatalogEntry &entry) {
+		metadata_.catalog_.visit(superblock, [this, &superblock, &report, &catalog, &check](const CatalogEntry &entry) {
+            check();
 			requireIntegrity(catalog.emplace(entry.segment_id.value(), entry).second,
 							 "relocatable integrity scan found duplicate Catalog Segment IDs");
 			++report.catalog_entries;
@@ -405,17 +416,42 @@ namespace graph::storage {
         std::optional<SlottedPagePool> hybridPages;
         std::optional<HybridPropertyReadContext> hybrid;
         std::shared_ptr<std::pmr::memory_resource> hybridMemory;
-        if (superblock.hybrid_property_descriptor_root.isValid()) {
+        if (superblock.hybrid_property_descriptor_root.isValid() || RSS_SCAN_PATH_FORMAT_ENABLED) {
             hybridMemory = workspace_owner_ ? workspace_owner_ : utils::OwnedAllocationScope::owner();
             // Preserve the scanner's existing legacy unbounded convention;
             // explicit/scoped protected workspaces are retained verbatim.
             if (!hybridMemory) hybridMemory = std::shared_ptr<std::pmr::memory_resource>(
                 std::pmr::get_default_resource(), [](auto *) {});
             hybridPages.emplace(io_, metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
-            hybrid.emplace(io_, *hybridPages, metadata_, snapshot);
+            hybrid.emplace(io_, *hybridPages, metadata_, snapshot, cancellation);
             static_cast<void>(HybridPropertyDirectoryIntegrity::verify(*hybrid, snapshot, hybridMemory, &largeValues));
         }
-		ScanMap<uint64_t, ScannedPage> scannedPages;
+        const auto loadPayload = [&pages, &snapshot, &check](const ScannedPage &page) {
+            check();
+            auto contents = pages.read(snapshot, page.location.page_id);
+            requireIntegrity(contents.location == page.location &&
+                contents.owner.kind == page.owner.kind && contents.owner.owner_id == page.owner.owner_id &&
+                contents.owner.page_id == page.owner.page_id && contents.owner.flags == page.owner.flags,
+                "relocatable integrity scan reread changed a pinned page identity");
+            return std::move(contents.payload);
+        };
+		const auto findScannedPage = [&](uint64_t pageId) -> std::optional<ScannedPage> {
+            check();
+            if (!pageId) return std::nullopt;
+            const auto location = metadata_.findPageLocationOptional(snapshot, PageId(pageId));
+            if (!location) return std::nullopt;
+            const auto pool = catalog.find(location->segment_id.value());
+            requireIntegrity(pool != catalog.end(),
+                "relocatable integrity scan reread found an uncatalogued page");
+            const auto owner = pages.readPageOwner(pool->second, static_cast<uint8_t>(location->page_index));
+            // Generic page readers intentionally reject native typed/member
+            // frames. Their separate reverse audit ran in the physical pass.
+            if (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY) return std::nullopt;
+            requireIntegrity(owner.page_id == location->page_id && owner.flags == 0U &&
+                hasExpectedPageOwner(pool->second.kind, owner.kind),
+                "relocatable integrity scan reread found a changed page owner");
+            return ScannedPage{*location, pool->second, owner};
+        };
 		ScanMap<uint64_t, VectorManifestLocation> scannedManifests;
 		ScanMap<uint64_t, VectorCodebookHeader> scannedCodebooks;
 		ScanMap<uint64_t, VectorCodebookExtentHeader> scannedCodebookExtents;
@@ -424,13 +460,14 @@ namespace graph::storage {
 		ScanMap<uint64_t, StateLocation> scannedStates;
 		ScanMap<uint64_t, VectorPageHeader> vectorPages;
 		ScanMap<uint64_t, ScanSet<uint64_t>> rawVectorIdsByIndex;
-		ScanMap<StableSlotKey, std::pair<EntityPageRecordKind, uint64_t>> scannedEntitySlots;
+		size_t physicalEntitySlots = 0U;
 		ScanMap<StableSlotKey, utils::OwnedVector<uint64_t>> scannedLabelSlots;
-		ScanMap<StableSlotKey, EntityPropertyKey> scannedEntityPropertySlots;
+		size_t physicalPropertySlots = 0U;
 		// Node and Edge logical IDs share the directory type with the native
 		// Entity Map. Validate their targets below instead of rejecting the root
 		// outright: a clean native database necessarily has entries here.
 		metadata_.locations_.visitPages(superblock, [&](const PageLocation &location) {
+            check();
 			const auto catalogEntry = catalog.find(location.segment_id.value());
 			requireIntegrity(catalogEntry != catalog.end(),
 							 "relocatable integrity scan found a Page Directory target missing from the Catalog");
@@ -462,15 +499,7 @@ namespace graph::storage {
 			}
 			// LocationDirectory route validation gives every logical PageId exactly one
 			// leaf position, so a second insertion cannot be produced by a decoded tree.
-            // LargeValue codecs below authenticate their full bytes immediately.
-            // Their decoded headers/manifests retain every field needed later;
-            // keeping an extra raw image for every data page exhausted the
-            // protected workspace as a function of the live payload byte count.
-            const bool retainImage = contents.owner.kind != PageOwnerKind::POK_LARGE_VALUE_DATA &&
-                contents.owner.kind != PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
-            static_cast<void>(scannedPages.emplace(location.page_id.value(),
-                ScannedPage{location, contents.pool, contents.owner,
-                    retainImage ? contents.payload : utils::OwnedVector<std::byte>{}}));
+
 			++report.page_locations;
 			switch (contents.owner.kind) {
 				case PageOwnerKind::POK_ENTITY: {
@@ -489,11 +518,14 @@ namespace graph::storage {
 												  ? page.findNode(slot).has_value()
 												  : page.findEdge(slot).has_value();
 						if (live) {
-							// A typed Entity page enumerates each slot ordinal once and PageId
-							// uniqueness was established by the Location Directory above.
-							static_cast<void>(scannedEntitySlots.emplace(
-									stableSlotKey(location.page_id, slot, page.slotGeneration(slot)),
-									std::pair{header.record_kind, page.entityId(slot)}));
+                            const uint64_t entityId = page.entityId(slot);
+                            const auto route = header.record_kind == EntityPageRecordKind::EPRK_NODE
+                                ? metadata_.findNodePageLocationOptional(snapshot, entityId)
+                                : metadata_.findEdgePageLocationOptional(snapshot, entityId);
+                            requireIntegrity(route && *route == EntityPageLocation{entityId, location.page_id,
+                                slot, page.slotGeneration(slot)},
+                                "relocatable integrity scan found a live Entity slot without its exact Entity Map entry");
+                            ++physicalEntitySlots;
 						}
 					}
 					break;
@@ -539,7 +571,10 @@ namespace graph::storage {
 								throwIntegrityError("relocatable integrity scan found an Entity Property LargeValue reference "
 													"with an invalid content type");
 							}
-							const std::vector<std::byte> payload = largeValues.read(snapshot, largeValueReference.value);
+							utils::OwnedHeapReservation payloadAdmission(workspace_owner_ ? workspace_owner_
+                                : utils::OwnedAllocationScope::owner());
+                            const std::vector<std::byte> payload = largeValues.read(snapshot, largeValueReference.value,
+                                [&](size_t bytes) { check(); payloadAdmission.set(bytes); });
 							if (EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
 								root.owner_entity_id = largeValueReference.owner_entity_id;
 								root.owner_entity_type = largeValueReference.owner_entity_type;
@@ -557,8 +592,11 @@ namespace graph::storage {
 									"relocatable integrity scan found a retired or malformed Entity Property payload");
 						}
 						const EntityPropertyKey key = entityPropertyKeyForRoot(root);
-						static_cast<void>(scannedEntityPropertySlots.emplace(
-								stableSlotKey(reference.page_id, reference.slot_id, reference.generation), key));
+                        const auto route = metadata_.findEntityPropertyLocationOptional(snapshot, key);
+                        requireIntegrity(route && *route == EntityPropertyLocation{key, reference.page_id,
+                            reference.slot_id, reference.generation},
+                            "relocatable integrity scan found an Entity Property root without its exact directory entry");
+                        ++physicalPropertySlots;
 					}
 					break;
 				}
@@ -679,15 +717,15 @@ namespace graph::storage {
 		ScanSet<uint64_t> reachableLargeValueManifestPages;
 		ScanSet<uint64_t> reachableLargeValueDataPages;
 		metadata_.visitLargeValueManifestLocations(snapshot, [&](const LargeValueManifestLocation &route) {
-			const auto rootPage = scannedPages.find(route.manifest_page_id.value());
+			const auto rootPage = findScannedPage(route.manifest_page_id.value());
 			const auto root = scannedLargeValueManifests.find(route.manifest_page_id.value());
 			// LocationLeaf decoding owns route-field validity. Page/Manifest codecs
 			// bind a decoded manifest PageId to its Page Directory key, leaving only
 			// cross-object reachability, generation, identity, and root shape here.
-			const uint8_t invalidRoute = static_cast<uint8_t>(rootPage == scannedPages.end()) |
+			const uint8_t invalidRoute = static_cast<uint8_t>(!rootPage) |
 					static_cast<uint8_t>(root == scannedLargeValueManifests.end()) |
-					static_cast<uint8_t>(rootPage != scannedPages.end() &&
-										 rootPage->second.location.generation != route.generation) |
+					static_cast<uint8_t>(rootPage.has_value() &&
+										 rootPage->location.generation != route.generation) |
 					static_cast<uint8_t>(root != scannedLargeValueManifests.end() &&
 										 (root->second.value_id != route.value_id ||
 										  root->second.node_kind != LargeValueManifestNodeKind::LVMNK_ROOT));
@@ -699,6 +737,7 @@ namespace graph::storage {
 			routedLargeValueReferences.emplace(rootReference.value_id.value(), rootReference);
 			std::function<LargeValueNodeSpan(const LargeValueManifest &)> scanNode;
 			scanNode = [&](const LargeValueManifest &node) -> LargeValueNodeSpan {
+                check();
 				// Typed manifests require every child level to be exactly one below
 				// its parent, so a cycle is structurally impossible after decoding.
 				reachableLargeValueManifestPages.insert(node.page_id.value());
@@ -780,7 +819,7 @@ namespace graph::storage {
 		}
 		if (contentIndexRoot.has_value()) {
 			const size_t maximumEntries = routedLargeValueReferences.size() + 1U;
-			const utils::OwnedVector<BTreePageEntry> entries = scanIndexTree(scannedPages, *contentIndexRoot, maximumEntries);
+			const utils::OwnedVector<BTreePageEntry> entries = scanIndexTree(findScannedPage, loadPayload, *contentIndexRoot, maximumEntries);
 			if (entries.size() != routedLargeValueReferences.size()) {
 				throwIntegrityError("relocatable integrity scan found an incomplete or orphan LargeValue content index");
 			}
@@ -864,8 +903,8 @@ namespace graph::storage {
 			}
 			// Exact StateLocation equality above proves the source page and kind: the
 			// scanned State map is populated only while decoding POK_STATE pages.
-			const auto page = scannedPages.find(location.page_id.value());
-			const SlottedPage opened = SlottedPage::open(page->second.owner, page->second.payload);
+			const auto page = findScannedPage(location.page_id.value());
+			const SlottedPage opened = SlottedPage::open(page->owner, loadPayload(*page));
 			const StateRecord record = StateRecordCodec::decode(
 					opened.read({location.page_id, location.slot_id, location.slot_generation}));
 			if (record.storage_kind == StateRecordStorageKind::SRS_LARGE_VALUE) {
@@ -884,12 +923,12 @@ namespace graph::storage {
 		}
 
 		metadata_.locations_.visitIndexRoots(superblock, [&](const IndexRootLocation &root) {
-			const auto page = scannedPages.find(root.root_page_id.value());
-			requireIntegrity(page != scannedPages.end(),
+			const auto page = findScannedPage(root.root_page_id.value());
+			requireIntegrity(page.has_value(),
 							 "relocatable integrity scan found an Index Root Directory reference to an absent page");
-			const uint8_t invalidRoot = static_cast<uint8_t>(page->second.owner.kind != PageOwnerKind::POK_INDEX) |
-										static_cast<uint8_t>(page->second.owner.owner_id != root.index_id) |
-										static_cast<uint8_t>(page->second.location.generation != root.root_generation);
+			const uint8_t invalidRoot = static_cast<uint8_t>(page->owner.kind != PageOwnerKind::POK_INDEX) |
+										static_cast<uint8_t>(page->owner.owner_id != root.index_id) |
+										static_cast<uint8_t>(page->location.generation != root.root_generation);
 			requireIntegrity(invalidRoot == 0U,
 							 "relocatable integrity scan found an Index Root Directory reference mismatch");
 		});
@@ -901,16 +940,18 @@ namespace graph::storage {
             const auto root = metadata_.locations_.findIndexRootOptional(superblock, EntityFreeSpaceIndex::indexId(kind));
             if (!root) continue; // Legacy files have no summary until explicit initialization.
             ScanMap<utils::OwnedVector<std::byte>, uint64_t> expected;
-            for (const auto &[id, scanned] : scannedPages) {
-                if (scanned.owner.kind != PageOwnerKind::POK_ENTITY) continue;
-                const auto header = EntityPage::open(scanned.owner, scanned.payload).header();
-                if (header.record_kind != kind || !header.live_count || header.live_count == header.slot_capacity) continue;
-                const auto key = EntityFreeSpaceIndex::entryKey(PageId(id), uint16_t(header.slot_capacity - header.live_count), kind);
+            metadata_.locations_.visitPages(superblock, [&](const PageLocation &location) {
+                const auto scanned = findScannedPage(location.page_id.value());
+                if (!scanned || scanned->owner.kind != PageOwnerKind::POK_ENTITY) return;
+                const auto header = EntityPage::open(scanned->owner, loadPayload(*scanned)).header();
+                if (header.record_kind != kind || !header.live_count || header.live_count == header.slot_capacity) return;
+                const auto key = EntityFreeSpaceIndex::entryKey(location.page_id,
+                    uint16_t(header.slot_capacity - header.live_count), kind);
                 expected.emplace(utils::OwnedVector<std::byte>(key.begin(), key.end()), 0U);
-            }
+            });
             const uint64_t count = expected.size();
             const auto generationKey = EntityFreeSpaceIndex::generationKey(), countKey = EntityFreeSpaceIndex::countKey();
-            const auto entries = scanIndexTree(scannedPages, *root, expected.size() + 3U, BTreeLeafValueLayout::BLVL_U64);
+            const auto entries = scanIndexTree(findScannedPage, loadPayload, *root, expected.size() + 3U, BTreeLeafValueLayout::BLVL_U64);
             std::optional<uint64_t> generation, declaredCount;
             for (const auto &entry : entries) {
                 if (std::ranges::equal(entry.key, generationKey)) generation = entry.value_or_child;
@@ -929,38 +970,23 @@ namespace graph::storage {
                 "relocatable integrity scan found an incomplete or stale entity free-space summary");
         }
 
-		ScanMap<uint64_t, EntityPageLocation> nativeNodes;
-		ScanMap<uint64_t, EntityPageLocation> nativeEdges;
-		ScanSet<StableSlotKey> mappedEntitySlots;
-		ScanMap<StableSlotKey, uint64_t> labelSlotOwners;
-		const auto validateNativeEntityLocation = [&scannedPages, &scannedEntitySlots, &scannedLabelSlots, &nativeNodes,
-														   &nativeEdges, &mappedEntitySlots,
-														   &labelSlotOwners](const EntityPageLocation &location,
-																								 EntityPageRecordKind expectedKind) {
-			const auto page = scannedPages.find(location.page_id.value());
-			if (page == scannedPages.end() || page->second.owner.kind != PageOwnerKind::POK_ENTITY) {
-				throwIntegrityError(expectedKind == EntityPageRecordKind::EPRK_NODE
-												? "relocatable integrity scan found a retired fixed-record Node directory entry"
-												: "relocatable integrity scan found a retired fixed-record Edge directory entry");
-			}
-			const StableSlotKey slotKey = stableSlotKey(location.page_id, location.slot_id, location.slot_generation);
-			const auto slot = scannedEntitySlots.find(slotKey);
-			// LocationLeaf decoding already requires nonzero EntityId, PageId, and
-			// slot generation; this scan owns target liveness and record-kind matching.
-			requireIntegrity(slot != scannedEntitySlots.end() && slot->second.first == expectedKind &&
-								 slot->second.second == location.entity_id,
-							 "relocatable integrity scan found an Entity Map entry that does not resolve to a live "
-							 "same-kind slot with the same Entity ID");
-			requireIntegrity(
-					mappedEntitySlots.insert(slotKey).second,
-					"relocatable integrity scan found multiple Entity Map entries for one live Entity page slot");
-			ScanMap<uint64_t, EntityPageLocation> &entities =
-					expectedKind == EntityPageRecordKind::EPRK_NODE ? nativeNodes : nativeEdges;
-			static_cast<void>(entities.emplace(location.entity_id, location));
+        size_t mappedEntityCount = 0U;
+        ScanMap<StableSlotKey, uint64_t> labelSlotOwners;
+        const auto validateNativeEntityLocation = [&](const EntityPageLocation &location,
+                EntityPageRecordKind expectedKind) {
+            const auto page = findScannedPage(location.page_id.value());
+            requireIntegrity(page.has_value() && page->owner.kind == PageOwnerKind::POK_ENTITY,
+                "relocatable integrity scan found an Entity Map entry outside a current Entity page");
+            const EntityPage entityPage = EntityPage::open(page->owner, loadPayload(*page));
+            const bool live = expectedKind == EntityPageRecordKind::EPRK_NODE
+                ? entityPage.findNode(location.slot_id, location.slot_generation, location.entity_id).has_value()
+                : entityPage.findEdge(location.slot_id, location.slot_generation, location.entity_id).has_value();
+            requireIntegrity(live,
+                "relocatable integrity scan found an Entity Map entry without a same-kind same-ID live slot");
+            ++mappedEntityCount;
 			if (expectedKind != EntityPageRecordKind::EPRK_NODE) {
 				return true;
 			}
-			const EntityPage entityPage = EntityPage::open(page->second.owner, page->second.payload);
 			const std::optional<NodeEntityRecord> node =
 					entityPage.findNode(location.slot_id, location.slot_generation, location.entity_id);
 			requireIntegrity(node.has_value(),
@@ -986,96 +1012,92 @@ namespace graph::storage {
 		metadata_.visitEdgePageLocations(snapshot, [&validateNativeEntityLocation](const EntityPageLocation &location) {
 			static_cast<void>(validateNativeEntityLocation(location, EntityPageRecordKind::EPRK_EDGE));
 		});
-		if (mappedEntitySlots.size() != scannedEntitySlots.size()) {
+		if (mappedEntityCount != physicalEntitySlots) {
 			throwIntegrityError("relocatable integrity scan found a live Entity page slot without an Entity Map entry");
 		}
 		if (labelSlotOwners.size() != scannedLabelSlots.size()) {
 			throwIntegrityError("relocatable integrity scan found a live LabelSet slot without one owning Node");
 		}
 
-		ScanSet<StableSlotKey> mappedEntityPropertySlots;
-		metadata_.visitEntityPropertyLocations(snapshot, [&](const EntityPropertyLocation &location) {
-			const StableSlotKey slotKey = stableSlotKey(location.page_id, location.slot_id, location.slot_generation);
-			const auto property = scannedEntityPropertySlots.find(slotKey);
-			// EntityPropertyKey validity is a LocationLeaf codec invariant.
-			requireIntegrity(property != scannedEntityPropertySlots.end() && property->second == location.key,
-							 "relocatable integrity scan found an Entity Property Directory entry that does not "
-							 "resolve to its exact root");
-			requireIntegrity(
-					mappedEntityPropertySlots.insert(slotKey).second,
-					"relocatable integrity scan found multiple Entity Property Directory entries for one root");
-			const bool ownerExists = location.key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE
-											 ? nativeNodes.contains(location.key.entity_id)
-											 : nativeEdges.contains(location.key.entity_id);
-			requireIntegrity(
-					ownerExists,
-					"relocatable integrity scan found an Entity Property root without its native Entity Map owner");
-		});
-		if (mappedEntityPropertySlots.size() != scannedEntityPropertySlots.size()) {
-			throwIntegrityError("relocatable integrity scan found an Entity Property root without a directory entry");
-		}
+        size_t mappedPropertyCount = 0U;
+        metadata_.visitEntityPropertyLocations(snapshot, [&](const EntityPropertyLocation &location) {
+            // Every live physical root was decoded and checked against this
+            // exact route above. Recheck route liveness; equality of counts
+            // establishes the reverse direction without retaining all roots.
+            const auto page = findScannedPage(location.page_id.value());
+            requireIntegrity(page.has_value() && page->owner.kind == PageOwnerKind::POK_PROPERTY,
+                "relocatable integrity scan found an Entity Property route outside a current ROW page");
+            const SlottedPage opened = SlottedPage::open(page->owner, loadPayload(*page));
+            static_cast<void>(opened.read({location.page_id, location.slot_id, location.slot_generation}));
+            const bool ownerExists = location.key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE
+                ? metadata_.findNodePageLocationOptional(snapshot, location.key.entity_id).has_value()
+                : metadata_.findEdgePageLocationOptional(snapshot, location.key.entity_id).has_value();
+            requireIntegrity(ownerExists,
+                "relocatable integrity scan found an Entity Property root without its native Entity Map owner");
+            ++mappedPropertyCount;
+        });
+        requireIntegrity(mappedPropertyCount == physicalPropertySlots,
+            "relocatable integrity scan found an unmatched Entity Property directory entry");
 
 		// Ordinary graph adjacency is a key-only derived access path. Validate it
 		// against the authoritative Edge records before scanning unrelated derived
 		// structures, so an orphan, missing, or one-direction Edge fails closed.
-		ScanMap<uint64_t, EdgeEntityRecord> authoritativeEdges;
-		for (const auto &[edgeId, location]: nativeEdges) {
-			const auto page = scannedPages.find(location.page_id.value());
-			requireIntegrity(page != scannedPages.end(),
-							 "relocatable integrity scan found an Edge Entity Map entry outside a current page");
-			const EntityPage entityPage = EntityPage::open(page->second.owner, page->second.payload);
-			const std::optional<EdgeEntityRecord> edge =
-					entityPage.findEdge(location.slot_id, location.slot_generation, location.entity_id);
-			requireIntegrity(edge.has_value(),
-							 "relocatable integrity scan found an Edge Entity Map entry without a live Edge record");
-			requireIntegrity(nativeNodes.contains(edge->source_node_id) && nativeNodes.contains(edge->target_node_id),
-							 "relocatable integrity scan found an Edge whose endpoint is absent from the Entity Map");
-			requireIntegrity(authoritativeEdges.emplace(edgeId, *edge).second,
-							 "relocatable integrity scan found duplicate authoritative Edge identity");
-		}
-		const std::optional<IndexRootLocation> adjacencyRoot =
-				metadata_.locations_.findIndexRootOptional(superblock, RSS_GLOBAL_ADJACENCY_INDEX_ID);
-		if (authoritativeEdges.empty()) {
-			requireIntegrity(!adjacencyRoot.has_value(),
-							 "relocatable integrity scan found an empty global adjacency tree");
-		} else {
-			requireIntegrity(adjacencyRoot.has_value(),
-							 "relocatable integrity scan found live Edges without the global adjacency tree");
-		}
-		if (adjacencyRoot.has_value()) {
-			if (authoritativeEdges.size() > std::numeric_limits<size_t>::max() / 2U) {
-				throwIntegrityError("relocatable integrity scan cannot bound global adjacency entry validation");
-			}
-			const size_t expectedEntryCount = authoritativeEdges.size() * 2U;
-			const utils::OwnedVector<BTreePageEntry> entries =
-					scanIndexTree(scannedPages, *adjacencyRoot, expectedEntryCount, BTreeLeafValueLayout::BLVL_EMPTY);
-			requireIntegrity(entries.size() == expectedEntryCount,
-							 "relocatable integrity scan found an incomplete global adjacency tree");
-			ScanSet<utils::OwnedVector<std::byte>> expectedKeys;
-			for (const auto &[edgeId, edge]: authoritativeEdges) {
-				static_cast<void>(expectedKeys.insert(
-						AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, edge.source_node_id, edgeId})));
-				static_cast<void>(expectedKeys.insert(
-						AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_IN, edge.target_node_id, edgeId})));
-			}
-			for (const BTreePageEntry &entry: entries) {
-				if (entry.value_or_child != 0U || !expectedKeys.erase(entry.key)) {
-					throwIntegrityError(
-							"relocatable integrity scan found an orphan, duplicate, or nonempty global adjacency entry");
-				}
-			}
-			requireIntegrity(expectedKeys.empty(),
-							 "relocatable integrity scan found a live Edge missing a global adjacency entry");
-		}
+        size_t authoritativeEdgeCount = 0U;
+        const auto readEdge = [&](const EntityPageLocation &location) {
+            const auto page = findScannedPage(location.page_id.value());
+            requireIntegrity(page.has_value(),
+                "relocatable integrity scan found an Edge outside a current page");
+            const EntityPage entityPage = EntityPage::open(page->owner, loadPayload(*page));
+            const auto edge = entityPage.findEdge(location.slot_id, location.slot_generation, location.entity_id);
+            requireIntegrity(edge.has_value(),
+                "relocatable integrity scan found an Edge route without a live Edge record");
+            return *edge;
+        };
+        metadata_.visitEdgePageLocations(snapshot, [&](const EntityPageLocation &location) {
+            const auto edge = readEdge(location);
+            requireIntegrity(metadata_.findNodePageLocationOptional(snapshot, edge.source_node_id).has_value() &&
+                metadata_.findNodePageLocationOptional(snapshot, edge.target_node_id).has_value(),
+                "relocatable integrity scan found an Edge whose endpoint is absent from the Entity Map");
+            ++authoritativeEdgeCount;
+        });
+        const auto adjacencyRoot =
+            metadata_.locations_.findIndexRootOptional(superblock, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+        requireIntegrity(adjacencyRoot.has_value() == (authoritativeEdgeCount != 0U),
+            "relocatable integrity scan found inconsistent global adjacency root presence");
+        if (adjacencyRoot) {
+            requireIntegrity(authoritativeEdgeCount <= (std::numeric_limits<size_t>::max)() / 2U,
+                "relocatable integrity scan cannot bound global adjacency entry validation");
+            const size_t expectedEntries = authoritativeEdgeCount * 2U;
+            size_t actualEntries = 0U;
+            static_cast<void>(scanIndexTree(findScannedPage, loadPayload, *adjacencyRoot, expectedEntries,
+                BTreeLeafValueLayout::BLVL_EMPTY, [&](const BTreePageEntry &entry) {
+                    const auto key = AdjacencyKeyCodec::decode(entry.key);
+                    const auto location = metadata_.findEdgePageLocationOptional(snapshot, key.edge_id);
+                    requireIntegrity(location.has_value() && entry.value_or_child == 0U,
+                        "relocatable integrity scan found an orphan or nonempty global adjacency entry");
+                    const auto edge = readEdge(*location);
+                    const uint64_t expectedNode = key.direction == GlobalAdjacencyDirection::GAD_OUT
+                        ? edge.source_node_id : edge.target_node_id;
+                    requireIntegrity(key.node_id == expectedNode,
+                        "relocatable integrity scan found a mismatched global adjacency endpoint");
+                    ++actualEntries;
+                }));
+            // Canonical keys, strict page order/separator ranges and unique
+            // visited pages permit at most OUT and IN for each live Edge.
+            // Exactly twice the Edge count therefore proves both directions
+            // without retaining a database-sized expected-key set.
+            requireIntegrity(actualEntries == expectedEntries,
+                "relocatable integrity scan found a live Edge missing a global adjacency entry");
+        }
 
 		metadata_.locations_.visitVectorLocations(superblock, [&](const VectorLocation &location) {
-			const auto page = scannedPages.find(location.page_id.value());
+			const auto page = findScannedPage(location.page_id.value());
 			const auto vector = vectorPages.find(location.page_id.value());
-			requireIntegrity(page != scannedPages.end(),
+			requireIntegrity(page.has_value(),
 							 "relocatable integrity scan found a Vector Location reference to an absent page");
 			requireIntegrity(vector != vectorPages.end(),
 							 "relocatable integrity scan found a Vector Location outside a VectorPage");
-			const VectorPage opened = VectorPage::open(page->second.owner, page->second.payload);
+			const VectorPage opened = VectorPage::open(page->owner, loadPayload(*page));
 			const utils::OwnedVector<std::byte> record = opened.read(location.slot_id, location.slot_generation);
 			const uint8_t invalidRecordIdentity =
 					static_cast<uint8_t>(location.vector_id == 0U) |
@@ -1092,28 +1114,28 @@ namespace graph::storage {
 
 		metadata_.locations_.visitVectorManifests(superblock, [&](const VectorManifestLocation &location) {
 			const auto actual = scannedManifests.find(location.index_id);
-			const auto page = scannedPages.find(location.manifest_page_id.value());
+			const auto page = findScannedPage(location.manifest_page_id.value());
 			const uint8_t missingManifest = static_cast<uint8_t>(actual == scannedManifests.end()) |
-											static_cast<uint8_t>(page == scannedPages.end());
+											static_cast<uint8_t>(!page);
 			requireIntegrity(
 					missingManifest == 0U,
 					"relocatable integrity scan found a Vector Manifest Directory reference to an absent page");
 			requireIntegrity(actual->second == location,
 							 "relocatable integrity scan found a stale Vector Manifest Directory reference");
 			const VectorManifest manifest =
-					VectorManifestPage::open(page->second.owner, page->second.payload).manifest();
+					VectorManifestPage::open(page->owner, loadPayload(*page)).manifest();
 			if (manifest.raw_write_tail_page_id.isValid()) {
-				const auto tailPage = scannedPages.find(manifest.raw_write_tail_page_id.value());
+				const auto tailPage = findScannedPage(manifest.raw_write_tail_page_id.value());
 				const auto tailHeader = vectorPages.find(manifest.raw_write_tail_page_id.value());
 				const uint8_t invalidTail =
-						static_cast<uint8_t>(tailPage == scannedPages.end()) |
+						static_cast<uint8_t>(!tailPage) |
 						static_cast<uint8_t>(tailHeader == vectorPages.end()) |
-						static_cast<uint8_t>(tailPage != scannedPages.end() &&
-											 tailPage->second.pool.kind != SegmentKind::SGK_VECTOR_RAW_POOL) |
-						static_cast<uint8_t>(tailPage != scannedPages.end() &&
-											 tailPage->second.owner.kind != PageOwnerKind::POK_VECTOR_RAW) |
-						static_cast<uint8_t>(tailPage != scannedPages.end() &&
-											 tailPage->second.owner.owner_id != manifest.index_id) |
+						static_cast<uint8_t>(tailPage.has_value() &&
+											 tailPage->pool.kind != SegmentKind::SGK_VECTOR_RAW_POOL) |
+						static_cast<uint8_t>(tailPage.has_value() &&
+											 tailPage->owner.kind != PageOwnerKind::POK_VECTOR_RAW) |
+						static_cast<uint8_t>(tailPage.has_value() &&
+											 tailPage->owner.owner_id != manifest.index_id) |
 						static_cast<uint8_t>(tailHeader != vectorPages.end() &&
 											 tailHeader->second.index_id != manifest.index_id) |
 						static_cast<uint8_t>(tailHeader != vectorPages.end() &&
@@ -1148,7 +1170,7 @@ namespace graph::storage {
 							"relocatable integrity scan found a Vector Manifest delta mapping-root mismatch");
 				}
 				const utils::OwnedVector<BTreePageEntry> deltaEntries =
-						scanIndexTree(scannedPages, *mappingRoot, manifest.delta_entry_count);
+						scanIndexTree(findScannedPage, loadPayload, *mappingRoot, manifest.delta_entry_count);
 				if (deltaEntries.size() != manifest.delta_entry_count) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Vector delta mapping");
 				}
@@ -1197,7 +1219,7 @@ namespace graph::storage {
 				}
 				const ScanSet<uint64_t> &expectedVectorIds = semanticVectorIds;
 				const utils::OwnedVector<BTreePageEntry> nodeEntries =
-						scanIndexTree(scannedPages, *nodeMappingRoot, expectedVectorIds.size());
+						scanIndexTree(findScannedPage, loadPayload, *nodeMappingRoot, expectedVectorIds.size());
 				if (nodeEntries.size() != expectedVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Node-to-Vector mapping");
 				}
@@ -1215,7 +1237,7 @@ namespace graph::storage {
 					static_cast<void>(vectorByNode.emplace(nodeId, entry.value_or_child));
 				}
 				const utils::OwnedVector<BTreePageEntry> reverseEntries =
-						scanIndexTree(scannedPages, *vectorNodeMappingRoot, expectedVectorIds.size());
+						scanIndexTree(findScannedPage, loadPayload, *vectorNodeMappingRoot, expectedVectorIds.size());
 				if (reverseEntries.size() != expectedVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Vector-to-Node mapping");
 				}
@@ -1297,7 +1319,7 @@ namespace graph::storage {
 							"relocatable integrity scan found an adjacency generation without raw Vector IDs");
 				}
 				const utils::OwnedVector<BTreePageEntry> entries =
-						scanIndexTree(scannedPages, *mappingRoot, baseVectorIds.size());
+						scanIndexTree(findScannedPage, loadPayload, *mappingRoot, baseVectorIds.size());
 				if (entries.size() != baseVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an adjacency mapping that does not cover "
 										"every raw Vector");
@@ -1308,19 +1330,19 @@ namespace graph::storage {
 						throwIntegrityError(
 								"relocatable integrity scan found an adjacency mapping key or page value mismatch");
 					}
-					const auto adjacencyPage = scannedPages.find(entry.value_or_child);
+					const auto adjacencyPage = findScannedPage(entry.value_or_child);
 					// The preceding Page Directory scan has already bound an adjacency page's pool kind to its owner
 					// kind and verified its record order; only the derived owner namespace remains mapping-specific
 					// here.
-					if (adjacencyPage == scannedPages.end() ||
-						adjacencyPage->second.pool.kind != SegmentKind::SGK_VECTOR_ADJACENCY_POOL ||
-						adjacencyPage->second.owner.owner_id !=
+					if (!adjacencyPage ||
+						adjacencyPage->pool.kind != SegmentKind::SGK_VECTOR_ADJACENCY_POOL ||
+						adjacencyPage->owner.owner_id !=
 								VectorAdjacencyPageStore::derivedOwnerId(manifest.index_id)) {
 						throwIntegrityError(
 								"relocatable integrity scan found an adjacency mapping page with invalid ownership");
 					}
 					const SlottedPage page =
-							SlottedPage::open(adjacencyPage->second.owner, adjacencyPage->second.payload);
+							SlottedPage::open(adjacencyPage->owner, loadPayload(*adjacencyPage));
 					bool found = false;
 					for (const SlottedSlotReference &reference: page.liveSlots()) {
 						const VectorAdjacencyRecord record = VectorAdjacencyCodec::decode(page.read(reference));
@@ -1344,17 +1366,17 @@ namespace graph::storage {
 				}
 			}
 			for (const VectorManifestEntry &entry: manifest.entries) {
-				const auto vectorPage = scannedPages.find(entry.page_id.value());
+				const auto vectorPage = findScannedPage(entry.page_id.value());
 				const auto vectorHeader = vectorPages.find(entry.page_id.value());
-				const uint8_t missingVectorPage = static_cast<uint8_t>(vectorPage == scannedPages.end()) |
+				const uint8_t missingVectorPage = static_cast<uint8_t>(!vectorPage) |
 												  static_cast<uint8_t>(vectorHeader == vectorPages.end());
 				if (missingVectorPage != 0U) {
 					throwIntegrityError(
 							"relocatable integrity scan found a manifest reference to an absent VectorPage");
 				}
 				const uint8_t invalidVectorPage =
-						static_cast<uint8_t>(vectorPage->second.owner.owner_id != manifest.index_id) |
-						static_cast<uint8_t>(vectorPage->second.owner.kind != vectorPageOwnerKind(entry.storage_kind)) |
+						static_cast<uint8_t>(vectorPage->owner.owner_id != manifest.index_id) |
+						static_cast<uint8_t>(vectorPage->owner.kind != vectorPageOwnerKind(entry.storage_kind)) |
 						static_cast<uint8_t>(vectorHeader->second.live_count != entry.record_count) |
 						static_cast<uint8_t>(entry.storage_kind == VectorStorageKind::VSK_PQ &&
 											 manifest.codebook_id == 0U) |

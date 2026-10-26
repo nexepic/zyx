@@ -1,0 +1,911 @@
+{
+  "tests": 83,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T16:28:14Z",
+  "time": "0.58s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "PropertyCollectionRootStoreCacheTest",
+      "tests": 25,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:28:14Z",
+      "time": "0.05s",
+      "testsuite": [
+        {
+          "name": "PointReadsAdmitOneSharedOwnedFrame",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.004s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 211,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 239,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsSelectedValuesAndCountsThroughOneDirectoryMerge",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 265,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ScanCursorRetainsOneDecodedPageWithoutResidentPollution",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 295,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "NativeReadSessionReusesOneCursorForOrderedSelectedProperties",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 326,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 349,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorCountBatchReusesTheOrderedDirectoryAndPageRoute",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 371,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 400,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 417,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.003s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorPropagatesCancellationBeforeDirectoryOrPropertyIo",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 451,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorAdmissionRejectsAndCanRetryWithoutStaleOutput",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 459,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 482,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 542,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 604,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CombinedPinnedReadRetainsOwnedImageForSubsequentCalls",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 637,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 676,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 707,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 720,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest",
+          "point_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":73216,\"native_graph.read.decoded_metadata_cache_hits\":16,\"native_graph.read.distinct_page_pins\":1,\"native_graph.read.distinct_page_pins_incomplete\":0,\"native_graph.read.materialized_bytes\":72,\"native_graph.read.property_selected_decode\":2,\"native_graph.read.radix_requested_children\":8,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.selected_values_decoded\":2,\"native_graph.read.shared_page_known_location_pin\":2,\"native_graph.read.shared_page_route_resolution\":2,\"storage.buffer_pool.hits\":3,\"storage.buffer_pool.misses\":1,\"storage.buffer_pool.physical_read_bytes\":4096,\"storage.checksum.bytes\":8576,\"storage.checksum.incremental_bytes\":8064,\"storage_io.file_size_calls\":4}",
+          "scan_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":44760,\"native_graph.read.decoded_metadata_cache_hits\":10,\"native_graph.read.directory_range_calls\":2,\"native_graph.read.directory_range_cursor_metadata_pages\":4,\"native_graph.read.directory_range_cursor_root_descents\":2,\"native_graph.read.distinct_page_pins\":1,\"native_graph.read.distinct_page_pins_incomplete\":0,\"native_graph.read.materialized_bytes\":146,\"native_graph.read.property_directory_metadata_pages\":2,\"native_graph.read.property_directory_refill\":2,\"native_graph.read.property_selected_borrowed_owners\":4,\"native_graph.read.property_selected_column_batch_owners\":4,\"native_graph.read.property_selected_column_batch_pages\":2,\"native_graph.read.property_selected_column_decode\":4,\"native_graph.read.property_selected_decode\":4,\"native_graph.read.property_selected_page_acquisition\":1,\"native_graph.read.property_selected_page_reuse\":1,\"native_graph.read.radix_requested_children\":489,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.root_descents\":2,\"native_graph.read.selected_values_decoded\":4,\"native_graph.read.shared_page_known_location_pin\":1,\"native_graph.read.shared_page_route_resolution\":1,\"storage.buffer_pool.hits\":2,\"storage.checksum.bytes\":4288,\"storage.checksum.incremental_bytes\":4032,\"storage_io.file_size_calls\":2}",
+          "gather_locations_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":16304,\"native_graph.read.decoded_metadata_cache_hits\":4,\"native_graph.read.directory_range_calls\":2,\"native_graph.read.directory_range_cursor_metadata_pages\":4,\"native_graph.read.directory_range_cursor_root_descents\":2,\"native_graph.read.radix_requested_children\":2,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.root_descents\":2}"
+        },
+        {
+          "name": "SelectedPageRetentionReleasesOnFailureAndOtherReadModes",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 770,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest",
+          "failures": [
+            {
+              "failure": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp:788\nExpected equality of these values:\n  io_->bufferPoolStats().pinned_bytes\n    Which is: 0\n  RSS_PAGE_SIZE\n    Which is: 4096\n",
+              "type": ""
+            },
+            {
+              "failure": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp:791\nExpected equality of these values:\n  io_->bufferPoolStats().pinned_bytes\n    Which is: 0\n  RSS_PAGE_SIZE\n    Which is: 4096\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "SelectedPageRetentionInvalidatesAfterWriteAttempt",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 797,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedPinSurvivesPoolDisableAndMoveAssignmentWithoutDanglingView",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 817,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners",
+          "file": "tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 834,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        }
+      ]
+    },
+    {
+      "name": "BufferPoolTest",
+      "tests": 47,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:28:14Z",
+      "time": "0.473s",
+      "testsuite": [
+        {
+          "name": "KeepsDifferentGenerationsForOnePhysicalPageResident",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ValidatesCapacityAndPinHandleState",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 188,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesPreserveGenerationAndPinSafety",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 219,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 249,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 267,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "RefusesToEvictPinnedPageThenEvictsAfterUnpin",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 318,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FullPageOverwriteAvoidsReadBeforeWrite",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 341,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 356,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 382,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EvictionFlushesDirtyPagesBeforeReusingTheirFrames",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 439,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 457,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 518,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 565,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 580,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateNoOpKeepsCachedPagesResident",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 624,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 647,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.001s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 662,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 682,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 737,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 750,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 786,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIOForwardsAndRetainsTheCoordinatedCacheGrant",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 795,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIOCacheDenialLeavesNoPartiallyPublishedPage",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 812,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EvictsForMetadataPressureBeforeThePayloadOnlyCeiling",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 838,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 862,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:14Z",
+          "time": "0.42s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 891,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 911,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 928,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 942,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 965,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ControlRecordWritesValidateRangesAndProtectPinnedImages",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 989,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1031,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1059,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1081,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.047s",
+          "classname": "BufferPoolTest",
+          "largest_clean_residency": "2048",
+          "generation_checks_32": "1",
+          "erase_visits_32": "2",
+          "range_checks_32": "1",
+          "flush_visits_32": "1",
+          "generation_checks_512": "1",
+          "erase_visits_512": "2",
+          "range_checks_512": "1",
+          "flush_visits_512": "1",
+          "generation_checks_2048": "1",
+          "erase_visits_2048": "2",
+          "range_checks_2048": "1",
+          "flush_visits_2048": "1"
+        },
+        {
+          "name": "OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1119,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoPinsRetainTheirPoolAcrossDisableReplacementAndMove",
+          "file": "tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanMembershipDirectoryTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:28:15Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "UsesTheCompleteNodeDomainAndBigEndianOrder",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0s",
+          "classname": "ScanMembershipDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 10,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:28:15Z",
+      "time": "0.055s",
+      "testsuite": [
+        {
+          "name": "PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.01s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.004s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.007s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 246,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.011s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 262,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.004s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 270,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.003s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "IntegritySourceWorkspaceRemainsChargedToTheCaller",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 281,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.003s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount",
+          "file": "tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:28:15Z",
+          "time": "0.003s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    }
+  ]
+}

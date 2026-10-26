@@ -1,0 +1,43 @@
+{
+  "compile": [
+    "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "-std=c++20",
+    "-O1",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-unused-parameter",
+    "-Wno-missing-designated-field-initializers",
+    "-DZYX_HAS_LZ4=1",
+    "-DZYX_HAS_ZSTD=1",
+    "-I/workspace/zyx/include",
+    "-I/workspace/zyx/src",
+    "-isystem",
+    "/workspace/zyx-sysroot/usr/include",
+    "-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1",
+    "-DZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=1",
+    "-I/workspace/zyx/build-scan-candidate",
+    "-c",
+    "/workspace/zyx/tests/src/storage/relocatable/entity/test_StoredScanMembership.cpp",
+    "-o",
+    "/tmp/zyx-stored-membership-tests.o"
+  ],
+  "link": [
+    "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "/tmp/zyx-stored-membership-tests.o",
+    "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+    "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+    "-lgtest_main",
+    "-lgtest",
+    "-lz",
+    "-llz4",
+    "-lxxhash",
+    "-lzstd",
+    "-lboost_filesystem",
+    "-lboost_atomic",
+    "-pthread",
+    "-o",
+    "/tmp/zyx-stored-membership-tests"
+  ],
+  "core_sha256": "d87702b599fe5874fe2d604a6347deb6bc0e7caa56a44cd98a459f90ed998817"
+}

@@ -1,0 +1,23 @@
+{
+  "accepted_progress_percent": 15,
+  "source_sha256": {
+    "src/storage/relocatable/metadata/MetadataPagePool.cpp": "486322cd895020815ead44a6b6739d45725c1afa55928c59790cbda0918a11e2",
+    "tests/src/storage/relocatable/metadata/test_MetadataPagePoolCapacityRollback.cpp": "37c7aff9df37fd391e0752d4641a1919987c077cd9d75947d6651563306163d1"
+  },
+  "bug": "ensureMetadataFrameCapacity could materialize several private pools, fail during a later creation, and never return the already created pool list to MetadataWriteBatch. Registry ownership then disagreed with durable Allocator state, causing strict tail refusal.",
+  "reproducer_before_fix": "one registered pool/file extent leaked after second-pool file-limit failure; retry incorrectly reported no new pool",
+  "fix": "reserve bookkeeping before I/O; on any capacity failure, abandon all pools and provisional suffix created by that call, restore cursor, poison if rollback itself fails, rethrow original exception. Existing caller materialization and protected pool frames stay intact.",
+  "experimental_metadata_cases": 98,
+  "experimental_failures": 0,
+  "default_new_rollback_cases": 3,
+  "default_failures": 0,
+  "compatibility_new_rollback_cases": 3,
+  "compatibility_failures": 0,
+  "coverage": "append failure, existing pool/control/frame preservation, reusable durable free-hole failure with unchanged file length, and successful retry",
+  "v11_holdout": "completed, actual whole-file saving14.573877962682802%; public four-case untimed complete oracle passed; preserved",
+  "v11_medium": "failed at strict tail validation; hashed/removed; original input untouched",
+  "v12_medium": "fresh original-source construction running; no resumed authority or relaxed checks",
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false
+}

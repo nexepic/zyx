@@ -1,0 +1,743 @@
+{
+  "tests": 71,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T19:13:26Z",
+  "time": "15.385s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableIntegrityScannerTest",
+      "tests": 34,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:13:26Z",
+      "time": "2.2s",
+      "testsuite": [
+        {
+          "name": "RejectsNullOrForeignDataStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 340,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansEveryPageOfAMultiLevelLargeValueManifestTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 346,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.097s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueContentIndexValueThatDisagreesWithItsManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 360,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.101s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsIncompleteOrOrphanLargeValueContentIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 383,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.204s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueManifestCycle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 437,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.096s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueManifestChildWithMismatchedSubtreeRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.111s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueRootManifestThatDisagreesWithItsDirectoryRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 462,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.152s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsOrphanLargeValueManifestPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 472,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.065s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsOrphanLargeValueDataPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 479,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:26Z",
+          "time": "0.074s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueManifestDirectoryRelationshipCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 486,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.188s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsStaleLargeValuePageFreeSpaceMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.084s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsLargeValueTreeAndDataRelationshipCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.374s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsPageDirectoryEntriesWithoutACatalogSegment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 631,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsPageDirectoryEntriesOutsideSharedPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 639,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsMalformedOrUnsupportedExtentDirectoryEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 655,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansStateDirectoryRecordsAndRejectsStaleLocations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 675,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsStateDirectoryIdsWithoutMatchingRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 691,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsStatePagesWithStaleFreeSpaceOrRecordsWithoutDirectoryEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 704,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsStateReferencesToMissingLargeValueManifests",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansStateReferencesToExistingLargeValueManifests",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 736,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.002s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsStateReferencesToLargeValuesWithAnotherOwnerMediaType",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 757,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.002s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsEntityPropertyRootsWithoutTheirNativeEntityOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 777,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansAndValidatesNodeToVectorMappingRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 807,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.011s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansMultiLevelBidirectionalVectorMappingTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 990,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.216s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "ScansIndexPqVectorAndCodebookLayouts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1145,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.016s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsManifestPagesMissingFromTheManifestDirectory",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1375,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsDuplicateManifestIndexOwnershipAcrossPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1389,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsManifestReferencesToAbsentVectorPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1415,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsNoncanonicalPropertyPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1430,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.002s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsDuplicateStateRecordsAcrossStatePages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1482,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.001s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RejectsDerivedAdjacencyMappingAndRecordCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1509,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.023s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "WorkspaceQuotaDenialPreservesFileAndReleasesEveryAdmittedNode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1742,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:27Z",
+          "time": "0.083s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "RelationshipChecksDoNotRetainEveryPagePayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1777,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.236s",
+          "classname": "RelocatableIntegrityScannerTest"
+        },
+        {
+          "name": "CancellationBeforeAndDuringValidationReleasesThePinnedWorkspace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner.cpp",
+          "line": 1804,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.038s",
+          "classname": "RelocatableIntegrityScannerTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableIntegrityScannerTestFixture",
+      "tests": 37,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:13:28Z",
+      "time": "13.185s",
+      "testsuite": [
+        {
+          "name": "ScansNativeEntityMapsLabelSetsAndOwnerKeyedProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 395,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.005s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsLiveEdgesWithoutTheReservedGlobalAdjacencyRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 400,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.006s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsMissingOrMismatchedGlobalAdjacencyKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 412,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.01s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsMalformedGlobalAdjacencyKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 439,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.006s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyLeafWithAValueLayout",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.007s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRootDirectoryGenerationMismatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 470,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.004s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRootMappedToANonRootPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 488,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.237s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyTreeCycle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 509,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.231s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyTreeWithMismatchedChildLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 523,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:28Z",
+          "time": "0.327s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyTreeChildOutsideTheIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 538,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:29Z",
+          "time": "0.355s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyChildWithForeignOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 554,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:29Z",
+          "time": "0.497s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyNonRootSiblingCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 568,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:30Z",
+          "time": "2.364s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyNonRootLeftSiblingCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 586,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:32Z",
+          "time": "0.842s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRestartCountMismatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 606,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "0.005s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRestartOffsetCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 622,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "0.007s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRootWithForeignOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 638,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "0.01s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsGlobalAdjacencyRootWithSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 650,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "0.005s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsInternalGlobalAdjacencyRootWithSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 665,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "0.257s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsDeepGlobalAdjacencySeparatorRangeCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 683,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:33Z",
+          "time": "1.567s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "ScansRelocatedAndRetiredCatalogQueueEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 708,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.006s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsStaleNativeEntityPageFreeSpaceMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 751,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.023s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsEntityPageWithNonEntityOwnerKind",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 763,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.015s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsStaleOrForeignLabelSetPageMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.026s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsShortEntityPropertyPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 803,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.024s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsInconsistentNativeVectorDeltaSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 822,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.201s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsNativeEntityAndLabelSetOrphans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 939,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.022s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsPageLocalEntityIdThatDisagreesWithTheEntityMap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 957,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.012s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsOwnerKeyedPropertyRootWithoutDirectoryEntry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 977,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.02s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsNativeEntityMapRelationshipCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 986,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.052s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsEntityPropertyDirectoryRelationshipCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1049,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.034s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsAdjacencyPageWithForeignOwnerIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1071,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.004s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsStateReferenceToTextLargeValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.01s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsDerivedAdjacencyTreeAndOwnershipCorruption",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1137,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.09s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsCodebookManifestHeaderGenerationMismatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1387,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.007s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsOrphanedCodebookDataExtent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1417,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.022s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "RejectsNoncanonicalBidirectionalVectorMappings",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1471,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:35Z",
+          "time": "0.485s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        },
+        {
+          "name": "GlobalAdjacencyIntegrityUsesABoundedFrontierInsteadOfAllEdges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableIntegrityScanner_Corruption.cpp",
+          "line": 1742,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:13:36Z",
+          "time": "5.37s",
+          "classname": "RelocatableIntegrityScannerTestFixture"
+        }
+      ]
+    }
+  ]
+}

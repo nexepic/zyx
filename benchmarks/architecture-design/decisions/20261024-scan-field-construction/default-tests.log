@@ -1,0 +1,59 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.*:ScanMembershipDirectoryTest.*:ScanMembershipSourceTest.*:ScanFormatCloneCodecTest.*:ScanBuildingCloneTest.*:HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO:HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO:HybridPropertyColdConversionProbeTest.*
+[==========] Running 17 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership
+[       OK ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership (0 ms)
+[----------] 1 test from BuildingScanMembershipTest (0 ms total)
+
+[----------] 9 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (2 ms)
+[ RUN      ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup
+[       OK ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup (2 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup
+[       OK ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup (11 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (1 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (1 ms)
+[----------] 9 tests from ScanMembershipSourceTest (22 ms total)
+
+[----------] 1 test from ScanFormatCloneCodecTest
+[ RUN      ] ScanFormatCloneCodecTest.OrdinaryProfilesCannotTranscodeCandidateFiles
+[       OK ] ScanFormatCloneCodecTest.OrdinaryProfilesCannotTranscodeCandidateFiles (0 ms)
+[----------] 1 test from ScanFormatCloneCodecTest (0 ms total)
+
+[----------] 1 test from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (2 ms)
+[----------] 1 test from HybridPropertyCohortAdmissionTest (2 ms total)
+
+[----------] 4 tests from HybridPropertyColdConversionProbeTest
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting
+[       OK ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting (5 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace
+[       OK ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace (7 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly
+[       OK ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly (6 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource
+[       OK ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource (2 ms)
+[----------] 4 tests from HybridPropertyColdConversionProbeTest (22 ms total)
+
+[----------] Global test environment tear-down
+[==========] 17 tests from 6 test suites ran. (48 ms total)
+[  PASSED  ] 17 tests.

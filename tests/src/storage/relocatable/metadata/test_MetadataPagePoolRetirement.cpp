@@ -6,8 +6,11 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 TEST_F(RelocatableMetadataStoreTest, IncrementalRetirementKeepsOldSnapshotAcrossRepeatedPublicationAndReopen) {
     auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
@@ -165,4 +168,63 @@ TEST_F(RelocatableMetadataStoreTest, FullReconciliationRebuildsDelayedRetirement
     EXPECT_LT(verifier.stats().allocated_pages, pinned);
     EXPECT_FALSE(counters.contains("native_metadata.reclaim.full_traversals"));
     EXPECT_NO_THROW(verifier.validateReachability(current));
+}
+
+TEST_F(RelocatableMetadataStoreTest, CompleteReconciliationChargesCallerAndDeniesBeforeWriting) {
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    auto pin = store->openSnapshot(); const auto current = pin.superblock();
+    MetadataPagePoolAllocator verifier(io, current, MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
+    const auto beforeBytes = io->fileSize();
+    const auto beforeWrites = io->dataMutationEpoch();
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(sizeof(Superblock) + 1U);
+    {
+        graph::utils::OwnedAllocationScope owner(tiny);
+        EXPECT_THROW(verifier.reclaimUnreachable(current, {}, true),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(tiny->used(), 0U);
+    EXPECT_EQ(io->dataMutationEpoch(), beforeWrites);
+    EXPECT_EQ(io->fileSize(), beforeBytes);
+    MetadataPagePoolAllocator retry(io, current, MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope owner(memory);
+        EXPECT_NO_THROW(retry.reclaimUnreachable(current, {}, true));
+        EXPECT_NO_THROW(retry.validateReachability(current));
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(store->openSnapshot().superblock(), current);
+}
+
+TEST_F(RelocatableMetadataStoreTest, CompleteRouteCollectorsRetainCallerCreditUntilResultsDie) {
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    auto pin = store->openSnapshot(); const auto current = pin.superblock();
+    MetadataPageFile pages(io, current);
+    MetadataPageRouteDirectory routes(pages);
+    const auto header = pages.readPageDirectoryBootstrap(current.page_directory_root);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope owner(memory);
+        auto registered = routes.collectRoutesFromRouteBranch(current, header.metadata_page_directory_root);
+        ASSERT_FALSE(registered.empty());
+        EXPECT_GT(memory->used(), 0U);
+        auto physical = current; physical.page_directory_root = header.data_page_directory_root;
+        auto live = routes.collectRoutesFromPhysicalDirectoryRoots(physical);
+        EXPECT_EQ(registered, live);
+        auto frames = routes.collectRouteBranchFrames(current, header.metadata_page_directory_root);
+        EXPECT_FALSE(frames.empty());
+        EXPECT_GT(memory->used(), 0U);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    const auto before = io->dataMutationEpoch();
+    {
+        graph::utils::OwnedAllocationScope owner(tiny);
+        EXPECT_THROW(static_cast<void>(routes.collectRoutesFromRouteBranch(current, header.metadata_page_directory_root)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(routes.collectRouteBranchFrames(current, header.metadata_page_directory_root)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(tiny->used(), 0U);
+    EXPECT_EQ(io->dataMutationEpoch(), before);
 }

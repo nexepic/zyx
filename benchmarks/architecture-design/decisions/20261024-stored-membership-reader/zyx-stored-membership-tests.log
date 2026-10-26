@@ -1,0 +1,22 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = StoredScanMembershipTest.*
+[==========] Running 6 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 6 tests from StoredScanMembershipTest
+[ RUN      ] StoredScanMembershipTest.StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId
+[       OK ] StoredScanMembershipTest.StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId (25 ms)
+[ RUN      ] StoredScanMembershipTest.EmptyStorageAndExplicitPrefixStopsHaveDistinctCompletionResults
+[       OK ] StoredScanMembershipTest.EmptyStorageAndExplicitPrefixStopsHaveDistinctCompletionResults (14 ms)
+[ RUN      ] StoredScanMembershipTest.CancellationAfterDeliveryDoesNotReplayThePrefix
+[       OK ] StoredScanMembershipTest.CancellationAfterDeliveryDoesNotReplayThePrefix (10 ms)
+[ RUN      ] StoredScanMembershipTest.ForeignAndReleasedPinsCannotContinueAStoredStream
+[       OK ] StoredScanMembershipTest.ForeignAndReleasedPinsCannotContinueAStoredStream (14 ms)
+[ RUN      ] StoredScanMembershipTest.WorkspaceRefusalPrecedesAnyStorageReadOrConsumerCall
+[       OK ] StoredScanMembershipTest.WorkspaceRefusalPrecedesAnyStorageReadOrConsumerCall (3 ms)
+[ RUN      ] StoredScanMembershipTest.FullExhaustionRejectsAValidCrcButIncorrectDescriptorCount
+[       OK ] StoredScanMembershipTest.FullExhaustionRejectsAValidCrcButIncorrectDescriptorCount (13 ms)
+[----------] 6 tests from StoredScanMembershipTest (81 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 1 test suite ran. (81 ms total)
+[  PASSED  ] 6 tests.

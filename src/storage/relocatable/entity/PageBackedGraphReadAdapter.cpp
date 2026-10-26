@@ -38,6 +38,16 @@ namespace graph::storage {
 			throw FormatException(error, message);
 		}
 
+        // Primary Entity IDs are uint64, while Property owners use a tagged
+        // directory key. IDs outside that key domain cannot own Properties.
+        constexpr bool canHaveProperties(uint64_t id) {
+            return EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, id}.isValid();
+        }
+        void requirePropertySnapshot(const RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot) {
+            if (!metadata.ownsSnapshot(snapshot))
+                throwAdapterError(FormatError::FERR_INVALID_STATE, "Property read has a foreign snapshot");
+        }
+
 		[[nodiscard]] GlobalAdjacencyDirection globalDirection(PageBackedGraphReadDirection direction) {
 			if (direction == PageBackedGraphReadDirection::PBGRD_OUTGOING) {
 				return GlobalAdjacencyDirection::GAD_OUT;
@@ -91,6 +101,10 @@ namespace graph::storage {
 	std::vector<PropertyCollectionRootEntry>
 	PageBackedGraphReadAdapter::readProperties(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 											   PropertyCollectionRootScanCursor *scanCursor, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
+        if (key.entity_id && !key.isValid() && (key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ||
+            key.owner_kind == EntityPropertyOwnerKind::EPOK_EDGE)) {
+            requirePropertySnapshot(metadata_, snapshot); return {};
+        }
 		std::optional<PropertyCollectionRoot> root = scanCursor == nullptr
 															 ? properties_.readEntityOptional(snapshot, key, admission, slotsAdmission)
 															 : scanCursor->readEntityOptional(snapshot, key, admission, slotsAdmission);
@@ -267,6 +281,7 @@ namespace graph::storage {
 		PropertyCollectionRootScanCursor &cursor = active.propertyCursor(properties_, snapshot);
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
 			const uint64_t nodeId = nodeIds[index];
+            if (!canHaveProperties(nodeId)) { requirePropertySnapshot(metadata_, snapshot); continue; }
 			if (auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}, admission);
 				root.has_value()) {
 				result[index] = std::move(root->entries);
@@ -330,6 +345,7 @@ namespace graph::storage {
 		}
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+        if (!canHaveProperties(nodeId)) { requirePropertySnapshot(metadata_, snapshot); return std::nullopt; }
 		if (const auto cached = activeSession.property(false, nodeId, propertyToken); cached.has_value()) {
 			return *cached;
 		}
@@ -356,6 +372,7 @@ namespace graph::storage {
 		}
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+        if (!canHaveProperties(nodeId)) { requirePropertySnapshot(metadata_, snapshot); return false; }
 		if (const auto cachedValue = activeSession.property(false, nodeId, propertyToken); cachedValue.has_value()) {
 			const bool present = cachedValue->has_value();
 			if (requireNonNull) return present && !std::holds_alternative<std::monostate>((*cachedValue)->getVariant());
@@ -392,6 +409,7 @@ namespace graph::storage {
 								  "page-backed sorted Node Property read requires strictly increasing Node IDs");
 			}
 			previousId = nodeIds[index];
+            if (!canHaveProperties(nodeIds[index])) { requirePropertySnapshot(metadata_, snapshot); continue; }
 			if (const auto cached = active.property(false, nodeIds[index], propertyToken); cached.has_value()) {
 				result[index] = *cached;
 			} else if (const auto present = active.propertyPresence(false, nodeIds[index], propertyToken);
@@ -460,6 +478,7 @@ namespace graph::storage {
 		columns.reserve(propertyTokens.size());
 		for (size_t token = 0U; token < propertyTokens.size(); ++token) columns.emplace_back(nodeIds.size());
 		const auto needsDecode = [&](uint64_t id) {
+            if (!canHaveProperties(id)) { requirePropertySnapshot(metadata_, snapshot); return false; }
 			return std::ranges::any_of(propertyTokens, [&](uint32_t token) {
 				if (active.hasProperty(false, id, token)) return false;
 				const auto present = active.propertyPresence(false, id, token);
@@ -474,7 +493,8 @@ namespace graph::storage {
 			// If any token needs decoding, this owner is read as one rectangular
 			// token batch. Avoid copying/admitting cache cells that would then be
 			// decoded again and overwritten by that same immutable owner read.
-			const bool missing = needsDecode(nodeIds[owner]);
+			if (!canHaveProperties(nodeIds[owner])) continue;
+            const bool missing = needsDecode(nodeIds[owner]);
 			if (missing) {
 				missingIds.push_back(nodeIds[owner]);
 				continue;
@@ -524,6 +544,28 @@ namespace graph::storage {
 		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
         const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches) const {
 		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct Property cells require a sink");
+        if (!ids.empty() && !canHaveProperties(ids.back())) {
+            requirePropertySnapshot(metadata_, snapshot);
+            uint64_t previous = 0;
+            for (const auto id : ids) {
+                if (!id || id <= previous) throwAdapterError(FormatError::FERR_INVALID_HEADER,
+                    "direct Property cells require strictly increasing Node IDs");
+                previous = id;
+            }
+            uint32_t previousToken = 0;
+            for (const auto token : tokens) {
+                if (!token || token <= previousToken) throwAdapterError(FormatError::FERR_INVALID_HEADER,
+                    "direct Property cells require strictly increasing Property tokens");
+                previousToken = token;
+            }
+            const size_t prefix = size_t(std::find_if(ids.begin(), ids.end(),
+                [](uint64_t id) { return !canHaveProperties(id); }) - ids.begin());
+            readNodePropertyCellsSorted(snapshot, ids.first(prefix), tokens, sink, session, admission, scalars, texts, batches);
+            for (size_t row = prefix; row < ids.size(); ++row)
+                for (size_t column = 0; column < tokens.size(); ++column) sink(row, column, std::nullopt);
+            return;
+        }
+
 		if (ids.size() > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyKey))
 			throw std::overflow_error("direct Property owner staging overflowed");
 		if (admission) (*admission)(ids.size() * sizeof(EntityPropertyKey));
@@ -557,6 +599,14 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							  "combined Node Property read result size overflows");
 		}
+        if (!nodeIds.empty() && !canHaveProperties(nodeIds.back())) {
+            uint32_t previousToken = 0;
+            for (const auto token : propertyTokens) {
+                if (!token || token <= previousToken) throwAdapterError(FormatError::FERR_INVALID_HEADER,
+                    "combined Node Properties require strictly increasing Property tokens");
+                previousToken = token;
+            }
+        }
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = selectNativeReadSession(snapshot, session, localSession);
 		size_t stagingBytes = 0U;
@@ -598,6 +648,9 @@ namespace graph::storage {
 		reserveStaging(missingOwners, nodeIds.size());
 		reserveStaging(countOnlyOwners, nodeIds.size());
 		for (size_t owner = 0U; owner < nodeIds.size(); ++owner) {
+            if (!canHaveProperties(nodeIds[owner])) {
+                requirePropertySnapshot(metadata_, snapshot); counts[owner] = 0U; continue;
+            }
 			const bool missingValue = std::ranges::any_of(propertyTokens, [&](uint32_t token) {
 				return !active.hasProperty(false, nodeIds[owner], token);
 			});
@@ -673,6 +726,7 @@ namespace graph::storage {
 		}
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+        if (!canHaveProperties(nodeId)) { requirePropertySnapshot(metadata_, snapshot); return 0U; }
 		const std::array<EntityPropertyKey, 1U> keys{{{EntityPropertyOwnerKind::EPOK_NODE, nodeId}}};
 		std::array<std::optional<size_t>, 1U> counts;
 		activeSession.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, keys, counts);
@@ -693,10 +747,11 @@ namespace graph::storage {
 								  "page-backed sorted Node Property counts require strictly increasing Node IDs");
 			}
 			previousId = nodeId;
-			keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, nodeId});
+			if (canHaveProperties(nodeId)) keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, nodeId});
+            else requirePropertySnapshot(metadata_, snapshot);
 		}
-		std::vector<std::optional<size_t>> result(nodeIds.size());
-	activeSession.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, keys, result);
+		std::vector<std::optional<size_t>> result(nodeIds.size(), size_t{0});
+	activeSession.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, keys, std::span(result).first(keys.size()));
 		return result;
 	}
 
@@ -898,6 +953,7 @@ namespace graph::storage {
 		}
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+        if (!canHaveProperties(edgeId)) { requirePropertySnapshot(metadata_, snapshot); return std::nullopt; }
 		if (const auto cached = activeSession.property(true, edgeId, propertyToken); cached.has_value()) {
 			return *cached;
 		}
@@ -923,6 +979,7 @@ namespace graph::storage {
 		}
 		std::optional<NativeReadSession> localSession;
 		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+        if (!canHaveProperties(edgeId)) { requirePropertySnapshot(metadata_, snapshot); return false; }
 		if (const auto cachedValue = activeSession.property(true, edgeId, propertyToken); cachedValue.has_value()) {
 			const bool present = cachedValue->has_value();
 			if (requireNonNull) return present && !std::holds_alternative<std::monostate>((*cachedValue)->getVariant());
@@ -959,6 +1016,7 @@ namespace graph::storage {
 								  "page-backed sorted Edge Property read requires strictly increasing Edge IDs");
 			}
 			previousId = edgeIds[index];
+            if (!canHaveProperties(edgeIds[index])) { requirePropertySnapshot(metadata_, snapshot); continue; }
 			if (const auto cached = active.property(true, edgeIds[index], propertyToken); cached.has_value()) {
 				result[index] = *cached;
 			} else if (const auto present = active.propertyPresence(true, edgeIds[index], propertyToken);
@@ -1024,6 +1082,7 @@ namespace graph::storage {
 		columns.reserve(propertyTokens.size());
 		for (size_t token = 0U; token < propertyTokens.size(); ++token) columns.emplace_back(edgeIds.size());
 		const auto needsDecode = [&](uint64_t id) {
+            if (!canHaveProperties(id)) { requirePropertySnapshot(metadata_, snapshot); return false; }
 			return std::ranges::any_of(propertyTokens, [&](uint32_t token) {
 				if (active.hasProperty(true, id, token)) return false;
 				const auto present = active.propertyPresence(true, id, token);
@@ -1038,7 +1097,8 @@ namespace graph::storage {
 			// If any token needs decoding, this owner is read as one rectangular
 			// token batch. Avoid copying/admitting cache cells that would then be
 			// decoded again and overwritten by that same immutable owner read.
-			const bool missing = needsDecode(edgeIds[owner]);
+			if (!canHaveProperties(edgeIds[owner])) continue;
+            const bool missing = needsDecode(edgeIds[owner]);
 			if (missing) {
 				missingIds.push_back(edgeIds[owner]);
 				continue;
@@ -1282,6 +1342,7 @@ namespace graph::storage {
 		PropertyCollectionRootScanCursor &cursor = active.propertyCursor(properties_, snapshot);
 		for (size_t index = 0U; index < edgeIds.size(); ++index) {
 			const uint64_t edgeId = edgeIds[index];
+            if (!canHaveProperties(edgeId)) { requirePropertySnapshot(metadata_, snapshot); continue; }
 			if (auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, admission);
 				root.has_value()) {
 				result[index] = std::move(root->entries);

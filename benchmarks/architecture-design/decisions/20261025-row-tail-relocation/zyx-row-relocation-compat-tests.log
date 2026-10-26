@@ -1,0 +1,45 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 18 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 18 tests from HybridPropertyFieldRelocationTest
+[ RUN      ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite
+[       OK ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite (4 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+[       OK ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins (1871 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+[       OK ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool (1094 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+[       OK ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration (352 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse (158 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry (822 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+[       OK ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration (107 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse (2173 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether (278 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs (112 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry (813 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame
+[       OK ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame (754 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking
+[       OK ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking (1520 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames
+[       OK ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames (316 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute (240 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse (100 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels
+[       OK ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels (129 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute
+[       OK ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute (330 ms)
+[----------] 18 tests from HybridPropertyFieldRelocationTest (11184 ms total)
+
+[----------] Global test environment tear-down
+[==========] 18 tests from 1 test suite ran. (11184 ms total)
+[  PASSED  ] 18 tests.

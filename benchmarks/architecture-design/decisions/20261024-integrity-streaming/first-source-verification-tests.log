@@ -1,0 +1,133 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.*:ScanMembershipDirectoryTest.*:ScanMembershipSourceTest.*:ScanFormatCloneCodecTest.*:ScanBuildingCloneTest.*:HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO:HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO:HybridPropertyColdConversionProbeTest.*
+[==========] Running 49 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 24 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (6 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (2 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix (2 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (0 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (4 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (7 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (2 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (2 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (1 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (2 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (12 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (0 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (3 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (30 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[       OK ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (169 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix (99 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback
+[       OK ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback (4 ms)
+[ RUN      ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeAndEdgeFieldsBeforeAnyCompletePublication
+[       OK ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeAndEdgeFieldsBeforeAnyCompletePublication (157 ms)
+[ RUN      ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup
+[       OK ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup (9 ms)
+[ RUN      ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary
+[       OK ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization (12 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites
+[       OK ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites (13 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget (8 ms)
+[ RUN      ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage
+[       OK ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage (11 ms)
+[----------] 24 tests from BuildingScanMembershipTest (564 ms total)
+
+[----------] 9 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (1 ms)
+[ RUN      ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup
+[       OK ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup
+[       OK ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup (9 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (1 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (0 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (1 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (1 ms)
+[----------] 9 tests from ScanMembershipSourceTest (20 ms total)
+
+[----------] 5 tests from ScanFormatCloneCodecTest
+[ RUN      ] ScanFormatCloneCodecTest.PreservesLegacyIdentityRootsAndReserveButNeverProducesACompleteRoot
+[       OK ] ScanFormatCloneCodecTest.PreservesLegacyIdentityRootsAndReserveButNeverProducesACompleteRoot (0 ms)
+[ RUN      ] ScanFormatCloneCodecTest.AuthenticatesSourceBeforeChangingVersionsAndRetainsLegacyValidation
+[       OK ] ScanFormatCloneCodecTest.AuthenticatesSourceBeforeChangingVersionsAndRetainsLegacyValidation (20 ms)
+[ RUN      ] ScanFormatCloneCodecTest.EnvelopeTranslationPreservesOwnershipAndRejectsUnknownSources
+[       OK ] ScanFormatCloneCodecTest.EnvelopeTranslationPreservesOwnershipAndRejectsUnknownSources (0 ms)
+[ RUN      ] ScanFormatCloneCodecTest.CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation
+[       OK ] ScanFormatCloneCodecTest.CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation (18 ms)
+[ RUN      ] ScanFormatCloneCodecTest.MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum
+[       OK ] ScanFormatCloneCodecTest.MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum (0 ms)
+[----------] 5 tests from ScanFormatCloneCodecTest (40 ms total)
+
+[----------] 4 tests from ScanBuildingCloneTest
+[ RUN      ] ScanBuildingCloneTest.CopiesIndependentImageWithoutPublishingOrChangingSource
+[       OK ] ScanBuildingCloneTest.CopiesIndependentImageWithoutPublishingOrChangingSource (0 ms)
+[ RUN      ] ScanBuildingCloneTest.RefusesFileAndWorkspaceBudgetsBeforeDestinationWrites
+[       OK ] ScanBuildingCloneTest.RefusesFileAndWorkspaceBudgetsBeforeDestinationWrites (0 ms)
+[ RUN      ] ScanBuildingCloneTest.CancellationAndChangingSourceLeaveOnlyBuildingTargets
+[       OK ] ScanBuildingCloneTest.CancellationAndChangingSourceLeaveOnlyBuildingTargets (0 ms)
+[ RUN      ] ScanBuildingCloneTest.CorruptSegmentPayloadIsNotCopiedOrPromoted
+[       OK ] ScanBuildingCloneTest.CorruptSegmentPayloadIsNotCopiedOrPromoted (0 ms)
+[----------] 4 tests from ScanBuildingCloneTest (1 ms total)
+
+[----------] 2 tests from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (0 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO
+[       OK ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO (2 ms)
+[----------] 2 tests from HybridPropertyCohortAdmissionTest (2 ms total)
+
+[----------] 4 tests from HybridPropertyColdConversionProbeTest
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting
+[       OK ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting (8 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace
+[       OK ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace (9 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly
+[       OK ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly (8 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource
+[       OK ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource (2 ms)
+[----------] 4 tests from HybridPropertyColdConversionProbeTest (28 ms total)
+
+[----------] Global test environment tear-down
+[==========] 49 tests from 7 test suites ran. (659 ms total)
+[  PASSED  ] 48 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+
+ 1 FAILED TEST

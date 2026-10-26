@@ -1,0 +1,365 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 166 tests from 9 test suites.
+[----------] Global test environment set-up.
+[----------] 30 tests from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsFutureDirectoryPage
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsFutureDirectoryPage (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationResolvesBootstrapRootsLogically
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationResolvesBootstrapRootsLogically (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationClonesTheBootstrapDataDirectoryAnchor
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationClonesTheBootstrapDataDirectoryAnchor (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RoutedMetadataRelocationRejectsANoncurrentPageIdTarget
+[       OK ] RelocatableMetadataStoreTest.RoutedMetadataRelocationRejectsANoncurrentPageIdTarget (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationRejectsAStaleBatchSuperblock
+[       OK ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationRejectsAStaleBatchSuperblock (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationRejectsAnUnallocatedRouteTarget
+[       OK ] RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationRejectsAnUnallocatedRouteTarget (8 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataEvacuationReportsNoCandidateForInapplicablePoolContexts
+[       OK ] RelocatableMetadataStoreTest.MetadataEvacuationReportsNoCandidateForInapplicablePoolContexts (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataEvacuationRejectsAStaleBootstrapGenerationBeforeScanningRoutes
+[       OK ] RelocatableMetadataStoreTest.MetadataEvacuationRejectsAStaleBootstrapGenerationBeforeScanningRoutes (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataEvacuationRejectsInvisibleOrIncompleteBootstrapHeaders
+[       OK ] RelocatableMetadataStoreTest.MetadataEvacuationRejectsInvisibleOrIncompleteBootstrapHeaders (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsABootstrapFlagWithoutAHeader
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsABootstrapFlagWithoutAHeader (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRootWithInternalKind
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRootWithInternalKind (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRepeatedSourceFrame
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRepeatedSourceFrame (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRepeatedLogicalPageId
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsRepeatedLogicalPageId (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedAllocatorLeaf
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedAllocatorLeaf (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsEmptyCatalogLeaf
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsEmptyCatalogLeaf (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedCatalogLeaf
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedCatalogLeaf (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsWrongLocationLeafType
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsWrongLocationLeafType (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedLocationLeaf
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsMisroutedLocationLeaf (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationClonesNestedRadixDirectory
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationClonesNestedRadixDirectory (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsNestedDirectoryWithWrongKind
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsNestedDirectoryWithWrongKind (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsNestedDirectoryWithWrongLevel
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsNestedDirectoryWithWrongLevel (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsAllocatorLeafRouteThatOverflowsSlotMath
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsAllocatorLeafRouteThatOverflowsSlotMath (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsOverflowingChildOrdinal
+[       OK ] RelocatableMetadataStoreTest.MetadataDirectoryEvacuationRejectsOverflowingChildOrdinal (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.IncrementalRetirementKeepsOldSnapshotAcrossRepeatedPublicationAndReopen
+[       OK ] RelocatableMetadataStoreTest.IncrementalRetirementKeepsOldSnapshotAcrossRepeatedPublicationAndReopen (80 ms)
+[ RUN      ] RelocatableMetadataStoreTest.RetirementQueueWaitsForOldestGenerationAndRejectsDuplicateRetirement
+[       OK ] RelocatableMetadataStoreTest.RetirementQueueWaitsForOldestGenerationAndRejectsDuplicateRetirement (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CapacityPreparationDoesNotVisitFullPools
+[       OK ] RelocatableMetadataStoreTest.CapacityPreparationDoesNotVisitFullPools (1 ms)
+[ RUN      ] RelocatableMetadataStoreTest.MissingRetirementProofReconcilesInsteadOfTrustingFreeCapacity
+[       OK ] RelocatableMetadataStoreTest.MissingRetirementProofReconcilesInsteadOfTrustingFreeCapacity (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.FullReconciliationRebuildsDelayedRetirementForPinnedRoots
+[       OK ] RelocatableMetadataStoreTest.FullReconciliationRebuildsDelayedRetirementForPinnedRoots (2 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CompleteReconciliationChargesCallerAndDeniesBeforeWriting
+[       OK ] RelocatableMetadataStoreTest.CompleteReconciliationChargesCallerAndDeniesBeforeWriting (0 ms)
+[ RUN      ] RelocatableMetadataStoreTest.CompleteRouteCollectorsRetainCallerCreditUntilResultsDie
+[       OK ] RelocatableMetadataStoreTest.CompleteRouteCollectorsRetainCallerCreditUntilResultsDie (0 ms)
+[----------] 30 tests from RelocatableMetadataStoreTest (110 ms total)
+
+[----------] 3 tests from IncrementalMetadataPublicationTest
+[ RUN      ] IncrementalMetadataPublicationTest.ThreeLeaves
+[       OK ] IncrementalMetadataPublicationTest.ThreeLeaves (1 ms)
+[ RUN      ] IncrementalMetadataPublicationTest.ThreeHundredLeaves
+[       OK ] IncrementalMetadataPublicationTest.ThreeHundredLeaves (16 ms)
+[ RUN      ] IncrementalMetadataPublicationTest.NineHundredLeaves
+[       OK ] IncrementalMetadataPublicationTest.NineHundredLeaves (71 ms)
+[----------] 3 tests from IncrementalMetadataPublicationTest (89 ms total)
+
+[----------] 10 tests from RelocatableMetadataPagePoolTest
+[ RUN      ] RelocatableMetadataPagePoolTest.RecoveryValidatesNestedAllocatorSummaryAndFullLeaf
+[       OK ] RelocatableMetadataPagePoolTest.RecoveryValidatesNestedAllocatorSummaryAndFullLeaf (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RecoveryAcceptsACompletelyAllocatedAllocatorSubtree
+[       OK ] RelocatableMetadataPagePoolTest.RecoveryAcceptsACompletelyAllocatedAllocatorSubtree (7 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RootDiscoveryTraversesAnIndirectCatalogDirectory
+[       OK ] RelocatableMetadataPagePoolTest.RootDiscoveryTraversesAnIndirectCatalogDirectory (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RootDiscoveryUsesBootstrapRoutesWhenPhysicalRootsAreAbsent
+[       OK ] RelocatableMetadataPagePoolTest.RootDiscoveryUsesBootstrapRoutesWhenPhysicalRootsAreAbsent (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RootRecoveryRejectsInvisibleOrIncompleteBootstrapHeaders
+[       OK ] RelocatableMetadataPagePoolTest.RootRecoveryRejectsInvisibleOrIncompleteBootstrapHeaders (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.DiscoveryOnlyOpenAcceptsAnEmptyMetadataTail
+[       OK ] RelocatableMetadataPagePoolTest.DiscoveryOnlyOpenAcceptsAnEmptyMetadataTail (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RootDiscoveryRejectsHeaderSegmentIdentityMismatch
+[       OK ] RelocatableMetadataPagePoolTest.RootDiscoveryRejectsHeaderSegmentIdentityMismatch (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.UnknownOrNonemptyBatchPoolsFailClosedBeforeReuse
+[       OK ] RelocatableMetadataPagePoolTest.UnknownOrNonemptyBatchPoolsFailClosedBeforeReuse (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.RecoveryRejectsMalformedSuperblockAndLocationRoutes
+[       OK ] RelocatableMetadataPagePoolTest.RecoveryRejectsMalformedSuperblockAndLocationRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPagePoolTest.EmergencyReserveCannotRotateWhenNoReserveExists
+[       OK ] RelocatableMetadataPagePoolTest.EmergencyReserveCannotRotateWhenNoReserveExists (0 ms)
+[----------] 10 tests from RelocatableMetadataPagePoolTest (9 ms total)
+
+[----------] 39 tests from RelocatableMetadataPageRouteDirectoryTest
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.ResolvesCompleteRoutesAcrossMultipleRadixLevelsAfterReopen
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.ResolvesCompleteRoutesAcrossMultipleRadixLevelsAfterReopen (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.AuthenticatedTargetsServeRepeatedPointAndDuplicateBatchReads
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.AuthenticatedTargetsServeRepeatedPointAndDuplicateBatchReads (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.CachedTargetsDoNotHideCorruptionAfterAnIoWrite
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.CachedTargetsDoNotHideCorruptionAfterAnIoWrite (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RouteRootsAndVisibilityFencesRemainIndependentWithAWarmCache
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RouteRootsAndVisibilityFencesRemainIndependentWithAWarmCache (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.PartialCacheHitsStillValidateEveryMissingAndInvalidRequest
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.PartialCacheHitsStillValidateEveryMissingAndInvalidRequest (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.ZeroCacheBudgetPreservesAuthenticatedUncachedLookup
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.ZeroCacheBudgetPreservesAuthenticatedUncachedLookup (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.BatchResolvesSharedRouteLeafWithTwoPageReads
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.BatchResolvesSharedRouteLeafWithTwoPageReads (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.LogicalRadixChildrenShareRouteReadsAndPreserveSparseSlots
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.LogicalRadixChildrenShareRouteReadsAndPreserveSparseSlots (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsMissingFutureAndWronglyTypedRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsMissingFutureAndWronglyTypedRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsEmptyInvalidAndFutureRouteInputs
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsEmptyInvalidAndFutureRouteInputs (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsMissingAndWronglyTypedRouteDescendants
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsMissingAndWronglyTypedRouteDescendants (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.ResolvesLogicalRadixChildrenThroughPublishedBootstrapRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.ResolvesLogicalRadixChildrenThroughPublishedBootstrapRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsUnorderedIncompleteOrFutureRouteSets
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsUnorderedIncompleteOrFutureRouteSets (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsRouteLeavesThatDoNotMatchTheirRadixOrdinal
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsRouteLeavesThatDoNotMatchTheirRadixOrdinal (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsInvalidOrFutureRouteBranchReferences
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsInvalidOrFutureRouteBranchReferences (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsAliasedRouteBranchFramesAndTargets
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsAliasedRouteBranchFramesAndTargets (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsRouteTargetsThatAliasBootstrapPlumbing
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsRouteTargetsThatAliasBootstrapPlumbing (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsWronglyTypedInternalRouteChildDuringLookup
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsWronglyTypedInternalRouteChildDuringLookup (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsInvalidVisibilityAndRouteIdentityMetadata
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsInvalidVisibilityAndRouteIdentityMetadata (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsEmptyPhysicalDirectoryRouteSet
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsEmptyPhysicalDirectoryRouteSet (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsFuturePhysicalDirectoryRoot
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsFuturePhysicalDirectoryRoot (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RejectsBootstrapRootMissingFromTheCompleteRouteSet
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RejectsBootstrapRootMissingFromTheCompleteRouteSet (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.CountsAllFramesBeforeInitialBootstrapAllocation
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.CountsAllFramesBeforeInitialBootstrapAllocation (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.CollectsEveryVisiblePhysicalDirectoryPageBeforeBootstrapMigration
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.CollectsEveryVisiblePhysicalDirectoryPageBeforeBootstrapMigration (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.CollectsAllocatorAndExtentDirectoryRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.CollectsAllocatorAndExtentDirectoryRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.StagedBootstrapOverlaysFinalBatchFramesWithoutDroppingCurrentRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.StagedBootstrapOverlaysFinalBatchFramesWithoutDroppingCurrentRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.InitialRouteBranchOverlaysPhysicalRootsWithBatchRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.InitialRouteBranchOverlaysPhysicalRootsWithBatchRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.NextRouteBranchOverlaysPublishedRoutesWithCurrentBatchFrames
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.NextRouteBranchOverlaysPublishedRoutesWithCurrentBatchFrames (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.CountsExactFramesForNextBootstrapRoutePublication
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.CountsExactFramesForNextBootstrapRoutePublication (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.IdentityOnlyBootstrapPublicationPreservesThePublishedRouteBranchAndRejectsRouteChanges
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.IdentityOnlyBootstrapPublicationPreservesThePublishedRouteBranchAndRejectsRouteChanges (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.IdentifiesACompleteRouteBranchPoolForRefreshOnlyEvacuation
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.IdentifiesACompleteRouteBranchPoolForRefreshOnlyEvacuation (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.EvacuatesMixedRoutedTargetsRouteBranchAndBootstrapHeaderFromOnePool
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.EvacuatesMixedRoutedTargetsRouteBranchAndBootstrapHeaderFromOnePool (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RelocatesThePhysicalDataDirectoryAnchorWithItsRoute
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RelocatesThePhysicalDataDirectoryAnchorWithItsRoute (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RelocatesARoutedPhysicalChildPageByPublishingLogicalChildren
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RelocatesARoutedPhysicalChildPageByPublishingLogicalChildren (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.RefreshesAnIsolatedBootstrapHeaderPoolDuringEvacuation
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.RefreshesAnIsolatedBootstrapHeaderPoolDuringEvacuation (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.SelectedChildrenPreserveOrderSparseSlotsAndFullValidation
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.SelectedChildrenPreserveOrderSparseSlotsAndFullValidation (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.PointAndBoundedCursorDoNotResolveUnvisitedSiblingRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.PointAndBoundedCursorDoNotResolveUnvisitedSiblingRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.SparseEntityAndPropertyBatchesSkipUnrequestedInteriorRoutes
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.SparseEntityAndPropertyBatchesSkipUnrequestedInteriorRoutes (0 ms)
+[ RUN      ] RelocatableMetadataPageRouteDirectoryTest.LookupRejectsAMisroutedEndpointEvenWhenTheRequestedEntryIsValid
+[       OK ] RelocatableMetadataPageRouteDirectoryTest.LookupRejectsAMisroutedEndpointEvenWhenTheRequestedEntryIsValid (0 ms)
+[----------] 39 tests from RelocatableMetadataPageRouteDirectoryTest (7 ms total)
+
+[----------] 25 tests from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop
+[       OK ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop (62 ms)
+[ RUN      ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof
+[       OK ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof (267 ms)
+[ RUN      ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership
+[       OK ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership (335 ms)
+[ RUN      ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty
+[       OK ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty (370 ms)
+[ RUN      ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof
+[       OK ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof (658 ms)
+[ RUN      ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots
+[       OK ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots (341 ms)
+[ RUN      ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback
+[       OK ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback (360 ms)
+[ RUN      ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot
+[       OK ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot (372 ms)
+[ RUN      ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge
+[       OK ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge (527 ms)
+[ RUN      ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication
+[       OK ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication (369 ms)
+[ RUN      ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget
+[       OK ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget (264 ms)
+[ RUN      ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership
+[       OK ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership (335 ms)
+[ RUN      ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership
+[       OK ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership (347 ms)
+[ RUN      ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback
+[       OK ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback (579 ms)
+[ RUN      ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether
+[       OK ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether (22050 ms)
+[ RUN      ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback
+[       OK ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback (1044 ms)
+[ RUN      ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile
+[       OK ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile (30 ms)
+[ RUN      ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority
+[       OK ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority (40 ms)
+[ RUN      ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds
+[       OK ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds (59 ms)
+[ RUN      ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority
+[       OK ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority (86 ms)
+[ RUN      ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification
+[       OK ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification (82 ms)
+[ RUN      ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch
+[       OK ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch (78 ms)
+[ RUN      ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification
+[       OK ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification (61 ms)
+[ RUN      ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues
+[       OK ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues (349 ms)
+[ RUN      ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority
+[       OK ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority (482 ms)
+[----------] 25 tests from ScanReadProofTest (29563 ms total)
+
+[----------] 5 tests from ScanBlockMembershipTest
+[ RUN      ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds
+[       OK ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity
+[       OK ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds
+[       OK ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums
+[       OK ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums (0 ms)
+[ RUN      ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels
+[       OK ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels (0 ms)
+[----------] 5 tests from ScanBlockMembershipTest (1 ms total)
+
+[----------] 14 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (2 ms)
+[ RUN      ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin
+[       OK ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin (2 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback
+[       OK ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback (19 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (2 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (1 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (2 ms)
+[ RUN      ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource
+[       OK ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource (2 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts
+[       OK ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts (2 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary
+[       OK ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary (2 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo
+[       OK ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation
+[       OK ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation (1 ms)
+[----------] 14 tests from ScanMembershipSourceTest (47 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 39 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (9 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (4 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup (6 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo (24 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (2 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (5 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (11 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (3 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (3 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (3 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (4 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (20 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (4 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (115 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[       OK ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (398 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix (176 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback
+[       OK ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback (5 ms)
+[ RUN      ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeAndEdgeFieldsBeforeAnyCompletePublication
+[       OK ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeAndEdgeFieldsBeforeAnyCompletePublication (405 ms)
+[ RUN      ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup
+[       OK ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup (41 ms)
+[ RUN      ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary
+[       OK ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+[       OK ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization (27 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites
+[       OK ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites (18 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget (45 ms)
+[ RUN      ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage
+[       OK ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage (30 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests (1 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots (168 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection (133 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot (309 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority
+[       OK ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority (53 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding
+[       OK ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding (37 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (236 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate
+[       OK ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate (41 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity (459 ms)
+[ RUN      ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes
+[       OK ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes (26 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages
+[       OK ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages (22 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption
+[       OK ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption (23 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (22 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource
+[       OK ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource (171 ms)
+[----------] 39 tests from BuildingScanMembershipTest (3083 ms total)
+
+[----------] Global test environment tear-down
+[==========] 166 tests from 9 test suites ran. (32912 ms total)
+[  PASSED  ] 166 tests.

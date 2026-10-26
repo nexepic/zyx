@@ -1,0 +1,173 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 76 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from PageBackedGraphNameResolverContractTest
+[ RUN      ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface
+[       OK ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface (0 ms)
+[----------] 1 test from PageBackedGraphNameResolverContractTest (0 ms total)
+
+[----------] 9 tests from NativeReadSessionTest
+[ RUN      ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames
+[       OK ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets
+[       OK ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound
+[       OK ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded
+[       OK ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound
+[       OK ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound (0 ms)
+[ RUN      ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder
+[       OK ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder (0 ms)
+[ RUN      ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget
+[       OK ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget (17 ms)
+[ RUN      ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap
+[       OK ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap (82 ms)
+[ RUN      ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry
+[       OK ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry (0 ms)
+[----------] 9 tests from NativeReadSessionTest (100 ms total)
+
+[----------] 27 tests from PageBackedGraphReadAdapterTest
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations
+[       OK ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations (1 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity
+[       OK ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity (5 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs
+[       OK ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse
+[       OK ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse (12 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot (10 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties
+[       OK ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties (27 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession
+[       OK ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession (5 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession
+[       OK ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession (2 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity (15 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity (8 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties
+[       OK ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties (8 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship
+[       OK ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship (7 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary
+[       OK ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary (14 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds
+[       OK ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds (8 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly
+[       OK ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly (28 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches
+[       OK ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches (21 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch
+[       OK ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch (26 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords
+[       OK ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap
+[       OK ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap (2 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories
+[       OK ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories (4 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable
+[       OK ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable (1 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning
+[       OK ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning (1 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain (5 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads
+[       OK ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads (23 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry
+[       OK ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry (7 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch
+[       OK ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch (11 ms)
+[----------] 27 tests from PageBackedGraphReadAdapterTest (289 ms total)
+
+[----------] 1 test from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication
+[       OK ] RelocatableMetadataStoreTest.RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication (0 ms)
+[----------] 1 test from RelocatableMetadataStoreTest (0 ms total)
+
+[----------] 38 tests from RelocatableOfflineVectorPqRebuildTest
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.PublishesOnlyTheCompletePqGenerationThroughTheManifest
+[       OK ] RelocatableOfflineVectorPqRebuildTest.PublishesOnlyTheCompletePqGenerationThroughTheManifest (9 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RebuildsExistingPqGenerationWithoutBreakingPinnedSnapshots
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RebuildsExistingPqGenerationWithoutBreakingPinnedSnapshots (16 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.ReplacementRebuildRecoversAsOneCompleteGenerationAtPublishBoundaries
+[       OK ] RelocatableOfflineVectorPqRebuildTest.ReplacementRebuildRecoversAsOneCompleteGenerationAtPublishBoundaries (51 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.ReclaimsOnlyUnpublishedPqPagesAfterManifestPublication
+[       OK ] RelocatableOfflineVectorPqRebuildTest.ReclaimsOnlyUnpublishedPqPagesAfterManifestPublication (20 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.BoundsEveryReachablePqCandidateDuringReclamation
+[       OK ] RelocatableOfflineVectorPqRebuildTest.BoundsEveryReachablePqCandidateDuringReclamation (8 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenTheManifestRootIsNotCurrent
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenTheManifestRootIsNotCurrent (8 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsARawPage
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsARawPage (14 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsTheWrongRecord
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsTheWrongRecord (10 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenTheMappingDoesNotCoverRawVectors
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenTheMappingDoesNotCoverRawVectors (14 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingKeyIsNotCanonical
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingKeyIsNotCanonical (30 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsAZeroPageId
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsAZeroPageId (9 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsAnotherIndex
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsAnotherIndex (8 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsALegacyPqPage
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RefusesPqReclamationWhenAMappingTargetsALegacyPqPage (8 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RetainsNonPqManifestEntriesWhenPublishingTheDerivedGeneration
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RetainsNonPqManifestEntriesWhenPublishingTheDerivedGeneration (7 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.BeforePublicationFailureLeavesNoCandidateReachable
+[       OK ] RelocatableOfflineVectorPqRebuildTest.BeforePublicationFailureLeavesNoCandidateReachable (18 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.AfterPublicationFailureMakesTheCompleteCandidateReachable
+[       OK ] RelocatableOfflineVectorPqRebuildTest.AfterPublicationFailureMakesTheCompleteCandidateReachable (11 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsATrainingInputThatDoesNotMatchDurableRawVectorSemantics
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsATrainingInputThatDoesNotMatchDurableRawVectorSemantics (5 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsInvalidBoundedOptionsBeforeWritingDerivedObjects
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsInvalidBoundedOptionsBeforeWritingDerivedObjects (27 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsPqPageBudgetBeforePublishingAnyDerivedObject
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsPqPageBudgetBeforePublishingAnyDerivedObject (3 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.PublishesWhenTheCodebookWasPreparedBeforeTheRebuild
+[       OK ] RelocatableOfflineVectorPqRebuildTest.PublishesWhenTheCodebookWasPreparedBeforeTheRebuild (12 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsMappingTreePageBudgetBeforePublishingAnyDerivedObject
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsMappingTreePageBudgetBeforePublishingAnyDerivedObject (55 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithAZeroTargetPage
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithAZeroTargetPage (29 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAnExistingCodebookWithDifferentDeterministicContents
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAnExistingCodebookWithDifferentDeterministicContents (7 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAnExistingCodebookWithADifferentPayloadShape
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAnExistingCodebookWithADifferentPayloadShape (2 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.ReplacesAnyPriorPqManifestInventory
+[       OK ] RelocatableOfflineVectorPqRebuildTest.ReplacesAnyPriorPqManifestInventory (12 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RetainsNonPqManifestEntriesAcrossAPublishedGenerationReplacement
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RetainsNonPqManifestEntriesAcrossAPublishedGenerationReplacement (10 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAnAlreadyPublishedMappingWhosePqCodesWereCorrupted
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAnAlreadyPublishedMappingWhosePqCodesWereCorrupted (15 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsUnreachablePqManifestInventoryOnIdempotentRetry
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsUnreachablePqManifestInventoryOnIdempotentRetry (13 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsPqManifestRecordCountMismatchOnIdempotentRetry
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsPqManifestRecordCountMismatchOnIdempotentRetry (36 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithDifferentRecordsOrCodes
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithDifferentRecordsOrCodes (10 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithDifferentVectorIds
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleMappingWithDifferentVectorIds (19 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsCheckpointLsnExhaustionBeforePublishingDerivedObjects
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsCheckpointLsnExhaustionBeforePublishingDerivedObjects (6 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAPqMappingThatPointsAtARawVectorPage
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAPqMappingThatPointsAtARawVectorPage (9 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAPqMappingThatDoesNotContainTheMappedVectorId
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAPqMappingThatDoesNotContainTheMappedVectorId (9 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsStoresBoundToDifferentMetadataInstances
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsStoresBoundToDifferentMetadataInstances (5 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleManifestWithTheWrongMappingRoot
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAVisibleManifestWithTheWrongMappingRoot (12 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsAnUnanchoredManifestThatClaimsAPqMappingRoot
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsAnUnanchoredManifestThatClaimsAPqMappingRoot (3 ms)
+[ RUN      ] RelocatableOfflineVectorPqRebuildTest.RejectsPublishedPqMappingWithMissingCanonicalVector
+[       OK ] RelocatableOfflineVectorPqRebuildTest.RejectsPublishedPqMappingWithMissingCanonicalVector (23 ms)
+[----------] 38 tests from RelocatableOfflineVectorPqRebuildTest (581 ms total)
+
+[----------] Global test environment tear-down
+[==========] 76 tests from 5 test suites ran. (976 ms total)
+[  PASSED  ] 76 tests.

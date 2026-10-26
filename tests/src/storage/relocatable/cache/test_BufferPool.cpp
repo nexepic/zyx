@@ -1157,3 +1157,27 @@ TEST_F(BufferPoolTest, FailedFlushRetainsDirtyChainForAnExactRetry) {
     EXPECT_EQ(pool_->stats().disk_write_bytes, written);
 }
 #endif
+
+TEST_F(BufferPoolTest, StorageIoPinsRetainTheirPoolAcrossDisableReplacementAndMove) {
+    open(2U);
+    io_->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+    auto original = io_->pinTypedPage({0U, 1U}, BufferPoolReadHint::BPRH_SEQUENTIAL);
+    ASSERT_TRUE(original); EXPECT_EQ(original->bytes()[0], std::byte{1});
+    const auto firstEpoch = io_->dataMutationEpoch();
+    io_->disableBufferPool();
+    ASSERT_GT(io_->dataMutationEpoch(), firstEpoch);
+    EXPECT_EQ(original->bytes()[0], std::byte{1});
+    io_->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+    auto replacement = io_->pinTypedPage({RSS_BUFFER_POOL_PAGE_BYTES, 2U});
+    ASSERT_TRUE(replacement); EXPECT_EQ(replacement->bytes()[0], std::byte{2});
+    *replacement = std::move(*original);
+    EXPECT_FALSE(original->isValid()); EXPECT_EQ(replacement->bytes()[0], std::byte{1});
+    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
+    io_->disableBufferPool();
+    auto moved = std::move(*replacement);
+    replacement.reset(); original.reset();
+    EXPECT_EQ(moved.validBytes(), RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(moved.bytes()[0], std::byte{1});
+    moved = BufferPool::Pin{};
+    EXPECT_FALSE(moved.isValid());
+}

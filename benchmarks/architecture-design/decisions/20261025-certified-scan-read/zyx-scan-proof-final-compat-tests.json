@@ -1,0 +1,95 @@
+{
+  "tests": 4,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T00:11:52Z",
+  "time": "0.001s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanMembershipDirectoryTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:11:52Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "UsesTheCompleteNodeDomainAndBigEndianOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 7,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:11:52Z",
+          "time": "0s",
+          "classname": "ScanMembershipDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:11:52Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatCannotInstallOrPublishScanMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 1158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:11:52Z",
+          "time": "0s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    },
+    {
+      "name": "StoredScanMembershipTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:11:52Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "OrdinaryFormatsRejectTheStreamBeforeReadingStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:11:52Z",
+          "time": "0s",
+          "classname": "StoredScanMembershipTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanReadProofTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:11:52Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "OrdinaryFormatsRejectVerificationBeforeIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 437,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:11:52Z",
+          "time": "0s",
+          "classname": "ScanReadProofTest"
+        }
+      ]
+    }
+  ]
+}

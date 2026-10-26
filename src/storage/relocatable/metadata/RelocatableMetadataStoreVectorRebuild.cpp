@@ -388,7 +388,7 @@ namespace graph::storage {
 							  "offline PQ rebuild Codebook candidate does not contain exactly one manifest extent");
 		}
 
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
 		const VectorManifestLocation visibleManifest = locations_.findVectorManifest(current, mutation.index_id);
 		const PageLocation visibleManifestPage =
@@ -586,6 +586,13 @@ namespace graph::storage {
 		}
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        // This validated vector-only closure leaves primary Nodes, fields and
+        // complete scan membership unchanged. Retain all descriptor roots while
+        // publishing its new derived mappings and immutable codebook together.
+        if (current.hybrid_property_descriptor_root.isValid()) {
+            pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
+            batch.hybrid_property_publication_ = true;
+        }
 		OfflineVectorDerivedRebuildMetadataMaterialization materialization;
 		materialization.codebook_extents.reserve(mutation.codebook_reservations.size());
 		materialization.pq_retirement_pools.reserve(pqRetirementBatchesBySegment.size());

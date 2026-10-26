@@ -1,0 +1,34 @@
+{
+  "accepted_progress_percent": 15,
+  "module_tests": {
+    "isolated": {
+      "tests": 82,
+      "failures": 0
+    },
+    "default": {
+      "tests": 22,
+      "failures": 0
+    },
+    "compat": {
+      "tests": 56,
+      "failures": 0
+    }
+  },
+  "sources": {
+    "include/graph/storage/relocatable/entity/ScanMembershipMutation.hpp": "365d10d512b311c152677110193f92db257e260dcfc4edfa6f24eb8701e9cc0b",
+    "include/graph/storage/relocatable/entity/ScanMembershipPublication.hpp": "9544a6b969a8f0c6147ea62aff98c0919d352f2d0698499643671eedb2305867",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreScanMutation.cpp": "3c89578398b88f43bb117e1320465b043b90b6f7147c794595b01f0e99c75a6b",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "c78e986c55688a001713a8f6b52275d414ba8d833fab1b2f78df9d0d02e41f31",
+    "tests/src/storage/relocatable/entity/test_ScanMembershipSource.cpp": "7dc7d4fb4c8b10546776439e874a695d478f945f49f642231e4209bc041bda96"
+  },
+  "cores": {
+    "build-scan-candidate": "1136f016a27ffb7c78528b5173ade128ec52408f57eb212d6037cacff1007f1e",
+    "build-scan-work": "923638c7aea1c09fdab776b702856207ee2e927e646ac7719c6b1cda0552b966",
+    "build-hybrid-compat": "430e208fb824ac617569799db883b614527399aa7b0670bde37b8b3b5cd3d6c2"
+  },
+  "public_writable_open_enabled": false,
+  "real_dataset_space_admitted": false,
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false
+}

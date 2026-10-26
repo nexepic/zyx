@@ -21,6 +21,7 @@
 
 #include "storage/relocatable/maintenance/RelocatableIntegrityScannerTestFixture.hpp"
 
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Types.hpp"
@@ -1736,4 +1737,21 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsNoncanonicalBidirectionalV
 	};
 	replaceLeaf(nodeOwner, nodeHeader, duplicateNodeMapping);
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, GlobalAdjacencyIntegrityUsesABoundedFrontierInsteadOfAllEdges) {
+    using namespace graph::query::execution::detail;
+    auto graph = createNativeGlobalAdjacencyIntegrityGraph(io, 4096U);
+    const auto expected = RelocatableIntegrityScanner(io, *graph.metadata).scan();
+    constexpr size_t maximum = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_MAINTENANCE, maximum);
+    auto workspace = std::make_shared<PrepaidMemoryResource>(account, maximum, std::pmr::new_delete_resource());
+    const auto before = io->stats();
+    const auto generation = graph.metadata->openSnapshot().superblock().generation;
+    EXPECT_EQ(RelocatableIntegrityScanner(io, *graph.metadata, workspace).scan(), expected);
+    EXPECT_EQ(workspace->used(), 0U);
+    EXPECT_EQ(io->stats().write_calls, before.write_calls);
+    EXPECT_EQ(graph.metadata->openSnapshot().superblock().generation, generation);
 }

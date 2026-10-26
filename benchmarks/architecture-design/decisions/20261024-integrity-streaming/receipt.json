@@ -1,0 +1,74 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "performance_run_this_round": false,
+  "full_unit_suite_run": false,
+  "commit_or_push_this_round": false,
+  "configuration_tests": {
+    "default_integrity": {
+      "tests": 71,
+      "failures": 0,
+      "disabled": 0
+    },
+    "isolated_building": {
+      "tests": 49,
+      "failures": 0,
+      "disabled": 0
+    },
+    "default_building": {
+      "tests": 17,
+      "failures": 0,
+      "disabled": 0
+    }
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "b1e48f5fd19e23266e96626574716af18ebb38ac0a8d0035ad0736f3faa71ee5",
+    "include/graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp": "640ff8b3ac4e1f8fc9007fbd33187b0ee1ba16e14c89d6c04b5f6219b0337f9e",
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "3bc81069475fd92552a5912fd57b4f8e861963eae7d39448f0cc70d17efeeab9",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "0c1e46e38b731e79c1a77711010b78dbfa75dedec8b4a20e98df8a2a94ddba6b",
+    "tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner.cpp": "a148c8ecff1f06933f7e6e153e600edf3192566d28aae10b7d93e6b5365a37fa",
+    "tests/src/storage/relocatable/maintenance/test_RelocatableIntegrityScanner_Corruption.cpp": "6920e0726fba4f8390f2d45e26e1bb75d3d6afcce998b3a085d04450b38a865c"
+  },
+  "core_sha256": {
+    "isolated": "d87702b599fe5874fe2d604a6347deb6bc0e7caa56a44cd98a459f90ed998817",
+    "default": "4737b61a0a25bc193f728ce2bffa3571a1503f2f4c5b030a3731a643a2694775"
+  },
+  "module_object_sha256": {
+    "zyx-integrity-reread-tests.o": "e60436387c17c200337997f01d5b8fbbbe35ca1b424927d0b759d12c352f30b6",
+    "zyx-integrity-reread-corruption.o": "0df387391a97cdd7bfa97a43ee0a0838e2d534ea35cca48a655782e038eae46f",
+    "zyx-integrity-default-builder.o": "8d8c651af5ef35fa183d6d420d8201233d601713b9dbbe4beb9a9ee9ef0acdd3",
+    "zyx-integrity-builder-source-tests.o": "e982b0a2eed1c76ff2c592b3953abed37f80481133580b755e687f531a58a0b5"
+  },
+  "evidence_sha256": {
+    "en.md": "e3b9f234c53e1fa3fe7c0c10f62a2d163fa3f9f78078466ba9b5344f5955dcbb",
+    "first-building-tests.json": "1956b2e96e077a90cd1cc771f37c6809fad2a3fa0432308b70f7b1dec0141c27",
+    "first-building-tests.log": "dd8995a5c2c19d5e12fb49e0c645798eb3c037bd477d6feb8c0668a67d98ce48",
+    "first-source-verification-tests.json": "c777b8ffa700f7bf60359a41886277bf382275c3c8c84a5496c41c15d2644c0b",
+    "first-source-verification-tests.log": "cf36be3c036f3087141a095816400f0afeb78cec8c5d5fe4d151639876f95a45",
+    "recipes.json": "7fab1cb8bb31d6eb45b6d79ae73b611fd14530bf422e02f1cf5757d889bfaed0",
+    "zh.md": "30dc95c0c2f4e37c62bdd96fd015b04ed6367a2f1b8115cf7a2ab15d13374423",
+    "zyx-integrity-cancel-default-build.log": "21e52f83c1f1bbc4732dd116bf757216579305656e702f52a1ebacfa24cf4ffb",
+    "zyx-integrity-cancel-isolated-build.log": "d5c7335df257871fcd8197f527328861affe1ccc05019916ca54fe2aa8f4771d",
+    "zyx-integrity-final-building-tests.json": "0b067ca658e6d22150935aaf4092ff3829f7213b4e3b6e4fe0b711bede6659c8",
+    "zyx-integrity-final-building-tests.log": "cf0fba0674af61057ea53005a5012348cdb55aa744f1f3f9befb38e70167a39e",
+    "zyx-integrity-final-default-building-tests.json": "8e7609ba293b933a48346c7d8991bb5a339a4b2dab9a8363b1965623041276a4",
+    "zyx-integrity-final-default-building-tests.log": "52169a1972feffc0df4cdf2ad80a962ece82dd6699bb991b7f7d24cd9c4784ab",
+    "zyx-integrity-final-default-tests.json": "e95bfc47dcaea39423d00b7132f1b93c9e6345df208af0be7cd1e9e75ec34752",
+    "zyx-integrity-final-default-tests.log": "83db84e1bf51d52282f397f4e57163f2b844a753bb231982f7119154fabf0c1c",
+    "zyx-integrity-lazy-pages-default-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-lazy-pages-isolated-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-owner-dispatch-default-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-reread-default-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-reread-isolated-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-reread-memory.json": "3e2f70e17265a1b7d5f163a2ad9d8e2f47902d14b0a5ec6c71ac9f9c539a5ebb",
+    "zyx-integrity-reread-memory.log": "6ef1a5240901e4d6390e6141d0e4253864e9fba0c11442c9feb0dec31d54e3b9",
+    "zyx-integrity-stream-adjacency-default-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-integrity-stream-primary-default-build.log": "f3356f04154223ac90d56a06636a674f80a60a4d51b105631b42fb69b78433ac",
+    "zyx-scan-integrity-budget-status.json": "72a4eb8340bca05d6270dee9650f043e4e030341727a9883d291cb63cfcafbad",
+    "zyx-scan-integrity-budget.cpp": "147f7b81b9ac1322c3f053179346cfaf7e6c430951c6546398b5410ee769631c",
+    "zyx-scan-page-census-medium.json": "bfcfd010a3d26ce6a8bfc9f6f745bc5f9075e689efb3a4ab95fda8aa3fbf0901",
+    "zyx-scan-page-census.cpp": "582cafe47531c978920af77c0de3247aaf29d5f26e126ac6aea8bd8d57b87282"
+  }
+}

@@ -1,0 +1,417 @@
+{
+  "head": "9d65a397f93689557eb076458aec65104505a989",
+  "results": [
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "zyx_p50_ms": 341.93369,
+      "kuzu_p50_ms": 5.27811900008146,
+      "zyx_over_kuzu": 64.78324759156108
+    },
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "zyx_p50_ms": 490.37622550000003,
+      "kuzu_p50_ms": 1.7341560001113976,
+      "zyx_over_kuzu": 282.7751514099652
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "zyx_p50_ms": 339.2920695,
+      "kuzu_p50_ms": 9.883615500029919,
+      "zyx_over_kuzu": 34.328740277176195
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "zyx_p50_ms": 409.2139575,
+      "kuzu_p50_ms": 14.478107500053738,
+      "zyx_over_kuzu": 28.264326501131528
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "zyx_p50_ms": 228.06775349999998,
+      "kuzu_p50_ms": 2.9911504999518,
+      "zyx_over_kuzu": 76.24750192398379
+    },
+    {
+      "scale": "holdout",
+      "case": "all_nodes_property_filter",
+      "zyx_p50_ms": 363.80259049999995,
+      "kuzu_p50_ms": 1.2445429999843327,
+      "zyx_over_kuzu": 292.3182168109738
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "zyx_p50_ms": 230.32662299999998,
+      "kuzu_p50_ms": 4.761731500025235,
+      "zyx_over_kuzu": 48.370350784956976
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "zyx_p50_ms": 317.2267045,
+      "kuzu_p50_ms": 8.577816499951041,
+      "zyx_over_kuzu": 36.982220883579245
+    }
+  ],
+  "threads": 1,
+  "processes": 3,
+  "warmup": 3,
+  "iterations": 10,
+  "oracle": "complete typed rows, unordered bags",
+  "new_environment_calibration": true,
+  "source_library_sha256": "6594a671e402754c373185bea972a1691b104be0d96c784c847c7ce06ac5e8da",
+  "binary_sha256": "fafe4b6670ae441b66d1974e67f9f2ad08f15a4c9b5a9c25700bd297c4ac35a4",
+  "per_process": [
+    {
+      "file": "initial-holdout-0-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 4.580063499929565,
+      "p95_ms": 4.844654949943106
+    },
+    {
+      "file": "initial-holdout-0-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.1525760000949958,
+      "p95_ms": 1.763020000043979
+    },
+    {
+      "file": "initial-holdout-0-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 2.9611339999746633,
+      "p95_ms": 3.6375290499449875
+    },
+    {
+      "file": "initial-holdout-0-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 7.098790499981078,
+      "p95_ms": 8.523550049858384
+    },
+    {
+      "file": "initial-holdout-0-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 232.7670415,
+      "p95_ms": 312.6357387999999
+    },
+    {
+      "file": "initial-holdout-0-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 354.52680250000003,
+      "p95_ms": 447.59374395
+    },
+    {
+      "file": "initial-holdout-0-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 229.837378,
+      "p95_ms": 325.2166891
+    },
+    {
+      "file": "initial-holdout-0-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 319.831763,
+      "p95_ms": 482.27748174999994
+    },
+    {
+      "file": "initial-holdout-1-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 4.717666999908943,
+      "p95_ms": 5.0582384000108505
+    },
+    {
+      "file": "initial-holdout-1-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.2393849999625672,
+      "p95_ms": 2.0760336000762427
+    },
+    {
+      "file": "initial-holdout-1-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 2.7066185000421683,
+      "p95_ms": 3.1515898500856565
+    },
+    {
+      "file": "initial-holdout-1-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 8.709352500090972,
+      "p95_ms": 11.132082750032168
+    },
+    {
+      "file": "initial-holdout-1-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 230.630481,
+      "p95_ms": 283.60607254999996
+    },
+    {
+      "file": "initial-holdout-1-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 405.87122899999997,
+      "p95_ms": 642.1416561
+    },
+    {
+      "file": "initial-holdout-1-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 234.8148215,
+      "p95_ms": 294.20113399999997
+    },
+    {
+      "file": "initial-holdout-1-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 306.07690349999996,
+      "p95_ms": 319.2132918
+    },
+    {
+      "file": "initial-holdout-2-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 5.914060000009158,
+      "p95_ms": 9.238074099937418
+    },
+    {
+      "file": "initial-holdout-2-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.507035500026177,
+      "p95_ms": 2.355686349949337
+    },
+    {
+      "file": "initial-holdout-2-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 3.4707204999904206,
+      "p95_ms": 5.337474549946816
+    },
+    {
+      "file": "initial-holdout-2-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 9.80722849999438,
+      "p95_ms": 16.547160350057762
+    },
+    {
+      "file": "initial-holdout-2-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 227.9942315,
+      "p95_ms": 257.4829475
+    },
+    {
+      "file": "initial-holdout-2-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 411.48844099999997,
+      "p95_ms": 539.07991295
+    },
+    {
+      "file": "initial-holdout-2-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 219.25703,
+      "p95_ms": 285.9059856999999
+    },
+    {
+      "file": "initial-holdout-2-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 472.656571,
+      "p95_ms": 580.7082278999999
+    },
+    {
+      "file": "initial-medium-0-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 9.041488499974548,
+      "p95_ms": 13.333422249934296
+    },
+    {
+      "file": "initial-medium-0-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.459535999970285,
+      "p95_ms": 2.398273549977147
+    },
+    {
+      "file": "initial-medium-0-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 4.91162200000872,
+      "p95_ms": 8.170258699976783
+    },
+    {
+      "file": "initial-medium-0-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 15.535228499970799,
+      "p95_ms": 30.62939909993929
+    },
+    {
+      "file": "initial-medium-0-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 316.1966395,
+      "p95_ms": 332.76287625
+    },
+    {
+      "file": "initial-medium-0-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 486.45925750000004,
+      "p95_ms": 520.7455851999999
+    },
+    {
+      "file": "initial-medium-0-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 308.9679225,
+      "p95_ms": 695.2830256999998
+    },
+    {
+      "file": "initial-medium-0-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 401.082454,
+      "p95_ms": 442.79583725
+    },
+    {
+      "file": "initial-medium-1-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 9.830457500015655,
+      "p95_ms": 10.596461700095006
+    },
+    {
+      "file": "initial-medium-1-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.737864000119771,
+      "p95_ms": 3.179044400019392
+    },
+    {
+      "file": "initial-medium-1-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 5.98241350007811,
+      "p95_ms": 12.770792100127434
+    },
+    {
+      "file": "initial-medium-1-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 14.276589000019158,
+      "p95_ms": 16.119997450005027
+    },
+    {
+      "file": "initial-medium-1-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 362.4408855,
+      "p95_ms": 554.16134805
+    },
+    {
+      "file": "initial-medium-1-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 875.2080705000001,
+      "p95_ms": 993.7364788499999
+    },
+    {
+      "file": "initial-medium-1-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 349.343488,
+      "p95_ms": 478.96217879999983
+    },
+    {
+      "file": "initial-medium-1-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 440.8506075,
+      "p95_ms": 781.7218825499997
+    },
+    {
+      "file": "initial-medium-2-kuzu.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 11.593247000064366,
+      "p95_ms": 57.609515849867336
+    },
+    {
+      "file": "initial-medium-2-kuzu.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 1.9117100000585197,
+      "p95_ms": 3.064787849984895
+    },
+    {
+      "file": "initial-medium-2-kuzu.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 6.073523500049305,
+      "p95_ms": 14.393662549991848
+    },
+    {
+      "file": "initial-medium-2-kuzu.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 14.50220200001695,
+      "p95_ms": 22.60243174998777
+    },
+    {
+      "file": "initial-medium-2-zyx.jsonl",
+      "case": "aggregation_count_by_group",
+      "samples": 10,
+      "p50_ms": 381.487639,
+      "p95_ms": 558.5921452499999
+    },
+    {
+      "file": "initial-medium-2-zyx.jsonl",
+      "case": "all_nodes_property_filter",
+      "samples": 10,
+      "p50_ms": 454.061578,
+      "p95_ms": 573.2585866999999
+    },
+    {
+      "file": "initial-medium-2-zyx.jsonl",
+      "case": "label_scan_filter",
+      "samples": 10,
+      "p50_ms": 438.09140549999995,
+      "p95_ms": 931.7742947999997
+    },
+    {
+      "file": "initial-medium-2-zyx.jsonl",
+      "case": "multi_key_group",
+      "samples": 10,
+      "p50_ms": 406.1703075,
+      "p95_ms": 411.40219365
+    }
+  ],
+  "p95_method": "linear interpolation at (n-1)*0.95; ten samples per process do not establish precise tail latency",
+  "environment": {
+    "cpu": "Intel Xeon Platinum 8370C",
+    "cpu_quota": "400000 100000",
+    "memory_limit_bytes": 17179869184,
+    "kuzu_version": "0.11.3",
+    "address_space_limit_bytes": 6442450944,
+    "test_hooks_in_timing_library": false
+  },
+  "scope": "Initial current-work calibration; not the registered candidate comparison, a replacement for historical evidence, or optimization acceptance. Freshly rebuilt ROW images have different physical identities from the missing original databases."
+}

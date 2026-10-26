@@ -1,0 +1,185 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = PropertyCollectionRootStoreCacheTest.*:BufferPoolTest.*:ScanMembershipDirectoryTest.*:BuildingScanMembershipTest.*
+[==========] Running 83 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (15 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (2 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges
+[       OK ] PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionReleasesOnFailureAndOtherReadModes
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionReleasesOnFailureAndOtherReadModes (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedPageRetentionInvalidatesAfterWriteAttempt (1 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedPinSurvivesPoolDisableAndMoveAssignmentWithoutDanglingView
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedPinSurvivesPoolDisableAndMoveAssignmentWithoutDanglingView (3 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners (1 ms)
+[----------] 25 tests from PropertyCollectionRootStoreCacheTest (70 ms total)
+
+[----------] 47 tests from BufferPoolTest
+[ RUN      ] BufferPoolTest.KeepsDifferentGenerationsForOnePhysicalPageResident
+[       OK ] BufferPoolTest.KeepsDifferentGenerationsForOnePhysicalPageResident (0 ms)
+[ RUN      ] BufferPoolTest.ValidatesCapacityAndPinHandleState
+[       OK ] BufferPoolTest.ValidatesCapacityAndPinHandleState (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration
+[       OK ] BufferPoolTest.TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesPreserveGenerationAndPinSafety
+[       OK ] BufferPoolTest.TypedPageRangesPreserveGenerationAndPinSafety (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd
+[       OK ] BufferPoolTest.TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile
+[       OK ] BufferPoolTest.TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile (0 ms)
+[ RUN      ] BufferPoolTest.TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews
+[       OK ] BufferPoolTest.TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews (0 ms)
+[ RUN      ] BufferPoolTest.RefusesToEvictPinnedPageThenEvictsAfterUnpin
+[       OK ] BufferPoolTest.RefusesToEvictPinnedPageThenEvictsAfterUnpin (0 ms)
+[ RUN      ] BufferPoolTest.PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten
+[       OK ] BufferPoolTest.PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten (0 ms)
+[ RUN      ] BufferPoolTest.FullPageOverwriteAvoidsReadBeforeWrite
+[       OK ] BufferPoolTest.FullPageOverwriteAvoidsReadBeforeWrite (0 ms)
+[ RUN      ] BufferPoolTest.WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews
+[       OK ] BufferPoolTest.WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews (0 ms)
+[ RUN      ] BufferPoolTest.InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews
+[       OK ] BufferPoolTest.InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews (0 ms)
+[ RUN      ] BufferPoolTest.FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules
+[       OK ] BufferPoolTest.FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules (0 ms)
+[ RUN      ] BufferPoolTest.EvictionFlushesDirtyPagesBeforeReusingTheirFrames
+[       OK ] BufferPoolTest.EvictionFlushesDirtyPagesBeforeReusingTheirFrames (0 ms)
+[ RUN      ] BufferPoolTest.PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush
+[       OK ] BufferPoolTest.PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush (0 ms)
+[ RUN      ] BufferPoolTest.SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead
+[       OK ] BufferPoolTest.SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead (0 ms)
+[ RUN      ] BufferPoolTest.TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback
+[       OK ] BufferPoolTest.TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback (0 ms)
+[ RUN      ] BufferPoolTest.ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty
+[       OK ] BufferPoolTest.ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty (0 ms)
+[ RUN      ] BufferPoolTest.DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle
+[       OK ] BufferPoolTest.DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix
+[       OK ] BufferPoolTest.StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport
+[       OK ] BufferPoolTest.StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateNoOpKeepsCachedPagesResident
+[       OK ] BufferPoolTest.StorageIoTruncateNoOpKeepsCachedPagesResident (0 ms)
+[ RUN      ] BufferPoolTest.ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages
+[       OK ] BufferPoolTest.ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink
+[       OK ] BufferPoolTest.StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink (0 ms)
+[ RUN      ] BufferPoolTest.RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch
+[       OK ] BufferPoolTest.RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch (0 ms)
+[ RUN      ] BufferPoolTest.FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted
+[       OK ] BufferPoolTest.FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted (0 ms)
+[ RUN      ] BufferPoolTest.CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity
+[       OK ] BufferPoolTest.CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity (0 ms)
+[ RUN      ] BufferPoolTest.CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage
+[       OK ] BufferPoolTest.CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage (0 ms)
+[ RUN      ] BufferPoolTest.EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache
+[       OK ] BufferPoolTest.EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache (0 ms)
+[ RUN      ] BufferPoolTest.PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail
+[       OK ] BufferPoolTest.PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail (0 ms)
+[ RUN      ] BufferPoolTest.CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed
+[       OK ] BufferPoolTest.CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed (0 ms)
+[ RUN      ] BufferPoolTest.StorageIOForwardsAndRetainsTheCoordinatedCacheGrant
+[       OK ] BufferPoolTest.StorageIOForwardsAndRetainsTheCoordinatedCacheGrant (0 ms)
+[ RUN      ] BufferPoolTest.StorageIOCacheDenialLeavesNoPartiallyPublishedPage
+[       OK ] BufferPoolTest.StorageIOCacheDenialLeavesNoPartiallyPublishedPage (0 ms)
+[ RUN      ] BufferPoolTest.EvictsForMetadataPressureBeforeThePayloadOnlyCeiling
+[       OK ] BufferPoolTest.EvictsForMetadataPressureBeforeThePayloadOnlyCeiling (0 ms)
+[ RUN      ] BufferPoolTest.SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance
+[       OK ] BufferPoolTest.SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance (0 ms)
+[ RUN      ] BufferPoolTest.TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins
+[       OK ] BufferPoolTest.TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins (225 ms)
+[ RUN      ] BufferPoolTest.TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins
+[       OK ] BufferPoolTest.TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins (1 ms)
+[ RUN      ] BufferPoolTest.TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation
+[       OK ] BufferPoolTest.TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation (0 ms)
+[ RUN      ] BufferPoolTest.TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages
+[       OK ] BufferPoolTest.TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages (0 ms)
+[ RUN      ] BufferPoolTest.UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent
+[       OK ] BufferPoolTest.UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent (0 ms)
+[ RUN      ] BufferPoolTest.ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread
+[       OK ] BufferPoolTest.ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread (2 ms)
+[ RUN      ] BufferPoolTest.ControlRecordWritesValidateRangesAndProtectPinnedImages
+[       OK ] BufferPoolTest.ControlRecordWritesValidateRangesAndProtectPinnedImages (0 ms)
+[ RUN      ] BufferPoolTest.NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits
+[       OK ] BufferPoolTest.NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits (0 ms)
+[ RUN      ] BufferPoolTest.SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages
+[       OK ] BufferPoolTest.SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages (0 ms)
+[ RUN      ] BufferPoolTest.LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows
+[       OK ] BufferPoolTest.LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows (103 ms)
+[ RUN      ] BufferPoolTest.OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData
+[       OK ] BufferPoolTest.OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData (0 ms)
+[ RUN      ] BufferPoolTest.StorageIoPinsRetainTheirPoolAcrossDisableReplacementAndMove
+[       OK ] BufferPoolTest.StorageIoPinsRetainTheirPoolAcrossDisableReplacementAndMove (0 ms)
+[----------] 47 tests from BufferPoolTest (340 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 10 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (141 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (5 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix (3 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (2 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (15 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (15 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (5 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (4 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (4 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (4 ms)
+[----------] 10 tests from BuildingScanMembershipTest (203 ms total)
+
+[----------] Global test environment tear-down
+[==========] 83 tests from 4 test suites ran. (614 ms total)
+[  PASSED  ] 83 tests.

@@ -1,0 +1,8 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:251:5: error: use of undeclared identifier 'utils'; did you mean 'graph::utils'?
+  251 |     utils::OwnedAllocationScope readOwner(readMemory);
+      |     ^~~~~
+      |     graph::utils
+/workspace/zyx/include/graph/utils/OwnedStringVector.hpp:13:18: note: 'graph::utils' declared here
+   13 | namespace graph::utils {
+      |                  ^
+1 error generated.

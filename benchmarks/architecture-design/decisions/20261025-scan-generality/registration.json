@@ -1,0 +1,28 @@
+{
+  "registration": "20261023-scan-path-s0/registration.json.generality_registration",
+  "owners": 16384,
+  "seed": 20261023,
+  "ordinal_base": 1,
+  "labels": "multiples of 3 both alpha/beta; remaining even alpha, odd beta",
+  "dense_integer": "ordinal; update multiples of 8 by +1000",
+  "sparse_number": "multiples of 16, alternating integer and double+0.5; removed at multiples of 16 during mutation",
+  "mixed": "ordinal mod4: integer, text, NULL, missing",
+  "text": "ordinal mod4 lengths 0,2,63,1024; embedded NUL at midpoint when length >=2",
+  "delete": "multiples of 32; deletion precedes other mutation rules",
+  "relabel": "multiples of 7 to changed",
+  "creation_batch": 128,
+  "mutation_batch_owner_span": 32,
+  "old_pin": "held across all mutations, full oracle checked again before release",
+  "reopen_raw_cache_bytes": 4096,
+  "oracle": "all IDs, complete labels and all Property values plus count/sum queries; no latency samples",
+  "query_benchmark": false,
+  "source_sha256": "3b5305939647a0cbb1d845aa625d3e5c7883e263e448c5cd34a2ace853a7744e",
+  "oracle_queries": [
+    "count/sum dense",
+    "sparse/mixed/text presence",
+    "four binary-text groups",
+    "overlapping labels"
+  ],
+  "oracle_source_workspace_bytes": 1048576,
+  "oracle_source_account_binding": "same shared caller budget during snapshot creation and visits"
+}

@@ -1,0 +1,162 @@
+{
+  "tests": 14,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T00:37:58Z",
+  "time": "2.361s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanReadProofTest",
+      "tests": 14,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:37:58Z",
+      "time": "2.361s",
+      "testsuite": [
+        {
+          "name": "PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 98,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:58Z",
+          "time": "0.061s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:58Z",
+          "time": "0.265s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:58Z",
+          "time": "0.298s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 207,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:58Z",
+          "time": "0.292s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:58Z",
+          "time": "0.585s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 308,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.034s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "BuildingAndInvalidAccountsCannotMintCompleteAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 320,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.022s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 334,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.054s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.051s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 403,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.111s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 432,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.046s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 458,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.045s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 488,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:37:59Z",
+          "time": "0.217s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 548,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:38:00Z",
+          "time": "0.273s",
+          "classname": "ScanReadProofTest"
+        }
+      ]
+    }
+  ]
+}

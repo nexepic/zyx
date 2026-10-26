@@ -1,0 +1,218 @@
+{
+  "artifacts": {
+    "initial_binary": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/public-baseline",
+      "bytes": 21373504,
+      "sha256": "fafe4b6670ae441b66d1974e67f9f2ad08f15a4c9b5a9c25700bd297c4ac35a4"
+    },
+    "control_binary": {
+      "path": "/tmp/zyx-frozen-control-public",
+      "bytes": 21348600,
+      "sha256": "a3eea980ed24f9ea0a46669783eda71ba196c59bd9d8ea374215dca9756c1419"
+    },
+    "initial_library": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/libzyx-baseline-production.a",
+      "bytes": 45591314,
+      "sha256": "6594a671e402754c373185bea972a1691b104be0d96c784c847c7ce06ac5e8da"
+    },
+    "control_library": {
+      "path": "/workspace/zyx-frozen-control-369039d/build/libzyx_core.a",
+      "bytes": 43459544,
+      "sha256": "ab6baf2ed7ef61d87666db1d536d88947a7f52055ee38314966fd8eae6965a0c"
+    },
+    "medium_row": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+      "bytes": 309985280,
+      "sha256": "925aa548f8ddfb270067cb15bc9df8303c77d9b8bb70c9748a7b9634dd98ad97"
+    },
+    "holdout_row": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+      "bytes": 259915776,
+      "sha256": "2d0a37f0c7657f68f4c191f8393daae45337a19bdd01b0a0249fb65ae40b99a6"
+    },
+    "medium_kuzu": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.kuzu",
+      "bytes": 41108096,
+      "sha256": "cc730efbdaef224a965a8145876945cbf182472584ef988cc748371f3522ab72"
+    },
+    "holdout_kuzu": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.kuzu",
+      "bytes": 34380344,
+      "sha256": "f6162505aea3084fb02dcf4b39f9a9ca98cde1f478de1fb84be258efed648d54"
+    },
+    "public_probe_source": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/public-probe.cpp",
+      "bytes": 23526,
+      "sha256": "8c691cb8392edece0805b583a40da10eecd29fcb75aab23bd64057d555317929"
+    },
+    "oracle_source": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/oracle.py",
+      "bytes": 9950,
+      "sha256": "2a5d55ae3ed5d71cd463dae365db5f990074bd15b64b4b1951c610a0707d8d57"
+    },
+    "kuzu_worker_source": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/kuzu-worker.py",
+      "bytes": 6426,
+      "sha256": "f07ab311f82f0df12811aba1838a2aae6bc3ec891a2aaa6e9e3d86ac1f71d3eb"
+    },
+    "B_binary": {
+      "path": "/tmp/zyx-corrected-b-public",
+      "bytes": 23191768,
+      "sha256": "3024cb6d970803a9f53d74f2fb9eed9c474497f37916cfad60b9f4c0ebc22b49"
+    },
+    "B_values": {
+      "path": "/tmp/zyx-corrected-b-values",
+      "bytes": 23191768,
+      "sha256": "70a1891970dc1c900da4eef4c12d17909a17c83fcfe1d48cdcc3cad849512c3f"
+    },
+    "B_library": {
+      "path": "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+      "bytes": 48832980,
+      "sha256": "e9b4a09507e1e2ca59baa13ae67a50655a825c291fa49f89844ffa27e693f157"
+    },
+    "campaign": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261025-final-scan-comparison/campaign.py",
+      "bytes": 9938,
+      "sha256": "659d2d265d1a3a150b856a49cf2770af8078a936cdf39acca07c0c79f4fd54a0"
+    },
+    "recheck": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/recheck.py",
+      "bytes": 7184,
+      "sha256": "3498f5e30d15b542088606b87a14e0dcf77cfbb4c5012ee50e779780dbe63b8a"
+    },
+    "tests": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/related-83-tests.json",
+      "bytes": 35932,
+      "sha256": "ccde5c495dad2070770504c487eda766ca466f15c2200a410f6e8c68edb71a19"
+    },
+    "compatible_tests": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/compatible-read-tests.json",
+      "bytes": 28825,
+      "sha256": "1e6ae2078d111eeff055ec99b0ef06ec67efea46e1bda25f559a9f67fae24b4c"
+    },
+    "values_source": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261025-final-scan-comparison/value-probe.cpp",
+      "bytes": 23961,
+      "sha256": "cf0457e69e7b2301e3efbc31b3265a092bdc402dc4e8fa7b30fdfd9a5a21dab9"
+    },
+    "untimed_work_script": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-bounded-scan-batch-correction/check-work.py",
+      "bytes": 2479,
+      "sha256": "2c23abcb9db56b435e18dd1a134ddd2cda300558907e83a3e3eb69cf0d6993b5"
+    },
+    "medium_scan": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+      "bytes": 256507904,
+      "sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    "medium_primary_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-medium-primary.json",
+      "bytes": 588,
+      "sha256": "76cab3606bc8c13a1db3042621fd548b2d7f57102545b84ccda3d07f36d9a8a9"
+    },
+    "medium_edge-batch_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-medium-edge-batch.json",
+      "bytes": 521,
+      "sha256": "ef05090cd36fe45cd2d51c5c6b829af37bdc6817ef3c36318f1636cc096d9e0d"
+    },
+    "medium_edge-single_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-medium-edge-single.json",
+      "bytes": 525,
+      "sha256": "045ae841473c97b9f3658cc89f63a531333c2039a1f9ebe4ef0c4ad972f39b14"
+    },
+    "medium_follows.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/follows.csv",
+      "bytes": 13500016,
+      "sha256": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747"
+    },
+    "medium_tags.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/tags.csv",
+      "bytes": 83899,
+      "sha256": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf"
+    },
+    "medium_users.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/users.csv",
+      "bytes": 2977829,
+      "sha256": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67"
+    },
+    "medium_posts.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/posts.csv",
+      "bytes": 4054761,
+      "sha256": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46"
+    },
+    "medium_authored.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/authored.csv",
+      "bytes": 3240016,
+      "sha256": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716"
+    },
+    "medium_has_tag.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium/has_tag.csv",
+      "bytes": 6240016,
+      "sha256": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+    },
+    "holdout_scan": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-corrected-v1.zyx",
+      "bytes": 222035968,
+      "sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    "holdout_primary_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-holdout-primary.json",
+      "bytes": 590,
+      "sha256": "680116aa3cfe2a7f4c0da9d4ed151e61eef6ece0278bac51aa41c291ac33b743"
+    },
+    "holdout_edge-batch_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-holdout-edge-batch.json",
+      "bytes": 523,
+      "sha256": "7ee25c8eae63ce168a38d292fc16aa21e7a9228c4981390b8b8899f71eb7655b"
+    },
+    "holdout_edge-single_oracle": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/bounded-correction/untimed-holdout-edge-single.json",
+      "bytes": 527,
+      "sha256": "094b192e7770af16cf3aa5a713cd9e008cb9dd07597098e37283ea3f92e6d81b"
+    },
+    "holdout_follows.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/follows.csv",
+      "bytes": 13797016,
+      "sha256": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999"
+    },
+    "holdout_tags.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/tags.csv",
+      "bytes": 49899,
+      "sha256": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b"
+    },
+    "holdout_users.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/users.csv",
+      "bytes": 2173962,
+      "sha256": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+    },
+    "holdout_posts.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/posts.csv",
+      "bytes": 2939689,
+      "sha256": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19"
+    },
+    "holdout_authored.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/authored.csv",
+      "bytes": 2349016,
+      "sha256": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e"
+    },
+    "holdout_has_tag.csv": {
+      "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout/has_tag.csv",
+      "bytes": 4524016,
+      "sha256": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9"
+    }
+  },
+  "kuzu_version": "0.11.3",
+  "original_failed_freeze_sha256": "9f82e7c6bbab286f02d7f33231ce0fc4c2b600f5703c5a45404af176df608371",
+  "correction_number": 1,
+  "protocol": {
+    "warmup": 3,
+    "iterations": 10,
+    "limits": {
+      "address_space_bytes": 6442450944,
+      "file_bytes": 2147483648,
+      "process_timeout_seconds": 1200
+    }
+  },
+  "scope": "Corrected B versus unchanged initial/control/Kuzu; A already failed, no extra candidate",
+  "full_s5_matrix": false
+}

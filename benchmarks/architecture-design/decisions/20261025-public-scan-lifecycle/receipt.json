@@ -1,0 +1,60 @@
+{
+  "accepted_progress_percent": 15,
+  "tests": {
+    "current-boundary-tests": {
+      "tests": 174,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "adapter-identity-pq-tests": {
+      "tests": 76,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "property-lifecycle-tests": {
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "boundary-default-tests": {
+      "tests": 174,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    },
+    "boundary-compat-tests": {
+      "tests": 138,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0
+    }
+  },
+  "sources": {
+    "CMakeLists.txt": "c4b122ab2bb987fdd52d6943e1027849ee3d8b001831ab6cae3aa000280b6dae",
+    "apps/scan_convert/main.cpp": "ee3f3dc25a881b879647ea315c034f41804e9403ac8a0a9ee965d98c0bf67ffc",
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "d605664668856c024414f85b3cf52b5afe912e9a25776d91a910603ee1947497",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "ed32506a0aefe7d8dbef090ee223f8d652765c66ef173cc2ba94336ba9bc9141",
+    "include/graph/storage/relocatable/entity/ScanMembershipPublication.hpp": "a8bbfa7e0be570f741e8c7582f05606b931ac6976f7ff8ba9a710e045a47774b",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreScanMutation.cpp": "75199d686cc90d02fa0c4ade90b06ff2173a31b105d4c776c3c50fab1491fe55",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "f3e04efab1cf99669cf30e68c986b3d65361f2e76393ec9d3505de1d9433d79e",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "f75a3a3ce380773a4f7b105722b266809c2c590e44b1a6f7663e52d3fd8f629f",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreIdentity.cpp": "eb6ecd61dd76d001ca718e4ba276e0f865f3a89ba1b724dab64d714157a76eaf",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp": "3cb3ccae84f1ec88f2836bd899c7c309b87ca9cae45e1d06d5c49cc9c4231823",
+    "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": "6bbce0aec67fea0d5a944daa47173cb48e20aeac686238cbc9dd06336a23d435",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "bf5c978490b5afe5b62ea2934daa5df8a58ac196028ca0acae89e7b6c6457a53",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "6263a5eb9907c22aaec1e1a03fdc76756e08830c5ac628c078052569b3e697d4",
+    "tests/src/storage/relocatable/entity/test_PageBackedGraphReadAdapter_WideIds.cpp": "da98e12a05525fd850173bdad26263b8e78d2d1e41fd920aef8e737271a972bd"
+  },
+  "candidate_core_sha256": "12956977914f172cd4d1707a324c3a977d2c4ecfedb8f099bf6d3b2190236d78",
+  "public_writable_open_enabled": true,
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false,
+  "real_images": "v6 BUILDING; complete integrity, whole-file saving and final performance gates pending",
+  "test_source_note": "174-test run precedes addition of the one supplemental property type/large-value test, which passed separately against the same implementation. Default vector base/adjacency fault modules use the default storage-test-hook build. Original hooks-off compilation refusal retained.",
+  "cmake_offline_converter_target_built": true,
+  "cmake_build_apps_required": false
+}

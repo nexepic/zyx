@@ -426,6 +426,10 @@ namespace graph::storage {
 								EntityLabelSetStore &labels, PropertyCollectionRootStore &properties, BTreePageStore &indexes,
 								NativeGraphWritePlannerOptions options = {});
 		[[nodiscard]] NativeGraphWriteTransaction beginTransaction();
+        // Derive both reserved free-slot indexes from actual entity pages.
+        // The caller supplies the existing allocation scope and cancellation.
+        [[nodiscard]] NativeGraphWriteCommitResult rebuildEntityFreeSpaceSummaries(
+            const std::function<void()> &checkpoint = {});
 		// Logical-transaction overlays acquire durable identities before exposing a
 		// provisional result. The returned ranges are later adopted verbatim by the
 		// graph writer, so another planner cannot steal or reorder these IDs.

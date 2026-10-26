@@ -1,0 +1,64 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "base_head": "9d65a397f93689557eb076458aec65104505a989",
+  "full_unit_suite_run": false,
+  "candidate_performance_comparison_run": false,
+  "final_performance_comparison_run": false,
+  "module_tests": {
+    "isolated_scan_codec_and_file_clone": 8,
+    "default_profile_rejection": 1,
+    "real_primary_membership_source": 8
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/entity/ScanMembershipSource.hpp": "03680bf108481acda2fa8e1faf2739da975c8dfdcc0b176761e6a5a3c5ae1a65",
+    "include/graph/storage/relocatable/format/ScanFormatCloneCodec.hpp": "b62fa7289c8a6e7ec9c63623dedcfe5c83a086ee71390f4e0e3784051a825655",
+    "include/graph/storage/relocatable/format/ScanBuildingClone.hpp": "45c18b73a9d1cffd90eed30a3acbb9e4401281e4266c42a39d520b60b7166e00",
+    "tests/src/storage/relocatable/entity/test_ScanMembershipSource.cpp": "7a08530118faf5ae0ad1f54470fed82cc20f9a7079ee791ad53cfc6a760e08d8",
+    "tests/src/storage/relocatable/format/test_ScanFormatCloneCodec.cpp": "05b17d16f5a603dddabb9104c3fcac8e88f9ce09706fd8db8872b1e7f817215c",
+    "tests/src/storage/relocatable/format/test_ScanBuildingClone.cpp": "9f7503ab33ddf009aa399aa180008a6517e28e91dbdc65ba8953b17e64d91de3"
+  },
+  "initial_calibration_samples": 480,
+  "raw_root": "benchmarks/architecture-design/results/20261024-work-scan",
+  "raw_sha256": {
+    "initial-holdout-0-kuzu.jsonl": "8169ce461432dc081626d991bc81ce118d873460a8498c0a4992f4d60c18661c",
+    "initial-holdout-0-zyx.jsonl": "b6539aa772bbe7fb914c04365804c746d07eafa6213c2706a05c2e256105383d",
+    "initial-holdout-1-kuzu.jsonl": "f5bd038c0db90f66f11cee5da7b0b157133b91acfefbeac7b17e8dad38f780ea",
+    "initial-holdout-1-zyx.jsonl": "766297ae06d806b1b7ede919dafc7e0dfe56d34c7e359a5f6815588d54128e69",
+    "initial-holdout-2-kuzu.jsonl": "662f44eea38940ee01f5920927529ece0f1198d41af5d6e2d592538fe786dfd3",
+    "initial-holdout-2-zyx.jsonl": "097c03902117f65b2dae1de00c6603c031464bbbde36a4d0d27d48e53f6c6d29",
+    "initial-medium-0-kuzu.jsonl": "e592e438a8e4547e4ea4eed800f4d98e029537e4dff1ffa3d3f6082e33b3a897",
+    "initial-medium-0-zyx.jsonl": "00618583562c5c02fbc323df007e6b78fa3767ed77840f09677c393524f50457",
+    "initial-medium-1-kuzu.jsonl": "08e08e28cb0b490eedd9e9acab1425d86128995deae0a927f5131425d94a3620",
+    "initial-medium-1-zyx.jsonl": "3d83415fe8eb889740297b1e285a3136f0f4a81e2b331fcbc81e310d1ce54a1c",
+    "initial-medium-2-kuzu.jsonl": "2631d239148e73a2b214311384a95fbcc3abfea639c8ad306903bd7abec3d146",
+    "initial-medium-2-zyx.jsonl": "1bb295ed220cdbb4256e9efb337f25b4a226d79adddf3049a02e186806da61ec"
+  },
+  "csv_sha256": {
+    "holdout/authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+    "holdout/follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+    "holdout/has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+    "holdout/posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+    "holdout/tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+    "holdout/users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41",
+    "medium/authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+    "medium/follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+    "medium/has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641",
+    "medium/posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+    "medium/tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+    "medium/users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67"
+  },
+  "pending": [
+    "Atomic persistent membership directory, counts and field roots in BUILDING destination",
+    "Bounded complete integrity and whole-file admission",
+    "Persistent certified scanning through existing consumers",
+    "Update/read/reopen and remaining lifecycle",
+    "Candidate comparison and S2-S5 acceptance"
+  ],
+  "test_link_boundary": "Scan format/Superblock/SuperblockPair compiled for 15/41; byte-I/O linked current default core. This is not full candidate-core validation. Primary-source tests use the default ROW core.",
+  "executed_initial_runner_sha256": "c605024a0069852d55817c07f622cade162700947637c229a853939765bcae15",
+  "reproducer_sha256": "e980710e2fe10a6eb497a717f16c5d5c9d0a7f2f77323af8edab555fe04542ec",
+  "reproducer_guard": "Frozen default run refuses before build/timing; fresh runs require exact registered CSV and clean base source."
+}

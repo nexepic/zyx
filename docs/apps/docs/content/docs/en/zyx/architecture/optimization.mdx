@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Batch Scan Path Architecture Optimization Plan
 
-Updated: 2026-10-24. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 15%; editing the plan and historical diagnostics do not count as implementation progress.**
+Updated: 2026-10-26. Plan ID: `scan-path-20261023`. **This is the sole active checklist for the next round, focused on the highest-priority batch scan bottleneck. Implementation progress is 35%; editing the plan and historical diagnostics do not count as implementation progress.**
 
 The previous incremental commits, import work and experimental cold conversion are complete and are removed from the active queue. Historical acceptance remains in `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Historical implementation completion does not establish read-performance acceptance. Do not reintroduce old P1–P7 tasks, stage reports or experimental capability lists as additional work.
 
@@ -20,11 +20,15 @@ The previous incremental commits, import work and experimental cold conversion a
 
 One workstream: **connect candidate generation, entity/label validation, property reads and operator consumption into an efficient end-to-end batch scan path**. Preserve the general property graph and reduce repeated per-entity work. Do not specialize on query text, label names, fixed properties or benchmark distributions.
 
-Cover label filters, untyped property filters, actual single-/multi-key grouping and their shared projection/property supply. The objective is to substantially reduce the Kuzu gap. The default adoption gate requires at least 5x speedup for each of the four primary workloads on both medium and holdout against the frozen starting point. This prevents local-only improvements from proceeding to full implementation; it is not a promised result. Report superiority to Kuzu separately for every workload.
+Cover label filters, untyped property filters, actual single-/multi-key grouping and their shared projection/property supply. The objective is to substantially reduce the Kuzu gap. On 2026-10-26 the user explicitly removed the fixed 5x requirement. Selection now uses real end-to-end gains on both datasets against both same-machine controls, complete semantics and the unchanged resource/space contracts. Historical failed-gate evidence is preserved. Beating Kuzu remains the objective and must be reported separately; selection acceptance does not establish superiority.
+
+The user's latest execution instruction overrides stage timing order: one initial ZYX/Kuzu calibration is complete; implementation now runs necessary module tests without further performance tests. Combine S2 candidate comparison and S5 comprehensive timing into the final window after all optimization code and necessary tests are complete. Do not accept S2 or adopt a default production path before performance evidence; required lifecycle implementation may continue in the isolated experimental format. Fixed weights, two candidates, adoption gates, resource limits and frozen holdout rules remain unchanged.
 
 **Out of scope:** independent bulk-import redesign, ordinary transaction optimization, vector dimensions, radix/B+Tree replacement, general caching, WAL/LSM, JIT, additional threads and whole-backend replacement. Existing import only prepares real frozen inputs. Updates, recovery and maintenance required by the selected read representation are in scope; a new COPY product entry point is not.
 
 ## 2. Current evidence and attribution boundaries
+
+The following diagnostic attribution comes from the historical AMD environment and does not provide current Intel acceptance latency. Current performance gates use the frozen same-machine initial and 369 controls, with Kuzu measured separately.
 
 Starting commit: `369039dafda8ba6e6764fc7c569ab9b5be7de8b5`, default production format 5/31, release archive SHA256 `6c4708b7ee7e3ce1cb3b133027b0ca0a027832e6a60c111241de50f8fa82447a`.
 
@@ -99,21 +103,21 @@ Audit existing experimental layouts against the batch contract, adoption coverag
 
 First evaluate local block COW. Compare a bounded update layer only after proving unacceptable small-update write amplification; do not automatically add a logging/LSM subsystem.
 
-S1 freezes at most 512 entities per batch, 1 MiB each for source workspace and encoded block, and 64 typed fields and 64 labels per block. Preserve general semantics beyond these limits without truncation: fields may use existing fallback; refuse construction until an oversized membership-group fallback is implemented, as specified in the S2 checkpoint. Persistent merge depth is one. Each maintenance operation handles at most one block with an 8 MiB workspace. Source workspace is also capped by the caller’s remaining query budget; old pins retain versions until safe reclamation. See S1 `contract.json` for the complete contract; adaptive behavior must not exceed these limits.
+S1 freezes at most 512 entities per batch, 1 MiB each for source workspace and encoded block, and 64 typed fields and 64 labels per block. Preserve general semantics beyond these limits without truncation: fields use existing fallback; oversized label groups now retain complete live bits in explicit versioned records and reread complete primary labels when predicates need them, as specified in the latest S2 checkpoint. Persistent merge depth is one. Each maintenance operation handles at most one block with an 8 MiB workspace. Source workspace is also capped by the caller’s remaining query budget; old pins retain versions until safe reclamation. See S1 `contract.json` for the complete contract; adaptive behavior must not exceed these limits.
 
 Publish fields, membership and primary data atomically. Failure, cancellation or crashes must not expose a conversion prefix. Relocation/reclamation reuse version and ownership mechanisms; an independent cache cannot hide consistency issues. Keep ROW when conversion is uneconomic, with observable refusal reasons. Do not relax space gates to force benchmark adoption.
 
 ## 5. Fixed checklist and progress
 
-Weights measure accepted deliverables, not code volume or performance attainment. Dependency order: S0 → S1 → S2 → S3 → S4 → S5. S0/S1 are accepted; S2–S5 are unaccepted. Documentation, synthetic microbenchmarks and experimental entry-point functionality do not replace production-path acceptance.
+Weights measure accepted deliverables, not code volume or performance attainment. Dependency order: S0 → S1 → S2 → S3 → S4 → S5. S0/S1/S2 are accepted; S3–S5 are unaccepted. Documentation, synthetic microbenchmarks and experimental entry-point functionality do not replace production-path acceptance.
 
 | Stage | Weight | Required deliverable | Status |
 |---|---:|---|---|
 | S0 | 5% | Frozen evidence, inputs, resources, comparison/adoption gates | Accepted |
 | S1 | 10% | Batch contract, candidates, update/maintenance costs and format decision | Accepted |
-| S2 | 20% | Bounded complete-scan candidate validation on real persistent data | Unaccepted |
-| S3 | 30% | Selected production read path and required write/recovery lifecycle | Unaccepted |
-| S4 | 20% | Generality, safety, resource and regression validation | Unaccepted |
+| S2 | 20% | Bounded complete-scan candidate validation on real persistent data | Accepted under the explicit user gate revision; B selected, all eight cases improve against both controls, space/correctness passed |
+| S3 | 30% | Selected production read path and required write/recovery lifecycle | Unaccepted; required lifecycle checks passed, selection/total cost pending |
+| S4 | 20% | Generality, safety, resource and regression validation | Unaccepted; generality/budget/compatibility passed, performance guards pending |
 | S5 | 15% | Final unified performance acceptance, documentation and delivery | Unaccepted |
 
 Completed stages remain only in the status table and evidence references, not as tasks to repeat. S0 `registration.json`, `verified-inputs.json` and `acceptance.json` freeze baselines, resources and oracles; S1 `design.en.md`, `contract.json` and `acceptance.json` freeze candidate contracts. Section 6 identifies their directories. Calibrate only necessary environment mismatches; do not reselect inputs or change gates.
@@ -122,25 +126,19 @@ Completed stages remain only in the status table and evidence references, not as
 
 Connect candidates → visibility/membership proofs → field batches → existing filter/group operators → owning outputs on real persistent data. Include reads after updates and reopen. Time the actual production chain; report conversion/build/maintenance separately rather than hiding them in preparation.
 
-Run one bounded comparison window with at most two candidates. Allow one targeted correction/recheck for a demonstrated implementation bug. Develop on medium, freeze rules, then evaluate holdout. Require each primary workload on each dataset to improve at least 5x while satisfying semantics, resource and space contracts. If both candidates fail, retain unresolved-cost evidence and leave the stage unaccepted with a bounded design revision. Do not automatically expand into unrelated optimization or lower the gate.
+Run one bounded comparison window with at most two candidates. Allow one targeted correction/recheck for a demonstrated implementation bug. Develop on medium, freeze rules, then evaluate holdout. Under the latest explicit user instruction, require real end-to-end gains with semantics, resource and space contracts intact, without a fixed 5x threshold. If both candidates fail, retain unresolved-cost evidence and leave the stage unaccepted with a bounded design revision. Do not automatically expand into unrelated optimization or lower the gate.
 
 #### Current checkpoint and next implementation entry
 
-At this documentation review, S2 remains **unaccepted**. Shared batch access, membership encoding, isolated format and private BUILDING cloning have prototypes; public scan-format opening is still refused. There is no complete persistent scan chain or new end-to-end performance conclusion. The checkpoint covers only its recorded source revisions and tests, not acceptance of the current workspace or production lifecycle.
+S2 is accepted under the explicit 2026-10-26 user instruction removing the fixed 5x requirement, bringing progress to 35%. Select corrected B: 24 independent processes and 960 measured samples passed complete oracles, and all eight primary combinations improve against both same-machine initial and 369 controls (1.91–3.84x versus 369). Whole-file savings are 17.25% and 14.57%, with unchanged budgets. Earlier failed 5x evidence is preserved. This decision reuses existing measurements and runs no additional benchmark. Kuzu remains faster in all eight comparisons. S3 now covers abandoned A cleanup and public lifecycle delivery; S4/S5 guards and total cost remain unaccepted. See `20261026-user-gate-revision/s2-acceptance.json`.
 
-Continue from these gaps without repeating S0/S1 or adding another batch API:
+Candidate A retains one pool-charged authenticated ROW page view across batches to reuse location and parsing, bound to the metadata store, physical generation and I/O mutation epoch. Other read modes and exceptions release the optional pin. Per-entity ROW root decoding and owner/slot/type checks remain; end-to-end results must establish actual gains.
 
-- **Remaining A work:** identify and implement shareable page location, certification and parsing; retain unavoidable per-entity costs. Forwarding existing ROW reads still counts as a prototype.
-- **Remaining B work:** complete the table below against the existing `persistent-format.en.md` and `membership-wire.en.md`, without redesigning settled encodings. Both are in `benchmarks/architecture-design/decisions/20261024-scan-path-s2/`; they specify constraints, not completed implementation.
+Candidate B builds persistent Node membership from real primary Entity records and complete labels, including property-less nodes, deletion and overlapping labels. Groups exceeding 64 labels use explicit version 2 primary-label fallback. Proofs bind complete roots, descriptors, physical versions and mutation epochs, and reuse covered validation only within the synchronous selected-ID scope. Field owner/slot/type/CRC checks remain. Complex, sparse and oversized fields use generic reads. Construction converts eligible Node fields; Edge fields retain ROW and participate in final full-graph integrity and whole-file space accounting.
 
-| Order | Remaining B chain | Required correctness evidence |
-|---|---|---|
-| 1 | Private builder derives membership from real primary Entity records and complete labels; publishes membership root/counts and field roots together | Callers cannot forge certification; property-less nodes are included; source stays read-only; target stays BUILDING; public create/open and unsupported writes refuse before side effects |
-| 2 | Clear BUILDING only after full integrity and whole-database space admission | Bounded merge against primary entities verifies live/label sets, reverse ownership, field references and counts; failures/cancellation expose no partial database; preserve whole-file and peak limits |
-| 3 | Real persistent membership → existing field columns → consumer scan path | Bind proofs to root/snapshot/version; reuse only covered checks, retaining field owner/slot/type validation; account for complex, oversized indivisible and uncovered-field fallbacks |
-| 4 | Minimum update → read → close → reopen chain | Supported updates keep membership/fields consistent under one root and preserve old snapshots; unsupported mutations refuse before I/O; S3 completes all mutation types |
+Completed images support public modification and reopen; direct creation and BUILDING opening remain refused. Node creation/deletion/label changes publish membership and fields atomically under one root. Grouped tests cover property type changes, NULL/removal, lists, large values, scalar/unique/trained-vector indexes, old pins, cancellation, recovery and reclamation. Invalidated proofs fall back before output; reopen verifies again. Source/maintenance accounts, cache and file limits are unchanged.
 
-Membership groups exceeding 64 labels do not yet have a general fallback-entry encoding. Until implemented, refuse the entire candidate construction and count that refusal; never truncate labels or claim fallback support. Field/value limits use existing general reads. Complete membership coverage and property fallback are distinct requirements.
+The real holdout image completed at 222,035,968 / 259,915,776 bytes, saving 14.57%. All four public SDK primary cases passed the complete CSV oracle without latency collection. Medium v11 exposed metadata-capacity exception safety; after the fix and 98 experimental, 3 default and 3 compatible related cases passed, v12 restarted from the original source and completed publication at 256,507,904 / 309,985,280 bytes, saving 17.25%; all four public SDK primary cases passed the complete oracle. The first formal S2 comparison failed the adoption gate; see `results/20261024-work-scan/final-comparison/selection-gate.json`. Section 7 indexes evidence and failed attempts.
 
 #### S2 execution order and required evidence
 
@@ -176,12 +174,34 @@ After code and necessary tests are frozen, run the registered matrix once, not e
 
 Report starting/final ZYX and equivalent Kuzu, result oracles, candidate/entity/property-root/batch work, CPU/wait boundaries, adoption coverage, build/maintenance costs, steady/peak space and tested platforms. Never sum nested timers, present sizeof sums as DRAM traffic, or treat process RSS high-water/file polling as exact peak allocation.
 
-Allow 100% only when each primary workload on both datasets reaches 5x, S3/S4 are complete and no stable regression remains unresolved. Report Kuzu superiority separately and disclose unmet comparisons. A failed final performance gate leaves S5 unaccepted; code completion alone cannot produce 100%.
+The user removed the fixed 5x requirement. Assess implementation acceptance only after S3/S4, complete final primary/guard evidence and resolution of stable regressions. Removing 5x does not establish the Kuzu objective. Report Kuzu superiority separately and disclose unmet comparisons. A failed final performance gate leaves S5 unaccepted; code completion alone cannot produce 100%.
 
 ## 6. Execution discipline and stop conditions
 
-Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification and the S1 design contract are accepted; progress is 15%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` define the two candidates; the persistent candidate now has S2 wire specifications, which still need to be implemented across construction, publication, reads and full integrity. S2 shared batch integration and a membership-codec prototype have targeted test evidence (`benchmarks/architecture-design/decisions/20261024-scan-path-s2/checkpoint.json`). The persistent candidate and selection comparison remain incomplete; this is not production delivery or a performance claim, and S2 remains unaccepted.
+Update accepted stage status each round and report the sum of accepted weights, actual gains and blockers. Commit/push to remote `work` only when the progress percentage increases. Draft designs, failed candidates and diagnostics do not inflate progress; no increase means no commit/push. S0 identity/oracle verification, the S1 design contract and S2 selection under the explicit user revision are accepted; progress is 35%. Evidence: `benchmarks/architecture-design/decisions/20261023-scan-path-s0/` and `benchmarks/architecture-design/decisions/20261023-scan-path-s1/`. S1 `design.en.md` and `contract.json` freeze both candidates. Section 7 indexes current implementation evidence; S2 is counted; S3–S5 remain unaccepted.
 
 Stop after S5 and final delivery. Do not automatically start import, ordinary-write or other optimization. When selection fails, preserve failure evidence and concrete blockers instead of expanding alternatives indefinitely. Any scope, resource-contract or acceptance-gate change must explicitly record its reason and the user's decision, never silently redefine completion.
 
 Related: [storage specification](native-single-file-storage-plan), [capability matrix](native-capability-acceptance-matrix). Planned features are not supported capabilities; synchronize actual capabilities only after acceptance.
+
+## 7. Current implementation evidence
+
+Paths below are under `benchmarks/architecture-design/decisions/`. Checkpoints establish their recorded source and tests only. Test groups can overlap and are not added as unique coverage. No full unit suite was run.
+
+| Delivery or check | Evidence directories and limits |
+|---|---|
+| Initial calibration, inputs and contracts | `20261023-scan-path-s0/`, `20261023-scan-path-s1/`, `20261024-scan-source-authentication/`; new Intel calibration does not reuse historical AMD latency |
+| A ROW page reuse | `20261024-row-page-reuse/`; per-entity costs remain |
+| Private construction and full-graph integrity | `20261024-scan-image-builder/`, `20261024-scan-field-construction/`, `20261024-integrity-streaming/`, `20261024-private-image-completion/` |
+| B reads and field delivery | `20261025-certified-scan-read/`, `20261025-column-window-page-reuse/`, `20261025-node-supply-proof/`; Node supply proofs do not authorize ROW Edge records |
+| Updates, labels and public lifecycle | `20261025-completed-field-update/`, `20261025-membership-label-fallback/`, `20261025-atomic-scan-membership/`, `20261025-public-scan-lifecycle/` |
+| Governed memory and generality | `20261025-governed-metadata-work/`, `20261025-bounded-offline-lifecycle/`, `20261025-scan-generality/`; 16,384 nodes, 512 mixed batches, old pins, full property/label and NULL/missing/binary-text/intersection oracles, full integrity and 4 KiB cache reopen passed |
+| Physical space and ownership | `20261025-row-tail-relocation/`, `20261025-index-tail-packing/`, `20261025-mixed-index-preflight/`; ROW movement and same-owner pool-tail packing retain mixed-owner sources; 78 scan/construction and 18 compatible relocation cases passed |
+| Capacity failure rollback | `20261025-capacity-rollback/`; later pool creation failure rolls back this call's private pools and provisional suffix while preserving prior pools; failed rollback poisons writes; 98 experimental metadata, 3 default and 3 compatible cases passed |
+| Real-image admission | `20261025-real-scan-admission/`; holdout v11 and medium v12 completed with 14.57% and 17.25% savings; all four public primary result checks passed |
+| First formal comparison | `20261025-final-scan-comparison/`; 30 primary processes, 1,200 samples and complete oracles finished; A/B failed 5x; S5 guards incomplete |
+| One targeted correction | `20261026-bounded-scan-batch-correction/`; 83 scan/build, 64 compatible read and five default insertion tests passed; 24-process/960-sample recheck still failed 5x and Kuzu goals; see `result.md` in that directory |
+
+Real construction failures remain in `benchmarks/architecture-design/results/20261024-work-scan/diagnostics/`: v6 correctly refused at the 2 GiB combined length limit; current ROW pages blocked v8 tail reclamation; v9 remained above 90% of source length; the strict coordinator refused v10 mixed-owner Index sources; strict tail validation refused v11 medium after failed capacity preparation left unpublished pool registration. Failed targets were identified before removal and original inputs are unchanged. Fixes reuse between-transaction reclamation, bounded physical relocation, governed pool-tail placement and exception rollback, without weakening ownership, space or budgets. Large/Skew isolated-conversion refusals and ROW non-adoption remain explicit and do not count as native B adoption.
+
+Explicit user gate revision and S2 acceptance: `20261026-user-gate-revision/`; original measurements preserved, no additional timing, and 35% does not establish the Kuzu objective.

@@ -1,0 +1,584 @@
+{
+  "tests": 49,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T19:17:31Z",
+  "time": "0.659s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanMembershipDirectoryTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:31Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "UsesTheCompleteNodeDomainAndBigEndianOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0s",
+          "classname": "ScanMembershipDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 24,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:31Z",
+      "time": "0.564s",
+      "testsuite": [
+        {
+          "name": "PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.006s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 218,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 232,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 251,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 266,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.004s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 285,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.007s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 301,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 309,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "IntegritySourceWorkspaceRemainsChargedToTheCaller",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 320,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.001s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.002s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 345,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.012s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "BuilderRefusesCompletedImagesAndPreIoBudgetDenial",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 364,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.003s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.03s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 447,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:31Z",
+          "time": "0.169s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.099s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.004s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "RealLegacyCloneBuildsNodeAndEdgeFieldsBeforeAnyCompletePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 573,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.157s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 633,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.009s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 669,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 693,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.012s",
+          "classname": "BuildingScanMembershipTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"native hybrid candidate rejects unadapted writes and pool reconciliation\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 730,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.013s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "SourceChangeDuringCloneDeletesTheExclusivePrivateTarget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 749,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.008s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.011s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanMembershipSourceTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:32Z",
+      "time": "0.02s",
+      "testsuite": [
+        {
+          "name": "ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 92,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.009s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "EmptyInputDoesNotInventAMembershipGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 103,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "CancellationAndConsumerFailureNeverReplayAnEmittedPrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "WorkspaceDenialPrecedesSourceDelivery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 138,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "ReleasingThePinInAConsumerRefusesFurtherDelivery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 152,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        },
+        {
+          "name": "LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanMembershipSource.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.001s",
+          "classname": "ScanMembershipSourceTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanFormatCloneCodecTest",
+      "tests": 5,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:32Z",
+      "time": "0.04s",
+      "testsuite": [
+        {
+          "name": "PreservesLegacyIdentityRootsAndReserveButNeverProducesACompleteRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanFormatCloneCodec.cpp",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanFormatCloneCodecTest"
+        },
+        {
+          "name": "AuthenticatesSourceBeforeChangingVersionsAndRetainsLegacyValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanFormatCloneCodec.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.02s",
+          "classname": "ScanFormatCloneCodecTest"
+        },
+        {
+          "name": "EnvelopeTranslationPreservesOwnershipAndRejectsUnknownSources",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanFormatCloneCodec.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanFormatCloneCodecTest"
+        },
+        {
+          "name": "CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanFormatCloneCodec.cpp",
+          "line": 70,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.018s",
+          "classname": "ScanFormatCloneCodecTest"
+        },
+        {
+          "name": "MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanFormatCloneCodec.cpp",
+          "line": 106,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanFormatCloneCodecTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanBuildingCloneTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:32Z",
+      "time": "0.001s",
+      "testsuite": [
+        {
+          "name": "CopiesIndependentImageWithoutPublishingOrChangingSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanBuildingClone.cpp",
+          "line": 57,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanBuildingCloneTest"
+        },
+        {
+          "name": "RefusesFileAndWorkspaceBudgetsBeforeDestinationWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanBuildingClone.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanBuildingCloneTest"
+        },
+        {
+          "name": "CancellationAndChangingSourceLeaveOnlyBuildingTargets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanBuildingClone.cpp",
+          "line": 85,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanBuildingCloneTest"
+        },
+        {
+          "name": "CorruptSegmentPayloadIsNotCopiedOrPromoted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/format\/test_ScanBuildingClone.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "ScanBuildingCloneTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:32Z",
+      "time": "0.002s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InvalidCohortEnvelopeRefusesBeforeIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyColdConversionProbeTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:17:32Z",
+      "time": "0.028s",
+      "testsuite": [
+        {
+          "name": "ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 61,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.008s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.009s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.008s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 64,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:17:32Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        }
+      ]
+    }
+  ]
+}

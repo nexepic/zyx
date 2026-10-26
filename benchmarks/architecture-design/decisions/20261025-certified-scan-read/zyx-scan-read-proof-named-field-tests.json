@@ -1,0 +1,376 @@
+{
+  "tests": 10,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T00:05:53Z",
+  "time": "0.757s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanReadProofTest",
+      "tests": 10,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T00:05:53Z",
+      "time": "0.756s",
+      "testsuite": [
+        {
+          "name": "PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 88,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.046s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 125,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.23s",
+          "classname": "ScanReadProofTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:150\nValue of: value.has_value()\n  Actual: false\nExpected: true\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.019s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "BuildingAndInvalidAccountsCannotMintCompleteAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.019s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.038s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.038s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 265,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.04s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 294,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.046s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 320,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.037s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 350,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T00:05:53Z",
+          "time": "0.239s",
+          "classname": "ScanReadProofTest"
+        }
+      ]
+    }
+  ]
+}

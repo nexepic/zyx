@@ -125,6 +125,8 @@ namespace graph::storage {
 
 	private:
         friend class RelocatableMetadataStore;
+        void amendPreparedHybridPropertyDescriptor(MetadataWriteBatch &batch,
+            const HybridPropertyDescriptor &descriptor) const;
         void prepareHybridPropertyDescriptorImpl(MetadataWriteBatch &batch,
             const HybridPropertyDescriptor &descriptor, bool nativeCandidate) const;
 		[[nodiscard]] BufferPoolPageKey pageKey(PhysicalPageRef reference) const;

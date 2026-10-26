@@ -1,3 +1,4 @@
+#include "graph/storage/relocatable/entity/ScanMembershipPublication.hpp"
 /**
  * @file RelocatableMetadataStoreHybridMutation.cpp
  * @brief Atomic field mutation and physical maintenance for the isolated native property candidate.
@@ -158,6 +159,25 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
 #else
     auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
 #endif
+    std::unique_ptr<PreparedScanMembershipMutation> scanDeletion;
+    if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+        if (!hybridTopology && !request.owner_deletions.empty()) {
+            utils::OwnedVector<scan_candidate_detail::ScanNodeChange> nodes{
+                utils::OwnedPmrAllocator<scan_candidate_detail::ScanNodeChange>(request.memory)};
+            for (const auto owner : request.owner_deletions)
+                if (owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE)
+                    nodes.push_back({owner.entity_id, scan_candidate_detail::ScanNodeChangeKind::SNCK_DELETE, {}});
+            if (!nodes.empty()) {
+                std::sort(nodes.begin(), nodes.end(), [](const auto &a, const auto &b) { return a.id < b.id; });
+                NativeGraphDerivedStateMutation emptyDerived;
+                NativeHybridTopologyPublication proof(*this, sourceEntities, current, {}, true,
+                    hybridVectors ? *hybridVectors->derived_ : emptyDerived, {}, request.memory, {},
+                    request.owner_deletions, false, nodes, request.field_pool_owner_id);
+                scanDeletion = prepareScanMembershipMutation(batch, writer, source, proof, request.memory,
+                    sourceEntities, sourceLabels, sourceTrees);
+            }
+        }
+    }
     struct InlineChange { const NativeHybridPropertyColumnReplacement *replacement; SlottedSlotReference reference; bool insert = false; };
     utils::OwnedVector<InlineChange> inlineChanges{utils::OwnedPmrAllocator<InlineChange>(request.memory)};
     inlineChanges.reserve(replacements.size());
@@ -1514,8 +1534,11 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         const auto id = indexImages[run.offset + i].header().page_id;
         for (auto &root : changedRoots) if (root.root_page_id == id) {
             root.root_generation = run.pool.generation;
-            if (isHybridPropertyIndexId(root.index_id))
-                descriptor.roots[root.index_id - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST] = {id, run.pool.generation};
+            if (isHybridPropertyIndexId(root.index_id)) {
+                const size_t ordinal = root.index_id - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST;
+                require(ordinal < descriptor.roots.size(), "native topology index namespace is unavailable in this format");
+                descriptor.roots[ordinal] = {id, run.pool.generation};
+            }
         }
     }
     for (auto pool = oldPools.begin(); pool != oldPools.end();) {
@@ -1632,6 +1655,12 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     std::sort(retirements.begin(), retirements.end(), [](const auto &a, const auto &b) { return a.physical_slot < b.physical_slot; });
     if (!oldPools.empty()) { catalog_.prepareUpsert(batch, oldPools); retirement_.prepareQueueInsertions(batch, retirements); }
     descriptor.semantic_generation = batch.generation(); pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
+    if (scanDeletion) {
+        scanDeletion->borrowed_placement_ = &placement;
+        materializeScanMembershipMutation(batch, writer, source, *scanDeletion, sourceTrees);
+    }
+    // Its pool hints are optional; this private plan dies before the caller's
+    // A/B publication, while all durable reservations belong to the batch.
     batch.hybrid_property_publication_ = true; check(); return true;
 }
 
@@ -1660,16 +1689,29 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const Nativ
     HybridPropertyFieldPageStore fields(io_, *this, source);
     SharedPagePoolAllocator sourcePools(io_, *this, source);
     const auto header = SharedPagePoolAllocator::readPoolHeader(*io_, current.data_region_offset, sourcePool);
-    utils::OwnedVector<HybridPropertyPageImage> images{utils::OwnedPmrAllocator<HybridPropertyPageImage>(request.memory)};
+    struct Image { PageOwnerKind kind; std::variant<HybridPropertyPageImage, SlottedPage> page; };
+    utils::OwnedVector<Image> images{utils::OwnedPmrAllocator<Image>(request.memory)};
     images.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT);
     for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
         check(); const auto currentOwner = hybrid_property_detail::currentPoolFrameOwner(sourcePool, header, frame,
             [&](uint8_t index) { return sourcePools.readPageOwner(sourcePool, index); },
             [&](PageId id) { return locations_.findPageOptional(current, id); });
         if (!currentOwner) continue; const auto owner = *currentOwner;
-        require(owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY && !owner.flags,
-            "native field relocation cannot move a current ROW or retired frame");
-        images.push_back(fields.cloneForMutation(source, owner.page_id, batch.generation(), request.memory));
+        require(!owner.flags && (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY ||
+            (RSS_SCAN_PATH_FORMAT_ENABLED && owner.kind == PageOwnerKind::POK_PROPERTY)),
+            "field relocation found an unsupported current page owner");
+        if (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
+            images.push_back({owner.kind, fields.cloneForMutation(source, owner.page_id, batch.generation(), request.memory)});
+        else {
+            // Physical ROW relocation keeps every logical PageId and slot
+            // identity. Authenticate the owner, payload CRC and complete slotted
+            // layout before rebinding only its physical owner generation/LSN.
+            const auto contents = sourcePools.read(source, owner.page_id);
+            auto page = SlottedPage::open(contents.owner, contents.payload, request.memory);
+            require(page.stats().contiguous_free_bytes == contents.location.free_bytes,
+                "ROW field relocation has a stale free-byte hint");
+            images.push_back({owner.kind, std::move(page)});
+        }
     }
     debug::PerfTrace::addValue("native_graph.hybrid.relocation_private_field_frames", int64_t(images.size())); check();
     utils::OwnedVector<PageLocation> published{utils::OwnedPmrAllocator<PageLocation>(request.memory)};
@@ -1693,18 +1735,41 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const Nativ
         utils::OwnedVector<SharedPagePoolPreparedAppend> appends{utils::OwnedPmrAllocator<SharedPagePoolPreparedAppend>(request.memory)};
         appends.reserve(images.size());
         for (auto &image : images) {
-            check(); const auto id = image.pageId();
-            const PageOwnerHeader owner{id, pool.owner_id, PageOwnerKind::POK_HYBRID_PROPERTY,
+            check();
+            const auto id = std::visit([](const auto &page) { return page.pageId(); }, image.page);
+            const PageOwnerHeader owner{id, pool.owner_id, image.kind,
                 0, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
             utils::OwnedHeapReservation referenceCredit(request.memory);
-            auto page = std::move(image).bindPrivateOwner(owner, pool, batch.checkpointLsn(), [&](size_t bytes) { referenceCredit.set(bytes); });
+            auto page = std::visit([&](auto &value) -> SlottedPage {
+                if constexpr (std::is_same_v<std::decay_t<decltype(value)>, HybridPropertyPageImage>)
+                    return std::move(value).bindPrivateOwner(owner, pool, batch.checkpointLsn(),
+                        [&](size_t bytes) { referenceCredit.set(bytes); });
+                else { value.rebindOwner(owner); return std::move(value); }
+            }, image.page);
             const auto bytes = page.serializeOwned(request.memory);
             SharedPagePoolPreparedAppend append; append.owner = owner; append.free_bytes = page.stats().contiguous_free_bytes;
             append.payload.assign(bytes.begin(), bytes.end()); appends.push_back(std::move(append));
             published.push_back({id, pool.segment_id, 0, pool.generation, page.stats().contiguous_free_bytes});
         }
-        check(); SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool,
-            appends, published, batch.checkpointLsn(), 0, true); check();
+        check();
+        const bool uniform = std::all_of(appends.begin(), appends.end(), [&](const auto &append) {
+            return append.owner.kind == appends.front().owner.kind;
+        });
+        if (uniform) {
+            SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool,
+                appends, published, batch.checkpointLsn(), 0,
+                appends.front().owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY);
+        } else {
+            // Each typed suffix authenticates the already prepared prefix, so
+            // mixed pools preserve the ordinary owner-kind checks.
+            for (size_t prefix = 0; prefix < appends.size(); ++prefix) {
+                SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool,
+                    std::span(appends).subspan(prefix, 1), std::span(published).subspan(prefix, 1),
+                    batch.checkpointLsn(), prefix, appends[prefix].owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY);
+                check();
+            }
+        }
+        check();
         allocator_.prepareSetAllocated(batch, pool.physical_slot, true);
         catalog_.prepareUpsert(batch, std::span(&pool, 1));
     }
@@ -1737,19 +1802,31 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
     SlottedPagePool sourcePages(io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
     BTreePageStore sourceTrees(sourcePages, *this);
     auto writer = beginWrite(true); const auto current = bootstrap_.recover();
+    // Private scan construction also compacts registered ordinary trees, such
+    // as global adjacency. Ordinary roots retain the existing namespace guard.
+    const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED && (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
     require(current.database_id == request.expected_database_id && current.generation == request.expected_generation &&
-        current.hybrid_property_descriptor_root.isValid() && current.hybrid_property_descriptor_root == request.expected_descriptor,
+        (current.hybrid_property_descriptor_root.isValid() || privateBuilding) &&
+        current.hybrid_property_descriptor_root == request.expected_descriptor,
         "native index relocation has a stale or foreign source fence");
     const auto sourcePool = catalog_.find(current, request.source_segment);
-    require(sourcePool.kind == SegmentKind::SGK_INDEX_PAGE_POOL && isHybridPropertyIndexId(sourcePool.owner_id) &&
+    const bool nativeNamespace = isHybridPropertyIndexId(sourcePool.owner_id);
+    require(sourcePool.kind == SegmentKind::SGK_INDEX_PAGE_POOL && (nativeNamespace || privateBuilding) &&
         sourcePool.state == SegmentState::SGS_SEALED && sourcePool.generation.value() < UINT64_MAX &&
         allocator_.isAllocated(current, sourcePool.physical_slot), "native index relocation requires a sealed allocated native directory pool");
-    auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
-    const size_t ordinal = sourcePool.owner_id - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST;
+    HybridPropertyDescriptor descriptor;
+    size_t ordinal = 0U;
     const auto expectedRoot = locations_.findIndexRootOptional(current, sourcePool.owner_id);
-    require(expectedRoot && expectedRoot->root_page_id == descriptor.roots[ordinal].page_id &&
-        expectedRoot->root_generation == descriptor.roots[ordinal].generation,
-        "native index relocation has no matching descriptor namespace root");
+    require(bool(expectedRoot), "native index relocation has no registered root");
+    if (nativeNamespace) {
+        require(current.hybrid_property_descriptor_root.isValid(), "native index relocation has no descriptor");
+        descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
+        ordinal = sourcePool.owner_id - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST;
+        require(ordinal < descriptor.roots.size(), "native index relocation namespace is unavailable in this format");
+        require(expectedRoot->root_page_id == descriptor.roots[ordinal].page_id &&
+            expectedRoot->root_generation == descriptor.roots[ordinal].generation,
+            "native index relocation has no matching descriptor namespace root");
+    }
     auto source = snapshots_.pinCurrentUnderWrite(writer, current);
     MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn, request.memory);
     batch.reserveDataSlot(sourcePool.physical_slot);
@@ -1773,8 +1850,40 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
     utils::OwnedVector<PageLocation> published{utils::OwnedPmrAllocator<PageLocation>(request.memory)};
     published.reserve(images.size());
     std::optional<CatalogEntry> destination;
+    HybridPropertyPoolPlacement placement(*this, batch, writer, source, request.first_slot, request.last_slot,
+        request.memory, check, true);
+    bool existingDestination = false;
+    utils::OwnedMap<uint64_t, uint8_t> currentFrames;
+    if (privateBuilding && !images.empty()) {
+        // Advisory upper bounds on free capacity, streamed once in directory
+        // order. These counts can only reject candidates; selected destinations
+        // still authenticate all owners, bitmaps, routes and pinned versions.
+        static_cast<void>(visitPageLocationsUntil(source, [&](const PageLocation &location) {
+            check(); auto &count = currentFrames[location.segment_id.value()];
+            if (count < RSS_PAGE_POOL_DATA_FRAME_COUNT) ++count;
+            return true;
+        }));
+    }
     if (!images.empty()) {
-        std::optional<uint64_t> nextSlot = request.first_slot.value();
+        if (privateBuilding) catalog_.visit(current, [&](const CatalogEntry &entry) {
+            check();
+            if (destination || entry.segment_id == sourcePool.segment_id || entry.kind != SegmentKind::SGK_INDEX_PAGE_POOL ||
+                entry.owner_id != sourcePool.owner_id || entry.state != SegmentState::SGS_SEALED ||
+                entry.physical_slot < request.first_slot || entry.physical_slot > request.last_slot ||
+                entry.physical_slot >= sourcePool.physical_slot) return;
+            const auto occupied = currentFrames.find(entry.segment_id.value());
+            const size_t count = occupied == currentFrames.end() ? 0U : occupied->second;
+            if (images.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT - count) return;
+            // Existing placement authenticates every bitmap/owner/route and all
+            // pinned generations before it offers any COW capacity.
+            placement.candidate(entry.segment_id, entry.kind, entry.owner_id, false);
+            auto candidate = std::find_if(placement.reservations_.begin(), placement.reservations_.end(),
+                [&](const auto &reservation) { return reservation.pool.segment_id == entry.segment_id; });
+            if (candidate != placement.reservations_.end() && candidate->capacity >= images.size()) {
+                candidate->assigned = images.size(); destination = candidate->pool; existingDestination = true;
+            }
+        });
+        std::optional<uint64_t> nextSlot = destination ? std::nullopt : std::optional(request.first_slot.value());
         while (nextSlot) {
             const auto free = allocator_.findFirstFree(current, PhysicalSlotId(*nextSlot), request.last_slot); if (!free) break;
             nextSlot = *free == request.last_slot ? std::nullopt : std::optional(free->value() + 1U);
@@ -1783,6 +1892,9 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
                 sourcePool.owner_id, Generation(sourcePool.generation.value() + 1U), SegmentState::SGS_SEALED, batch.checkpointLsn()};
             batch.reserveDataSlot(*free); break;
         }
+        // Private compaction may exhaust lower free slots and pin-safe tails.
+        // No page, control record or durable root has changed at this point.
+        if (!destination && privateBuilding) return current;
         require(bool(destination), "native index relocation has no free destination pool");
         const auto pool = *destination;
         utils::OwnedHeapReservation payloadCredit(request.memory, images.size() *
@@ -1800,10 +1912,15 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
             append.payload.assign(bytes.begin(), bytes.end()); appends.push_back(std::move(append));
             published.push_back({id, pool.segment_id, 0, pool.generation, page.slottedPage().stats().contiguous_free_bytes});
         }
-        check(); SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool,
-            appends, published, batch.checkpointLsn(), 0, false); check();
-        allocator_.prepareSetAllocated(batch, pool.physical_slot, true);
-        catalog_.prepareUpsert(batch, std::span(&pool, 1));
+        check();
+        if (existingDestination) placement.write(pool, appends, published, false);
+        else {
+            SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(*io_, current.data_region_offset, pool,
+                appends, published, batch.checkpointLsn(), 0, false);
+            allocator_.prepareSetAllocated(batch, pool.physical_slot, true);
+            catalog_.prepareUpsert(batch, std::span(&pool, 1));
+        }
+        check();
     }
     // Every frame was checked against its exact current Page Directory route.
     // All current frames now have fresh destinations; stale frames stay behind
@@ -1817,11 +1934,12 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
     if (destination && std::any_of(published.begin(), published.end(), [&](const auto &location) { return location.page_id == expectedRoot->root_page_id; })) {
         const IndexRootLocation replacement{sourcePool.owner_id, expectedRoot->root_page_id, destination->generation};
         locations_.prepareReplaceIndexRoots(batch, std::span(&replacement, 1), {});
-        descriptor.roots[ordinal] = {replacement.root_page_id, replacement.root_generation};
-        // A replacement descriptor carries this publication's fence even
-        // though the logical field records and values remain unchanged.
-        descriptor.semantic_generation = batch.generation();
-        pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
+        if (nativeNamespace) {
+            descriptor.roots[ordinal] = {replacement.root_page_id, replacement.root_generation};
+            // The native namespace also carries the new physical root epoch.
+            descriptor.semantic_generation = batch.generation();
+            pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
+        }
     }
     batch.hybrid_property_publication_ = true; check(); publishBatch(batch, writer, options); return batch.candidate();
 }

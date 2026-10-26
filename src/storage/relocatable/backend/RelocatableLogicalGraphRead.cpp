@@ -20,6 +20,7 @@
 
 #include "graph/storage/LogicalGraphRead.hpp"
 #include "graph/storage/relocatable/adjacency/CoveredAdjacencyCandidate.hpp"
+#include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 #include "graph/debug/PerfTrace.hpp"
 
@@ -45,7 +46,11 @@ namespace graph::storage {
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
 			std::shared_ptr<std::pmr::memory_resource> memory) :
-			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory), utils::OwnedAllocationScope::owner()) {}
+			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory), utils::OwnedAllocationScope::owner()) {
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+                if (const auto *root = backend_.verifiedScanRoot(snapshot_.metadataSnapshot())) scan_root_.emplace(*root);
+#endif
+            }
 
         void enableCoveredControl(uint64_t indexId, size_t maximumEdges, size_t maximumMetadataPages,
             std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
@@ -212,6 +217,50 @@ namespace graph::storage {
                     throw std::invalid_argument("native scan batch requires bounded rows, fields and callbacks");
                 for (const auto key : keys) if (key.empty())
                     throw std::invalid_argument("native scan batch has an empty Property key");
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+                if (scan_root_ && backend_.verifiedScanRoot(snapshot_.metadataSnapshot())) {
+                    constexpr size_t sourceBytes = 128U * 1024U;
+                    admitBatch(sourceBytes);
+                    // The parent admission owns this complete synchronous source;
+                    // its child only subdivides that prepaid finite reservation.
+                    auto workspace = std::make_shared<query::execution::MaterializedByteBudget>(sourceBytes - 4096U);
+                    std::pmr::vector<uint64_t> tokens(workspace.get());
+                    read_session_.bind(snapshot_.metadataSnapshot());
+                    for (const auto &label : labels) {
+                        std::optional<uint64_t> token;
+                        if (const auto cached = read_session_.nodeLabelToken(label)) token = *cached;
+                        else {
+                            token = backend_.resolveNodeLabelName(snapshot_.metadataSnapshot(), label);
+                            read_session_.putNodeLabelToken(label, token);
+                        }
+                        if (!token) return true;
+                        tokens.push_back(*token);
+                    }
+                    std::ranges::sort(tokens);
+                    tokens.erase(std::ranges::unique(tokens).begin(), tokens.end());
+                    return CertifiedScanMembership::visit(*scan_root_, backend_.scanSourceIO(), *backend_.metadata_,
+                        snapshot_.metadataSnapshot(), workspace, maximumRecords, maximumBatchRows, tokens,
+                        [&](std::span<const uint64_t> ids, size_t examined, const ScanBatchReadGrant &grant) {
+                            const NodeScanPropertySource source = [&](std::span<const uint64_t> requested,
+                                const PropertyCellSink &values, const PropertyColumnBatchReadSinks &runs,
+                                const std::function<void(size_t)> &admission) {
+                                if (!values || !runs.scalars || !runs.texts || !admission)
+                                    throw std::invalid_argument("certified scan requires typed sinks and admission");
+                                size_t charged = sourceBytes;
+                                const std::function<void(size_t)> boundedAdmission = [&](size_t bytes) {
+                                    if (bytes > 1024U * 1024U - charged) throw LogicalGraphBufferPressure();
+                                    admission(bytes); charged += bytes;
+                                };
+                                grant.read(requested, [&] {
+                                    static_cast<void>(tryReadNodePropertyColumnBatchesSortedWithAdmission(
+                                        requested, keys, values, runs, boundedAdmission));
+                                });
+                            };
+                            debug::PerfTrace::addValue("native_graph.read.stored_membership_scan_batches", 1);
+                            return visitor(ids, examined, source);
+                        });
+                }
+#endif
                 // Both bounded arrays belong to this query's source reservation.
                 // Admit before touching source data or invoking a consumer.
                 admitBatch(2U * maximumRows * sizeof(uint64_t));
@@ -796,6 +845,9 @@ namespace graph::storage {
 		const PageBackedLogicalGraphReadAdapter &native_reads_;
 			RelocatableReadSnapshot snapshot_;
 		mutable NativeReadSession read_session_;
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        std::optional<VerifiedScanRoot> scan_root_;
+#endif
 	};
 
 	static_assert(alignof(RelocatableLogicalGraphReadSnapshot) <= alignof(std::max_align_t));

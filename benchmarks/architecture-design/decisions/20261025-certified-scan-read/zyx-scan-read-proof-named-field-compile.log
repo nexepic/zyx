@@ -1,0 +1,60 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:41:47: error: no matching constructor for initialization of 'std::span<const uint64_t>' (aka 'span<const unsigned long>')
+   41 |                 const auto id = tx.createNode({label});
+      |                                               ^~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:225:7: note: candidate constructor not viable: no known conversion from 'const uint64_t' (aka 'const unsigned long') to 'const span<const unsigned long>' for 1st argument
+  225 |       span(const span&) noexcept = default;
+      |       ^    ~~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:187:2: note: candidate template ignored: could not match 'const unsigned long[_ArrayExtent]' against 'const uint64_t' (aka 'const unsigned long')
+  187 |         span(type_identity_t<element_type> (&__arr)[_ArrayExtent]) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:194:2: note: candidate template ignored: could not match 'array<_Tp, _ArrayExtent>' against 'const uint64_t' (aka 'const unsigned long')
+  194 |         span(array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:201:2: note: candidate template ignored: could not match 'const array<_Tp, _ArrayExtent>' against 'const uint64_t' (aka 'const unsigned long')
+  201 |         span(const array<_Tp, _ArrayExtent>& __arr) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:213:2: note: candidate template ignored: constraints not satisfied [with _Range = const uint64_t &]
+  213 |         span(_Range&& __range)
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:209:7: note: because 'const unsigned long &' does not satisfy 'contiguous_range'
+  209 |           && ranges::contiguous_range<_Range> && ranges::sized_range<_Range>
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:608:9: note: because 'const unsigned long &' does not satisfy 'random_access_range'
+  608 |       = random_access_range<_Tp> && contiguous_iterator<iterator_t<_Tp>>
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:603:9: note: because 'const unsigned long &' does not satisfy 'bidirectional_range'
+  603 |       = bidirectional_range<_Tp> && random_access_iterator<iterator_t<_Tp>>;
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:598:9: note: because 'const unsigned long &' does not satisfy 'forward_range'
+  598 |       = forward_range<_Tp> && bidirectional_iterator<iterator_t<_Tp>>;
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:593:9: note: because 'const unsigned long &' does not satisfy 'input_range'
+  593 |       = input_range<_Tp> && forward_iterator<iterator_t<_Tp>>;
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:588:27: note: because 'const unsigned long &' does not satisfy 'range'
+  588 |     concept input_range = range<_Tp> && input_iterator<iterator_t<_Tp>>;
+      |                           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/ranges_base.h:501:2: note: because 'ranges::begin(__t)' would be invalid: no matching function for call to object of type 'const ranges::__access::_Begin'
+  501 |         ranges::begin(__t);
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:233:2: note: candidate template ignored: could not match 'const span<_OType, _OExtent>' against 'const uint64_t' (aka 'const unsigned long')
+  233 |         span(const span<_OType, _OExtent>& __s) noexcept
+      |         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:149:7: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+  149 |       span() noexcept
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:157:2: note: candidate constructor template not viable: requires 2 arguments, but 1 was provided
+  157 |         span(_It __first, size_type __count)
+      |         ^    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/span:172:2: note: candidate constructor template not viable: requires 2 arguments, but 1 was provided
+  172 |         span(_It __first, _End __last)
+      |         ^    ~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp:161:63: note: passing argument to parameter 'labels' here
+  161 |                 [[nodiscard]] uint64_t createNode(std::span<const uint64_t> labels);
+      |                                                                             ^
+1 error generated.
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/workspace/zyx-sysroot/usr/bin/clang++-19', '-std=c++20', '-O0', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-missing-designated-field-initializers', '-DZYX_HAS_LZ4=1', '-DZYX_HAS_ZSTD=1', '-I/workspace/zyx/include', '-I/workspace/zyx/src', '-isystem', '/workspace/zyx-sysroot/usr/include', '-DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1', '-DZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=1', '-I/workspace/zyx/build-scan-candidate', '-Wno-missing-field-initializers', '-c', '/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp', '-o', '/tmp/zyx-scan-read-proof-tests.o']' returned non-zero exit status 1.

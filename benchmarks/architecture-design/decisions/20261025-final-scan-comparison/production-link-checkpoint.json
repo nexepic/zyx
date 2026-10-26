@@ -1,0 +1,23 @@
+{
+  "utc": "2026-10-25T13:33:33.980133+00:00",
+  "artifacts": {
+    "zyx-final-a-public": {
+      "sha256": "fcca8f91c4c1592dd3d6cf9b828e359454806b08f8db7f673ce02a448768ff04",
+      "bytes": 21409608
+    },
+    "zyx-final-b-public": {
+      "sha256": "7dd10459f10d7fc50903165bd2910346b30b12c23d68864497be8fcd44149203",
+      "bytes": 23172328
+    },
+    "zyx-final-a-values": {
+      "sha256": "d31cb7937c96c6a624535b4f57be51051f40676ef98ead482755d9c4465eb881",
+      "bytes": 21409608
+    },
+    "zyx-final-b-values": {
+      "sha256": "91e027a01815450dca849ccbd613019f66e34b4a89d82c1b8e4492111b7da0d0",
+      "bytes": 23172328
+    }
+  },
+  "allocator_exception_safety_fix_linked": true,
+  "query_benchmark_run": false
+}

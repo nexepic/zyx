@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.TransactionOverlayUsesEachEvacuatedChildGenerationAndRetainsOldPins
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreTransactionOverlay_Generations.cpp:28: Failure
+Expected: switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(transaction.commit().committed())) ; else return ::testing::internal::AssertHelper(::testing::TestPartResult::kFatalFailure, "/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreTransactionOverlay_Generations.cpp", 28, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, "transaction.commit().committed()", "false", "true") .c_str()) = ::testing::Message() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "relocatable transaction-local B+Tree overlay encountered a foreign or malformed page".
+
+[  FAILED  ] RelocatableBTreePageStoreTest.TransactionOverlayUsesEachEvacuatedChildGenerationAndRetainsOldPins (5 ms)
+[----------] 1 test from RelocatableBTreePageStoreTest (5 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (5 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableBTreePageStoreTest.TransactionOverlayUsesEachEvacuatedChildGenerationAndRetainsOldPins
+
+ 1 FAILED TEST

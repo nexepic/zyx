@@ -1,0 +1,70 @@
+{
+  "accepted_progress_percent": 15,
+  "sources_and_core_sha256": {
+    "CMakeLists.txt": "c4b122ab2bb987fdd52d6943e1027849ee3d8b001831ab6cae3aa000280b6dae",
+    "apps/scan_convert/main.cpp": "5ad8f231caace41f6ceeaeb4ccf66e79dcb1bd0b144dc45fe16221b2669b434b",
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "f9bdc8f2d16c26dbda912d9223504d8ec2f70a8f3d7e5b98012d2f5200c91cd5",
+    "src/storage/StorageIO.cpp": "8c55097021b73e6486f11ef83edda446d630de89f85786b2479d55726a513f2b",
+    "src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": "c7580f3363a47e0df5cb9219c005d0ecd30856902fe01393e223aed9cfb0acb7",
+    "src/storage/relocatable/entity/EntityPageStore.cpp": "a199a7782c2dc3f5bbb937f6f9011cef6ab57254ad08df0e4af10c752006e939",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "58e2b479152e4f2909e2a5085cbd8bd073e533ff5383e9ff3269722fe495aec1",
+    "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "5efbd5c7203230e40188137f45020f2f10fb02e5d22a10d47f08eda5f2dc44ab",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "e24c0becefd23ea4f7b43c35be73ea06ca3c7855ae3548bb3776b5d8d753acf8",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "398cca54f4843dfcfbcd8b454917ff7e480a7f46325ac09933d2f3bac3d3fd02",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "775e814a719674a57ce3e22f0902c5c8219b0d2430b5a8a6a1d50d41c85d6cc6",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "26e1518ecadbcc106c58f5a579f146fab10b0047f8f04a2382697ef8c5ea4430",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "1194f486caf9d0bc85417d0dc3f7764c5d3db7ddee018ebab99758e9817a498a",
+    "tests/src/storage/relocatable/entity/test_EntityPageStore_CheckedBatch.cpp": "9761ab6f411438079a87620431626bad23c5f6fb3ab7ccbeb740b63676504c23",
+    "tests/src/storage/relocatable/index/test_BTreePageStoreTransactionOverlay_Generations.cpp": "14758470ef163163a416c02dc62b903a80886de6fbb2d79ebe086985b96c3e2c",
+    "build-scan-candidate/libzyx_core.a": "d04aea2351bb9d4017612be375090b39be784d0d95bb4c56103d8ec4f8d296db",
+    "build-scan-work/libzyx_core.a": "b2db7af4a84ccad71261dac5239dfe5dcd7dc4eecbf9488c8d2fb229df1dbd91",
+    "build-hybrid-compat/libzyx_core.a": "7b9b7aceaba6557606803dd347514e2ebf2d996915d0276fbdfe8a314a49c57a",
+    "build-scan-row-production/libzyx_core.a": "43855721fdb22dc3cda400db2859dd5a559dd4d3729719045abd1fcbb6e34e91"
+  },
+  "related_module_runs": {
+    "node-policy-tests": {
+      "tests": 75,
+      "failures": 0,
+      "errors": 0
+    },
+    "btree-generations-tests": {
+      "tests": 38,
+      "failures": 0,
+      "errors": 0
+    },
+    "final-related-module-tests": {
+      "tests": 148,
+      "failures": 0,
+      "errors": 0
+    },
+    "cross-generation-fixed-tests": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    "thousand-edge-admission-correct-tests": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0
+    },
+    "frozen-default-tests": {
+      "tests": 110,
+      "failures": 0,
+      "errors": 0
+    },
+    "frozen-compat-tests": {
+      "tests": 144,
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "generality": "16384 owners, 512 mixed mutation batches, pinned/current full value/label oracles, NULL/missing/binary text/overlap query oracles, full integrity and 4096-byte raw-cache reopen all passed",
+  "whole_file_admission": "v8 medium/holdout running, not admitted",
+  "conversion_policy": "eligible Node fields only; Edge rows retained; actual full-file and complete semantic gates unchanged",
+  "source_workspace_bytes": 1048576,
+  "maintenance_workspace_bytes": 7340032,
+  "raw_cache_bytes": 67108864,
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false
+}

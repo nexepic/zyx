@@ -1,0 +1,37 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "base_head": "9d65a397f93689557eb076458aec65104505a989",
+  "full_unit_suite_run": false,
+  "performance_run_this_round": false,
+  "configuration_test_cases": {
+    "isolated_building_publication": 11,
+    "isolated_source_format": 24,
+    "default_guard": 2
+  },
+  "candidate_core_sha256": "d61bc08391825cf869e2819f067f36b71ca50a5bc08334200f58dc2c5fa8d62f",
+  "candidate_core_build": "cmake --build build-scan-candidate --target zyx_core -j4",
+  "default_validation_scope": "New default guard translation unit linked against existing default core; not a full default core rebuild.",
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "1ab92b260834464f596753a96bbefbcf5691c0f523dab593be4c2793de701bcc",
+    "include/graph/storage/relocatable/entity/BuildingScanMembership.hpp": "d321fc93d349bd4a1a2901ca5823c53b6cf4b5ff5abfd172a8f81f901129cf78",
+    "include/graph/storage/relocatable/entity/ScanMembershipDirectory.hpp": "0ed742c3534445d018f0c44452e5f803710588fb45a40bbf58c8051c5b5d30e3",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "44677c2fb98d7d905dc5a252169073a7becae202d071e1088d556e08903d283d",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp": "814535943ec9064f8f0973bc98ebfa3f1b3fc49c1faed22e8f01761950c93119",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "1a40082a7f479e64f9d18e5f6bb5ab9bcfc13f91324372eccb3d6dc71ece9e70",
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "fbdf2f15f6be159c01a8ae4ad083c0942a06fad154ced9a40b916eea720d0e81",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreScanMembership.cpp": "359a4458e21abde7bbfa6952a234725d016c066e6312ab47e244d7028318fea3",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "be1f4f9667abf1bb1dbc0c616f5f867229879e7d344de68ff7f19704dcdaaa15"
+  },
+  "evidence_sha256": {
+    "default-guard-tests.log": "37220edd70db6d24ebdf0794e31d5fda0ab6649ae33dc9c8b00afa8e767201dd",
+    "module-recipes.json": "ab8da05221244645dd0fae248fa98c4f46aa547377d8f6c24f0866878762b972",
+    "source-format-tests.log": "b1a1b06cd22f0bb5aeb1560516279dda1a099b50fb7ca134c3a599cbded122d0",
+    "building-tests.log": "87d091171f85f24ed005ac2c35c8519b69106d4ebd3c9678df980f98ae34bb00",
+    "default-guard-tests.json": "f17990f7f9b34fd9f689682185423048aa924027f5bcf21b6990c36c7e55c4d2",
+    "building-tests.json": "20f6d7d60648c4a704daeb8d1c2941904c4217001bc4d164a556bfed1a7909a4",
+    "source-format-tests.json": "10f43e7c78c408d96f6e6a944a8b6b1bef984cd01d4e64139dff5aed2bc5db5b"
+  }
+}

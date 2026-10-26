@@ -1,4 +1,4 @@
-# S2 candidate B: complete file protocol (pending implementation)
+# S2 candidate B: complete file protocol (frozen contract)
 
 This fixes the format/publication boundaries alongside `membership-wire.en.md`. It does not claim implementation or increase progress. Default 5/31 and experimental 13/39 retain their meaning; neither may contain the new scan membership records. Implement and test every requirement below before comparing candidate B.
 

@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "cases": [
+    "label_scan_filter",
+    "all_nodes_property_filter",
+    "aggregation_count_by_group",
+    "multi_key_group"
+  ],
+  "query_benchmark": false,
+  "oracle": "complete typed rows, multiplicity, ordered multi-key groups",
+  "command": [
+    "/tmp/zyx-final-b-public",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-private-v11.zyx",
+    "/tmp/zyx-holdout-public-ready-check.zyx",
+    "label_scan_filter,all_nodes_property_filter,aggregation_count_by_group,multi_key_group",
+    "0",
+    "1"
+  ]
+}

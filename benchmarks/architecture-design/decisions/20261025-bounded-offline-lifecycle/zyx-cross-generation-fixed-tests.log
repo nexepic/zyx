@@ -1,0 +1,15 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from RelocatableEntityPageStoreTest
+[ RUN      ] RelocatableEntityPageStoreTest.CheckedMixedPageBatchKeepsFailedShadowPrivateAndPreservesOldSnapshot
+[       OK ] RelocatableEntityPageStoreTest.CheckedMixedPageBatchKeepsFailedShadowPrivateAndPreservesOldSnapshot (6 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.CrossGenerationCowRebindsEntityHeadersForFreshAndExistingDestinations
+[       OK ] RelocatableEntityPageStoreTest.CrossGenerationCowRebindsEntityHeadersForFreshAndExistingDestinations (2 ms)
+[ RUN      ] RelocatableEntityPageStoreTest.CrossGenerationCowRebindsOverflowLabelsAndKeepsOldSlotsReadable
+[       OK ] RelocatableEntityPageStoreTest.CrossGenerationCowRebindsOverflowLabelsAndKeepsOldSlotsReadable (2 ms)
+[----------] 3 tests from RelocatableEntityPageStoreTest (11 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (11 ms total)
+[  PASSED  ] 3 tests.

@@ -1,0 +1,1712 @@
+{
+  "tests": 160,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T16:32:21Z",
+  "time": "0.928s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "PropertyCollectionRootStoreCacheTest",
+      "tests": 25,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:21Z",
+      "time": "0.027s",
+      "testsuite": [
+        {
+          "name": "PointReadsAdmitOneSharedOwnedFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.002s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 211,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 239,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ReadsSelectedValuesAndCountsThroughOneDirectoryMerge",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 265,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ScanCursorRetainsOneDecodedPageWithoutResidentPollution",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 295,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "NativeReadSessionReusesOneCursorForOrderedSelectedProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 326,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 349,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorCountBatchReusesTheOrderedDirectoryAndPageRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 371,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 400,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 417,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorPropagatesCancellationBeforeDirectoryOrPropertyIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 451,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CursorAdmissionRejectsAndCanRetryWithoutStaleOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 459,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 482,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 542,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 604,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "CombinedPinnedReadRetainsOwnedImageForSubsequentCalls",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 637,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 676,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 707,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 720,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest",
+          "point_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":73216,\"native_graph.read.decoded_metadata_cache_hits\":16,\"native_graph.read.distinct_page_pins\":1,\"native_graph.read.distinct_page_pins_incomplete\":0,\"native_graph.read.materialized_bytes\":72,\"native_graph.read.property_selected_decode\":2,\"native_graph.read.radix_requested_children\":8,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.selected_values_decoded\":2,\"native_graph.read.shared_page_known_location_pin\":2,\"native_graph.read.shared_page_route_resolution\":2,\"storage.buffer_pool.hits\":3,\"storage.buffer_pool.misses\":1,\"storage.buffer_pool.physical_read_bytes\":4096,\"storage.checksum.bytes\":8576,\"storage.checksum.incremental_bytes\":8064,\"storage_io.file_size_calls\":4}",
+          "scan_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":44760,\"native_graph.read.decoded_metadata_cache_hits\":10,\"native_graph.read.directory_range_calls\":2,\"native_graph.read.directory_range_cursor_metadata_pages\":4,\"native_graph.read.directory_range_cursor_root_descents\":2,\"native_graph.read.distinct_page_pins\":1,\"native_graph.read.distinct_page_pins_incomplete\":0,\"native_graph.read.materialized_bytes\":146,\"native_graph.read.property_directory_metadata_pages\":2,\"native_graph.read.property_directory_refill\":2,\"native_graph.read.property_selected_borrowed_owners\":4,\"native_graph.read.property_selected_column_batch_owners\":4,\"native_graph.read.property_selected_column_batch_pages\":2,\"native_graph.read.property_selected_column_decode\":4,\"native_graph.read.property_selected_decode\":4,\"native_graph.read.property_selected_page_acquisition\":1,\"native_graph.read.property_selected_page_reuse\":1,\"native_graph.read.radix_requested_children\":489,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.root_descents\":2,\"native_graph.read.selected_values_decoded\":4,\"native_graph.read.shared_page_known_location_pin\":1,\"native_graph.read.shared_page_route_resolution\":1,\"storage.buffer_pool.hits\":2,\"storage.checksum.bytes\":4288,\"storage.checksum.incremental_bytes\":4032,\"storage_io.file_size_calls\":2}",
+          "gather_locations_twice": "{\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":16304,\"native_graph.read.decoded_metadata_cache_hits\":4,\"native_graph.read.directory_range_calls\":2,\"native_graph.read.directory_range_cursor_metadata_pages\":4,\"native_graph.read.directory_range_cursor_root_descents\":2,\"native_graph.read.radix_requested_children\":2,\"native_graph.read.radix_resolved_children\":0,\"native_graph.read.root_descents\":2}"
+        },
+        {
+          "name": "SelectedPageRetentionReleasesOnFailureAndOtherReadModes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 770,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedPageRetentionInvalidatesAfterWriteAttempt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 801,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedPinSurvivesPoolDisableAndMoveAssignmentWithoutDanglingView",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 821,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.001s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        },
+        {
+          "name": "SelectedBatchReacquiresAfterMutationWithoutReplayingDeliveredOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRootStoreCache.cpp",
+          "line": 838,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "PropertyCollectionRootStoreCacheTest"
+        }
+      ]
+    },
+    {
+      "name": "BufferPoolTest",
+      "tests": 49,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:21Z",
+      "time": "0.165s",
+      "testsuite": [
+        {
+          "name": "KeepsDifferentGenerationsForOnePhysicalPageResident",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ValidatesCapacityAndPinHandleState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 188,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesPreserveGenerationAndPinSafety",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 219,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 249,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 267,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "RefusesToEvictPinnedPageThenEvictsAfterUnpin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PrivateCowPageIsInvisibleUntilFlushThenDurablyWritten",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 318,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FullPageOverwriteAvoidsReadBeforeWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 341,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "WritesReuseResidentPagesAndConsumePrefetchWithoutDroppingPinnedViews",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 356,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "InvalidationFlushesDirtyPagesButRefusesPinnedOrOverlappingStaleViews",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 382,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FrequentAndTransientPagesFollowTheirDistinctEvictionAndResetRules",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 406,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EvictionFlushesDirtyPagesBeforeReusingTheirFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 439,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PrivateCowPageRejectsDuplicatesAndCanBeRedirtiedAfterFlush",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 457,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SequentialReadsBypassWorkingSetAndPrefetchIsConsumedByDemandRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TransparentStorageIoWritesAreCachedUntilSyncOnFstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 518,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 537,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "DirectFstreamAppendIsVisibleToCachedReadsWithNativeReadHandle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 565,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateDropsCachedTailPagesAndPreservesPrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 580,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateRejectsExtensionAndRequiresNativeWriteSupport",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateNoOpKeepsCachedPagesResident",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 610,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 624,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 647,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "RejectsOverflowUnalignedPrivateAndEndOfFileKeysWithoutPartialPrefetch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 662,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 682,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 737,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 750,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 758,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 786,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIOForwardsAndRetainsTheCoordinatedCacheGrant",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 795,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIOCacheDenialLeavesNoPartiallyPublishedPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 812,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "EvictsForMetadataPressureBeforeThePayloadOnlyCeiling",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 823,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 838,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 862,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.131s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 891,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 911,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 928,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 942,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 965,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "ControlRecordWritesValidateRangesAndProtectPinnedImages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 989,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FailedControlRecordWriteLeavesNoDirtyCachedImageToOverwriteTheSurvivor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1009,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1031,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1059,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "LocalWriteAndFlushWorkStayBoundedAsCleanResidencyGrows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1081,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.029s",
+          "classname": "BufferPoolTest",
+          "largest_clean_residency": "2048",
+          "generation_checks_32": "1",
+          "erase_visits_32": "2",
+          "range_checks_32": "1",
+          "flush_visits_32": "1",
+          "generation_checks_512": "1",
+          "erase_visits_512": "2",
+          "range_checks_512": "1",
+          "flush_visits_512": "1",
+          "generation_checks_2048": "1",
+          "erase_visits_2048": "2",
+          "range_checks_2048": "1",
+          "flush_visits_2048": "1"
+        },
+        {
+          "name": "OffsetInvalidationPrechecksTheWholeOverlappingRangeBeforeWritingDirtyData",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1119,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "FailedFlushRetainsDirtyChainForAnExactRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        },
+        {
+          "name": "StorageIoPinsRetainTheirPoolAcrossDisableReplacementAndMove",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/cache\/test_BufferPool.cpp",
+          "line": 1161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0s",
+          "classname": "BufferPoolTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:21Z",
+      "time": "0.543s",
+      "testsuite": [
+        {
+          "name": "DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 10,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.024s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.051s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:21Z",
+          "time": "0.327s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeBorrowedViewsUseTypedSinksAndPreserveAliasesAndFallbacks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 158,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.016s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PropertyRunsKeepComplexLargeValueNullAndMissingFallbacks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 283,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.012s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CertifiedScanBatchesBoundRowsAndValidateSubsetsBeforeDelivery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.019s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CertifiedScanAdmissionAndConsumerStopDoNotReplay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 347,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.031s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CertifiedScanKeepsLargeValueFallbackBeyondSourceWorkspace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 381,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.06s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "StorageIOTest",
+      "tests": 74,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:22Z",
+      "time": "0.129s",
+      "testsuite": [
+        {
+          "name": "WriteAtReadAtRoundtrip_NativeFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "CounterSaturationNeverWraps",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ConstructorRejectsUnknownAccessMode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ExplicitAccessModeAccuratelyReportsWriteCapability",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 159,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "RetainsItsStreamAndNativeWriteHandleLifecycle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "PositionedOperationsRejectUnaddressableRangesBeforeIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPagePinsCountDistinctPhysicalIdentitiesOnlyAfterSuccessfulPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageRangesRejectMalformedInputsAndRoundTripThroughTheCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.002s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageRangeShortNativeWriteFailsClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 244,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageRangePreservesShortAndFailedReadSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageWriteThroughDropsCachedImageBeforeShortNativeWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 272,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.001s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "UncachedSafetyGuardsRejectEmptyBuffersBeforeNativeIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 291,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "NativeFaultHooksRejectEmptyAndNestedScopes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ThreadLocalWriteHookTakesPrecedenceOverAllThreadWriteHook",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 343,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ThreadLocalSyncHookTakesPrecedenceOverAllThreadSyncHook",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.001s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "NativeWriteFailureWithoutPlatformErrorUsesGenericIoError",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 387,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtReadAtRoundtrip_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 408,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FstreamFallbackSerializesConcurrentPositionedReadsAndWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 422,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.004s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtMiddleOfFile",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 479,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendReturnsCorrectOffset",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 503,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReserveAppendSpaceExtendsWithZeroReadableGap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 522,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReserveAppendSpaceNativeExtendsWithZeroReadableGap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 543,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FileSizeUsesNativeAndFstreamPaths",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 556,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SequentialReadTracksBytesWithoutUsingThePageCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 566,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SequentialReadTreatsEmptyRequestsAsNoOps",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageOperationsSupportDirectNativeIoAndRejectNullReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 587,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TypedPageWriteThroughSupportsDirectNativeIoAndRejectsNullBuffer",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 602,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TruncateShrinksNativeFilesAndRejectsExtension",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 615,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TruncateRejectsFstreamOnlyIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 626,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TruncateFlushesAndInvalidatesCachedTailPages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 631,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "TruncateAndSyncSurfaceNativeDurabilityFailures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 652,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FileSizeRejectsAnIoWithoutFileAccess",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 680,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FallbackOperationsRejectAnIoWithoutAStream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 685,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FileSizeReportsClosedNativeHandle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FileSizeReportsClosedFstream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 706,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtReportsClosedFstream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 715,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendNativeUsesEndAfterReserve",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 725,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtNullBufferNoOp",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 745,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtNullBufferReturnsZero",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 756,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendNullBufferThrows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 767,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendAndReserveReportClosedStreamWriteFailures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendAndReserveReportClosedNativeWriteFailures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 786,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "NativeWritePathsReportReadOnlyHandleFailures",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 799,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncDoesNotThrow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 819,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.002s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncRecordsDataAndSuperblockDurabilityFences",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 824,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.001s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncReportsClosedNativeWriteHandle",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 835,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncReportsFailedFstreamFlush",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 845,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FlushStreamDoesNotThrow",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 861,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "BufferPoolHelpersAreNoOpsWithoutCacheAndFlushCachedWrites",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 866,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "BufferPoolRoutesByteReadsPrefetchAndExternalRebaseThroughTheCache",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 892,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "CacheAwareAppendAndReserveInvalidateTheDurableTailRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 913,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadOnlyIoRejectsMutationsBeforeTouchingTheStream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 925,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ControlRecordWriteInvalidatesTheGenerationTaggedCacheEntry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 936,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.001s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ConcurrentControlRecordReaderCannotRetainThePreWriteImage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 963,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.102s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ControlRecordWriteRejectsInvalidTypedPageRanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1006,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtNullBufferNoOp_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1021,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtNullBufferReturnsZero_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1028,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtOffsetZero_NativeFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1039,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtOffsetZero_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1050,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtBeyondFileEnd_NativeFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1065,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtBeyondFileEnd_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1073,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtPartialRead_NativeFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1081,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtPartialRead_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1089,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "WriteAtPwriteError_InvalidFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "ReadAtPreadError_InvalidFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncFstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1144,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FlushStreamFstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendWithNativeFds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1163,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "AppendNullBufferThrows_NativeFds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1182,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncWithNullStream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.002s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "FlushStreamWithNullStream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1206,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncWithNullStreamAndInvalidFd",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1216,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "MultipleWriteReadRoundtrip_FstreamFallback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "StorageIOTest"
+        },
+        {
+          "name": "SyncTraceSeparatesSuccessfulDurabilityFencesAndRejectsUnknownKind",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/test_StorageIO.cpp",
+          "line": 1242,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.002s",
+          "classname": "StorageIOTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanMembershipDirectoryTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:22Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "UsesTheCompleteNodeDomainAndBigEndianOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "ScanMembershipDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:22Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatCannotInstallOrPublishScanMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 307,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    },
+    {
+      "name": "BufferModes\/RelocatablePropertyRunTest",
+      "tests": 2,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T16:32:22Z",
+      "time": "0.061s",
+      "testsuite": [
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/0",
+          "value_param": "67108864",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.034s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp:251\nExpected equality of these values:\n  copied.at(\"native_graph.read.property_selected_borrowed_owners\").totalValue\n    Which is: 512\n  ids.size()\n    Which is: 256\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "NativeRunsPreservePageBorrowLifetimeOldPinsAndCopiedFallback\/1",
+          "value_param": "4096",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T16:32:22Z",
+          "time": "0.027s",
+          "classname": "BufferModes\/RelocatablePropertyRunTest"
+        }
+      ]
+    }
+  ]
+}

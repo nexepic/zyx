@@ -1,0 +1,106 @@
+{
+  "tests": 7,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T23:45:18Z",
+  "time": "0.844s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanReadProofTest",
+      "tests": 7,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T23:45:18Z",
+      "time": "0.844s",
+      "testsuite": [
+        {
+          "name": "BuildingAndInvalidAccountsCannotMintCompleteAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 79,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.039s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.073s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 131,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.061s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.068s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 191,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.065s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 217,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:18Z",
+          "time": "0.074s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 247,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T23:45:19Z",
+          "time": "0.46s",
+          "classname": "ScanReadProofTest",
+          "failures": [
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:284\nExpected equality of these values:\n  counts.actual\n    Which is: 0\n  64\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:289\nExpected equality of these values:\n  counts.saved\n    Which is: 128\n  64\n",
+              "type": ""
+            },
+            {
+              "failure": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp:295\nExpected equality of these values:\n  counts.actual\n    Which is: 0\n  64\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

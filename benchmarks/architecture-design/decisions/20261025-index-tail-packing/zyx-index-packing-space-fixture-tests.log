@@ -1,0 +1,16 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage:BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages:BuildingScanMembershipTest.PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery
+[       OK ] BuildingScanMembershipTest.PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery (10 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages
+[       OK ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages (21 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (27 ms)
+[----------] 3 tests from BuildingScanMembershipTest (60 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (60 ms total)
+[  PASSED  ] 3 tests.

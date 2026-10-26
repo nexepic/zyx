@@ -71,3 +71,20 @@ TEST(ScanBlockMembershipTest, RejectsNoncanonicalHeadersEvenWithRecomputedChecks
     const std::array<uint64_t, 2> limits{1, 64};
     EXPECT_EQ(decoded.select(limits), value.live);
 }
+
+TEST(ScanBlockMembershipTest, PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels) {
+    auto source = membership(); source.labels_from_primary = true; source.label_count = 0;
+    const auto bytes = source.encode();
+    EXPECT_EQ(bytes.size(), ScanBlockMembership::HEADER_BYTES);
+    EXPECT_EQ(LittleEndianCodec::readU16(bytes, 4), ScanBlockMembership::PRIMARY_LABEL_VERSION);
+    const auto decoded = ScanBlockMembership::decode(bytes, DatabaseId(7), Generation(3), 2);
+    EXPECT_TRUE(decoded.labels_from_primary); EXPECT_EQ(decoded.select({}), source.live);
+    EXPECT_THROW(static_cast<void>(decoded.select(std::array<uint64_t, 1>{2})), FormatException);
+    source.label_count = 1;
+    EXPECT_THROW(static_cast<void>(source.encode()), FormatException);
+    auto bad = bytes; LittleEndianCodec::writeU16(bad, 4, ScanBlockMembership::VERSION);
+    LittleEndianCodec::writeU32(bad, 52, 0);
+    LittleEndianCodec::writeU32(bad, 52, graph::utils::calculateCrc(bad.data(), ScanBlockMembership::HEADER_BYTES));
+    EXPECT_THROW(static_cast<void>(ScanBlockMembership::decode(bad, DatabaseId(7), Generation(3), 2)), FormatException);
+    EXPECT_FALSE(ScanBlockMembership::decode(membership().encode(), DatabaseId(7), Generation(3), 2).labels_from_primary);
+}

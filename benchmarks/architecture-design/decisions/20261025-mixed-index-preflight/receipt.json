@@ -1,0 +1,22 @@
+{
+  "accepted_progress_percent": 15,
+  "source_sha256": {
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "cfae7800ed9145b0d63b830be00dddf70eafd854d4495334663f02129db23475",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp": "d788a8ed693b1625b66111edc38d59cbc7298b929a72c1f64e77b0146dde59d4",
+    "tests/src/storage/relocatable/entity/test_BuildingScanIndexPacking.cpp": "1b062bcf123c3607efba4982e2d168c469962ff72bb11f9122ae1d372e3935df"
+  },
+  "scan_construction_module_cases": 78,
+  "failures": 0,
+  "source_classification": "Only current routed Index owners matching the source Catalog owner are eligible for the strict single-owner coordinator. Mixed ordinary pools remain untouched for the final full integrity and whole-file admission.",
+  "advisory_counts": "One governed ordered Page-directory traversal records saturated per-segment current-frame counts. These only prune impossible destination capacity. Chosen targets still validate every owner/bitmap/current route/old pin through the existing placement allocator. No cache persists.",
+  "regression": "A valid ordinary mixed-owner pool is cloned through the real builder; compaction skips it with zero writes, both trees return correct values, full integrity passes. Existing occupied-destination cross-generation/old-pin/A-B tests pass.",
+  "v10_holdout": "failed before any unsafe mixed source publication; original source untouched; unadmitted target hashed and removed",
+  "v11_holdout": "fresh construction from original input running",
+  "v10_medium": "Read-only current-route census confirmed a registered mixed-owner source at physical slot 11. Stopped before inevitable v10 refusal; source/census/log/hash/resource evidence retained; unadmitted target removed.",
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false,
+  "compatibility_relocation_cases": 18,
+  "compatibility_failures": 0,
+  "v11_medium": "fresh construction from original input running"
+}

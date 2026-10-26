@@ -1,0 +1,131 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "base_head": "9d65a397f93689557eb076458aec65104505a989",
+  "branch": "work",
+  "performance_run_this_round": false,
+  "full_unit_suite_run": false,
+  "commit_or_push_this_round": false,
+  "configuration_tests": {
+    "default-tests.json": {
+      "tests": 160,
+      "failures": 0,
+      "suites": {
+        "PropertyCollectionRootStoreCacheTest": 25,
+        "BufferPoolTest": 49,
+        "RelocatableStorageBackendTest": 8,
+        "StorageIOTest": 74,
+        "ScanMembershipDirectoryTest": 1,
+        "BuildingScanMembershipTest": 1,
+        "BufferModes/RelocatablePropertyRunTest": 2
+      }
+    },
+    "isolated-tests.json": {
+      "tests": 83,
+      "failures": 0,
+      "suites": {
+        "PropertyCollectionRootStoreCacheTest": 25,
+        "BufferPoolTest": 47,
+        "ScanMembershipDirectoryTest": 1,
+        "BuildingScanMembershipTest": 10
+      }
+    },
+    "source-format-tests.json": {
+      "tests": 24,
+      "failures": 0,
+      "suites": {
+        "ScanMembershipSourceTest": 8,
+        "ScanBlockMembershipTest": 4,
+        "ScanPathFormatTest": 2,
+        "ScanBuildingCloneTest": 4,
+        "ScanFormatCloneCodecTest": 4,
+        "ScanMembershipPageTest": 2
+      }
+    }
+  },
+  "builds": {
+    "candidate": {
+      "format": "15/41",
+      "complete_core_rebuild": true,
+      "storage_test_hooks": false,
+      "core_sha256": "483c921d7158a29933c86a9d26fac152bb4259a3b47ed9cb7efbe9e685d48fda",
+      "command": [
+        "cmake",
+        "--build",
+        "build-scan-candidate",
+        "--target",
+        "zyx_core",
+        "-j4"
+      ]
+    },
+    "default": {
+      "format": "5/31",
+      "complete_core_rebuild": true,
+      "storage_test_hooks": true,
+      "core_sha256": "aa4e5a0823cf2ea70682aabc01091a7ec6e3552f8d1a96e2ce2bd78372e12080",
+      "commands": [
+        [
+          "cmake",
+          "--build",
+          "build-scan-work",
+          "--target",
+          "zyx_core",
+          "-j2"
+        ],
+        [
+          "cmake",
+          "--build",
+          "build-scan-work",
+          "--target",
+          "zyx_core",
+          "-j4"
+        ]
+      ]
+    }
+  },
+  "notes": [
+    "Counts are per configuration; overlapping tests are not distinct deliveries.",
+    "Public backend opening of scan format remains refused; real query consumer tests run in the default format.",
+    "Default compilation was restarted with four jobs after the isolated core completed; no concurrent builds mutated the same build tree.",
+    "First failed runs and their assertion-scope corrections are retained and explained in bilingual decision documents.",
+    "This is correctness and work-elimination evidence, not a performance or space acceptance result."
+  ],
+  "source_sha256": {
+    "include/graph/storage/relocatable/cache/BufferPool.hpp": "bc7cd18b29489edc24c14569ecd5d83596c26fbec29df023994aab9b51585a78",
+    "src/storage/relocatable/cache/BufferPool.cpp": "e1c33239b81e74f21acea2ddf4d63342cd3c41def22c2e1b93c5c6ee85368739",
+    "src/storage/StorageIO.cpp": "2fbd63571df4e8eba48e52e36fb1855cabba9806ca7a6828e80996930f6ed5b4",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "201673aacffc8733b00cc04c1fff542ae3da4748dd4229caaecad845938336ec",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "97b080b35cef77b5f5356ca79a89fe68cfde54e2c11467cbfb454bc636f5f84f",
+    "include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": "f054b32a1134f36f5e7f6827e81c83825025cd1f921fd54ac91440a43455183a",
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "6be685117c312eb82dc9e0ee61b12d6e3fef080d82bcc802fd61f1af02379210",
+    "tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp": "90ea8c01824da67846da8c6e0976bf8f8001fd62c7531779b2747115684ef263",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "16851baa78e04f334c0f96f742f5982537343f449de70b00a39a90e731e08347",
+    "tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp": "4c32dd118ad83c857efe960fb9c3ba960755d7027342dbf26e7a0271a6f6de29",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreScanMembership.cpp": "359a4458e21abde7bbfa6952a234725d016c066e6312ab47e244d7028318fea3",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp": "814535943ec9064f8f0973bc98ebfa3f1b3fc49c1faed22e8f01761950c93119",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "1a40082a7f479e64f9d18e5f6bb5ab9bcfc13f91324372eccb3d6dc71ece9e70",
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "fbdf2f15f6be159c01a8ae4ad083c0942a06fad154ced9a40b916eea720d0e81",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "be1f4f9667abf1bb1dbc0c616f5f867229879e7d344de68ff7f19704dcdaaa15"
+  },
+  "evidence_sha256": {
+    "candidate-build.log": "33848b1e5df46c5dbe9fc48458dd0cc1e6d75ce3c7a670ced08dc3b821e97af4",
+    "default-build.log": "8bab1db57f70be66ed73fe2a78c86c2913635bb6950577898842734939c7fce6",
+    "default-recipes.json": "52b254f7b79732774c48432d9fa1d2168a4cfe9d2d4c31d0a643fb2f566d6b6f",
+    "default-tests.json": "d47352f4de44fb237be0270524c0e286999afa9b8c05de167344f7e4aceb96ab",
+    "default-tests.log": "49008b251dcc2f88705d1dda850e8bee36b6604a11970b6791e781494a37b1af",
+    "en.md": "29bc44212f137a8466168330cf55c66283b1b662739ebdfb7170208519e67e86",
+    "first-default-tests.json": "d9b36f49f3b59fd684dcf587cff07b3ea6d2cb6b7af698153f729432f0f8010b",
+    "first-default-tests.log": "4ae6040467594160059ca3726bd09b68689fdfc39200f714ea9381d585616d4a",
+    "first-isolated-tests.json": "f373d82ca38a474e308ed8584125c1644c47a01dfe4153c06c60c1c71b5df2e6",
+    "first-isolated-tests.log": "5f2c5470849a1bc61f62d1837c4fbecc8f167a16768d83593dd6bfa95e027ded",
+    "isolated-recipes.json": "82d1aba764d7dbf1ce22fd370fe398498cf1cdc0c237f63ea1daf54039806444",
+    "isolated-tests.json": "3f1e61f7db6e0292bdbd78a643f6c23bf9b923713d64177de93160e558031d70",
+    "isolated-tests.log": "a4ffda749991c894de1d9b5bf0a1f48923f10ecd6c3f15c355bb5552d3557602",
+    "module-recipes.json": "ab8da05221244645dd0fae248fa98c4f46aa547377d8f6c24f0866878762b972",
+    "source-format-tests.json": "81254b8b28bf4c71b25279751b4bd8741944ed76670206e8ca656f5cd93c1275",
+    "source-format-tests.log": "1e08bfee54e374ad08993dd0a6c16f336a374cd7ec86502d74c105d1f894b721",
+    "zh.md": "791a82d526337bcdb1feb1266f6fd10539f98fda6799e118004abbd3c46e99de"
+  }
+}

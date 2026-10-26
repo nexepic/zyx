@@ -16,6 +16,7 @@
 #include "graph/utils/OwnedVector.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
+#include "graph/storage/relocatable/entity/ScanReadProof.hpp"
 
 #include <algorithm>
 #include <array>
@@ -281,8 +282,17 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] const std::shared_ptr<StorageIO> &io() const { return io_; }
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        void installVerifiedScanRoot(VerifiedScanRoot root) { verified_scan_.emplace(std::move(root)); }
+        [[nodiscard]] const VerifiedScanRoot *verifiedScanRoot() const {
+            return verified_scan_ ? &*verified_scan_ : nullptr;
+        }
+#endif
 
 	private:
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        std::optional<VerifiedScanRoot> verified_scan_;
+#endif
 		OwnedRelocatableBackendFile() = default;
 
 		std::shared_ptr<std::fstream> stream_;
@@ -2815,6 +2825,9 @@ namespace graph::storage {
 
 	std::shared_ptr<RelocatableStorageBackend>
 	RelocatableStorageBackend::initializeNew(RelocatableStorageBackendOptions options) {
+        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED)
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
+                "scan images require explicit offline construction and whole-file admission");
 		if (options.open_mode != OpenMode::OPEN_CREATE_NEW_FILE &&
 			options.open_mode != OpenMode::OPEN_CREATE_OR_OPEN_FILE) {
 			throw std::invalid_argument("relocatable native initialization requires a create-capable open mode");
@@ -2879,12 +2892,21 @@ namespace graph::storage {
 
 	RelocatableStorageBackend::~RelocatableStorageBackend() { releaseResources(); }
 
+    std::shared_ptr<StorageIO> RelocatableStorageBackend::scanSourceIO() const { return data_file_->io(); }
+
+    const VerifiedScanRoot *RelocatableStorageBackend::verifiedScanRoot(const MetadataSnapshotPin &snapshot) const {
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        if (data_file_ && metadata_) {
+            const auto *root = data_file_->verifiedScanRoot();
+            if (root && root->matches(*metadata_, *data_file_->io(), snapshot)) return root;
+        }
+#else
+        static_cast<void>(snapshot);
+#endif
+        return nullptr;
+    }
+
 	void RelocatableStorageBackend::open() {
-        // The isolated codec is not a production format until its complete
-        // construction, update and recovery lifecycle has been installed.
-        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                "complete-scan format lifecycle is not installed");
 		if (isOpen()) {
 			return;
 		}
@@ -2911,6 +2933,8 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable backend refuses a non-complete relocatable database file");
 		}
 		const Superblock recovered = SuperblockFile(data->io()).recover();
+        if (RSS_SCAN_PATH_FORMAT_ENABLED && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING))
+            throw FormatException(FormatError::FERR_INVALID_STATE, "cannot open an unfinished scan image");
 		const auto identityHandle = data->io()->getWriteFd() != INVALID_FILE_HANDLE
 			? data->io()->getWriteFd() : data->io()->readFd_;
 		auto resourceDomain = query::execution::detail::ProcessResourceDomains::defaultOwner()->domain(
@@ -2923,6 +2947,22 @@ namespace graph::storage {
         data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
         auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
             std::to_string(recovered.database_id.value()), controlMemory);
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        if (writable) {
+            // Authenticate complete semantics before writable recovery can
+            // change any allocator control record. The writer is verified again
+            // below after recovery, against its own store and final I/O epoch.
+            auto readOnlyMetadata = RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory,
+                controlMemory, logicalIdMemory, coordination);
+            const size_t bytes = (std::min)(options_.maximum_integrity_workspace_bytes, size_t{7U * 1024U * 1024U});
+            auto account = std::make_shared<query::execution::detail::ResourceAccount>(resourceDomain,
+                query::execution::detail::ResourceClass::RCK_MAINTENANCE, bytes);
+            auto workspace = std::make_shared<query::execution::MaterializedByteBudget>(bytes, account);
+            static_cast<void>(VerifiedScanRoot::verifyComplete(data->io(), *readOnlyMetadata, workspace, controlMemory));
+            if (options_.verify_integrity_on_open)
+                static_cast<void>(RelocatableIntegrityScanner(data->io(), *readOnlyMetadata, workspace).scan());
+        }
+#endif
         auto metadata = writable ? RelocatableMetadataStore::open(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination)
                                  : RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination);
 
@@ -3087,9 +3127,20 @@ namespace graph::storage {
 						},
 						nativeMutationOptions, system_catalog_.get());
 			}
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+            const size_t scanWorkspaceBytes = (std::min)(options_.maximum_integrity_workspace_bytes, size_t{7U * 1024U * 1024U});
+            auto scanAccount = std::make_shared<query::execution::detail::ResourceAccount>(resource_domain_,
+                query::execution::detail::ResourceClass::RCK_MAINTENANCE, scanWorkspaceBytes);
+            auto scanWorkspace = std::make_shared<query::execution::MaterializedByteBudget>(scanWorkspaceBytes, scanAccount);
+            data_file_->installVerifiedScanRoot(VerifiedScanRoot::verifyComplete(data_file_->io(), *metadata_,
+                scanWorkspace, controlMemory));
+            verifyConstraintSupportTrees(metadata_->openSnapshot());
+            if (options_.verify_integrity_on_open) static_cast<void>(verifyIntegrity());
+#else
 			if (options_.verify_integrity_on_open) {
 				static_cast<void>(verifyIntegrity());
 			}
+#endif
 			requires_reopen_after_indeterminate_write_.store(false, std::memory_order_release);
 			initializeNativeMaintenanceService();
 		} catch (...) {
@@ -6948,19 +6999,27 @@ namespace graph::storage {
 	}
 
     void RelocatableStorageBackend::rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint) {
+        rebuildNativeEntityFreeSpaceSummaries(checkpoint, {});
+    }
+
+    void RelocatableStorageBackend::rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint,
+        const std::shared_ptr<query::execution::MaterializedByteBudget> &boundedWorkspace) {
         requireOpen();
         if (isReadOnly()) throw std::logic_error("free-space initialization requires a writable backend");
         requireNoIndeterminateWrite();
+        constexpr size_t maintenanceLimit = 7U * 1024U * 1024U;
+        if (boundedWorkspace && (boundedWorkspace->used() > maintenanceLimit ||
+            boundedWorkspace->available() > maintenanceLimit - boundedWorkspace->used()))
+            throw std::invalid_argument("bounded free-space initialization exceeds its maintenance account");
         auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
-        auto workspace = mutationWriteWorkspace(resource_domain_);
+        std::shared_ptr<std::pmr::memory_resource> workspace;
+        if (boundedWorkspace) workspace = boundedWorkspace;
+        else workspace = mutationWriteWorkspace(resource_domain_);
         utils::OwnedAllocationScope allocation(workspace);
         std::lock_guard lock(native_publication_mutex_);
-        auto transaction = native_graph_write_planner_->beginTransaction();
-        transaction.rebuild_entity_free_summaries_ = true;
-        transaction.free_summary_checkpoint_ = checkpoint;
-        const auto publicationBase = transaction.snapshot_.superblock();
+        const auto publicationBase = metadata_->openSnapshot().superblock();
         try {
-            const auto result = transaction.commit();
+            const auto result = native_graph_write_planner_->rebuildEntityFreeSpaceSummaries(checkpoint);
             if (!result.committed()) throw LogicalGraphMutationConflict("free-space initialization source changed");
         } catch (...) {
             markReopenRequiredIfPublicationAdvanced(publicationBase);

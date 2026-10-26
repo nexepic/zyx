@@ -205,9 +205,9 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<std::optional<EdgeEntityRecord>>
 		readEdgesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
 			const std::function<void(size_t)> &retainedBufferAdmission = {}) const;
-		// Ordinary scans walk current physical Entity pages and enumerate their live
-		// slots without a per-record Entity Map lookup. Order is intentionally not a
-		// contract; resumable logical-ID scans use visitNodesAfter below.
+		// Native scans enumerate the typed Entity Map in increasing logical-ID
+		// order and reuse the loaded Entity page across adjacent owners. Resumable
+		// logical-ID scans use visitNodesAfter below.
 		[[nodiscard]] bool
 		visitNodesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
 						const std::function<bool(uint64_t nodeId, const NodeEntityRecord &)> &visitor,

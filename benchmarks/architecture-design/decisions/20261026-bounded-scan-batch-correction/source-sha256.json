@@ -1,0 +1,10 @@
+{
+  "include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": "dce22699756d1741d87093d5935cfa32b176b600658f237f27d7efb295c019dc",
+  "include/graph/storage/relocatable/property/HybridPropertyValueReader.hpp": "df62e8e749ab4e3da95d0a4937b214d70e748a247b5f9c6d925fa0406ad07e59",
+  "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "2fb0d945ba9e9d8c441aec749bd114a52d1be9d59f6a763a6fbb1710cb70f958",
+  "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "6484494e93b2c0ef61a16ebfbebeadc0a0674c24bf25ef8da20679eba91f558c",
+  "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "cf2ecb33714d594dbd9c79402ba45c749abd1b59e83afc0e630725b29a289968",
+  "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "b6e25cc1bda9787aa3319460e76371c996b4b50be1e857c9755bbda568ef2213",
+  "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "f26c985346425ff60d5a1aa31f666786e9abcfe4ea00522495810b6a50c0d9bc",
+  "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "81b824da6a4a43a57813760a9033e90f68ac8f4a2034cd11e430c36ed96813f7"
+}

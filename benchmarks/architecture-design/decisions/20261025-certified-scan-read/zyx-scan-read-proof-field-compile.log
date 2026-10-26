@@ -1,0 +1,25 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:267:25: error: 'visitColumnOwnersSorted' is a private member of 'graph::storage::HybridPropertyReadContext'
+  267 |     EXPECT_TRUE(context.visitColumnOwnersSorted(owners, 1, consumeColumn, {}));
+      |                         ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp:466:24: note: declared private here
+  466 |     [[nodiscard]] bool visitColumnOwnersSorted(std::span<const EntityPropertyKey> owners,uint32_t token,
+      |                        ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:274:37: error: 'visitColumnOwnersSorted' is a private member of 'graph::storage::HybridPropertyReadContext'
+  274 |                 EXPECT_TRUE(context.visitColumnOwnersSorted(owners, 1, consumeColumn, {}));
+      |                                     ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp:466:24: note: declared private here
+  466 |     [[nodiscard]] bool visitColumnOwnersSorted(std::span<const EntityPropertyKey> owners,uint32_t token,
+      |                        ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:276:37: error: 'visitColdOwnersSorted' is a private member of 'graph::storage::HybridPropertyReadContext'
+  276 |                 EXPECT_TRUE(context.visitColdOwnersSorted(owners, 3,
+      |                                     ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp:400:24: note: declared private here
+  400 |     [[nodiscard]] bool visitColdOwnersSorted(std::span<const EntityPropertyKey> owners, uint32_t token,
+      |                        ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:283:25: error: 'visitColumnOwnersSorted' is a private member of 'graph::storage::HybridPropertyReadContext'
+  283 |     EXPECT_TRUE(context.visitColumnOwnersSorted(owners, 1, consumeColumn, {}));
+      |                         ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp:466:24: note: declared private here
+  466 |     [[nodiscard]] bool visitColumnOwnersSorted(std::span<const EntityPropertyKey> owners,uint32_t token,
+      |                        ^
+4 errors generated.

@@ -1,0 +1,18 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "/tmp/zyx-capacity-rollback-default.o",
+  "/workspace/zyx/build-scan-work/libzyx_core.a",
+  "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+  "-lgtest_main",
+  "-lgtest",
+  "-lz",
+  "-llz4",
+  "-lxxhash",
+  "-lzstd",
+  "-lboost_filesystem",
+  "-lboost_atomic",
+  "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+  "-pthread",
+  "-o",
+  "/tmp/zyx-capacity-rollback-default-tests"
+]

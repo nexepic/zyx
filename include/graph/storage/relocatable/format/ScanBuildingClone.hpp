@@ -62,8 +62,7 @@ namespace graph::storage::scan_candidate_detail {
                 if (source.readAt(offset, buffer.data(), bytes) != bytes)
                     throw FormatException(FormatError::FERR_BUFFER_TOO_SMALL, "scan clone source was truncated during copy");
                 if (segmentHeaders && LittleEndianCodec::readU32(buffer, 0) == RSS_SEGMENT_MAGIC) {
-                    const auto header = ScanFormatCloneCodec::legacyEnvelopeHeader(std::span(buffer).first(RSS_ENVELOPE_BYTES));
-                    std::copy(header.begin(), header.end(), buffer.begin());
+                    ScanFormatCloneCodec::legacySegmentToBuilding(std::span(buffer).first(bytes));
                 }
                 target.writeAt(offset, buffer.data(), bytes);
                 offset += bytes;

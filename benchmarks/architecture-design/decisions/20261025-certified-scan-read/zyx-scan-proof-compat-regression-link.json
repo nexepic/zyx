@@ -1,0 +1,19 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "/tmp/zyx-scan-proof-compat-BuildingScanMembership.o",
+  "/tmp/zyx-scan-proof-compat-StoredScanMembership.o",
+  "/tmp/zyx-scan-read-proof-compat-tests.o",
+  "/workspace/zyx/build-hybrid-compat/libzyx_core.a",
+  "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+  "-lgtest_main",
+  "-lgtest",
+  "-lz",
+  "-llz4",
+  "-lxxhash",
+  "-lzstd",
+  "-lboost_filesystem",
+  "-lboost_atomic",
+  "-pthread",
+  "-o",
+  "/tmp/zyx-scan-proof-compat-regression-tests"
+]

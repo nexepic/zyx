@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <vector>
 #include "graph/storage/relocatable/format/ScanFormatCloneCodec.hpp"
 using namespace graph::storage;
 
@@ -66,9 +67,98 @@ TEST(ScanFormatCloneCodecTest, EnvelopeTranslationPreservesOwnershipAndRejectsUn
     LittleEndianCodec::writeU32(bytes, 52, graph::utils::calculateCrc(bytes.data(), bytes.size()));
     EXPECT_THROW((void)ScanFormatCloneCodec::legacyEnvelopeHeader(bytes), FormatException);
 }
+TEST(ScanFormatCloneCodecTest, CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation) {
+    std::vector<std::byte> bytes(RSS_SEGMENT_SIZE);
+    SegmentEnvelope envelope;
+    envelope.kind = SegmentKind::SGK_CODEBOOK_EXTENT;
+    envelope.state = SegmentState::SGS_SEALED; envelope.segment_id = SegmentId(8);
+    envelope.owner_id = 91; envelope.generation = Generation(3); envelope.committed_lsn = LogSequenceNumber(2);
+    envelope.header_bytes = RSS_ENVELOPE_BYTES + 8;
+    envelope.payload_bytes = 128;
+    std::fill_n(bytes.begin() + envelope.header_bytes, envelope.payload_bytes, std::byte{0x53});
+    envelope.payload_crc = graph::utils::calculateCrc(bytes.data() + envelope.header_bytes, envelope.payload_bytes);
+    auto header = SegmentEnvelopeCodec::encode(envelope);
+    LittleEndianCodec::writeU16(header, 4, 5); LittleEndianCodec::writeU32(header, 52, 0);
+    LittleEndianCodec::writeU32(header, 52, graph::utils::calculateCrc(header.data(), header.size()));
+    std::copy(header.begin(), header.end(), bytes.begin());
+    bytes.back() = std::byte{0x71}; // outside the live payload, not part of its CRC
+    const auto original = bytes;
+    for (size_t offset = envelope.header_bytes; offset < envelope.header_bytes + envelope.payload_bytes; ++offset) {
+        auto corrupt = original; corrupt[offset] ^= std::byte{1};
+        const auto before = corrupt;
+        try {
+            ScanFormatCloneCodec::legacySegmentToBuilding(corrupt);
+            FAIL() << "accepted corrupt payload at " << offset;
+        } catch (const FormatException &error) {
+            EXPECT_EQ(error.error(), FormatError::FERR_CHECKSUM_MISMATCH);
+        }
+        EXPECT_EQ(corrupt, before);
+    }
+    ScanFormatCloneCodec::legacySegmentToBuilding(bytes);
+    EXPECT_EQ(SegmentEnvelopeCodec::decode(std::span(bytes).first(RSS_ENVELOPE_BYTES)).payload_crc,
+        envelope.payload_crc);
+    EXPECT_TRUE(std::equal(bytes.begin() + RSS_ENVELOPE_BYTES, bytes.end(),
+        original.begin() + RSS_ENVELOPE_BYTES));
+    auto truncated = original; truncated.pop_back();
+    EXPECT_THROW(ScanFormatCloneCodec::legacySegmentToBuilding(truncated), FormatException);
+    EXPECT_EQ(truncated, std::vector<std::byte>(original.begin(), original.end() - 1));
+}
+TEST(ScanFormatCloneCodecTest, MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum) {
+    for (const bool metadata : {false, true}) {
+        SCOPED_TRACE(metadata);
+        std::vector<std::byte> bytes(RSS_SEGMENT_SIZE);
+        SegmentEnvelope envelope;
+        envelope.kind = metadata ? SegmentKind::SGK_METADATA_PAGE_POOL : SegmentKind::SGK_ENTITY_PAGE_POOL;
+        envelope.state = SegmentState::SGS_SEALED; envelope.segment_id = SegmentId(8); envelope.owner_id = 91;
+        envelope.generation = Generation(3); envelope.committed_lsn = LogSequenceNumber(2);
+        envelope.header_bytes = RSS_PAGE_SIZE;
+        envelope.payload_bytes = RSS_PAGE_POOL_DATA_FRAME_COUNT * RSS_PAGE_SIZE;
+        const auto reseal = [&] {
+            auto header = SegmentEnvelopeCodec::encode(envelope);
+            LittleEndianCodec::writeU16(header, 4, 5); LittleEndianCodec::writeU32(header, 52, 0);
+            LittleEndianCodec::writeU32(header, 52, graph::utils::calculateCrc(header.data(), header.size()));
+            std::copy(header.begin(), header.end(), bytes.begin());
+        };
+        reseal();
+        const auto control = [&] {
+            if (metadata) {
+                MetadataPagePoolHeader value;
+                value.physical_slot = PhysicalSlotId(91); value.segment_id = SegmentId(8);
+                value.allocated_frames = 1; value.generation = Generation(3);
+                value.committed_lsn = LogSequenceNumber(2); value.control_sequence = 7;
+                return MetadataPagePoolHeaderCodec::encode(value);
+            }
+            SharedPagePoolHeader value;
+            value.segment_id = SegmentId(8); value.allocated_frames = 1; value.generation = Generation(3);
+            value.committed_lsn = LogSequenceNumber(2); value.control_sequence = 7;
+            return SharedPagePoolHeaderCodec::encode(value);
+        }();
+        for (size_t record = 0; record < 2; ++record)
+            std::copy(control.begin(), control.end(), bytes.begin() + RSS_ENVELOPE_BYTES + record * control.size());
+        bytes.back() = std::byte{0x53}; // typed frames are not covered by envelope.payload_crc=0
+        const auto original = bytes;
+        auto peer = bytes; peer[RSS_ENVELOPE_BYTES] ^= std::byte{1};
+        EXPECT_NO_THROW(ScanFormatCloneCodec::legacySegmentToBuilding(peer));
+        auto corrupt = original;
+        corrupt[RSS_ENVELOPE_BYTES] ^= std::byte{1};
+        corrupt[RSS_ENVELOPE_BYTES + control.size()] ^= std::byte{1};
+        const auto before = corrupt;
+        EXPECT_THROW(ScanFormatCloneCodec::legacySegmentToBuilding(corrupt), FormatException);
+        EXPECT_EQ(corrupt, before);
+        envelope.segment_id = SegmentId(9); reseal();
+        const auto wrongOwner = bytes;
+        EXPECT_THROW(ScanFormatCloneCodec::legacySegmentToBuilding(bytes), FormatException);
+        EXPECT_EQ(bytes, wrongOwner);
+        bytes = original;
+        EXPECT_NO_THROW(ScanFormatCloneCodec::legacySegmentToBuilding(bytes));
+        EXPECT_TRUE(std::equal(bytes.begin() + RSS_ENVELOPE_BYTES, bytes.end(), original.begin() + RSS_ENVELOPE_BYTES));
+    }
+}
+
 #else
 TEST(ScanFormatCloneCodecTest, OrdinaryProfilesCannotTranscodeCandidateFiles) {
     EXPECT_THROW((void)ScanFormatCloneCodec::legacySuperblockToBuilding({}), FormatException);
     EXPECT_THROW((void)ScanFormatCloneCodec::legacyEnvelopeHeader({}), FormatException);
+    EXPECT_THROW(ScanFormatCloneCodec::legacySegmentToBuilding({}), FormatException);
 }
 #endif

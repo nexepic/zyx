@@ -1,0 +1,15 @@
+# Streaming integrity and stable-source checkpoint
+
+Accepted progress remains 15%. No benchmark, full unit suite, commit or push was performed.
+
+The integrity scanner no longer retains every page payload, page identity, entity/property route, authoritative Edge or expected adjacency key. Physical slots point-check their exact logical routes; a forward pass authenticates directory targets and compares counts. Adjacency validation retains ordering, separator ranges, levels, cycle checks and both directions through streamed keys and authoritative Edge lookups. Reciprocal leaf links retain one predecessor. Ordinary pages are reread through the same pin; native field/member pages keep their dedicated reverse audit. Raw LargeValue read buffers are admitted explicitly, and 32 KiB covers fixed unmanaged codec copies. Cancellation releases workspace and pins.
+
+The private builder instance validates the identity-preserving ROW clone before normalization can retire corrupt source slots. An explicit caller-provided integrity budget is limited to 7 MiB alongside the original 1 MiB construction account; the default shares the original account. The static construction primitive grants no completion capability. Native file identity, raw A/B bytes and length fence phase boundaries. A changed source closes and removes the exclusively created target while preserving a foreign replacement at that pathname. Discarded-image diagnostics refuse access. Path conversion/cleanup credit is admitted before opening files.
+
+71 default integrity, 49 isolated construction and 17 default refusal cases passed. New coverage includes 128 large inline State pages and 4096 Edges under 256 KiB, cancellation/refunds, pre-normalization orphan ROW rejection, source length change, mid-clone change and POSIX pathname replacement. Windows handles do not share deletion, so only the pathname-replacement fixture is POSIX-specific; production native identity has both platform implementations, without a Windows run this round.
+
+Initial failures are retained: insufficient fixture physical slots; native frames incorrectly dispatched through the generic reader (production dispatch fixed); and a corruption fixture hitting an existing protected write boundary after membership publication (corruption moved before cloning, protection retained).
+
+A read-only structural census found 45350 current pages and 2363 catalog entries in medium, with zero source writes. A separate large-image diagnostic linked an earlier implementation and was cancelled after subsequent fixes. It produced no completed report and is not acceptance evidence for the current implementation; its binary identity and cancellation reason are retained.
+
+Large LabelSet/LargeValue/vector derived collections still require memory-governance review. Actual whole-file savings, reclamation/compaction, atomic completion, persistent scan consumers and ongoing maintenance remain incomplete. The separate 13/39 compatibility build is still running. Public 15/41 adoption and performance claims remain blocked.

@@ -1,0 +1,31 @@
+{
+  "accepted_progress_percent": 15,
+  "profiles": {
+    "isolated": {
+      "tests": 67,
+      "failures": 0,
+      "result": "zyx-label-fallback-final-isolated-tests.json",
+      "core_sha256_after_tests": "fe21fb3b8d5761c3515f71c1f528d73b1b416d16166696907f5aead9d05d0bd7"
+    },
+    "default": {
+      "tests": 17,
+      "failures": 0,
+      "result": "zyx-label-fallback-default-tests.json",
+      "core_sha256_after_tests": "5dac4dfe9fee4bcf4aa5e7b88438a1ead7d518b13d2cc9eae4ac83715bbf2bac"
+    },
+    "compat": {
+      "tests": 17,
+      "failures": 0,
+      "result": "zyx-label-fallback-compat-tests.json",
+      "core_sha256_after_tests": "b7f8d401467d06e118c6edcf83ddf3de9e9de31e270fd97a899d11eb93fe6101"
+    }
+  },
+  "new_query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false,
+  "notes": [
+    "Normal membership record version 1 is unchanged. Version 2 is a canonical primary-label fallback record.",
+    "Existing global experimental format 15/41 and descriptor version 2 are unchanged; old record readers fail closed.",
+    "Hashes captured after passing targeted tests."
+  ]
+}

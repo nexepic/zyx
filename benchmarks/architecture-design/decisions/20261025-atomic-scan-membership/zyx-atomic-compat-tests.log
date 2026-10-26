@@ -1,0 +1,139 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 56 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from ScanBlockMembershipTest
+[ RUN      ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds
+[       OK ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity
+[       OK ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds
+[       OK ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums
+[       OK ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums (0 ms)
+[ RUN      ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels
+[       OK ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels (0 ms)
+[----------] 5 tests from ScanBlockMembershipTest (0 ms total)
+
+[----------] 14 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (2 ms)
+[ RUN      ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin
+[       OK ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin (2 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback
+[       OK ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback (16 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (0 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (0 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (2 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (1 ms)
+[ RUN      ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource
+[       OK ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource (2 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts
+[       OK ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary
+[       OK ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary (3 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo
+[       OK ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation
+[       OK ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation (1 ms)
+[----------] 14 tests from ScanMembershipSourceTest (38 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership
+[       OK ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership (0 ms)
+[----------] 1 test from BuildingScanMembershipTest (0 ms total)
+
+[----------] 1 test from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.OrdinaryFormatsRejectVerificationBeforeIo
+[       OK ] ScanReadProofTest.OrdinaryFormatsRejectVerificationBeforeIo (0 ms)
+[----------] 1 test from ScanReadProofTest (0 ms total)
+
+[----------] 28 tests from HybridPropertyOwnerDeletionTest
+[ RUN      ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources
+[       OK ] HybridPropertyOwnerDeletionTest.DisabledOrUnconvertedOwnerDeletionDoesNotWriteOrStageResources (2 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats
+[       OK ] HybridPropertyOwnerDeletionTest.ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdjacencyInBothFormats (2 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether
+[       OK ] HybridPropertyOwnerDeletionTest.NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether (275 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse
+[       OK ] HybridPropertyOwnerDeletionTest.LastOwnersEraseTheNamespaceAndResumeOrdinaryWritesWithoutIdReuse (47 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount
+[       OK ] HybridPropertyOwnerDeletionTest.Maximum64Owner4096FieldDeletionUsesTheOriginalOneMiBAccount (2028 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable
+[       OK ] HybridPropertyOwnerDeletionTest.NativeTransactionCopiesOwnerKeysMovesAndKeepsEarlyCancellationRetryable (142 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys
+[       OK ] HybridPropertyOwnerDeletionTest.OwnerDeletionConflictAndRollbackReleaseTheOwnedKeys (57 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration
+[       OK ] HybridPropertyOwnerDeletionTest.ABRecoverySelectsOneCompleteEntityMapAndHybridFieldGeneration (264 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner
+[       OK ] HybridPropertyOwnerDeletionTest.QuotaAndPrePostWriteCancellationRefundWithoutDeletingHalfAnOwner (210 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.InlineLabeledOwnerRemovalRetainsTheOtherOwnerAndOldPin (52 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeRemovalPublishesBothDirectionsAndNativeFieldsTogether (72 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate
+[       OK ] HybridPropertyOwnerDeletionTest.ExhaustingPinnedEntityFramesRetiresAndReleasesTheirPoolWithoutLeavingTheCandidate (1078 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes
+[       OK ] HybridPropertyOwnerDeletionTest.PropertylessLastOwnerDropsOnlyItsGroupAndEntityRoutes (14 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin
+[       OK ] HybridPropertyOwnerDeletionTest.LargeValueOwnerRemovalRetainsGlobalContentAndTheOldPin (22 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges
+[       OK ] HybridPropertyOwnerDeletionTest.LastEdgeOwnersEraseAdjacencyAndKeepEndpointsForNewMonotonicEdges (71 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster
+[       OK ] HybridPropertyOwnerDeletionTest.SelfLoopTypeZeroAndParallelEdgesKeepDistinctDirectionsAndRemainingMaster (64 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeABRecoverySelectsMatchingMasterFieldsAndBothAdjacencyDirections (277 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly
+[       OK ] HybridPropertyOwnerDeletionTest.EdgeCancellationNeverPublishesOnlyOneDirectionOrDropsTheMasterEarly (229 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry
+[       OK ] HybridPropertyOwnerDeletionTest.ValidChecksumMissingReverseDirectionRejectsBeforeWritingAndCanRetry (53 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsIncidentEdgesAndAcceptsTheirLogicallyEmptyMapAfterRemoval
+[       OK ] HybridPropertyOwnerDeletionTest.NodeDeletionRejectsIncidentEdgesAndAcceptsTheirLogicallyEmptyMapAfterRemoval (67 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology
+[       OK ] HybridPropertyOwnerDeletionTest.NativeEdgeDeletionStagesOwnedIdsAndKeepsTheRemainingTopology (164 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB
+[       OK ] HybridPropertyOwnerDeletionTest.MaximumEdgeGroupDeletionCoordinates4096FieldsWithinOneMiB (1751 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.OwnersInTwoNodeGroupsAreDeletedWithBothLiveMasksAndOldPins
+[       OK ] HybridPropertyOwnerDeletionTest.OwnersInTwoNodeGroupsAreDeletedWithBothLiveMasksAndOldPins (197 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.NodeAndEdgeWithTheSameIdDeleteTheirOwnEntityAndFieldNamespaces
+[       OK ] HybridPropertyOwnerDeletionTest.NodeAndEdgeWithTheSameIdDeleteTheirOwnEntityAndFieldNamespaces (172 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.CrossGroupDemotionThenLastOwnerDeletionRemovesEveryNativeDirectory
+[       OK ] HybridPropertyOwnerDeletionTest.CrossGroupDemotionThenLastOwnerDeletionRemovesEveryNativeDirectory (236 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.MixedKindDeletionRecoversAllEntityAndFieldRootsAcrossBothHeaders
+[       OK ] HybridPropertyOwnerDeletionTest.MixedKindDeletionRecoversAllEntityAndFieldRootsAcrossBothHeaders (315 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.IncidentNodeDeletionRequiresEveryParallelEdgeInItsAtomicBatch
+[       OK ] HybridPropertyOwnerDeletionTest.IncidentNodeDeletionRequiresEveryParallelEdgeInItsAtomicBatch (36 ms)
+[ RUN      ] HybridPropertyOwnerDeletionTest.AtomicNodeDeletionHandlesSelfLoopsAndUntypedIncidentEdges
+[       OK ] HybridPropertyOwnerDeletionTest.AtomicNodeDeletionHandlesSelfLoopsAndUntypedIncidentEdges (37 ms)
+[----------] 28 tests from HybridPropertyOwnerDeletionTest (7949 ms total)
+
+[----------] 6 tests from HybridPropertyLabeledDeletionTest
+[ RUN      ] HybridPropertyLabeledDeletionTest.UnconvertedOwnerDeletionRetainsLabelsAndAllRoutes
+[       OK ] HybridPropertyLabeledDeletionTest.UnconvertedOwnerDeletionRetainsLabelsAndAllRoutes (4 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot
+[       OK ] HybridPropertyLabeledDeletionTest.ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot (45 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.TwoRemovalsCoalesceTheSharedLabelPageAndRemoveItsEmptyRoute
+[       OK ] HybridPropertyLabeledDeletionTest.TwoRemovalsCoalesceTheSharedLabelPageAndRemoveItsEmptyRoute (43 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.OldPinsProtectDetachedEntityAndLabelPoolsUntilEveryOwnerIsRemoved
+[       OK ] HybridPropertyLabeledDeletionTest.OldPinsProtectDetachedEntityAndLabelPoolsUntilEveryOwnerIsRemoved (23 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.QuotaAndPrivateCancellationRefundWithoutPublishingHalfALabelDeletion
+[       OK ] HybridPropertyLabeledDeletionTest.QuotaAndPrivateCancellationRefundWithoutPublishingHalfALabelDeletion (18 ms)
+[ RUN      ] HybridPropertyLabeledDeletionTest.ABRecoverySelectsMatchingNodeLabelAndNativeFieldRoots
+[       OK ] HybridPropertyLabeledDeletionTest.ABRecoverySelectsMatchingNodeLabelAndNativeFieldRoots (92 ms)
+[----------] 6 tests from HybridPropertyLabeledDeletionTest (228 ms total)
+
+[----------] Global test environment tear-down
+[==========] 56 tests from 7 test suites ran. (8218 ms total)
+[  PASSED  ] 56 tests.

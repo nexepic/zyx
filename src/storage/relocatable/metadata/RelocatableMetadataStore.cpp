@@ -2566,7 +2566,14 @@ namespace graph::storage {
         const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
             std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
                 [](const auto &root) { return root.page_id.isValid(); });
-        if (nativeActive && !isLargeValueMaintenancePool(visible))
+        // Complete scan writes retain the ordinary immutable Entity/Index
+        // COW planners. Capacity reclamation consults both the current page
+        // directory and every active pin before reusing a frame. These pools
+        // contain no native field pages, which require their separate joined
+        // reconciliation path.
+        const bool scanCowPool = RSS_SCAN_PATH_FORMAT_ENABLED &&
+            (visible.kind == SegmentKind::SGK_ENTITY_PAGE_POOL || visible.kind == SegmentKind::SGK_INDEX_PAGE_POOL);
+        if (nativeActive && !isLargeValueMaintenancePool(visible) && !scanCowPool)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
                 "native physical reconciliation requires an immutable LargeValue or content-index pool");
 		const uint8_t unavailable = static_cast<uint8_t>(visible.state != SegmentState::SGS_SEALED) |
@@ -3076,16 +3083,24 @@ namespace graph::storage {
 																	   Generation expectedGeneration,
 																	   LogSequenceNumber checkpointLsn,
 																	   const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
+        std::optional<Superblock> privateSource;
+        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+            const auto observed = bootstrap_.recover();
+            if (observed.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) privateSource = observed;
+        }
+        MetadataWriteGuard writer = beginWrite(privateSource.has_value());
+        const Superblock current = bootstrap_.recover();
+        if (privateSource && current != *privateSource)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "private relocated-source release lost its BUILDING root fence");
 		const RetireQueueEntry retirement =
 				segment_relocation_coordinator_.validateRelocatedSourceRelease(current, segmentId, expectedGeneration);
 		if (retirement_.isVisibleToActiveSnapshot(writer, retirement)) {
             return std::nullopt;
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		segment_relocation_coordinator_.prepareRelocatedSourceRelease(batch, retirement);
-		publishBatch(batch, writer, options);
+        segment_relocation_coordinator_.prepareRelocatedSourceRelease(batch, retirement);
+        if (privateSource) batch.hybrid_property_publication_ = true;
+        publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -4340,6 +4355,7 @@ namespace graph::storage {
 	}
 
 	MetadataPagePoolStats RelocatableMetadataStore::pagePoolStats() const { return metadata_page_pool_.stats(); }
+	uint64_t RelocatableMetadataStore::dataMutationEpoch() const { return io_->dataMutationEpoch(); }
 
 	Superblock RelocatableMetadataStore::migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
 																		 const MetadataPublishOptions &options) {

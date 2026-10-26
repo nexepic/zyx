@@ -148,6 +148,12 @@ if(NOT ZYX_WASM AND ZYX_BUILD_STATIC_LIBRARY)
     add_library(zyx::zyx_static ALIAS zyx_static)
 endif()
 
+if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_WASM)
+    add_executable(zyx_scan_convert EXCLUDE_FROM_ALL apps/scan_convert/main.cpp)
+    set_target_properties(zyx_scan_convert PROPERTIES OUTPUT_NAME zyx-scan-convert)
+    target_link_libraries(zyx_scan_convert PRIVATE zyx::core)
+endif()
+
 if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     add_executable(zyx_cli apps/cli/main.cpp)
     set_target_properties(zyx_cli PROPERTIES OUTPUT_NAME zyx)

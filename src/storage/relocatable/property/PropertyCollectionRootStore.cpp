@@ -959,19 +959,21 @@ namespace graph::storage {
     PropertyCollectionRootScanCursor::~PropertyCollectionRootScanCursor() = default;
     PropertyCollectionRootScanCursor::PropertyCollectionRootScanCursor(const PropertyCollectionRootStore &store,
         Generation generation, const CancellationCheckpoint *cancellation)
-        : store_(&store), generation_(generation), cancellation_(cancellation) {}
+        : store_(&store), generation_(generation), cancellation_(cancellation),
+          data_epoch_(store.metadata_.dataMutationEpoch()) {}
 
 	PropertyCollectionRootScanCursor::PropertyCollectionRootScanCursor(
 			PropertyCollectionRootScanCursor &&other) noexcept :
 		hybrid_context_(std::move(other.hybrid_context_)), store_(std::exchange(other.store_, nullptr)), generation_(std::exchange(other.generation_, Generation{})),
 		cancellation_(std::exchange(other.cancellation_, nullptr)),
 		current_page_id_(std::exchange(other.current_page_id_, PageId{})),
-		current_page_(std::move(other.current_page_)), directory_cursor_(std::move(other.directory_cursor_)),
+		current_page_(std::move(other.current_page_)), selected_page_(std::move(other.selected_page_)),
+        data_epoch_(other.data_epoch_), directory_cursor_(std::move(other.directory_cursor_)),
 		pending_directory_location_(std::move(other.pending_directory_location_)),
 		directory_metadata_pages_reported_(std::exchange(other.directory_metadata_pages_reported_, 0U)),
 		last_requested_directory_id_(std::exchange(other.last_requested_directory_id_, 0U)),
 		directory_stream_enabled_(std::exchange(other.directory_stream_enabled_, false)) {
-		other.current_page_.reset();
+		other.current_page_.reset(); other.selected_page_.reset();
 		other.directory_cursor_.reset();
 		other.pending_directory_location_.reset();
 	}
@@ -985,12 +987,13 @@ namespace graph::storage {
 			cancellation_ = std::exchange(other.cancellation_, nullptr);
 			current_page_id_ = std::exchange(other.current_page_id_, PageId{});
 			current_page_ = std::move(other.current_page_);
+            selected_page_ = std::move(other.selected_page_); data_epoch_ = other.data_epoch_;
 			directory_cursor_ = std::move(other.directory_cursor_);
 			pending_directory_location_ = std::move(other.pending_directory_location_);
 			directory_metadata_pages_reported_ = std::exchange(other.directory_metadata_pages_reported_, 0U);
 			last_requested_directory_id_ = std::exchange(other.last_requested_directory_id_, 0U);
 			directory_stream_enabled_ = std::exchange(other.directory_stream_enabled_, false);
-			other.current_page_.reset();
+			other.current_page_.reset(); other.selected_page_.reset();
 			other.directory_cursor_.reset();
 			other.pending_directory_location_.reset();
 		}
@@ -1257,12 +1260,21 @@ namespace graph::storage {
 		return recordSelectedValues(EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyTokens, admission));
 	}
 
-	void PropertyCollectionRootScanCursor::validateSnapshot(const MetadataSnapshotPin &snapshot) const {
+	void PropertyCollectionRootScanCursor::validateSnapshot(const MetadataSnapshotPin &snapshot, bool selectedPage) {
 		if (store_ == nullptr || !store_->metadata_.ownsSnapshot(snapshot) ||
 			snapshot.superblock().generation != generation_) {
+			selected_page_.reset();
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property scan cursor requires its original active metadata generation");
 		}
+        const uint64_t epoch = store_->metadata_.dataMutationEpoch();
+        if (epoch != data_epoch_ || epoch == std::numeric_limits<uint64_t>::max()) {
+            current_page_.reset(); current_page_id_ = {};
+            selected_page_.reset(); directory_cursor_.reset(); pending_directory_location_.reset();
+            last_requested_directory_id_ = 0U; directory_metadata_pages_reported_ = 0U;
+            data_epoch_ = epoch;
+        }
+        if (!selectedPage) selected_page_.reset();
 	}
 
 	void PropertyCollectionRootScanCursor::accountDirectoryPages() {
@@ -1280,7 +1292,7 @@ namespace graph::storage {
 	std::optional<EntityPropertyLocation>
 	PropertyCollectionRootScanCursor::findLocationOptional(const MetadataSnapshotPin &snapshot,
 														  const EntityPropertyKey &key) {
-		validateSnapshot(snapshot);
+		validateSnapshot(snapshot, true);
 		if (cancellation_ != nullptr) {
 			cancellation_->check();
 		}
@@ -1482,7 +1494,11 @@ namespace graph::storage {
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
 			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
 			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches) {
-			validateSnapshot(snapshot);
+			validateSnapshot(snapshot, true);
+        // Move retention into this call before callbacks or admission. Any
+        // failure releases the pin without retaining a partially consumed batch.
+        auto retained = std::move(selected_page_); selected_page_.reset();
+        uint64_t sourceEpoch = data_epoch_;
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -1508,7 +1524,7 @@ namespace graph::storage {
 			previousToken = token;
 		}
 		std::fill(results.begin(), results.end(), std::nullopt);
-        const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
+        const auto releaseRow = [&] { retained.reset(); current_page_.reset(); current_page_id_ = PageId{}; };
         const std::function<void()> beforeCold = std::ref(releaseRow);
         if (store_->readHybridSelectedBatch(snapshot, keys, keyTokens, results, {}, cancellation_, admission, sink, scalars, texts, batches, &beforeCold)) return;
         std::optional<BorrowedPropertyRuns> runs;
@@ -1548,7 +1564,15 @@ namespace graph::storage {
 		SlottedPage *copied = nullptr;
 		bool tryPinned = true;
 		for (const size_t ownerIndex : present) {
-			validateSnapshot(snapshot);
+			validateSnapshot(snapshot, true);
+            if (data_epoch_ != sourceEpoch) {
+                // A concurrent COW publication does not change this snapshot's
+                // values. Drop decoded images and reacquire its authenticated
+                // page without replaying already delivered owners.
+                if (runs) runs->flush();
+                retained.reset(); pinned.reset(); copied = nullptr; previousPage = {};
+                sourceEpoch = data_epoch_;
+            }
 			if (cancellation_ != nullptr) cancellation_->check();
 			const EntityPropertyLocation &location = *locations[ownerIndex];
 			if (previousPage != location.page_id) {
@@ -1557,11 +1581,17 @@ namespace graph::storage {
 				++pagesRead;
 				pinned.reset();
 				copied = nullptr;
-				if (current_page_.has_value() && current_page_id_ == location.page_id) {
+                if (retained && retained->page.pageId() == location.page_id) {
+                    pinned = std::move(retained); retained.reset();
+                    debug::PerfTrace::addValue("native_graph.read.property_selected_page_reuse", 1);
+                } else if (current_page_.has_value() && current_page_id_ == location.page_id) {
 					copied = &*current_page_;
 				} else {
-					if (tryPinned)
+                    retained.reset(); current_page_.reset(); current_page_id_ = {};
+					if (tryPinned) {
+                        debug::PerfTrace::addValue("native_graph.read.property_selected_page_acquisition", 1);
 						pinned = store_->pages_.readPinned(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL);
+                    }
 					if (!pinned.has_value()) {
 						// Disabled or saturated pools cannot lend an image. Avoid
 						// repeating a failed pin route for every remaining page.
@@ -1616,26 +1646,13 @@ namespace graph::storage {
 			}
 		}
 		if (runs) runs->flush();
-		// Keep the established one-page owned cursor cache across batches;
-		// never retain a buffer-pool pin beyond this read. Only the final page
-		// is copied, while borrowed slots were decoded directly above.
-		if (pinned.has_value()) {
-            // Results above are already decoded. Retaining an extra image is
-            // optional and must not turn a valid bounded read into rejection.
+        // Text runs have been consumed above. Retain the same authenticated
+        // view, avoiding a page copy and a second parse on the next batch.
+        if (pinned && store_->metadata_.dataMutationEpoch() == sourceEpoch &&
+                sourceEpoch != std::numeric_limits<uint64_t>::max()) {
             current_page_.reset(); current_page_id_ = {};
-            try {
-                auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
-                    utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
-                        (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
-                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_copy_bytes",
-                    static_cast<int64_t>(pinned->contents.payload().size()));
-                current_page_.emplace(std::move(retained)); current_page_id_ = previousPage;
-            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
-                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_declined", 1);
-            } catch (const query::execution::MaterializedByteLimitExceeded &) {
-                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_declined", 1);
-            }
-		}
+            selected_page_ = std::move(pinned);
+        }
 		if (columnBatch) {
 			debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_pages",
 										static_cast<int64_t>(pagesRead));

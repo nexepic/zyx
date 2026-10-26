@@ -1,0 +1,16 @@
+{
+  "accepted_progress_percent": 15,
+  "scale": "medium",
+  "status": "completed_public_image",
+  "source_bytes": 309985280,
+  "target_bytes": 256507904,
+  "whole_file_saving_fraction": 0.17251585623678645,
+  "target_sha256": "9565d55bd228ee60029c58f7146a2ed50e1e4fa311bea187442addd9c721583f",
+  "construction_generation": 13427,
+  "source_workspace_bytes": 1048576,
+  "maintenance_workspace_bytes": 7340032,
+  "raw_cache_bytes": 67108864,
+  "construction_total_file_limit_bytes": 2147483648,
+  "public_check": "all four primary complete typed result oracles passed without latency collection",
+  "query_benchmark_run": false
+}

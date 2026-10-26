@@ -1,0 +1,48 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *PublicMixedBatchRetains*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:289: Failure
+Expected: static_cast<void>(backend.executeLogicalGraphMutationBatch(batch)) doesn't throw an exception.
+  Actual: it throws std::system_error with description "Resource deadlock avoided".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:293: Failure
+Expected equality of these values:
+  changed->readNodeProperty(8, "number")
+    Which is: 64-byte object <08-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 38-2B C8-32 86-55 00-00 38-2B C8-32 86-55 00-00 30-6B C8-32 86-55 00-00 20-6B C8-32 86-55 00-00 E9-90 7B-1F 86-55 00-00 02-9F C0-A6 FF-7F 00-00>
+  graph::PropertyValue(int64_t{1008})
+    Which is: 64-byte object <F0-03 00-00 00-00 00-00 02-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 03-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:294: Failure
+Expected equality of these values:
+  changed->readNode(7).labels
+    Which is: { "Nodes" }
+  (std::vector<std::string>{"Changed"})
+    Which is: { "Changed" }
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:298: Failure
+Expected equality of these values:
+  after
+    Which is: 4096
+  4095U
+    Which is: 4095
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:302: Failure
+Expected equality of these values:
+  reopened.openLogicalGraphReadSnapshot()->readNodeProperty(8, "number")
+    Which is: 64-byte object <08-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+  graph::PropertyValue(int64_t{1008})
+    Which is: 64-byte object <F0-03 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+
+[  FAILED  ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity (20355 ms)
+[----------] 1 test from ScanReadProofTest (20355 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (20355 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity
+
+ 1 FAILED TEST

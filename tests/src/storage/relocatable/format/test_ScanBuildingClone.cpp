@@ -98,4 +98,29 @@ TEST(ScanBuildingCloneTest, CancellationAndChangingSourceLeaveOnlyBuildingTarget
     EXPECT_EQ(targetHeader(*changed.io).flags, RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
     EXPECT_EQ(budget.used(), 0U);
 }
+TEST(ScanBuildingCloneTest, CorruptSegmentPayloadIsNotCopiedOrPromoted) {
+    PrivateCloneFile source, target; initializeSource(*source.io);
+    SegmentEnvelope envelope;
+    envelope.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+    envelope.state = SegmentState::SGS_SEALED; envelope.segment_id = SegmentId(1);
+    envelope.owner_id = 9; envelope.generation = Generation(2); envelope.committed_lsn = LogSequenceNumber(2);
+    envelope.payload_bytes = 1;
+    const std::byte payload{0x53}, corrupt{0x54};
+    envelope.payload_crc = graph::utils::calculateCrc(&payload, 1);
+    auto header = SegmentEnvelopeCodec::encode(envelope);
+    LittleEndianCodec::writeU16(header, 4, 5); LittleEndianCodec::writeU32(header, 52, 0);
+    LittleEndianCodec::writeU32(header, 52, graph::utils::calculateCrc(header.data(), header.size()));
+    source.io->writeAt(RSS_SEGMENT_SIZE, header.data(), header.size());
+    source.io->writeAt(RSS_SEGMENT_SIZE + RSS_ENVELOPE_BYTES, &corrupt, 1);
+    source.io->sync();
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    EXPECT_THROW((void)scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *target.io,
+        budget, 1024U * 1024U, [] {}), FormatException);
+    EXPECT_EQ(targetHeader(*target.io).flags, RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+    EXPECT_EQ(target.io->fileSize(), RSS_SEGMENT_SIZE); // only the BUILDING bootstrap was copied
+    EXPECT_EQ(budget.used(), 0U);
+    std::byte retained{};
+    ASSERT_EQ(source.io->readAt(RSS_SEGMENT_SIZE + RSS_ENVELOPE_BYTES, &retained, 1), 1U);
+    EXPECT_EQ(retained, corrupt);
+}
 #endif

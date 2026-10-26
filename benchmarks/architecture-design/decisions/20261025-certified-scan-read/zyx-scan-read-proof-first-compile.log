@@ -1,0 +1,9 @@
+In file included from /workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:2:
+/workspace/zyx/include/graph/storage/relocatable/entity/CertifiedScanMembership.hpp:56:31: error: use of undeclared identifier 'streamStoredMembership'; did you mean 'scan_candidate_detail::streamStoredMembership'?
+   56 |             static_cast<void>(streamStoredMembership(io, metadata, snapshot, workspace, SIZE_MAX,
+      |                               ^~~~~~~~~~~~~~~~~~~~~~
+      |                               scan_candidate_detail::streamStoredMembership
+/workspace/zyx/include/graph/storage/relocatable/entity/StoredScanMembership.hpp:22:49: note: 'scan_candidate_detail::streamStoredMembership' declared here
+   22 |     [[nodiscard]] inline StoredMembershipCounts streamStoredMembership(
+      |                                                 ^
+1 error generated.

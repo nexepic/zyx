@@ -1,0 +1,109 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 41 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from HybridPropertyDescriptorTest
+[ RUN      ] HybridPropertyDescriptorTest.VersionedPayloadAndIndependentLogicalRootsRoundTrip
+[       OK ] HybridPropertyDescriptorTest.VersionedPayloadAndIndependentLogicalRootsRoundTrip (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals
+[       OK ] HybridPropertyDescriptorTest.NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility
+[       OK ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed
+[       OK ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds
+[       OK ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted
+[       OK ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration
+[       OK ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration (30 ms)
+[----------] 7 tests from HybridPropertyDescriptorTest (30 ms total)
+
+[----------] 18 tests from HybridPropertyFieldRelocationTest
+[ RUN      ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite
+[       OK ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite (3 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+[       OK ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins (1220 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+[       OK ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool (465 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+[       OK ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration (176 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse (64 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry (502 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+[       OK ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration (64 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse (1212 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether (142 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs (68 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry
+[       OK ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry (406 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame
+[       OK ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame (398 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking
+[       OK ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking (924 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames
+[       OK ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames (249 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute (196 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse
+[       OK ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse (85 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels
+[       OK ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels (100 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute
+[       OK ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute (234 ms)
+[----------] 18 tests from HybridPropertyFieldRelocationTest (6515 ms total)
+
+[----------] 9 tests from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (1 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO
+[       OK ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO (3 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup
+[       OK ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup (32 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority
+[       OK ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority (34 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation
+[       OK ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation (87 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent
+[       OK ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent (248 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots
+[       OK ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots (145 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone
+[       OK ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone (187 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins
+[       OK ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins (5480 ms)
+[----------] 9 tests from HybridPropertyCohortAdmissionTest (6219 ms total)
+
+[----------] 4 tests from HybridPropertyColdConversionProbeTest
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting
+[       OK ] HybridPropertyColdConversionProbeTest.ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting (38 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace
+[       OK ] HybridPropertyColdConversionProbeTest.ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace (27 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly
+[       OK ] HybridPropertyColdConversionProbeTest.ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly (37 ms)
+[ RUN      ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource
+[       OK ] HybridPropertyColdConversionProbeTest.ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource (3 ms)
+[----------] 4 tests from HybridPropertyColdConversionProbeTest (107 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership
+[       OK ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership (0 ms)
+[----------] 1 test from BuildingScanMembershipTest (0 ms total)
+
+[----------] 1 test from StoredScanMembershipTest
+[ RUN      ] StoredScanMembershipTest.OrdinaryFormatsRejectTheStreamBeforeReadingStorage
+[       OK ] StoredScanMembershipTest.OrdinaryFormatsRejectTheStreamBeforeReadingStorage (0 ms)
+[----------] 1 test from StoredScanMembershipTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 41 tests from 7 test suites ran. (12873 ms total)
+[  PASSED  ] 41 tests.

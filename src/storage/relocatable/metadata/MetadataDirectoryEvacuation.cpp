@@ -9,6 +9,8 @@
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 
 #include <array>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 #include <limits>
 #include <map>
 #include <optional>
@@ -49,7 +51,7 @@ namespace graph::storage {
 			return factor;
 		}
 
-		void markEvacuationSourceReference(PhysicalPageRef reference, std::set<MetadataFrameKey> &visited) {
+		void markEvacuationSourceReference(PhysicalPageRef reference, utils::OwnedSet<MetadataFrameKey> &visited) {
 			// Every caller has already checked the root or child reference. Keeping
 			// this helper to one responsibility prevents an unreachable invalid-ref
 			// branch from obscuring the duplicate-frame corruption check.
@@ -60,7 +62,7 @@ namespace graph::storage {
 			}
 		}
 
-		void markEvacuationPageId(MetadataPageId pageId, std::set<uint64_t> &visited) {
+		void markEvacuationPageId(MetadataPageId pageId, utils::OwnedSet<uint64_t> &visited) {
 			if (!pageId.isValid() || !visited.emplace(pageId.value()).second) {
 				throwMetadataEvacuationError(
 						FormatError::FERR_INVALID_STATE,
@@ -177,7 +179,7 @@ namespace graph::storage {
 										 const Superblock &current, PhysicalPageRef source,
 										 MetadataDirectoryType directoryType, bool root,
 										 uint16_t expectedLevel, uint64_t ordinalBase,
-										 std::set<MetadataFrameKey> &visited, std::set<uint64_t> &visitedPageIds) {
+										 utils::OwnedSet<MetadataFrameKey> &visited, utils::OwnedSet<uint64_t> &visitedPageIds) {
 			markEvacuationSourceReference(source, visited);
 			MetadataRadixPage page = pages.readMetadataRadix(source);
 			markEvacuationPageId(page.page_id, visitedPageIds);
@@ -295,8 +297,8 @@ namespace graph::storage {
 		for (DirectoryRoot &directory: roots) {
 			directory.root = evacuationRootFor(pages, current, directory.directory_type, directory.root);
 		}
-		std::set<MetadataFrameKey> visited;
-		std::set<uint64_t> visitedPageIds;
+		utils::OwnedSet<MetadataFrameKey> visited;
+		utils::OwnedSet<uint64_t> visitedPageIds;
 		for (const DirectoryRoot &directory: roots) {
 			if (!directory.root.isValid()) {
 				continue;
@@ -340,7 +342,7 @@ namespace graph::storage {
 	namespace {
 
 		struct LocallyRelocatableRouteSet final {
-			std::vector<MetadataPageRoute> routes;
+			utils::OwnedStdVector<MetadataPageRoute> routes;
 			std::optional<MetadataPageId> data_root_page_id;
 		};
 
@@ -433,7 +435,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 
-		std::map<uint8_t, MetadataPageRoute> sourceFrames;
+		utils::OwnedMap<uint8_t, MetadataPageRoute> sourceFrames;
 		for (const MetadataPageRoute &route:
 			 MetadataPageRouteDirectory(pages).collectRoutesFromRouteBranch(current, bootstrap.metadata_page_directory_root)) {
 			if (route.physical_reference.physical_slot != sourcePoolSlot) {
@@ -498,7 +500,7 @@ namespace graph::storage {
 			}
 
 			enum class SourceFrameKind : uint8_t { SFK_ROUTE_TARGET, SFK_ROUTE_BRANCH, SFK_BOOTSTRAP_HEADER };
-			std::map<uint8_t, SourceFrameKind> sourceFrames;
+			utils::OwnedMap<uint8_t, SourceFrameKind> sourceFrames;
 			const auto registerFrame = [&](PhysicalPageRef reference, SourceFrameKind kind) {
 				const uint8_t frame = reference.frame_index;
 				if (reference.physical_slot != sourcePoolSlot || frame < RSS_PAGE_POOL_FIRST_DATA_FRAME ||
@@ -577,7 +579,7 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 
-			std::map<uint8_t, PhysicalPageRef> sourceFrames;
+			utils::OwnedMap<uint8_t, PhysicalPageRef> sourceFrames;
 			for (const PhysicalPageRef reference:
 				 MetadataPageRouteDirectory(pages).collectRouteBranchFrames(current, bootstrap.metadata_page_directory_root)) {
 				if (reference.physical_slot != sourcePoolSlot) {

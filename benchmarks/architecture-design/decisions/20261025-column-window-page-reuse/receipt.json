@@ -1,0 +1,32 @@
+{
+  "accepted_progress_percent": 15,
+  "profiles": {
+    "isolated": {
+      "tests": 12,
+      "failures": 0,
+      "result": "zyx-column-window-reuse-final-tests.json",
+      "core_sha256_after_tests": "c41b2485c89ebff036ee066d8cc01675d7913d3d8f19a3776784e97726fc6d35"
+    },
+    "default": {
+      "tests": 1,
+      "failures": 0,
+      "result": "zyx-column-window-default-tests.json",
+      "core_sha256_after_tests": "5dac4dfe9fee4bcf4aa5e7b88438a1ead7d518b13d2cc9eae4ac83715bbf2bac"
+    },
+    "compat": {
+      "tests": 8,
+      "failures": 0,
+      "result": "zyx-column-window-compat-tests.json",
+      "core_sha256_after_tests": "88bfe6626e9b14828641d2c92b6d37c46f34687ab3fc1fe77345c464543373ce"
+    }
+  },
+  "new_query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false,
+  "notes": [
+    "Local physical page reuse, no new persistent cache.",
+    "Initial assertions exercised a scalar path without batch sinks; corrected to the actual typed batch API.",
+    "The intermediate cold build was interrupted after the last header edit; final three builds and fresh module objects supersede it.",
+    "Hashes were captured after tests, with matching source receipt."
+  ]
+}

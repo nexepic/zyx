@@ -48,6 +48,8 @@
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceService.hpp"
 #include "graph/storage/relocatable/maintenance/VectorIndexStateReclaimer.hpp"
 
+namespace graph::query::execution { class MaterializedByteBudget; }
+
 namespace graph::storage {
 
 	class NativeBulkSessionLease;
@@ -81,6 +83,7 @@ namespace graph::storage {
 	class RelocatableStorageBackend;
 	class RelocatableLogicalGraphReadSnapshot;
 	class OwnedRelocatableBackendFile;
+    class VerifiedScanRoot;
 
 	struct RelocatableStorageBackendOptions {
 		std::filesystem::path data_path;
@@ -273,6 +276,8 @@ namespace graph::storage {
 		void rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint = {});
         // Explicit initialization/repair for legacy files; never hidden in open or an ordinary write.
         void rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint = {});
+        void rebuildNativeEntityFreeSpaceSummaries(const std::function<void()> &checkpoint,
+            const std::shared_ptr<query::execution::MaterializedByteBudget> &boundedWorkspace);
 		[[nodiscard]] std::vector<uint64_t> ensureLogicalMembershipIndexes(
 				const std::function<void()> &checkpoint = {});
 		[[nodiscard]] std::vector<uint64_t>
@@ -662,6 +667,8 @@ namespace graph::storage {
 		[[nodiscard]] const RelocatableMaintenanceService &requireMaintenance() const;
 		void initializeNativeMaintenanceService();
 		void releaseResources() noexcept;
+        [[nodiscard]] std::shared_ptr<StorageIO> scanSourceIO() const;
+        [[nodiscard]] const VerifiedScanRoot *verifiedScanRoot(const MetadataSnapshotPin &snapshot) const;
 
 		RelocatableStorageBackendOptions options_;
 		// A successful open establishes this complete common component domain;

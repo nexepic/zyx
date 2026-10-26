@@ -235,6 +235,7 @@ TEST_P(RelocatablePropertyRunTest, NativeRunsPreservePageBorrowLifetimeOldPinsAn
         for (size_t i = 0U; i < rows.size(); ++i) aliases.at(rows[i])[column] = values[i];
     };
     const std::array<std::string_view, 2U> aliasKeys{"text", "text"};
+    graph::debug::PerfTrace::reset(); // Attribute alias-page work independently of the rank gather above.
     ASSERT_TRUE(old->tryReadNodePropertyColumnBatchesSortedWithAdmission(ids, aliasKeys,
         [](size_t, size_t, std::optional<PropertyValue>) { ADD_FAILURE() << "unexpected owning alias"; },
         aliasSinks, [](size_t) {}));
@@ -243,8 +244,12 @@ TEST_P(RelocatablePropertyRunTest, NativeRunsPreservePageBorrowLifetimeOldPinsAn
     }
     const auto copied = graph::debug::PerfTrace::snapshotAndReset();
     if (GetParam() > RSS_PAGE_SIZE) {
-        ASSERT_TRUE(copied.contains("native_graph.read.property_selected_slot_copy_bytes"));
-        EXPECT_GT(copied.at("native_graph.read.property_selected_slot_copy_bytes").totalValue, 0);
+        // Cross-batch retention now keeps the authenticated view itself;
+        // aliases no longer copy the previously retained final page's slots.
+        EXPECT_FALSE(copied.contains("native_graph.read.property_selected_slot_copy_bytes"));
+        EXPECT_FALSE(copied.contains("native_graph.read.property_selected_last_page_cache_copy_bytes"));
+        ASSERT_TRUE(copied.contains("native_graph.read.property_selected_borrowed_owners"));
+        EXPECT_EQ(copied.at("native_graph.read.property_selected_borrowed_owners").totalValue, ids.size());
     }
     graph::debug::PerfTrace::reset();
     // Exercise the full consumer with the same bounded source cache.

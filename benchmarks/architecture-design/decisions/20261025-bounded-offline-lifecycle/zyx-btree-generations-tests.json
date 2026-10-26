@@ -1,0 +1,402 @@
+{
+  "tests": 38,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T06:36:23Z",
+  "time": "0.74s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableBTreePageStoreTest",
+      "tests": 38,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T06:36:23Z",
+      "time": "0.74s",
+      "testsuite": [
+        {
+          "name": "PublishesOneFinalStableRootLeafStateForAnOrderedTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "ErasesTheFinalKeyThroughAFreshEmptyRootWhenTheSourcePoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.015s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "CollapsesATransactionLocalSplitBackToOneEmptyStableRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsBrokenSuccessorLinkWhileSplittingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 170,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsBrokenSiblingLinksWhileRebalancingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsTamperedVirtualOverlayPlacementsBeforePreparingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsASiblingLinkedLeafAsTheOverlayRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 339,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsACyclicTreeWithAnInconsistentRevisitedLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayKeyThatCannotFitInAnyLeafPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "DenselyRebuildsALargeTransactionOverlayBeforePoolAssignment",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 438,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.027s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnOversizedSparseOverlayAcrossSeveralFreshPools",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:23Z",
+          "time": "0.588s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansADeepStructuralSplitWithoutPublishingAndRejectsAPlainReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsAnEmptySplitOverlayIntoOneFreshRootPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 547,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnEmptyNonRootLeafDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 583,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsASharedChildDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 629,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAZeroLeafPayloadDuringForcedOverlayRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RepairsTheNextLeafWhenMergingAnEmptyRightOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 722,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RetainsANonemptyUnderfullLeafWhenNoValidOverlayMergeExists",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 767,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "MergesAnEmptyRightLeafThroughTheTransactionOverlay",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 833,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 901,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 984,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "CollapsesAUnaryTransactionOverlayPathAfterTheFinalErase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1033,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsACollapsedTransactionRootLeafThatRetainsASiblingLink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1091,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RecursivelyCollapsesAUnaryDeepTreeAfterItsFinalErase",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1168,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAStaleTransactionOverlayPlanWithoutPublishingItsFinalState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansAndPreparesAStableRootLeafReplacementForAnExistingKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1266,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "ReportsBoundedReplacementCapacityAndRejectsInvalidOverlayPlans",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsInvalidPublicBTreePlansAndTamperedPreparationInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1344,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayPlanWhenTheRootLeafHasSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1428,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayPlanWhenAnInternalChildHasTheWrongLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1474,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsAnOverlayEraseForAnAbsentScalarKey",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RejectsTamperedTransactionOverlayPreparerBatchesBeforeWritingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1538,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RematerializesAForcedTransactionOverlayIntoAFreshImmutablePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1587,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RebuildsOneSharedPoolOverlayBeforePublishingTwoIndexUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1625,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "RedistributesInternalOverlayPagesAfterALeafMergeInOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1715,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "UpdatesTheParentSeparatorAfterErasingANonLeftmostLeafMinimumInATransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1831,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "PlansAFreshPoolForTransactionSplitPagesWhenTheSourcePoolIsFull",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay.cpp",
+          "line": 1905,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.014s",
+          "classname": "RelocatableBTreePageStoreTest"
+        },
+        {
+          "name": "TransactionOverlayUsesEachEvacuatedChildGenerationAndRetainsOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePageStoreTransactionOverlay_Generations.cpp",
+          "line": 5,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T06:36:24Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageStoreTest"
+        }
+      ]
+    }
+  ]
+}

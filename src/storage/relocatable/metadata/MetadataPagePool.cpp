@@ -28,10 +28,35 @@
 #include <vector>
 
 #include "graph/utils/ChecksumUtils.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
 
 namespace graph::storage {
 
 	namespace {
+
+        // Physical frame identity is a pool slot plus one of its 31 data bits.
+        // Keep one charged mask per visited pool instead of one tree node per
+        // frame; duplicate and cross-tree alias checks remain exact.
+        class MetadataFrameMarks final {
+        public:
+            bool insert(uint64_t slot, uint8_t frame) {
+                if (frame < RSS_PAGE_POOL_FIRST_DATA_FRAME || frame > RSS_PAGE_POOL_DATA_FRAME_COUNT)
+                    return false;
+                auto [entry, fresh] = masks_.try_emplace(slot, 0U);
+                static_cast<void>(fresh);
+                const uint32_t bit = 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+                const bool inserted = !(entry->second & bit);
+                entry->second |= bit;
+                return inserted;
+            }
+            bool contains(std::pair<uint64_t, uint8_t> frame) const {
+                const auto entry = masks_.find(frame.first);
+                return entry != masks_.end() &&
+                    (entry->second & (1U << (frame.second - RSS_PAGE_POOL_FIRST_DATA_FRAME)));
+            }
+        private:
+            utils::OwnedMap<uint64_t, uint32_t> masks_;
+        };
 
 		constexpr size_t MAGIC_OFFSET = 0;
 		constexpr size_t FORMAT_VERSION_OFFSET = 4;
@@ -780,13 +805,33 @@ namespace graph::storage {
             if (!excluded(PhysicalSlotId(slot))) available += pool.available_frames;
         }
 		std::vector<PhysicalSlotId> created;
-		while (available < count) {
-			PoolState &pool = createPoolLocked(generation, checkpointLsn, excludedPoolSlots,
-											excludedDataSlotRanges, reservationLookup);
-			created.push_back(pool.header.physical_slot);
-			available += RSS_PAGE_POOL_DATA_FRAME_COUNT;
-		}
-		return created;
+        if (available >= count) return created;
+        const auto initialBytes = io_->fileSize();
+        const auto originalCursor = allocation_cursor_slot_;
+        const size_t missing = count - available;
+        // No vector growth may fail after a new pool has been materialized but
+        // before its slot can be recorded for rollback.
+        created.reserve(missing / RSS_PAGE_POOL_DATA_FRAME_COUNT +
+            static_cast<size_t>(missing % RSS_PAGE_POOL_DATA_FRAME_COUNT != 0U));
+        try {
+            while (available < count) {
+                PoolState &pool = createPoolLocked(generation, checkpointLsn, excludedPoolSlots,
+                    excludedDataSlotRanges, reservationLookup);
+                created.push_back(pool.header.physical_slot);
+                available += RSS_PAGE_POOL_DATA_FRAME_COUNT;
+            }
+            return created;
+        } catch (...) {
+            const auto failure = std::current_exception();
+            try {
+                // The caller has not received these pools yet. Reclaim all of
+                // this call's private pools and provisional suffix atomically;
+                // the enclosing batch still owns any earlier materialization.
+                abandonUnpublishedBatchLocked(created, {}, {}, initialBytes);
+                allocation_cursor_slot_ = originalCursor;
+            } catch (...) { poisoned_ = true; }
+            std::rethrow_exception(failure);
+        }
 	}
 
 	PhysicalPageRef MetadataPagePoolAllocator::allocatePage(Generation generation) {
@@ -1092,7 +1137,7 @@ namespace graph::storage {
 	void MetadataPagePoolAllocator::reclaimUnreachable(const Superblock &current,
 													   std::span<const Superblock> activeSnapshots, bool force) {
 		SuperblockCodec::validate(current);
-		std::vector<Superblock> protectedSuperblocks;
+		std::vector<Superblock, utils::OwnedPmrAllocator<Superblock>> protectedSuperblocks;
 		protectedSuperblocks.reserve(activeSnapshots.size() + 1U);
 		protectedSuperblocks.push_back(current);
 		for (const Superblock &snapshot: activeSnapshots) {
@@ -1152,10 +1197,10 @@ namespace graph::storage {
 		}
         for (auto &[slot, pool] : pools_) { static_cast<void>(slot); pool.current_reachable_frames = 0U; }
         bool markingCurrent = false;
-		std::set<std::pair<uint64_t, uint8_t>> reachable;
+		MetadataFrameMarks reachable;
 		uint64_t maximumPageId = 0;
 		MetadataPageFile pages(io_, protectedSuperblocks.front());
-		std::set<uint64_t> *activeLogicalPageIds = nullptr;
+		utils::OwnedSet<uint64_t> *activeLogicalPageIds = nullptr;
 
 		auto markLogicalPageId = [&](MetadataPageId pageId) {
 			if (activeLogicalPageIds == nullptr || !pageId.isValid() ||
@@ -1165,7 +1210,7 @@ namespace graph::storage {
 			}
 		};
 
-		auto markReference = [&](PhysicalPageRef reference, std::set<std::pair<uint64_t, uint8_t>> &treeReferences) {
+		auto markReference = [&](PhysicalPageRef reference, MetadataFrameMarks &treeReferences) {
 			if (!reference.isValid()) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable metadata tree contains an invalid physical reference");
@@ -1173,11 +1218,11 @@ namespace graph::storage {
 			auto pool = pools_.find(reference.physical_slot.value());
 			const uint32_t bit = 1U << (reference.frame_index - RSS_PAGE_POOL_FIRST_DATA_FRAME);
 			if (pool == pools_.end() || (pool->second.header.allocated_frames & bit) == 0U ||
-				!treeReferences.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+				!treeReferences.insert(reference.physical_slot.value(), reference.frame_index)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata tree references an unavailable or duplicate pool frame");
 			}
-			reachable.emplace(reference.physical_slot.value(), reference.frame_index);
+			reachable.insert(reference.physical_slot.value(), reference.frame_index);
             if (markingCurrent) pool->second.current_reachable_frames |= bit;
 		};
 
@@ -1199,11 +1244,11 @@ namespace graph::storage {
 		};
 
 		std::function<bool(PhysicalPageRef, bool, uint16_t, uint64_t, MetadataDirectoryType, const Superblock &,
-						   std::set<std::pair<uint64_t, uint8_t>> &)>
+						   MetadataFrameMarks &)>
 				visitRadix;
 		visitRadix = [&](PhysicalPageRef reference, bool isRoot, uint16_t expectedLevel, uint64_t ordinalBase,
 						 MetadataDirectoryType directoryType, const Superblock &superblock,
-						 std::set<std::pair<uint64_t, uint8_t>> &treeReferences) -> bool {
+						 MetadataFrameMarks &treeReferences) -> bool {
 			markReference(reference, treeReferences);
 			const MetadataRadixPage page = pages.readMetadataRadix(reference);
 			if ((isRoot && page.kind != CatalogRadixPageKind::CRPK_ROOT) ||
@@ -1311,12 +1356,12 @@ namespace graph::storage {
 		};
 
 		std::function<void(PhysicalPageRef, bool, uint16_t, uint64_t, const Superblock &,
-						   std::set<std::pair<uint64_t, uint8_t>> &, std::set<std::pair<uint64_t, uint8_t>> &)>
+						   MetadataFrameMarks &, MetadataFrameMarks &)>
 				visitRouteBranch;
 		visitRouteBranch = [&](PhysicalPageRef reference, bool isRoot, uint16_t expectedLevel, uint64_t ordinalBase,
 							   const Superblock &superblock,
-							   std::set<std::pair<uint64_t, uint8_t>> &bootstrapReferences,
-							   std::set<std::pair<uint64_t, uint8_t>> &targetReferences) {
+							   MetadataFrameMarks &bootstrapReferences,
+							   MetadataFrameMarks &targetReferences) {
 			markReference(reference, bootstrapReferences);
 			const MetadataRadixPage page = pages.readMetadataRadix(reference);
 			if ((isRoot && page.kind != CatalogRadixPageKind::CRPK_ROOT) ||
@@ -1366,24 +1411,24 @@ namespace graph::storage {
             markingCurrent = &superblock == &protectedSuperblocks.front();
 			pages.rebindSuperblock(superblock);
             if (superblock.hybrid_property_descriptor_root.isValid()) {
-                std::set<std::pair<uint64_t, uint8_t>> descriptorReferences;
+                MetadataFrameMarks descriptorReferences;
                 markReference(superblock.hybrid_property_descriptor_root, descriptorReferences);
                 static_cast<void>(pages.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
             }
-			std::set<uint64_t> logicalPageIds;
+			utils::OwnedSet<uint64_t> logicalPageIds;
 			activeLogicalPageIds = &logicalPageIds;
 			const auto reconcileRoot = [&](MetadataDirectoryType directoryType, PhysicalPageRef physicalRoot) {
 				const PhysicalPageRef root = metadataRootReference(pages, superblock, directoryType, physicalRoot);
 				if (!root.isValid()) {
 					return;
 				}
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
+				MetadataFrameMarks treeReferences;
 				visitRadix(root, true, 0, 0, directoryType, superblock, treeReferences);
 			};
 			reconcileRoot(MetadataDirectoryType::MDT_CATALOG, superblock.catalog_root);
 			reconcileRoot(MetadataDirectoryType::MDT_ALLOCATOR, superblock.allocator_root);
 			if (superblock.page_directory_root.isValid() && !superblock.usesPageDirectoryBootstrap()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
+				MetadataFrameMarks treeReferences;
 				visitRadix(superblock.page_directory_root, true, 0, 0, MetadataDirectoryType::MDT_PAGE, superblock,
 						   treeReferences);
 			}
@@ -1392,8 +1437,8 @@ namespace graph::storage {
 					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 										  "Page Directory bootstrap flag has no physical header reference");
 				}
-				std::set<std::pair<uint64_t, uint8_t>> bootstrapReferences;
-				std::set<std::pair<uint64_t, uint8_t>> targetReferences;
+				MetadataFrameMarks bootstrapReferences;
+				MetadataFrameMarks targetReferences;
 				markReference(superblock.page_directory_root, bootstrapReferences);
 				const PageDirectoryBootstrap bootstrap =
 						pages.readPageDirectoryBootstrap(superblock.page_directory_root);
@@ -1404,7 +1449,7 @@ namespace graph::storage {
 										  "Page Directory bootstrap has invalid visibility or route branch");
 				}
 				if (bootstrap.data_page_directory_root.isValid()) {
-					std::set<std::pair<uint64_t, uint8_t>> dataReferences;
+					MetadataFrameMarks dataReferences;
 					visitRadix(bootstrap.data_page_directory_root, true, 0U, 0U, MetadataDirectoryType::MDT_PAGE,
 							   superblock, dataReferences);
 				}
@@ -1724,8 +1769,8 @@ namespace graph::storage {
 		allocation_cursor_slot_.reset();
         }
 		MetadataPageFile pages(io_, superblock);
-		std::set<std::pair<uint64_t, uint8_t>> visitedPages;
-		std::set<uint64_t> reachableSlots;
+		MetadataFrameMarks visitedPages;
+		utils::OwnedSet<uint64_t> reachableSlots;
 
 		const auto visitDirectory = [&](auto &&self, PhysicalPageRef reference, MetadataDirectoryType directoryType,
 										bool root) -> void {
@@ -1733,7 +1778,7 @@ namespace graph::storage {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable metadata root has an invalid physical reference");
 			}
-			if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+			if (!visitedPages.insert(reference.physical_slot.value(), reference.frame_index)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata roots alias or cycle through one physical page");
 			}
@@ -1765,7 +1810,7 @@ namespace graph::storage {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "metadata PageId route branch has an invalid physical reference");
 			}
-			if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+			if (!visitedPages.insert(reference.physical_slot.value(), reference.frame_index)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "metadata PageId route branch aliases or cycles through bootstrap pages");
 			}
@@ -1794,7 +1839,7 @@ namespace graph::storage {
 					self(self, child, false, static_cast<uint16_t>(page.level - 1U), ordinal);
 					continue;
 				}
-				if (!visitedPages.emplace(child.physical_slot.value(), child.frame_index).second) {
+				if (!visitedPages.insert(child.physical_slot.value(), child.frame_index)) {
 					throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 										  "metadata PageId route branch duplicates a bootstrap leaf");
 				}
@@ -1818,7 +1863,7 @@ namespace graph::storage {
 
         if (superblock.hybrid_property_descriptor_root.isValid()) {
             const auto reference = superblock.hybrid_property_descriptor_root;
-            if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second)
+            if (!visitedPages.insert(reference.physical_slot.value(), reference.frame_index))
                 throwCatalogPoolError(FormatError::FERR_INVALID_STATE, "hybrid descriptor aliases another metadata frame");
             static_cast<void>(pages.readHybridPropertyDescriptor(reference, superblock));
             reachableSlots.insert(reference.physical_slot.value());
@@ -1855,10 +1900,8 @@ namespace graph::storage {
 		}
 		if (superblock.usesPageDirectoryBootstrap()) {
 			if (!superblock.page_directory_root.isValid() ||
-				!visitedPages
-						 .emplace(superblock.page_directory_root.physical_slot.value(),
-								  superblock.page_directory_root.frame_index)
-						 .second) {
+				!visitedPages.insert(superblock.page_directory_root.physical_slot.value(),
+								  superblock.page_directory_root.frame_index)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "Page Directory bootstrap has an invalid or aliased header frame");
 			}

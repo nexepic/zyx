@@ -73,7 +73,7 @@ namespace graph::storage {
 			}
 		};
 
-		std::vector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
+		utils::OwnedStdVector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
 			PhysicalPageRef root, RouteBranchReuse *reuse, std::span<const MetadataPageRoute> pending);
 
 		template<class Visitor>
@@ -185,7 +185,7 @@ namespace graph::storage {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
 								  "metadata PageId bootstrap needs a nonempty route set");
 			}
-			std::set<uint64_t> children;
+			utils::OwnedSet<uint64_t> children;
 			for (const MetadataPageRoute &route: routes) {
 				children.emplace(leafOrdinal(route.page_id));
 			}
@@ -198,7 +198,7 @@ namespace graph::storage {
 				frames += count;
 			};
 			while (children.size() > 1U) {
-				std::set<uint64_t> parents;
+				utils::OwnedSet<uint64_t> parents;
 				for (const uint64_t ordinal: children) {
 					parents.emplace(ordinal / RSS_CATALOG_RADIX_FANOUT);
 				}
@@ -283,7 +283,7 @@ namespace graph::storage {
 				}
 				return {ordinal, writeNode(pages, batch, level, children, rootNode), true};
 			};
-			std::vector<Child> children;
+			utils::OwnedStdVector<Child> children;
 			for (size_t begin = 0U; begin < routes.size();) {
 				const uint64_t ordinal = leafOrdinal(routes[begin].page_id);
 				size_t end = begin;
@@ -313,7 +313,7 @@ namespace graph::storage {
 			}
 			uint16_t level = 0U;
 			while (children.size() > 1U) {
-				std::vector<Child> parents;
+				utils::OwnedStdVector<Child> parents;
 				for (size_t begin = 0U; begin < children.size();) {
 					const uint64_t ordinal = children[begin].ordinal / RSS_CATALOG_RADIX_FANOUT;
 					size_t end = begin;
@@ -684,19 +684,19 @@ namespace graph::storage {
 	}
 
 	size_t MetadataPageRouteDirectory::initialBootstrapFrameCount(const Superblock &superblock) const {
-		const std::vector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(superblock);
+		const utils::OwnedStdVector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(superblock);
 		return bootstrapFrameCount(routes);
 	}
 
 	size_t MetadataPageRouteDirectory::initialBootstrapFrameCount(const MetadataWriteBatch &batch) const {
-		std::map<uint64_t, PhysicalPageRef> routeMap;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routeMap;
 		for (const MetadataPageRoute &route: collectRoutesFromPhysicalDirectoryRoots(batch.current())) {
 			routeMap.emplace(route.page_id.value(), route.physical_reference);
 		}
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routeMap.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> routes;
+		utils::OwnedStdVector<MetadataPageRoute> routes;
 		routes.reserve(routeMap.size());
 		for (const auto &[pageId, reference]: routeMap) {
 			routes.push_back({MetadataPageId(pageId), reference});
@@ -719,14 +719,14 @@ namespace graph::storage {
 		if (!batch.bootstrapRouteRefreshRequested() && !batch.metadataRoutePruningRequested())
 			return incrementalPlan(batch, previous.metadata_page_directory_root)->frameCount();
         incremental_plan_.reset();
-		std::map<uint64_t, PhysicalPageRef> routes;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
 		});
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> complete;
+		utils::OwnedStdVector<MetadataPageRoute> complete;
 		complete.reserve(routes.size());
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
@@ -735,14 +735,14 @@ namespace graph::storage {
 	}
 
 	PhysicalPageRef MetadataPageRouteDirectory::buildInitialRouteBranch(MetadataWriteBatch &batch) {
-		std::map<uint64_t, PhysicalPageRef> routes;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 		for (const MetadataPageRoute &route: collectRoutesFromPhysicalDirectoryRoots(batch.current())) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
 		}
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> complete;
+		utils::OwnedStdVector<MetadataPageRoute> complete;
 		complete.reserve(routes.size());
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
@@ -751,13 +751,13 @@ namespace graph::storage {
 	}
 
 	namespace {
-		std::vector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
+		utils::OwnedStdVector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
 			PhysicalPageRef root, RouteBranchReuse *reuse, std::span<const MetadataPageRoute> pending) {
 			debug::ScopedPerfTimer timer("native_graph.route.collect_route_branch");
 			validateReference(root, superblock, "metadata PageId route branch has an invalid root reference");
-			std::set<std::pair<uint64_t, uint8_t>> bootstrapFrames;
-			std::set<std::pair<uint64_t, uint8_t>> targetFrames;
-			std::map<uint64_t, PhysicalPageRef> routes;
+			utils::OwnedSet<std::pair<uint64_t, uint8_t>> bootstrapFrames;
+			utils::OwnedSet<std::pair<uint64_t, uint8_t>> targetFrames;
+			utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 
 			const auto registerBootstrapFrame = [&bootstrapFrames](PhysicalPageRef reference) {
 				if (!bootstrapFrames.emplace(reference.physical_slot.value(), reference.frame_index).second) {
@@ -842,7 +842,7 @@ namespace graph::storage {
 										"metadata PageId route target aliases bootstrap plumbing");
 				}
 			}
-			std::vector<MetadataPageRoute> result;
+			utils::OwnedStdVector<MetadataPageRoute> result;
 			result.reserve(routes.size());
 			for (const auto &[pageId, reference]: routes) {
 				result.push_back({MetadataPageId(pageId), reference});
@@ -851,18 +851,18 @@ namespace graph::storage {
 		}
 	}
 
-	std::vector<MetadataPageRoute>
+	utils::OwnedStdVector<MetadataPageRoute>
 	MetadataPageRouteDirectory::collectRoutesFromRouteBranch(const Superblock &superblock, PhysicalPageRef root) const {
 		return collectRouteBranch(pages_, superblock, root, nullptr, {});
 	}
 
-	std::vector<PhysicalPageRef>
+	utils::OwnedStdVector<PhysicalPageRef>
 	MetadataPageRouteDirectory::collectRouteBranchFrames(const Superblock &superblock, PhysicalPageRef root) const {
 		// Reuse the complete route traversal first: it validates route targets as
 		// well as all radix/leaf ordering and rejects target-to-plumbing aliases.
 		static_cast<void>(collectRoutesFromRouteBranch(superblock, root));
-		std::set<std::pair<uint64_t, uint8_t>> seen;
-		std::vector<PhysicalPageRef> result;
+		utils::OwnedSet<std::pair<uint64_t, uint8_t>> seen;
+		utils::OwnedStdVector<PhysicalPageRef> result;
 		const auto registerFrame = [&seen, &result](PhysicalPageRef reference) {
 			if (!seen.emplace(reference.physical_slot.value(), reference.frame_index).second) {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
@@ -911,14 +911,14 @@ namespace graph::storage {
 		}
         incremental_plan_.reset();
 		RouteBranchReuse reuse;
-		std::map<uint64_t, PhysicalPageRef> routes;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, currentRoot, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
 		}, &reuse);
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> complete;
+		utils::OwnedStdVector<MetadataPageRoute> complete;
 		complete.reserve(routes.size());
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
@@ -973,14 +973,14 @@ namespace graph::storage {
 		}
         incremental_plan_.reset();
 		RouteBranchReuse reuse;
-		std::map<uint64_t, PhysicalPageRef> routes;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
 		}, &reuse);
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> complete;
+		utils::OwnedStdVector<MetadataPageRoute> complete;
 		complete.reserve(routes.size());
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
@@ -1023,19 +1023,19 @@ namespace graph::storage {
 	}
 
 	PhysicalPageRef MetadataPageRouteDirectory::prepareInitialBootstrapMigration(MetadataWriteBatch &batch) {
-		const std::vector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(batch.current());
+		const utils::OwnedStdVector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(batch.current());
 		PageDirectoryBootstrap bootstrap;
 		bootstrap.generation = batch.generation();
 		bootstrap.committed_lsn = batch.checkpointLsn();
 		bootstrap.data_page_directory_root = batch.candidate().page_directory_root;
-		std::map<uint64_t, PhysicalPageRef> completeRoutes;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> completeRoutes;
 		for (const MetadataPageRoute &route: routes) {
 			completeRoutes.emplace(route.page_id.value(), route.physical_reference);
 		}
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			completeRoutes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
-		std::vector<MetadataPageRoute> complete;
+		utils::OwnedStdVector<MetadataPageRoute> complete;
 		complete.reserve(completeRoutes.size());
 		for (const auto &[pageId, reference]: completeRoutes) {
 			complete.push_back({MetadataPageId(pageId), reference});

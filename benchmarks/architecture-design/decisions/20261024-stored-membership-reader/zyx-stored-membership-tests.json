@@ -1,0 +1,82 @@
+{
+  "tests": 6,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T19:43:13Z",
+  "time": "0.081s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "StoredScanMembershipTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T19:43:13Z",
+      "time": "0.081s",
+      "testsuite": [
+        {
+          "name": "StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 51,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.025s",
+          "classname": "StoredScanMembershipTest"
+        },
+        {
+          "name": "EmptyStorageAndExplicitPrefixStopsHaveDistinctCompletionResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 71,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.014s",
+          "classname": "StoredScanMembershipTest"
+        },
+        {
+          "name": "CancellationAfterDeliveryDoesNotReplayThePrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 87,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.01s",
+          "classname": "StoredScanMembershipTest"
+        },
+        {
+          "name": "ForeignAndReleasedPinsCannotContinueAStoredStream",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.014s",
+          "classname": "StoredScanMembershipTest"
+        },
+        {
+          "name": "WorkspaceRefusalPrecedesAnyStorageReadOrConsumerCall",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 115,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.003s",
+          "classname": "StoredScanMembershipTest"
+        },
+        {
+          "name": "FullExhaustionRejectsAValidCrcButIncorrectDescriptorCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T19:43:13Z",
+          "time": "0.013s",
+          "classname": "StoredScanMembershipTest"
+        }
+      ]
+    }
+  ]
+}

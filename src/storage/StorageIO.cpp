@@ -695,6 +695,7 @@ namespace graph::storage {
 			throw std::logic_error("StorageIO buffer pool is already enabled");
 		}
 		buffer_pool_ = std::move(pool);
+        saturatingAdd(data_mutation_epoch_, 1U); // decoded pin caches must use this pool incarnation
 	}
 
 	void StorageIO::disableBufferPool() {
@@ -706,6 +707,7 @@ namespace graph::storage {
 		std::lock_guard lock(buffer_pool_mutex_);
 		if (buffer_pool_ == pool) {
 			buffer_pool_.reset();
+            saturatingAdd(data_mutation_epoch_, 1U);
 		}
 	}
 
@@ -714,11 +716,15 @@ namespace graph::storage {
 		if (key.generation == 0U || key.page_offset % RSS_BUFFER_POOL_PAGE_BYTES != 0U) {
 			throw std::invalid_argument("StorageIO::pinTypedPage requires an aligned durable page key");
 		}
+        // The sequential scope also covers borrowed reads. Retaining a raw
+        // cache pin here would defeat its owned, cache-bypassing fallback.
+        if (SequentialReadScope::activeFor(*this)) return std::nullopt;
 		const std::shared_ptr<BufferPool> pool = bufferPool();
 		if (pool == nullptr) {
 			return std::nullopt;
 		}
 		BufferPool::Pin pin = pool->pin(key, hint);
+        pin.pool_owner_ = pool;
 		recordRead(pin.validBytes());
 		return pin;
 	}

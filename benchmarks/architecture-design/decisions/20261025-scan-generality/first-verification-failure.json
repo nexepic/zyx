@@ -1,0 +1,10 @@
+{
+  "message": "native physical reconciliation requires an immutable LargeValue or content-index pool\n",
+  "file_bytes": 7995392,
+  "sha256": "6d91e42596ba9c319ab2388a0182a0fc2632baf719dce76324ba1c3b194f741d",
+  "conversion_completed_generation": 1091,
+  "observed_generations": [
+    1099,
+    1100
+  ]
+}

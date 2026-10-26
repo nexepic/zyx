@@ -1,0 +1,55 @@
+{
+  "accepted_progress_percent": 15,
+  "status": "blocked-at-frozen-S2-gate",
+  "original_selection": "results/20261024-work-scan/final-comparison/selection-gate.json",
+  "correction_limit": "one evidence-backed correction/recheck; original failure retained",
+  "changes": [
+    "bounded certified group-directory window and one shared field-page view",
+    "multi-field grouped read with preflight before emitting any prefix",
+    "refresh existing stale insertion summaries before private completion using <=7 MiB work and allocator-certified placement"
+  ],
+  "new_tests": 5,
+  "full_unit_suite": false,
+  "corrective_query_timing_started": true,
+  "targeted_regression": {
+    "tests": 83,
+    "failures": 0,
+    "full_unit_suite": false
+  },
+  "untimed_real_images": {
+    "datasets": [
+      "medium",
+      "holdout"
+    ],
+    "checks": [
+      "four-primary-full-oracles",
+      "edge_batch_1000 persisted postcondition",
+      "edge_create_delete persisted postcondition"
+    ],
+    "all_passed": true,
+    "original_images_unchanged": true,
+    "whole_file_bytes_unchanged": true,
+    "medium_label_root_descents": {
+      "before": 1575,
+      "after": 208
+    },
+    "corrective_query_timing_started": false
+  },
+  "compatibility_tests": {
+    "tests": 64,
+    "failures": 0
+  },
+  "default_insertion_tests": {
+    "tests": 5,
+    "failures": 0,
+    "selection": "unchanged first five tests of test_RelocatableImportInsertionTargets.cpp; hook-dependent publication injection case excluded from no-hook production build"
+  },
+  "corrective_query_timing_complete": true,
+  "corrective_processes": 24,
+  "corrective_measured_samples": 960,
+  "all_primary_oracles_passed": true,
+  "passes_5x_all_primary": false,
+  "beats_kuzu_all_primary": false,
+  "s5_complete": false,
+  "commit_and_push_performed": false
+}

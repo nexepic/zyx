@@ -45,6 +45,9 @@
 #include "graph/storage/relocatable/vector/VectorManifestPage.hpp"
 
 namespace graph::storage {
+    namespace scan_candidate_detail { struct ScanNodeChange; }
+    class PreparedScanMembershipMutation;
+
     class NativeGraphDeferredIndexImages;
 
     class LargeValueReachabilityReclaimer;
@@ -1149,13 +1152,17 @@ namespace graph::storage {
         std::span<const EntityPropertyKey> owner_deletions_;
         std::shared_ptr<std::pmr::memory_resource> fields_memory_;
         std::span<const uint32_t> new_property_tokens_;
+        std::span<const scan_candidate_detail::ScanNodeChange> scan_changes_;
+        uint64_t scan_pool_owner_id_ = 0;
         NativeHybridTopologyPublication(const RelocatableMetadataStore &metadata, const EntityPageStore &entities,
             const Superblock &source, std::span<const EntityPropertyKey> owners, bool schemaPreserved,
             const NativeGraphDerivedStateMutation &derived, std::span<const NativeHybridPropertyColumnReplacement> fields,
             std::shared_ptr<std::pmr::memory_resource> memory, std::span<const uint32_t> newTokens,
-            std::span<const EntityPropertyKey> deletions, bool schemaOnly)
+            std::span<const EntityPropertyKey> deletions, bool schemaOnly,
+            std::span<const scan_candidate_detail::ScanNodeChange> scanChanges = {}, uint64_t scanPoolOwner = 0)
             : metadata_(&metadata), entities_(&entities), source_(source), property_owners_(owners), schema_preserved_(schemaPreserved), schema_only_(schemaOnly),
-                derived_(&derived), field_changes_(fields), owner_deletions_(deletions), fields_memory_(std::move(memory)), new_property_tokens_(newTokens) {}
+                derived_(&derived), field_changes_(fields), owner_deletions_(deletions), fields_memory_(std::move(memory)), new_property_tokens_(newTokens),
+                scan_changes_(scanChanges), scan_pool_owner_id_(scanPoolOwner) {}
     public:
         NativeHybridTopologyPublication(const NativeHybridTopologyPublication &) = delete;
         NativeHybridTopologyPublication(NativeHybridTopologyPublication &&) noexcept = default;
@@ -1210,6 +1217,9 @@ namespace graph::storage {
 	// making steady-state append and replacement scan the whole directory.
 	using CurrentPoolReconciler = std::function<void(const CatalogEntry &, std::span<const PageLocation>)>;
 
+    struct BuildingScanMembershipRequest;
+    struct BuildingScanMaintenanceRequest;
+    class BuildingScanCompletionRequest;
 	class RelocatableMetadataStore final {
         friend class NativeStreamedGraphAdjacencyIndexPlanner;
         friend class NativeGraphWriteTransaction;
@@ -1294,6 +1304,16 @@ namespace graph::storage {
 		// Snapshot-local cursors use this zero-I/O ownership check before retaining
 		// a generation fence. It does not interpret any untrusted persisted bytes.
 		[[nodiscard]] bool ownsSnapshot(const MetadataSnapshotPin &snapshot) const noexcept;
+        // Private-image physical maintenance, limited to one metadata pool.
+        // Exact BUILDING fences retain all logical field/member roots.
+        [[nodiscard]] MetadataPagePoolReclamation reclaimOneBuildingScanMetadataPool(
+            const BuildingScanMaintenanceRequest &request, LogSequenceNumber checkpointLsn,
+            const MetadataPublishOptions &options = {});
+        [[nodiscard]] Superblock completeBuildingScanImage(const BuildingScanCompletionRequest &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
+        // Derives one complete group from primary records and retains BUILDING.
+        [[nodiscard]] Superblock installBuildingScanMembershipGroup(const BuildingScanMembershipRequest &request,
+            LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
 		// Logical-ID leasing advances a bootstrap header to preserve the route
 		// generation invariant without changing either route branch or typed root.
 		[[nodiscard]] bool isIdentityOnlyBootstrapAdvance(const Superblock &before, const Superblock &after) const;
@@ -1869,6 +1889,8 @@ namespace graph::storage {
 		[[nodiscard]] RelocatableTailTruncationResult truncateReleasedTail();
 		[[nodiscard]] RelocatableCompactionObservation observeCompactionState() const;
 		[[nodiscard]] MetadataPagePoolStats pagePoolStats() const;
+		// Invalidates snapshot-local decoded data images after any StorageIO mutation.
+		[[nodiscard]] uint64_t dataMutationEpoch() const;
 		// Performs the one-time Page Directory format migration as a dedicated
 		// transaction. A capacity preflight completes before candidate allocation,
 		// keeping ordinary metadata COW failure ordering unchanged.
@@ -1878,6 +1900,14 @@ namespace graph::storage {
 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
 
 	private:
+        [[nodiscard]] std::unique_ptr<PreparedScanMembershipMutation> prepareScanMembershipMutation(
+            MetadataWriteBatch &batch, const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
+            const NativeHybridTopologyPublication &proof, const std::shared_ptr<std::pmr::memory_resource> &memory,
+            EntityPageStore &entities, EntityLabelSetStore &labels, BTreePageStore &trees);
+        void materializeScanMembershipMutation(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
+            const MetadataSnapshotPin &source, PreparedScanMembershipMutation &plan, BTreePageStore &trees);
+
+
         // Only the canonical durable maintenance journal may use this native
         // State COW path. Ordinary State publication remains protected.
         [[nodiscard]] std::optional<StateLocation> upsertNativeMaintenanceJournal(

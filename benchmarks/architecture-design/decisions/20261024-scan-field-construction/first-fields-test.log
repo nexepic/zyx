@@ -1,0 +1,24 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:479: Failure
+Value of: after.roots[0].page_id.isValid()
+  Actual: false
+Expected: true
+
+unknown file: Failure
+C++ exception with description "cold ROW reading requires the caller's original resource account" thrown in the test body.
+
+[  FAILED  ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (12 ms)
+[----------] 1 test from BuildingScanMembershipTest (12 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (12 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+
+ 1 FAILED TEST

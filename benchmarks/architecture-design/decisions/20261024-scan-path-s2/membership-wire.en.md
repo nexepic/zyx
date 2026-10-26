@@ -1,6 +1,6 @@
-# S2 persistent scan membership: byte-codec prototype
+# S2 persistent scan membership: byte protocol
 
-This fixes only the membership record's encoding, not a complete candidate file protocol. It does not authorize writing a new database format. Root addressing, format versions, construction state, atomic publication, updates, recovery and whole-database admission remain unimplemented. Until those are complete, this record must not bypass Entity validation. S2 remains unaccepted at 15% progress.
+This fixes the membership record encoding alongside `persistent-format.en.md`. A valid record alone grants no Entity authority: matching file versions, complete source coverage, atomic publication, update/recovery rules and whole-file admission remain mandatory. The isolated implementation has module evidence; current lifecycle and adoption status are recorded in the bilingual optimization checklist and decision checkpoints. S2 remains unaccepted at 15% pending real-image and final performance gates.
 
 Reuse the existing physical group's 64-ID interval, within S1's 512-row batch limit. group_id = 1 + (entity_id - 1) / 64; bit i denotes (group_id - 1) * 64 + 1 + i. The final group must not set bit 63, which would overflow uint64. Membership covers every live node, including nodes without properties or labels, not just owners with columnized fields. A union exceeding 64 labels sends the entire group to general reads; never truncate labels or treat unrecorded labels as absent.
 
@@ -20,3 +20,6 @@ Use existing calculateCrc. The body checksum covers all label entries. The heade
 CRC and semantic_generation alone do not prove visibility. Production integration must resolve the current snapshot's authenticated root to its actual owner page and authenticate physical version, slot generation, LSN, database/data-region identity and I/O epoch. Retain the owner throughout any borrow. Membership, node, label and field changes must publish together; old pins retain old records. Until these invariants are implemented, the prototype cannot replace primary node existence or label checks.
 
 Tests cover intersection and unlabeled nodes, every-byte mutation, all truncation lengths, wrong database/group/generation, duplicate labels, nonlive members, label-count limits and the uint64 ID boundary. Tests manipulate memory bytes only and create no candidate-format files.
+
+
+2026-10-25 implementation addendum: normal v1 encoding is unchanged. The explicit v2 primary-label fallback for over-64-label groups is specified in `../20261025-membership-label-fallback/format.en.md`; resource and adoption gates are unchanged.

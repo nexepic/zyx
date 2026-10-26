@@ -1,0 +1,59 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "performance_run_this_round": false,
+  "full_unit_suite_run": false,
+  "commit_or_push_this_round": false,
+  "core_rebuild_this_round": true,
+  "core_rebuild_scope": "Two implementation translation units per profile; exact logs retained.",
+  "configuration_tests": {
+    "isolated": {
+      "tests": 45,
+      "failures": 0,
+      "disabled": 0
+    },
+    "default": {
+      "tests": 17,
+      "failures": 0,
+      "disabled": 0
+    }
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "a9979421a4906fc93cb77bf069ead91f7b77243419706acf2394cfb40bc7e777",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "7dcb114a2b2bf61a31de0c1d40c266cfb4b17f4aa5444f758478b8f10c30180b",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "57e1d4d1739ea5846f049ff3c606e414ecba1880248e06b250f3a48b10164bbc",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "4e366046e905f25c9b37fc0b65988c523e9d62c1487b6c2d0c7ada5c8adb057d"
+  },
+  "core_sha256": {
+    "isolated": "43f1d3cfdf05c6f16de385061e8b66e073456512ec1ab7e2857a79af3961d880",
+    "default": "cb58c7cae1d79738fa4ab11a6bd97c146bb5c086eed358aec35e2f1a9bdb2d2a"
+  },
+  "module_object_sha256": {
+    "isolated-test_HybridPropertyCohortAdmission.o": "58d6da645eeb52f06443ef647cd106e43a859111031548c7b3bdf513cb777b65",
+    "isolated-test_ScanMembershipSource.o": "cb7c54b922508daed4ef304de84cadb661d754b9b973fe1ecc46931edad7e4d8",
+    "default-test_ScanFormatCloneCodec.o": "97886ce49b872692bf5774846338112795e0b74b20f29c8021edbe93e32f6b7a",
+    "isolated-test_HybridPropertyColdConversionProbe.o": "c3240d3600f3e17ca73c34eddb46741bf557a529d41861fe0fe3906b8f49b649",
+    "isolated-test_BuildingScanMembership.o": "ce352596dd664f72b587ab3d373c9482118b8ff6ba030d2201277b059a40b81f",
+    "isolated-test_ScanFormatCloneCodec.o": "bcfc5e438d2e652c3f0702e007d7ac7b667755b11eeccb93f933c177326907be",
+    "default-test_ScanMembershipSource.o": "cb7c54b922508daed4ef304de84cadb661d754b9b973fe1ecc46931edad7e4d8",
+    "default-test_HybridPropertyCohortAdmission.o": "4794a664934f854638a4ef87187a058d52088aa84907db4c94b3bd0099c6c589",
+    "isolated-test_ScanBuildingClone.o": "870abd6003cbe01017256f9e6f24b93689da7e7a418933ee4c61c24821609f5a",
+    "default-test_HybridPropertyColdConversionProbe.o": "62ad0d9fe0871a405416d1d7e5f9f8f69dde94b981f25ce754e47e350da629aa",
+    "default-test_BuildingScanMembership.o": "48f4fb6aa13c67f6196d6b787510ff63502078225b4b0a4dbd85f8a236f715fd"
+  },
+  "evidence_sha256": {
+    "default-tests.json": "98f676fbbd5875f16de25e6e9d7781842bf194021b6ac2985eec7cb36b3728a4",
+    "default-tests.log": "ee0ea55a1a07fbe98a687301407ae566a8ded57c73ad8c9b937e12db83e439b6",
+    "en.md": "d49c288ea11b41da4e7227becd56f122d7ba3364850d9aa2db703cae703bbfb9",
+    "first-fields-test.json": "89276e666acd53872bbaa957ad2876e674c73cd7bb57913b52f70f03e587408b",
+    "first-fields-test.log": "35574e583f5a2666e28abeca049ef4ec1a4595492d2104da1c44527a5b8feb62",
+    "isolated-tests.json": "2c82fcfc85a878d5cc5f999ff3f25d29e0d6039d2aca6b7c63da2a05d47ad624",
+    "isolated-tests.log": "3c57ee3b9960fd7c7acf42d7650060c87bfc7a68ad04a1a7112d9b947d45dd2d",
+    "recipes.json": "80767a37cf19e207c7335ffd7e80afea2bcb650b943b7593a4d6025284e0078d",
+    "zh.md": "c3e0584da418d3220e4dca7ba2206ddada5a4e679bdae2266f3d1a25be662eec",
+    "zyx-building-fields-candidate-build.log": "dcbfd2806e423e494afb5433b505d3a78f4df8d2f34f09eab2874e9949ded793",
+    "zyx-building-fields-default-build.log": "dcbfd2806e423e494afb5433b505d3a78f4df8d2f34f09eab2874e9949ded793"
+  }
+}

@@ -1773,3 +1773,61 @@ TEST_F(RelocatableIntegrityScannerTest, WorkspaceQuotaDenialPreservesFileAndRele
     EXPECT_EQ(io->stats().sync_calls, before.sync_calls);
     EXPECT_EQ(std::filesystem::file_size(path), fileBytes);
 }
+
+TEST_F(RelocatableIntegrityScannerTest, RelationshipChecksDoNotRetainEveryPagePayload) {
+    using namespace graph::query::execution::detail;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    SlottedPagePool pages(io, *metadata);
+    StateRecordStore states(pages, *metadata);
+    const StateRecordStoreOptions options{PhysicalSlotId(40), PhysicalSlotId(300), 800};
+    for (uint64_t id = 1U; id <= 128U; ++id) {
+        const StateRecord record{id, "bounded.page", StateRecordStorageKind::SRS_INLINE,
+            LargeValueId{}, std::vector<std::byte>(3000U, std::byte{0x41})};
+        static_cast<void>(states.upsert(record, options));
+    }
+    const auto expected = RelocatableIntegrityScanner(io, *metadata).scan();
+    ASSERT_EQ(expected.state_locations, 128U);
+    ASSERT_GE(expected.page_locations, 128U);
+    constexpr size_t maximum = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_MAINTENANCE, maximum);
+    auto workspace = std::make_shared<PrepaidMemoryResource>(account, maximum, std::pmr::new_delete_resource());
+    const auto before = io->stats();
+    const auto generation = metadata->openSnapshot().superblock().generation;
+    EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata, workspace).scan(), expected);
+    EXPECT_EQ(workspace->used(), 0U);
+    EXPECT_EQ(io->stats().write_calls, before.write_calls);
+    EXPECT_EQ(metadata->openSnapshot().superblock().generation, generation);
+}
+
+TEST_F(RelocatableIntegrityScannerTest, CancellationBeforeAndDuringValidationReleasesThePinnedWorkspace) {
+    using namespace graph::query::execution::detail;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    static_cast<void>(writeMultiLevelLargeValue(io, *metadata));
+    constexpr size_t maximum = 1024U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_MAINTENANCE, maximum);
+    auto workspace = std::make_shared<PrepaidMemoryResource>(account, maximum, std::pmr::new_delete_resource());
+    struct Cancel final : CancellationCheckpoint {
+        explicit Cancel(size_t limit) : limit(limit) {}
+        void check() const override { if (++calls == limit) throw std::runtime_error("cancel integrity"); }
+        size_t limit;
+        mutable size_t calls = 0U;
+    };
+    const auto root = metadata->openSnapshot().superblock();
+    for (const auto limit : {1U, 5U}) {
+        Cancel cancel(limit);
+        io->resetStats();
+        EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata, workspace).scan(&cancel)),
+            std::runtime_error);
+        EXPECT_EQ(cancel.calls, limit);
+        EXPECT_EQ(workspace->used(), 0U);
+        EXPECT_EQ(metadata->activeSnapshotCount(), 0U);
+        EXPECT_EQ(io->stats().write_calls, 0U);
+        EXPECT_EQ(io->stats().reserve_calls, 0U);
+        if (limit == 1U) EXPECT_EQ(io->stats().read_calls, 0U);
+        EXPECT_EQ(metadata->openSnapshot().superblock(), root);
+    }
+}

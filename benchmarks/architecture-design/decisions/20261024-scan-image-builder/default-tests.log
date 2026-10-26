@@ -1,0 +1,43 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.*:ScanMembershipDirectoryTest.*:ScanMembershipSourceTest.*:ScanFormatCloneCodecTest.*:ScanBuildingCloneTest.*
+[==========] Running 12 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership
+[       OK ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership (0 ms)
+[----------] 1 test from BuildingScanMembershipTest (0 ms total)
+
+[----------] 9 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (5 ms)
+[ RUN      ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup
+[       OK ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup (6 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup
+[       OK ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup (16 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (0 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (0 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (1 ms)
+[----------] 9 tests from ScanMembershipSourceTest (36 ms total)
+
+[----------] 1 test from ScanFormatCloneCodecTest
+[ RUN      ] ScanFormatCloneCodecTest.OrdinaryProfilesCannotTranscodeCandidateFiles
+[       OK ] ScanFormatCloneCodecTest.OrdinaryProfilesCannotTranscodeCandidateFiles (0 ms)
+[----------] 1 test from ScanFormatCloneCodecTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 12 tests from 4 test suites ran. (37 ms total)
+[  PASSED  ] 12 tests.

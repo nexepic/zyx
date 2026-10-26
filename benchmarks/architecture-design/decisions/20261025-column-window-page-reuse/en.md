@@ -1,0 +1,7 @@
+# Physical field page reuse within one window
+
+S2 remains unaccepted; progress is 15%. One synchronous column/cold-preflight window may reuse one authenticated physical field page for its group, membership matrix and column records. It stays bound to the snapshot and is reacquired after an IO mutation epoch or read-mode change. No persistent cache is added. The fixed cursor is source-accounted; the physical page is released before cold decoding when no longer needed. Slot, owner, type and record validation remains.
+
+12 isolated read/query cases, one ordinary-format refusal and eight 13/39 field-reuse regressions pass. Actual typed batch reads report reuse; a physical frame corrupted at a resource-admission boundary is reauthenticated and rejected before values are emitted. Compatible tests cover old pins, cancellation, reentry, cache pressure, NULL/boolean/double bits and cursor moves. See receipt.json and attached source/core hashes and exact recipes/logs.
+
+Initial tests accidentally used the non-batch scalar API and are retained as failed diagnostics. Corrected tests use production typed-batch parameters. The intermediate cold build was interrupted after the final cold-release edit; three final builds and fresh module objects supersede it. No query benchmark, full unit suite, commit or push. Updates, label fallback, real-dataset space/resources and final performance gates remain incomplete.

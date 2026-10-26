@@ -1,0 +1,7 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:70:49: error: 'convergeInitialBootstrap' is a private member of 'graph::storage::RelocatableMetadataStore'
+   70 |         if (routed) static_cast<void>(metadata->convergeInitialBootstrap(LogSequenceNumber(2)));
+      |                                                 ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1904:28: note: declared private here
+ 1904 |                 [[nodiscard]] Superblock convergeInitialBootstrap(LogSequenceNumber checkpointLsn,
+      |                                          ^
+1 error generated.

@@ -1,0 +1,307 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 94 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 18 tests from HybridPropertyFieldRelocationTest
+[ RUN      ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite
+[       OK ] HybridPropertyFieldRelocationTest.RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite (3 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+unknown file: Failure
+C++ exception with description "scan membership omits a live primary Node group" thrown in the test body.
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins (207 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:95: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool (327 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:115: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:115: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration (92 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:141: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse (45 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:173: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry (328 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:187: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration (41 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse
+unknown file: Failure
+C++ exception with description "scan membership omits a live primary Node group" thrown in the test body.
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse (260 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:250: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:250: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether (98 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:271: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs (41 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:301: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry (312 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:336: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame (317 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:360: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:365: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *reopened, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking (606 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:391: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames (79 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:407: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:407: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *recovered, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute (79 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:439: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse (45 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels
+unknown file: Failure
+C++ exception with description "scan directory disagrees with primary group existence before mutation" thrown in the test body.
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels (11 ms)
+[ RUN      ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyFieldRelocation.cpp:488: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute (24 ms)
+[----------] 18 tests from HybridPropertyFieldRelocationTest (2923 ms total)
+
+[----------] 35 tests from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop
+[       OK ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop (58 ms)
+[ RUN      ] ScanReadProofTest.PublicWritableLifecycleFallsBackBeforeOutputAndReopensWithFreshMembershipProof
+[       OK ] ScanReadProofTest.PublicWritableLifecycleFallsBackBeforeOutputAndReopensWithFreshMembershipProof (162 ms)
+[ RUN      ] ScanReadProofTest.PublicPropertyTypeChangesAndLargeValuesPreservePinnedAndReopenedReads
+[       OK ] ScanReadProofTest.PublicPropertyTypeChangesAndLargeValuesPreservePinnedAndReopenedReads (328 ms)
+[ RUN      ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity
+[       OK ] ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity (15470 ms)
+[ RUN      ] ScanReadProofTest.PublicScalarIndexAndConstraintClosureSurviveNativeUpdatesDeletionAndReopen
+[       OK ] ScanReadProofTest.PublicScalarIndexAndConstraintClosureSurviveNativeUpdatesDeletionAndReopen (563 ms)
+[ RUN      ] ScanReadProofTest.PublicThousandRowEdgesKeepPinnedPropertiesAndDetachWithNativeNodeFields
+[       OK ] ScanReadProofTest.PublicThousandRowEdgesKeepPinnedPropertiesAndDetachWithNativeNodeFields (337 ms)
+[ RUN      ] ScanReadProofTest.SingleRawCachePageUsesOwnedFallbackForWideFieldVerificationAndQueries
+[       OK ] ScanReadProofTest.SingleRawCachePageUsesOwnedFallbackForWideFieldVerificationAndQueries (229 ms)
+[ RUN      ] ScanReadProofTest.NodeProofDoesNotGrantRowEdgeAuthorityAndFullOpenVerificationRemainsExplicit
+[       OK ] ScanReadProofTest.NodeProofDoesNotGrantRowEdgeAuthorityAndFullOpenVerificationRemainsExplicit (550 ms)
+[ RUN      ] ScanReadProofTest.PublicVectorClosurePreservesOldPinAndCoordinatesNativeDeletionAndRowCreation
+[       OK ] ScanReadProofTest.PublicVectorClosurePreservesOldPinAndCoordinatesNativeDeletionAndRowCreation (301 ms)
+[ RUN      ] ScanReadProofTest.AdjacentGroupsCanReuseColdRemainderPoolsWithoutMutationAuthority
+[       OK ] ScanReadProofTest.AdjacentGroupsCanReuseColdRemainderPoolsWithoutMutationAuthority (228 ms)
+[ RUN      ] ScanReadProofTest.TerminalPropertylessNodeRemainsVisibleAndSuppliesAbsentKnownFields
+[       OK ] ScanReadProofTest.TerminalPropertylessNodeRemainsVisibleAndSuppliesAbsentKnownFields (206 ms)
+[ RUN      ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof
+[       OK ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof (142 ms)
+[ RUN      ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership
+[       OK ] ScanReadProofTest.QueryConsumerReturnsOwnedFilterAndGroupedResultsFromPersistentMembership (153 ms)
+[ RUN      ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty
+[       OK ] ScanReadProofTest.OversizedLabelGroupsUseCompletePrimaryLabelsWithoutTruncationOrAnUnlabelledScanPenalty (161 ms)
+[ RUN      ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof
+[       OK ] ScanReadProofTest.CompletedImageFieldUpdatePreservesMembershipAndOldPinThenReopensWithFreshProof (169 ms)
+[ RUN      ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots
+[       OK ] ScanReadProofTest.LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots (194 ms)
+[ RUN      ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback
+[       OK ] ScanReadProofTest.LogicalCreateAndDeleteMaintainNewMembershipGroupsAndPinnedRowFallback (251 ms)
+[ RUN      ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot
+[       OK ] ScanReadProofTest.LogicalDeletionCoordinatesNativeFieldsColdValuesAndMembershipInOneRoot (209 ms)
+[ RUN      ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge
+[       OK ] ScanReadProofTest.DetachDeletionCoordinatesANativeNodeWithARowFallbackEdge (269 ms)
+[ RUN      ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication
+[       OK ] ScanReadProofTest.NodeOnlyMembershipWorkspaceMustBeAdmittedByTheCallerBeforePublication (191 ms)
+[ RUN      ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget
+[       OK ] ScanReadProofTest.NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerBudget (187 ms)
+[ RUN      ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership
+[       OK ] ScanReadProofTest.PartialDeletionBootstrapWriteRecoversTheWholeOldGraphAndMembership (198 ms)
+[ RUN      ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership
+[       OK ] ScanReadProofTest.CompleteDeletionBootstrapWriteRecoversTheWholeNewGraphAndMembership (205 ms)
+[ RUN      ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback
+[       OK ] ScanReadProofTest.LogicalRelabelTransitionsIntoAndOutOfPrimaryLabelFallback (255 ms)
+[ RUN      ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether
+[       OK ] ScanReadProofTest.MixedLogicalNodeChangesPublishFieldsLabelsAndBothMembershipGroupsTogether (296 ms)
+[ RUN      ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback
+[       OK ] ScanReadProofTest.CompletePropertyReplacementAddsThe65thFieldThroughGeneralFallback (643 ms)
+[ RUN      ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile
+[       OK ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile (25 ms)
+[ RUN      ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority
+[       OK ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority (24 ms)
+[ RUN      ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds
+[       OK ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds (54 ms)
+[ RUN      ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority
+[       OK ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority (51 ms)
+[ RUN      ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification
+[       OK ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification (52 ms)
+[ RUN      ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch
+[       OK ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch (55 ms)
+[ RUN      ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification
+[       OK ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification (249 ms)
+[ RUN      ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues
+[       OK ] ScanReadProofTest.ColumnWindowReauthenticatesAfterWriteAndRejectsChangedFrameBeforeValues (246 ms)
+[ RUN      ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority
+[       OK ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority (262 ms)
+[----------] 35 tests from ScanReadProofTest (22990 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 40 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (8 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (4 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup (6 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo (3 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (1 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (7 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (12 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (4 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (4 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (3 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (4 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (26 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (4 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose
+[       OK ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose (45 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (83 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[       OK ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (235 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix (118 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback
+[       OK ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback (6 ms)
+[ RUN      ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication
+[       OK ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication (317 ms)
+[ RUN      ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup
+[       OK ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup (24 ms)
+[ RUN      ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary
+[       OK ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+[       OK ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization (23 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites
+[       OK ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites (20 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget (15 ms)
+[ RUN      ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage
+[       OK ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage (22 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests (1 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots (135 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection (112 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot (220 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority
+[       OK ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority (36 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding
+[       OK ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding (35 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (188 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate
+[       OK ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate (22 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity (361 ms)
+[ RUN      ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes
+[       OK ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes (8 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages
+[       OK ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages (23 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption
+[       OK ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption (26 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (22 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource
+[       OK ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource (123 ms)
+[----------] 40 tests from BuildingScanMembershipTest (2328 ms total)
+
+[----------] Global test environment tear-down
+[==========] 94 tests from 4 test suites ran. (28242 ms total)
+[  PASSED  ] 77 tests.
+[  FAILED  ] 17 tests, listed below:
+[  FAILED  ] HybridPropertyFieldRelocationTest.MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins
+[  FAILED  ] HybridPropertyFieldRelocationTest.CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool
+[  FAILED  ] HybridPropertyFieldRelocationTest.ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration
+[  FAILED  ] HybridPropertyFieldRelocationTest.OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse
+[  FAILED  ] HybridPropertyFieldRelocationTest.QuotaCancellationAndStaleFencesRefundBeforeRetry
+[  FAILED  ] HybridPropertyFieldRelocationTest.DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs
+[  FAILED  ] HybridPropertyFieldRelocationTest.DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry
+[  FAILED  ] HybridPropertyFieldRelocationTest.ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking
+[  FAILED  ] HybridPropertyFieldRelocationTest.RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityPoolABRecoverySelectsOneCompleteMainRecordRoute
+[  FAILED  ] HybridPropertyFieldRelocationTest.EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse
+[  FAILED  ] HybridPropertyFieldRelocationTest.WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels
+[  FAILED  ] HybridPropertyFieldRelocationTest.Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute
+
+17 FAILED TESTS

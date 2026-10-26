@@ -1,0 +1,16 @@
+stage=clone_and_membership
+/tmp/zyx-budget-throw-trace.so(__cxa_throw+0x46) [0x7f56818981a6]
+/tmp/zyx-scan-image-construction(+0x20220) [0x559e3f772220]
+/tmp/zyx-scan-image-construction(+0x58cb9) [0x559e3f7aacb9]
+/tmp/zyx-scan-image-construction(+0x2305fc) [0x559e3f9825fc]
+/tmp/zyx-scan-image-construction(+0x22a187) [0x559e3f97c187]
+/tmp/zyx-scan-image-construction(+0x22af6a) [0x559e3f97cf6a]
+/tmp/zyx-scan-image-construction(+0x24a611) [0x559e3f99c611]
+/tmp/zyx-scan-image-construction(+0x256820) [0x559e3f9a8820]
+/tmp/zyx-scan-image-construction(+0x2576b1) [0x559e3f9a96b1]
+/tmp/zyx-scan-image-construction(+0x19f7e) [0x559e3f76bf7e]
+/tmp/zyx-scan-image-construction(+0x18abd) [0x559e3f76aabd]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29ca8) [0x7f56811cdca8]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x85) [0x7f56811cdd65]
+/tmp/zyx-scan-image-construction(+0x18921) [0x559e3f76a921]
+construction_error=shared materialization exceeded its byte bound

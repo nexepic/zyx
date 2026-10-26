@@ -1,0 +1,65 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 22 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from ScanBlockMembershipTest
+[ RUN      ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds
+[       OK ] ScanBlockMembershipTest.RoundTripAndOverlappingLabelsPreserveLiveIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity
+[       OK ] ScanBlockMembershipTest.RejectsCorruptionTruncationAndWrongSnapshotIdentity (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds
+[       OK ] ScanBlockMembershipTest.RejectsInvalidAuthorityAndRetainsBoundaryIds (0 ms)
+[ RUN      ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums
+[       OK ] ScanBlockMembershipTest.RejectsNoncanonicalHeadersEvenWithRecomputedChecksums (0 ms)
+[ RUN      ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels
+[       OK ] ScanBlockMembershipTest.PrimaryLabelFallbackIsVersionedAndNeverPretendsToHaveBitmapLabels (0 ms)
+[----------] 5 tests from ScanBlockMembershipTest (0 ms total)
+
+[----------] 14 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (3 ms)
+[ RUN      ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin
+[       OK ] ScanMembershipSourceTest.CompleteOversizedLabelUnionUsesFallbackAndPreservesOldPin (2 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback
+[       OK ] ScanMembershipSourceTest.LabelUnionAcrossDifferentEntitiesUsesExplicitPrimaryFallback (12 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (0 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (1 ms)
+[ RUN      ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource
+[       OK ] ScanMembershipSourceTest.PreparesCreateDeleteAndRelabelTogetherWithoutChangingTheSource (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts
+[       OK ] ScanMembershipSourceTest.MutationPreparationRepresentsEmptyAndFirstLiveGroupsWithExactCounts (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary
+[       OK ] ScanMembershipSourceTest.MutationPreparationTransitionsBothWaysAcrossTheLabelFallbackBoundary (1 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo
+[       OK ] ScanMembershipSourceTest.MutationPreparationRejectsBadInputsAndWorkspaceBeforeIo (0 ms)
+[ RUN      ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation
+[       OK ] ScanMembershipSourceTest.MutationPreparationPreservesTerminalIdAndRefundsCancellation (0 ms)
+[----------] 14 tests from ScanMembershipSourceTest (32 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership
+[       OK ] BuildingScanMembershipTest.DefaultFormatCannotInstallOrPublishScanMembership (0 ms)
+[----------] 1 test from BuildingScanMembershipTest (0 ms total)
+
+[----------] 1 test from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.OrdinaryFormatsRejectVerificationBeforeIo
+[       OK ] ScanReadProofTest.OrdinaryFormatsRejectVerificationBeforeIo (0 ms)
+[----------] 1 test from ScanReadProofTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 22 tests from 5 test suites ran. (33 ms total)
+[  PASSED  ] 22 tests.

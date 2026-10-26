@@ -1,0 +1,19 @@
+{
+  "accepted_progress_percent": 15,
+  "query_benchmark_run": false,
+  "targeted_module_cases_passed": 76,
+  "source_sha256": {
+    "src/storage/relocatable/entity/ScanReadProof.cpp": "e569667cbc2abfa4593c6fecd7f3ed8f9c2b3f0e76291cc3176140fb58fde592",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "eef549f0f930df8e40a7463adc01fbe1fab3b3bb9966c7380eaf90d7c8691104",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "3c08aa8a249a7d75a9cdc7f6a3ff618842797de518933a74209b0b07487f8a72"
+  },
+  "authority": "complete Node membership, labels and referenced native field ownership; ROW edges retain ordinary validation",
+  "full_graph_integrity": "mandatory at private completion; explicit verifyIntegrity or verify_integrity_on_open before writable recovery",
+  "negative_test": "valid-CRC dangling ROW edge receives no Node proof authority; explicit full integrity and full-on-open reject without changing file",
+  "production_and_compatibility_library_sha256": {
+    "build-scan-candidate": "f197f71bd749652173b0cb90a724fd1fe6ba52721d69fd81320a069d9e173bd3",
+    "build-scan-row-production": "3115bca2b497f97e189c90bdf12f23aefd4e4e6d9d1ad8d9748d68f5a60dff28",
+    "build-scan-work": "e9ff17e3df7dff442b198605b27a6f2b44690f8dc61ed297f357648e6c1e0524",
+    "build-hybrid-compat": "2cba8dd5f1a53469226fb14f6c3037529cd1850c6f213c6febec41655e18e71a"
+  }
+}

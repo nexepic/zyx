@@ -32,13 +32,14 @@ namespace graph::storage {
 
 	BufferPool::Pin::~Pin() { release(); }
 
-	BufferPool::Pin::Pin(Pin &&other) noexcept : pool_(other.pool_), key_(other.key_), writable_(other.writable_) {
+	BufferPool::Pin::Pin(Pin &&other) noexcept : pool_owner_(std::move(other.pool_owner_)), pool_(other.pool_), key_(other.key_), writable_(other.writable_) {
 		other.pool_ = nullptr;
 	}
 
 	BufferPool::Pin &BufferPool::Pin::operator=(Pin &&other) noexcept {
 		if (this != &other) {
 			release();
+			pool_owner_ = std::move(other.pool_owner_);
 			pool_ = other.pool_;
 			key_ = other.key_;
 			writable_ = other.writable_;
@@ -80,6 +81,7 @@ namespace graph::storage {
 			pool_->unpin(key_);
 			pool_ = nullptr;
 		}
+        pool_owner_.reset(); // unpin before releasing the last pool owner
 	}
 
 	BufferPool::BufferPool(StorageIO &io, size_t capacityBytes, std::shared_ptr<std::pmr::memory_resource> memoryOwner) :

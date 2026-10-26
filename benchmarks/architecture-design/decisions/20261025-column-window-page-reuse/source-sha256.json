@@ -1,0 +1,5 @@
+{
+  "include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": "7cc9284a1e293090ccafb5c29e8f5f983299b924b6be90b26f2094ac7dea0112",
+  "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "160fd7733cfa9efd982f1e0bede7c873964d2ba307c1f428124893562d7d2353",
+  "tests/src/storage/relocatable/property/test_HybridPropertyColumnReadReuse.cpp": "3cf9c75e8de86b49891f13476733e4b7cd6bb4980e6fa5a7471a90fc24b57379"
+}

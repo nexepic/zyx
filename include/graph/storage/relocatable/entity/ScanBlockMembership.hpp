@@ -15,6 +15,7 @@ namespace graph::storage {
     struct ScanBlockMembership {
         static constexpr uint32_t MAGIC = 0x4d53595aU; // ZYSM
         static constexpr uint16_t VERSION = 1;
+        static constexpr uint16_t PRIMARY_LABEL_VERSION = 2;
         static constexpr size_t HEADER_BYTES = 64;
         static constexpr size_t MAX_LABELS = 64;
         static constexpr size_t MAX_BYTES = HEADER_BYTES + MAX_LABELS * 16;
@@ -28,6 +29,7 @@ namespace graph::storage {
         uint64_t group_id = 0;
         uint64_t live = 0;
         uint16_t label_count = 0;
+        bool labels_from_primary = false;
         std::array<Label, MAX_LABELS> labels{};
 
         void validate() const {
@@ -37,7 +39,8 @@ namespace graph::storage {
             // The final possible group contains only IDs through UINT64_MAX.
             if (group_id == 1U + (UINT64_MAX - 1U) / 64U)
                 require((live & (UINT64_C(1) << 63U)) == 0, "scan membership contains an overflowing ID");
-            require(label_count <= MAX_LABELS, "scan membership label limit exceeded");
+            require(label_count <= MAX_LABELS && (!labels_from_primary || !label_count),
+                "scan membership label mode or limit is invalid");
             uint64_t previous = 0;
             for (size_t i = 0; i < label_count; ++i) {
                 const auto &label = labels[i];
@@ -49,6 +52,7 @@ namespace graph::storage {
 
         [[nodiscard]] uint64_t select(std::span<const uint64_t> requiredTokens) const {
             validate();
+            require(!labels_from_primary || requiredTokens.empty(), "scan label fallback requires its primary source");
             uint64_t result = live, previous = 0;
             for (const auto token : requiredTokens) {
                 require(token > previous, "scan label predicate must be sorted and unique");
@@ -66,13 +70,14 @@ namespace graph::storage {
             require(bytes.size() == wireSize(), "scan membership encoding has the wrong capacity");
             std::fill(bytes.begin(), bytes.end(), std::byte{});
             LittleEndianCodec::writeU32(bytes, 0, MAGIC);
-            LittleEndianCodec::writeU16(bytes, 4, VERSION);
+            LittleEndianCodec::writeU16(bytes, 4, labels_from_primary ? PRIMARY_LABEL_VERSION : VERSION);
             LittleEndianCodec::writeU16(bytes, 6, HEADER_BYTES);
             LittleEndianCodec::writeU64(bytes, 8, database_id.value());
             LittleEndianCodec::writeU64(bytes, 16, semantic_generation.value());
             LittleEndianCodec::writeU64(bytes, 24, group_id);
             LittleEndianCodec::writeU64(bytes, 32, live);
             LittleEndianCodec::writeU16(bytes, 40, label_count);
+            LittleEndianCodec::writeU16(bytes, 42, labels_from_primary ? 1U : 0U);
             LittleEndianCodec::writeU32(bytes, 44, static_cast<uint32_t>(bytes.size()));
             for (size_t i = 0; i < label_count; ++i) {
                 LittleEndianCodec::writeU64(bytes, HEADER_BYTES + 16U * i, labels[i].token);
@@ -94,11 +99,14 @@ namespace graph::storage {
             LittleEndianCodec::writeU32(header, 52, 0);
             require(utils::calculateCrc(header.data(), header.size()) == headerCrc,
                 "scan membership header checksum mismatch");
-            require(LittleEndianCodec::readU32(bytes, 0) == MAGIC && LittleEndianCodec::readU16(bytes, 4) == VERSION &&
-                LittleEndianCodec::readU16(bytes, 6) == HEADER_BYTES, "scan membership format is unsupported");
-            require(LittleEndianCodec::readU16(bytes, 42) == 0 && LittleEndianCodec::readU64(bytes, 56) == 0,
-                "scan membership reserved bits are nonzero");
+            const auto version = LittleEndianCodec::readU16(bytes, 4);
+            const auto mode = LittleEndianCodec::readU16(bytes, 42);
+            require(LittleEndianCodec::readU32(bytes, 0) == MAGIC &&
+                ((version == VERSION && mode == 0) || (version == PRIMARY_LABEL_VERSION && mode == 1)) &&
+                LittleEndianCodec::readU16(bytes, 6) == HEADER_BYTES, "scan membership format or label mode is unsupported");
+            require(LittleEndianCodec::readU64(bytes, 56) == 0, "scan membership reserved bits are nonzero");
             ScanBlockMembership result;
+            result.labels_from_primary = mode == 1;
             result.database_id = DatabaseId(LittleEndianCodec::readU64(bytes, 8));
             result.semantic_generation = Generation(LittleEndianCodec::readU64(bytes, 16));
             result.group_id = LittleEndianCodec::readU64(bytes, 24);

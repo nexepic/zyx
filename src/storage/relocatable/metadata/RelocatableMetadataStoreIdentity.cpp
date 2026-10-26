@@ -29,9 +29,17 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable logical Page ID reservation requires a positive count and checkpoint LSN");
 		}
-		MetadataWriteGuard writer = beginWrite();
+		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
+        // Namespace-only leases preserve every field and membership root.
+        // Match the existing bounded native Segment-ID reservation lifecycle.
+        if (current.hybrid_property_descriptor_root.isValid() && count > 64U)
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native logical Page reservation exceeds64IDs");
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        if (current.hybrid_property_descriptor_root.isValid()) {
+            pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
+            batch.hybrid_property_publication_ = true;
+        }
 		std::vector<PageId> pageIds;
 		pageIds.reserve(count);
 		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {

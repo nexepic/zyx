@@ -1,0 +1,49 @@
+START 0 medium scan initial
+FINISH 0 medium scan initial passed 51.76
+START 0 medium scan control
+FINISH 0 medium scan control passed 25.89
+START 0 medium scan B
+FINISH 0 medium scan B passed 18.87
+START 0 medium scan kuzu
+FINISH 0 medium scan kuzu passed 2.31
+START 0 holdout scan initial
+FINISH 0 holdout scan initial passed 40.79
+START 0 holdout scan control
+FINISH 0 holdout scan control passed 18.54
+START 0 holdout scan B
+FINISH 0 holdout scan B passed 17.48
+START 0 holdout scan kuzu
+FINISH 0 holdout scan kuzu passed 1.36
+START 1 medium scan kuzu
+FINISH 1 medium scan kuzu passed 1.5
+START 1 medium scan B
+FINISH 1 medium scan B passed 14.92
+START 1 medium scan control
+FINISH 1 medium scan control passed 17.41
+START 1 medium scan initial
+FINISH 1 medium scan initial passed 18.7
+START 1 holdout scan kuzu
+FINISH 1 holdout scan kuzu passed 1.12
+START 1 holdout scan B
+FINISH 1 holdout scan B passed 12.21
+START 1 holdout scan control
+FINISH 1 holdout scan control passed 15.55
+START 1 holdout scan initial
+FINISH 1 holdout scan initial passed 15.88
+START 2 medium scan initial
+FINISH 2 medium scan initial passed 37.04
+START 2 medium scan control
+FINISH 2 medium scan control passed 19.01
+START 2 medium scan B
+FINISH 2 medium scan B passed 14.39
+START 2 medium scan kuzu
+FINISH 2 medium scan kuzu passed 1.56
+START 2 holdout scan initial
+FINISH 2 holdout scan initial passed 17.76
+START 2 holdout scan control
+FINISH 2 holdout scan control passed 24.51
+START 2 holdout scan B
+FINISH 2 holdout scan B passed 13.54
+START 2 holdout scan kuzu
+FINISH 2 holdout scan kuzu passed 1.16
+{"freeze_sha256": "9d67cab04a5786aca203e858c9220df8ca97033642ec2efbc20ca0ecc544110d", "primary": [{"scale": "medium", "case": "label_scan_filter", "valid": true, "speedup": {"initial": 3.7830101589184233, "control": 3.094038771147385}, "passes_5x_each_control": false, "candidate_p50_ms": 92.00192, "kuzu_p50_ms": 3.212253504898399, "beats_kuzu": false}, {"scale": "medium", "case": "all_nodes_property_filter", "valid": true, "speedup": {"initial": 2.309393529611311, "control": 2.0499174883060824}, "passes_5x_each_control": false, "candidate_p50_ms": 198.65669, "kuzu_p50_ms": 1.177338999696076, "beats_kuzu": false}, {"scale": "medium", "case": "aggregation_count_by_group", "valid": true, "speedup": {"initial": 3.2731547068402644, "control": 3.2066344515221004}, "passes_5x_each_control": false, "candidate_p50_ms": 88.6422635, "kuzu_p50_ms": 6.308279502263758, "beats_kuzu": false}, {"scale": "medium", "case": "multi_key_group", "valid": true, "speedup": {"initial": 2.557247496566865, "control": 2.35425357362578}, "passes_5x_each_control": false, "candidate_p50_ms": 148.8650205, "kuzu_p50_ms": 8.363590000953991, "beats_kuzu": false}, {"scale": "holdout", "case": "label_scan_filter", "valid": true, "speedup": {"initial": 2.680036452201161, "control": 2.3531793812111763}, "passes_5x_each_control": false, "candidate_p50_ms": 83.4078575, "kuzu_p50_ms": 2.663918501639273, "beats_kuzu": false}, {"scale": "holdout", "case": "all_nodes_property_filter", "valid": true, "speedup": {"initial": 2.1035278613381525, "control": 1.9060652730080883}, "passes_5x_each_control": false, "candidate_p50_ms": 158.2031425, "kuzu_p50_ms": 1.0203914935118519, "beats_kuzu": false}, {"scale": "holdout", "case": "aggregation_count_by_group", "valid": true, "speedup": {"initial": 2.8977972268670094, "control": 3.844787158692502}, "passes_5x_each_control": false, "candidate_p50_ms": 70.6242725, "kuzu_p50_ms": 4.364867498225067, "beats_kuzu": false}, {"scale": "holdout", "case": "multi_key_group", "valid": true, "speedup": {"initial": 2.399599162447024, "control": 2.7616653018521102}, "passes_5x_each_control": false, "candidate_p50_ms": 122.844528, "kuzu_p50_ms": 7.1288864928646944, "beats_kuzu": false}], "processes": 24, "samples": 960, "passes_all_primary": false, "beats_kuzu_all_primary": false, "s5_complete": false}

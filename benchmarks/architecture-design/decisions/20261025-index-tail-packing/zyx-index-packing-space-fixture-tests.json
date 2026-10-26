@@ -1,0 +1,52 @@
+{
+  "tests": 3,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T08:56:44Z",
+  "time": "0.06s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T08:56:44Z",
+      "time": "0.06s",
+      "testsuite": [
+        {
+          "name": "PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanIndexPacking.cpp",
+          "line": 5,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:56:44Z",
+          "time": "0.01s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "CompletionRejectsUnconstructedAndUnsavedImages",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 1116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:56:44Z",
+          "time": "0.021s",
+          "classname": "BuildingScanMembershipTest"
+        },
+        {
+          "name": "SourceChangeDuringPreparedCompletionDiscardsThePrivateImage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 1188,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:56:44Z",
+          "time": "0.027s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    }
+  ]
+}

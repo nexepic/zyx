@@ -1376,7 +1376,7 @@ namespace graph::storage {
         // A sequential visitor may read another page before its scan advances.
         // With one resident frame, retain the existing bounded owned fallback
         // rather than pinning the only frame across that consumer callback.
-        if (capacity == 0U || (hint == BufferPoolReadHint::BPRH_SEQUENTIAL && capacity <= RSS_PAGE_SIZE))
+        if (capacity <= RSS_PAGE_SIZE)
             return std::nullopt;
         std::array<std::byte, RSS_PAGE_SIZE> poolImage{};
         if (io_->readAt(poolKey, poolImage.data(), poolImage.size()) != RSS_PAGE_SIZE) {

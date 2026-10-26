@@ -4,6 +4,8 @@
 #include <array>
 #include <span>
 #include "graph/storage/relocatable/format/Superblock.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -65,7 +67,57 @@ namespace graph::storage {
             const auto decoded = SegmentEnvelopeCodec::decode(target);
             return SegmentEnvelopeCodec::encode(decoded);
         }
+
+        // Authenticate immutable payloads or the mutable pool's A/B control
+        // state before changing its header. Pool frames have typed checksums,
+        // not an envelope payload CRC; full target integrity must authenticate
+        // every reachable frame before BUILDING may ever be cleared.
+        static void legacySegmentToBuilding(std::span<std::byte> source) {
+            requireProfile();
+            require(source.size() == RSS_SEGMENT_SIZE, "scan clone requires a complete source segment");
+            const auto header = legacyEnvelopeHeader(source.first(RSS_ENVELOPE_BYTES));
+            const auto envelope = SegmentEnvelopeCodec::decode(header);
+            if (envelope.kind == SegmentKind::SGK_METADATA_PAGE_POOL) {
+                authenticatePoolControl<MetadataPagePoolHeaderCodec>(source, envelope);
+            } else if (isSharedPagePoolSegmentKind(envelope.kind)) {
+                authenticatePoolControl<SharedPagePoolHeaderCodec>(source, envelope);
+            } else {
+                const auto payload = source.subspan(envelope.header_bytes, envelope.payload_bytes);
+                const std::byte empty{};
+                if (utils::calculateCrc(payload.empty() ? &empty : payload.data(), payload.size()) != envelope.payload_crc)
+                    throw FormatException(FormatError::FERR_CHECKSUM_MISMATCH,
+                        "scan clone legacy segment payload checksum mismatch");
+            }
+            std::copy(header.begin(), header.end(), source.begin());
+        }
     private:
+        template<class Codec>
+        static void authenticatePoolControl(std::span<const std::byte> source, const SegmentEnvelope &envelope) {
+            require(envelope.state == SegmentState::SGS_SEALED && envelope.header_bytes == RSS_PAGE_SIZE &&
+                envelope.payload_bytes == RSS_PAGE_POOL_DATA_FRAME_COUNT * RSS_PAGE_SIZE,
+                "scan clone source pool has invalid framing");
+            using Header = decltype(Codec::decode(std::span<const std::byte>{}));
+            std::optional<Header> selected;
+            static_assert(RSS_METADATA_PAGE_POOL_CONTROL_RECORD_COUNT == RSS_SHARED_PAGE_POOL_CONTROL_RECORD_COUNT);
+            static_assert(RSS_METADATA_PAGE_POOL_HEADER_BYTES == RSS_SHARED_PAGE_POOL_HEADER_BYTES);
+            for (size_t record = 0; record < RSS_SHARED_PAGE_POOL_CONTROL_RECORD_COUNT; ++record) {
+                try {
+                    const auto control = Codec::decode(source.subspan(RSS_ENVELOPE_BYTES +
+                        record * RSS_SHARED_PAGE_POOL_HEADER_BYTES, RSS_SHARED_PAGE_POOL_HEADER_BYTES));
+                    if (!selected || control.control_sequence > selected->control_sequence) selected = control;
+                } catch (const FormatException &) {
+                    // The complete peer is authoritative after a torn inactive write.
+                }
+            }
+            if (!selected)
+                throw FormatException(FormatError::FERR_CHECKSUM_MISMATCH, "scan clone source pool has no valid control record");
+            require(selected->segment_id == envelope.segment_id && selected->generation == envelope.generation &&
+                selected->committed_lsn == envelope.committed_lsn,
+                "scan clone source pool control identity differs from its envelope");
+            if constexpr (requires { selected->physical_slot; })
+                require(selected->physical_slot.value() == envelope.owner_id,
+                    "scan clone source metadata pool slot differs from its envelope owner");
+        }
         static void require(bool valid, const char *message) {
             if (!valid) throw FormatException(FormatError::FERR_INVALID_HEADER, message);
         }

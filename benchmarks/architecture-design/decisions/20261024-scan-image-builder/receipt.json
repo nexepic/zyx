@@ -1,0 +1,68 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "partial_not_accepted",
+  "progress_percent": 15,
+  "base_head": "9d65a397f93689557eb076458aec65104505a989",
+  "performance_run_this_round": false,
+  "full_unit_suite_run": false,
+  "commit_or_push_this_round": false,
+  "configuration_tests": {
+    "isolated": {
+      "tests": 33,
+      "failures": 0,
+      "suites": {
+        "ScanMembershipDirectoryTest": 1,
+        "BuildingScanMembershipTest": 14,
+        "ScanMembershipSourceTest": 9,
+        "ScanFormatCloneCodecTest": 5,
+        "ScanBuildingCloneTest": 4
+      }
+    },
+    "default": {
+      "tests": 12,
+      "failures": 0,
+      "suites": {
+        "ScanMembershipDirectoryTest": 1,
+        "BuildingScanMembershipTest": 1,
+        "ScanMembershipSourceTest": 9,
+        "ScanFormatCloneCodecTest": 1
+      }
+    }
+  },
+  "core_rebuild_this_round": false,
+  "core_scope": "Previously rebuilt cores; new implementation paths are inline and module objects are freshly compiled. EntityPageStore header change is comment only.",
+  "core_sha256": {
+    "isolated": "483c921d7158a29933c86a9d26fac152bb4259a3b47ed9cb7efbe9e685d48fda",
+    "default": "aa4e5a0823cf2ea70682aabc01091a7ec6e3552f8d1a96e2ce2bd78372e12080"
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp": "af4563dff7f5b4060cf0c275ed40b105471fb8b28209c431cbda0216b4b932ce",
+    "include/graph/storage/relocatable/format/ScanFormatCloneCodec.hpp": "f4304d0f400d332f90868428aefe924527a289fdf465b20250bfb8c93077f760",
+    "include/graph/storage/relocatable/format/ScanBuildingClone.hpp": "45c18b73a9d1cffd90eed30a3acbb9e4401281e4266c42a39d520b60b7166e00",
+    "include/graph/storage/relocatable/entity/EntityPageStore.hpp": "59bf7990457e87bd95679cfd2eb13101feeb2bf255a6c4ccc8e7d38b21fa76b1",
+    "tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp": "dc9d903b41fa1d478a9ab9f15df35c81bc29c582291f93aaa2841c1790d74832",
+    "tests/src/storage/relocatable/entity/test_ScanMembershipSource.cpp": "2cbd102ce9a9095bc5ec2c6e22e805e719e2219c303c0e6f04db84ed0740b74b",
+    "tests/src/storage/relocatable/format/test_ScanFormatCloneCodec.cpp": "b177063bc8d5c4f7e988c1c02f0a04141c6611512cb36719aa8deb72b2f4f6ee"
+  },
+  "module_object_sha256": {
+    "default-test_BuildingScanMembership.o": "4973a634cda02a8ebb5b5ac9dfc5cbfa0b3f98c2c13741ecbe4b21f4bc3c8600",
+    "default-test_ScanFormatCloneCodec.o": "97886ce49b872692bf5774846338112795e0b74b20f29c8021edbe93e32f6b7a",
+    "default-test_ScanMembershipSource.o": "cb7c54b922508daed4ef304de84cadb661d754b9b973fe1ecc46931edad7e4d8",
+    "isolated-test_BuildingScanMembership.o": "dce4ccb2d77ce1c5a1a29beaf530be3a192e1ceffbfd7fb9c19102b85e45c201",
+    "isolated-test_ScanBuildingClone.o": "870abd6003cbe01017256f9e6f24b93689da7e7a418933ee4c61c24821609f5a",
+    "isolated-test_ScanFormatCloneCodec.o": "bcfc5e438d2e652c3f0702e007d7ac7b667755b11eeccb93f933c177326907be",
+    "isolated-test_ScanMembershipSource.o": "cb7c54b922508daed4ef304de84cadb661d754b9b973fe1ecc46931edad7e4d8"
+  },
+  "evidence_sha256": {
+    "default-tests.json": "6237334362c4242f971fd12456b4048c7ca0de1f4ce0c14701af89d1fee17733",
+    "default-tests.log": "368b8abaa2e1da2668d6b1a941c6d55cfdcdcf7c659aa03936a3c595b0e65c80",
+    "en.md": "3b6bc16025b0c6a10ef11da8f3a2bedf2aecdd86d314f07a64385de72d0b5956",
+    "first-integration-tests.json": "61639ca3ceff672099bcc4d3313517127e1fa79bae8600da138457237b9866da",
+    "first-integration-tests.log": "4127966fa5c07b1e480ee73c1ea2c4a33299ba261e3475e452831cbd62075b52",
+    "isolated-tests.json": "3094c2b8a65f667b904e7e726b6890f6098937b335ec3edda91609ae3e1a47c4",
+    "isolated-tests.log": "3848a93005eaba198f817dcd13f24818c6ad727f726f6db4eceaf944b8c54f3d",
+    "recipes.json": "cc079dd9552b9e4fd9a8dce47d7a0fa94b2f89fd749650f6f35ffde8de57a6ee",
+    "zh.md": "0c0abe73adea69706e747d974b8e85abd637cf30ca1876a9a97596ab7d89ac33"
+  }
+}

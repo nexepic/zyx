@@ -1,0 +1,7 @@
+{
+  "status": "cancelled_obsolete_diagnostic_binary",
+  "performance_run": false,
+  "result_is_acceptance": false,
+  "reason": "Diagnostic was linked before native-frame dispatch, cancellation, and the explicit fixed-codec reservation were finalized. Do not reuse it as evidence for the current scanner. Final candidate construction must validate the real image with the final implementation.",
+  "utility_binary_sha256": "69dae0d4d3aa2457e8a0272963c6743397797627b3751edb168e16dd3b55b531"
+}

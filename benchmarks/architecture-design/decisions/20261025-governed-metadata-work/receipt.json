@@ -1,0 +1,28 @@
+{
+  "accepted_progress_percent": 15,
+  "isolated_module_tests": 166,
+  "failures": 0,
+  "sources": {
+    "src/storage/relocatable/metadata/MetadataPagePool.cpp": "d2be114dae5d2dba37253890d3e4b84d07c65cb9884257ae09c420764fa41e3c",
+    "src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp": "77df935003f67a83cea997904f9acfc5a7db0cec6e2aa11c3eb474feb77eb3e3",
+    "src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp": "5969d53bcef345bc97d6390e2b595ad3c73ac5261f1163024f96a7c36b30dd24",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreScanMaintenance.cpp": "128ea2e91ae653cedb1bd0ea967d80c72b3e9a44eee57c2ff0c95c5b21230203",
+    "include/graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp": "a259a26fecd57c558eeb29e6c8dab84dc3bcbe5607ae6b8c4648707609ecc772",
+    "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "de7a2221f4304e3292f58afb7fa1e4b1b4d8ac5b903ec4a42677f83d360b97da",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "85a1966c84e21044f01c797bca6f8141300cd8714de8a00eafbabe67f712366e",
+    "src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp": "7036742f5534648ea327f12dfa594b82fc3ecab9b807241e3493e0e37153ab19",
+    "tests/src/storage/relocatable/metadata/test_MetadataPagePoolRetirement.cpp": "c9ac6273215ad063626261f6211f3570d888b263d2c67fcc3780d997ce87015b",
+    "tests/src/storage/relocatable/entity/test_ScanReadProof.cpp": "4295b5cf5175aa32d0af21f3e6d11f93e5a60b2630a4cdfcad309e39ce6a59e3"
+  },
+  "candidate_core_sha256": "de0fc538c5cdc874d52d4e83a58da97c46fb01a987e7c56b7b85d7d122cc9ddc",
+  "real_medium_status": "BUILDING clone and complete membership passed; field/integrity construction running; not admitted",
+  "maintenance_limit_bytes": 7340032,
+  "source_limit_bytes": 1048576,
+  "public_writable_open_enabled": false,
+  "query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false,
+  "default_module_tests": 104,
+  "default_failures": 0,
+  "default_core_sha256": "da61c35522104d65c858e1e721ec802a9588182432c028fba8e9571eb1ec99b1"
+}

@@ -1,0 +1,21 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "/tmp/zyx-label-fallback-compat-ScanBlockMembership.o",
+  "/tmp/zyx-label-fallback-compat-ScanMembershipSource.o",
+  "/tmp/zyx-label-fallback-compat-BuildingScanMembership.o",
+  "/tmp/zyx-label-fallback-compat-ScanReadProof.o",
+  "/workspace/zyx/build-hybrid-compat/libzyx_core.a",
+  "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+  "-lgtest_main",
+  "-lgtest",
+  "-lz",
+  "-llz4",
+  "-lxxhash",
+  "-lzstd",
+  "-lboost_filesystem",
+  "-lboost_atomic",
+  "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+  "-pthread",
+  "-o",
+  "/tmp/zyx-label-fallback-compat-tests"
+]

@@ -1,0 +1,43 @@
+{
+  "plan": "scan-path-20261023",
+  "status": "partial_not_accepted",
+  "stage": "S2",
+  "progress_percent": 15,
+  "performance_run_this_round": false,
+  "full_unit_suite_run": false,
+  "commit_or_push_this_round": false,
+  "configuration_tests": {
+    "isolated": {
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0
+    },
+    "default": {
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0
+    }
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/entity/StoredScanMembership.hpp": "8e3a4afc5470bda456b97708ac6c444674d42d4054aae1104b180df15c4847cf",
+    "tests/src/storage/relocatable/entity/test_StoredScanMembership.cpp": "e3f10bbce6bc0e31d387e5f16b7b6f52d18c09ca3f3609fad4076f2b156444fe"
+  },
+  "core_sha256": {
+    "isolated": "d87702b599fe5874fe2d604a6347deb6bc0e7caa56a44cd98a459f90ed998817",
+    "default": "4737b61a0a25bc193f728ce2bffa3571a1503f2f4c5b030a3731a643a2694775"
+  },
+  "module_object_sha256": {
+    "zyx-stored-membership-tests.o": "c48ffb3e9e10edbace9ee15d77dc1d081452bcf50d7b2e9a3dc6f9d4ce2f4601",
+    "zyx-stored-membership-default-tests.o": "e44804073006308c26003a19a4071ce2cd5325dc131de6591300b058cb639e6e"
+  },
+  "evidence_sha256": {
+    "en.md": "22ad90607a005fe0e236338a90c370292892236462f4704a1a9cab94cd44703c",
+    "zh.md": "436bc91f53db7f47f7852ec9a961a9fcb544a8cc10bf9379a4f7ffe2e90c07e1",
+    "zyx-stored-membership-default-recipes.json": "d7e5f18199f5b5d2c23c0d359c8af0a5a4af2830a884bad8e9dc649f9fc0382c",
+    "zyx-stored-membership-default-tests.json": "0c8c92244340a2da2ce83137e883cbed26d6f6270d8fce81fd1a882198a0f94a",
+    "zyx-stored-membership-default-tests.log": "ef337116b72cbd15330e8345b252d3a9318c231e61842e1a168c029ca09bf7fc",
+    "zyx-stored-membership-recipes.json": "97e337f134a1e2822c1c0b17c477f0a53942c5df9e2a6cbdf95c018f00d7d1b2",
+    "zyx-stored-membership-tests.json": "8e36bf53db1dd2769ab9e621d4763fd1d872fa5f7e78354e8c2e198f708701c9",
+    "zyx-stored-membership-tests.log": "d0a92708aa703bef3321c6ab66c07d045c2aa171106eb560f223cf6c589d8eeb"
+  }
+}

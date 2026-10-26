@@ -1,0 +1,31 @@
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:879:45: error: expected ';' after expression
+  879 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                                                                  ^
+      |                                                                  ;
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:879:15: error: no member named 'ScopedNativeSyncHookForTesting' in 'graph::storage::StorageIO'
+  879 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                         ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:879:46: error: use of undeclared identifier 'failFirstDataFence'
+  879 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:951:45: error: expected ';' after expression
+  951 |                         StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+      |                                                                  ^
+      |                                                                  ;
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:951:15: error: no member named 'ScopedNativeSyncHookForTesting' in 'graph::storage::StorageIO'
+  951 |                         StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+      |                         ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:951:46: error: use of undeclared identifier 'failFinalPublicationFence'
+  951 |                         StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+      |                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:1032:45: error: expected ';' after expression
+ 1032 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                                                                  ^
+      |                                                                  ;
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:1032:15: error: no member named 'ScopedNativeSyncHookForTesting' in 'graph::storage::StorageIO'
+ 1032 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                         ~~~~~~~~~~~^
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_OfflineVectorBaseRebuild.cpp:1032:46: error: use of undeclared identifier 'failFirstDataFence'
+ 1032 |                         StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+      |                                                                   ^
+9 errors generated.

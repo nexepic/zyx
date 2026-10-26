@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableIntegrityScannerTest.RelationshipChecksDoNotRetainEveryPagePayload
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableIntegrityScannerTest
+[ RUN      ] RelocatableIntegrityScannerTest.RelationshipChecksDoNotRetainEveryPagePayload
+unknown file: Failure
+C++ exception with description "relocatable State record store has no free physical destination slot" thrown in the test body.
+
+[  FAILED  ] RelocatableIntegrityScannerTest.RelationshipChecksDoNotRetainEveryPagePayload (209 ms)
+[----------] 1 test from RelocatableIntegrityScannerTest (210 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (210 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableIntegrityScannerTest.RelationshipChecksDoNotRetainEveryPagePayload
+
+ 1 FAILED TEST

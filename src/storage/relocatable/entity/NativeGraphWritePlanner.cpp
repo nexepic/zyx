@@ -1,3 +1,4 @@
+#include "graph/storage/relocatable/entity/ScanMembershipMutation.hpp"
 #include "graph/storage/relocatable/metadata/NativeGraphDeferredIndexImages.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 /**
@@ -77,6 +78,21 @@ namespace graph::storage {
 	};
 
 	namespace {
+        std::shared_ptr<query::execution::MaterializedByteBudget> nativeFieldWorkspace() {
+            constexpr size_t bytes = 1024U * 1024U;
+            if (!RSS_SCAN_PATH_FORMAT_ENABLED)
+                return std::make_shared<query::execution::MaterializedByteBudget>(bytes);
+            auto parent = utils::OwnedAllocationScope::owner();
+            if (!parent) throw query::execution::MaterializedByteLimitExceeded();
+            auto credit = std::make_shared<utils::OwnedHeapReservation>(parent, bytes);
+            // The child may outlive the local staging branch inside its writer.
+            // Its deleter retains the parent credit through the last child user.
+            return {new query::execution::MaterializedByteBudget(bytes - 4096U),
+                [credit = std::move(credit)](query::execution::MaterializedByteBudget *value) {
+                    static_cast<void>(credit); delete value;
+                }};
+        }
+
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
@@ -806,12 +822,14 @@ namespace graph::storage {
             fail(FormatError::FERR_UNSUPPORTED_VERSION, "native property group conversion is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
+        const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED &&
+            (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) != 0;
         if (coldRowRemainder && (!compactColumnMemberships ||
             direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID ||
-            (publishCandidate && !allocationAdmission)))
+            (publishCandidate && !allocationAdmission && !privateBuilding)))
             fail(FormatError::FERR_INVALID_HEADER, "cold ROW conversion requires compact forward layout and whole-database admission");
         if (!groupCount || groupCount > 8U || groupId > RSS_HYBRID_MAX_GROUP_ID - (groupCount - 1U) ||
-            (groupCount > 1U && (!compactColumnMemberships || !allocationAdmission || !publishCandidate ||
+            (groupCount > 1U && (!compactColumnMemberships || (!allocationAdmission && !privateBuilding) || !publishCandidate ||
                 direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
             fail(FormatError::FERR_INVALID_HEADER, "native cohort requires1..8groups and explicit gated compact forward publication");
         if (!hybrid_property_detail::validKind(kind) || !groupId || groupId > RSS_HYBRID_MAX_GROUP_ID ||
@@ -2979,7 +2997,7 @@ namespace graph::storage {
 		}) || rebuild_entity_free_summaries_;
 		using PageKindEntry = std::pair<const uint64_t, EntityPageRecordKind>;
         std::map<uint64_t, EntityPageRecordKind, std::less<uint64_t>, utils::OwnedPmrAllocator<PageKindEntry>> currentEntityPageKinds;
-		std::vector<ExistingInsertCandidate> existingInsertCandidates;
+		utils::OwnedVector<ExistingInsertCandidate> existingInsertCandidates;
 		existingInsertCandidates.reserve(currentEntityPageKinds.size());
 		const auto targetKindIndex = [](EntityPageRecordKind kind) -> size_t {
 			if (kind == EntityPageRecordKind::EPRK_NODE) {
@@ -3010,11 +3028,13 @@ namespace graph::storage {
             }
             return freeSummaryManaged[ordinal];
         };
-        std::map<uint64_t, uint16_t> indexedFreeCounts;
+        using FreeCountEntry = std::pair<const uint64_t, uint16_t>;
+        std::map<uint64_t, uint16_t, std::less<uint64_t>, utils::OwnedPmrAllocator<FreeCountEntry>> indexedFreeCounts;
 		// All pages observed in one snapshot belong to a stable Catalog
 		// generation. Cache the pool descriptor per segment while checking free
 		// insertion slots instead of descending the Catalog once per page.
-		std::map<uint64_t, CatalogEntry> currentEntityPools;
+        using PoolEntry = std::pair<const uint64_t, CatalogEntry>;
+		std::map<uint64_t, CatalogEntry, std::less<uint64_t>, utils::OwnedPmrAllocator<PoolEntry>> currentEntityPools;
 		std::vector<NativeGraphWritePlannerContext::InsertionTarget> priorInsertionTargets;
 		bool priorInsertionCacheValid = false;
 		bool usedInsertionTargetCache = false;
@@ -3105,7 +3125,9 @@ namespace graph::storage {
 				}
 			}
 		}
-		std::array<std::set<std::pair<uint16_t, size_t>>, 2U> existingInsertOrder;
+        using InsertionOrderKey = std::pair<uint16_t, size_t>;
+		std::array<std::set<InsertionOrderKey, std::less<InsertionOrderKey>,
+            utils::OwnedPmrAllocator<InsertionOrderKey>>, 2U> existingInsertOrder;
 		for (size_t ordinal = 0U; ordinal < existingInsertCandidates.size(); ++ordinal) {
 			existingInsertOrder[targetKindIndex(existingInsertCandidates[ordinal].kind)].emplace(
 					existingInsertCandidates[ordinal].remaining, ordinal);
@@ -3442,7 +3464,7 @@ namespace graph::storage {
                 node != nodes_.end() && node->second.inserted && !node->second.erased :
                 edge != edges_.end() && edge->second.inserted && !edge->second.erased;
             if (!pendingFieldsMemory) {
-                pendingFieldsMemory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                pendingFieldsMemory = nativeFieldWorkspace();
                 pendingFields.emplace(utils::OwnedPmrAllocator<NativeHybridPropertyColumnReplacement>(pendingFieldsMemory));
                 pendingPropertyKeys.emplace(utils::OwnedPmrAllocator<uint64_t>(pendingFieldsMemory));
                 nativeOwnerDeletions.emplace(utils::OwnedPmrAllocator<EntityPropertyKey>(pendingFieldsMemory));
@@ -3694,7 +3716,14 @@ namespace graph::storage {
                 changed = changed || insertedCount(page) || (kind == EntityPageRecordKind::EPRK_NODE ? !page.erased_node_ids.empty() : !page.erased_edge_ids.empty());
             for (const auto &page : appends) changed = changed || (page.record_kind == kind && insertedCount(page));
             for (const auto &page : newPools) changed = changed || (page.record_kind == kind && insertedCount(page));
-            if ((!changed && !rebuild_entity_free_summaries_) || !loadFreeSummary(kind)) return;
+            if (!changed && !rebuild_entity_free_summaries_) return;
+            const bool managed = loadFreeSummary(kind);
+            // Physical evacuation invalidates insertion authority without
+            // changing the summary's contents. Complete scan writes must still
+            // maintain its changed entries; retaining the old marker does not
+            // certify unvisited pages or enable the insertion fast path.
+            const bool retainStale = RSS_SCAN_PATH_FORMAT_ENABLED && !managed && freeSummaryProofs[type].has_value();
+            if (!managed && !retainStale) return;
             const uint64_t id = EntityFreeSpaceIndex::indexId(kind);
             auto position = std::lower_bound(scalar_index_mutations_.begin(), scalar_index_mutations_.end(), id,
                 [](const auto &staged, uint64_t key) { return staged.index_id < key; });
@@ -3769,7 +3798,8 @@ namespace graph::storage {
                 for (const auto &page : newPools) addFresh(page);
             }
             const auto sourceRoot = EntityFreeSpaceIndex::entityRoot(snapshot_.superblock(), kind);
-            const uint64_t generation = changed ? snapshot_.superblock().generation.value() + 1U : sourceRoot.generation.value();
+            const uint64_t generation = retainStale ? freeSummaryProofs[type]->directory_generation :
+                (changed ? snapshot_.superblock().generation.value() + 1U : sourceRoot.generation.value());
             if (generation == (std::numeric_limits<uint64_t>::max)() || freePages == (std::numeric_limits<uint64_t>::max)())
                 fail(FormatError::FERR_INVALID_STATE, "free-space summary marker encoding overflows");
             append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, EntityFreeSpaceIndex::generationKey(), generation + 1U);
@@ -4561,6 +4591,22 @@ namespace graph::storage {
                 }
                 std::vector<EntityPropertyKey, utils::OwnedPmrAllocator<EntityPropertyKey>> topologyPropertyOwners;
                 std::optional<NativeHybridTopologyPublication> topologyProof;
+                utils::OwnedVector<scan_candidate_detail::ScanNodeChange> scanChanges;
+                if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+                    if (native_graph_coordinated_ && snapshot_.superblock().hybrid_property_descriptor_root.isValid()) {
+                    for (const auto &[id, node] : nodes_) {
+                        if (node.inserted && node.erased) continue;
+                        using Kind = scan_candidate_detail::ScanNodeChangeKind;
+                        if (node.erased) scanChanges.push_back({id, Kind::SNCK_DELETE, {}});
+                        else if (node.inserted || node.labels) {
+                            if (!node.labels) fail(FormatError::FERR_INVALID_STATE, "new scan Node has no complete labels");
+                            scanChanges.push_back({id, node.inserted ? Kind::SNCK_CREATE : Kind::SNCK_RELABEL, *node.labels});
+                        }
+                    }
+                    if (scanChanges.size() > 64U)
+                        fail(FormatError::FERR_UNSUPPORTED_VERSION, "scan Node changes exceed the atomic source workspace window");
+                    }
+                }
                 const bool schemaOnlyCandidate = native_schema_coordinated_ && nodes_.empty() && edges_.empty() && properties_.empty() &&
                     node_id_ranges_.empty() && edge_id_ranges_.empty() && vector_deltas_.empty();
                 if ((native_graph_coordinated_ || schemaOnlyCandidate) && snapshot_.superblock().hybrid_property_descriptor_root.isValid()) {
@@ -4602,7 +4648,7 @@ namespace graph::storage {
                         pendingFields ? std::span<const NativeHybridPropertyColumnReplacement>(*pendingFields) : std::span<const NativeHybridPropertyColumnReplacement>{},
                         pendingFieldsMemory, pendingCatalogTokens ? std::span<const uint32_t>(*pendingCatalogTokens) : std::span<const uint32_t>{},
                         nativeOwnerDeletions ? std::span<const EntityPropertyKey>(*nativeOwnerDeletions) : std::span<const EntityPropertyKey>{},
-                        schemaOnlyCandidate && schemaControlsKnown));
+                        schemaOnlyCandidate && schemaControlsKnown, scanChanges, context_->options.property_roots.page_owner_id));
                 }
 				return context_->entities->applyNativeGraphBatchTransaction(
 						snapshot_, mutations, appends, newPools, propertyPlans, *context_->properties,
@@ -4670,6 +4716,15 @@ namespace graph::storage {
 		}
 		return NativeGraphWriteTransaction(context_, context_->metadata->openSnapshot());
 	}
+
+    NativeGraphWriteCommitResult NativeGraphWritePlanner::rebuildEntityFreeSpaceSummaries(
+        const std::function<void()> &checkpoint) {
+        auto transaction = beginTransaction();
+        transaction.rebuild_entity_free_summaries_ = true;
+        transaction.native_schema_coordinated_ = true;
+        transaction.free_summary_checkpoint_ = checkpoint;
+        return transaction.commit();
+    }
 
 	NativeGraphLogicalIdReservation NativeGraphWritePlanner::reserveLogicalIds(uint64_t nodeCount, uint64_t edgeCount) {
 		if (context_ == nullptr || (nodeCount == 0U && edgeCount == 0U) ||

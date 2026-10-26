@@ -48,9 +48,13 @@ namespace graph::storage {
 
 		private:
 			friend class BufferPool;
+			friend class StorageIO;
 			Pin(BufferPool *pool, BufferPoolPageKey key, bool writable) : pool_(pool), key_(key), writable_(writable) {}
 			void release() noexcept;
 
+			// StorageIO pins may outlive a disabled/replaced pool. Direct stack-
+			// owned BufferPool users retain their original lifetime contract.
+			std::shared_ptr<BufferPool> pool_owner_;
 			BufferPool *pool_ = nullptr;
 			BufferPoolPageKey key_{};
 			bool writable_ = false;

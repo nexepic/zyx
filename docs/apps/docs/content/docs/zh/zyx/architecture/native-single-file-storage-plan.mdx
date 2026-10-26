@@ -1008,6 +1008,10 @@ SlottedPagePool 的选页空闲索引从所选池已分配帧的有效 owner ID 
 
 最终证据：`benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`。过时的逐轮状态已移到其中的 historical-storage-notes-zh.md；保留协议合同及原始失败证据，不再把早期“发布关闭／生命周期未完成”当作当前限制。
 
-## 批扫描候选格式 15/41：待实现协议
+## 批扫描候选格式 15/41：隔离实现与验收边界
 
-`scan-path-20261023` 的候选 B 文件协议已登记在 `benchmarks/architecture-design/decisions/20261024-scan-path-s2/persistent-format.zh.md`，成员记录字节见同目录 `membership-wire.zh.md`。协议规定隔离版本、第九个成员目录根、BUILDING 拒绝、独立目标转码与全库准入、同事务成员更新及恢复/完整性规则。当前已有成员/隔离格式编码和未完成目标复制原型及定向测试，但完整 15/41 生命周期尚未实现、普通打开入口仍拒绝；默认 5/31 和实验 13/39 不变。所有写入实现必须先满足协议的检查点，不能将本节作为生产能力声明。
+`scan-path-20261023` 的候选 B 协议见 `benchmarks/architecture-design/decisions/20261024-scan-path-s2/persistent-format.zh.md`，成员记录字节见同目录 `membership-wire.zh.md`。`ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT` 默认关闭，依赖实验 hybrid 格式；开启后使用隔离版本 15/41、208 字节的版本 2 描述符及第九个 `NODE_SCAN` 成员目录根。默认 5/31、实验 13/39 与 15/41 互相拒绝，不原地解释或覆盖旧库。BUILDING 标记保持独立目标不可公开打开；没有另加 READY 标记。
+
+隔离构建提供显式离线命令 `zyx-scan-convert SOURCE DESTINATION`，源必须是已关闭的 5/31 文件，目标必须不存在。构建器核对只读源身份，建立完整 Node 成员覆盖并按既有通用规则转换可接纳的 Node 字段；Edge 及不合算字段保留 ROW。维护使用现有 COW、目录、退休和池所有权机制。清除 BUILDING 前必须重新执行完整图 integrity，并在发布准备完成后按实际全文件长度满足至少 10% 节省及源、目标、临时文件合计不超过 2 GiB 的门槛。失败目标可能保留 BUILDING，不得当作完整库使用；源文件不被替换。公共 8×64 有界转换入口的合同不变。
+
+完成的 15/41 文件可经公开 SDK 打开和修改；直接创建新 15/41 库仍拒绝。节点插入、删除及标签变化与成员/字段根在一次 A/B 发布中保持一致；写入使旧读取证明失效，旧 pin 继续保护原版本。公开打开验证完整 Node 供给链，ROW Edge 保留原访问校验；离线完成和显式完整检查验证全图。当前 Linux 模块、故障、资源及泛化验证证据见 `20261025-public-scan-lifecycle/`、`20261025-bounded-offline-lifecycle/`、`20261025-node-supply-proof/` 和 `20261025-capacity-rollback/` 决策目录。macOS、Windows 和 WASM 未在本次环境执行验证。实现可用不代表候选已获采用；真实两库空间、总成本、性能与守护验收以 [优化清单](optimization) 的当前状态及最终证据为准。

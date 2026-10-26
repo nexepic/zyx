@@ -269,9 +269,9 @@ namespace graph::storage {
 		RelocatableMetadataStore &metadata_;
 	};
 
-	// This cursor is snapshot-local and deliberately retains at most one decoded
-	// 4 KiB Property page. Consecutive owners sharing that page do not reread it,
-	// while moving to another page releases the transient Buffer Pool frame.
+	// This cursor is snapshot-local and retains at most one decoded Property
+	// page: an owned ROW image or a pool-charged selected-page pin. Consecutive
+	// batches sharing that page reuse its authenticated slotted-page view.
 	class PropertyCollectionRootScanCursor final {
 	public:
 		~PropertyCollectionRootScanCursor();
@@ -347,7 +347,7 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<EntityPropertyLocation>
 		findLocationOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key);
 		void accountDirectoryPages();
-		void validateSnapshot(const MetadataSnapshotPin &snapshot) const;
+		void validateSnapshot(const MetadataSnapshotPin &snapshot, bool selectedPage = false);
 
 		std::unique_ptr<HybridPropertyScanContext> hybrid_context_;
 		const PropertyCollectionRootStore *store_ = nullptr;
@@ -355,6 +355,9 @@ namespace graph::storage {
 		const CancellationCheckpoint *cancellation_ = nullptr;
 		PageId current_page_id_{};
 		std::optional<SlottedPage> current_page_;
+		// Mutually exclusive with the owned ROW image; the pool charges its frame.
+		std::optional<SlottedPagePinnedRead> selected_page_;
+		uint64_t data_epoch_ = 0U;
 		std::optional<LocationDirectoryRangeCursor> directory_cursor_;
 		std::optional<EntityPropertyLocation> pending_directory_location_;
 		size_t directory_metadata_pages_reported_ = 0U;

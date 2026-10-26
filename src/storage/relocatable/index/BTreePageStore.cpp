@@ -1133,11 +1133,10 @@ namespace graph::storage {
                 }
 				return node;
 			}
-            // Native map dirty paths may share untouched children from older
-            // physical pools. The descriptor binds the root; every child is
-            // independently authenticated through its pinned Page Directory.
-            const auto generation = (native_sink_ || index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID) &&
-                reference.existing_page_id != expected_root_.root_page_id ?
+            // Evacuation and cross-pool COW may leave any tree with children
+            // from different physical generations. Keep the exact root fence;
+            // authenticate each child through its own pinned directory route.
+            const auto generation = reference.existing_page_id != expected_root_.root_page_id ?
                 metadata_.findPageLocation(snapshot_, reference.existing_page_id).generation : expected_root_.root_generation;
             return loadExisting(reference.existing_page_id, generation.value(), expectedLevel);
 		}
@@ -1841,6 +1840,8 @@ namespace graph::storage {
             if (native_schema_keys_) return RSS_INDEX_KEY_MAX_BYTES;
             if (index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID) return RSS_GLOBAL_ADJACENCY_KEY_BYTES;
             if (index_id_ == RSS_LARGE_VALUE_CONTENT_INDEX_ID) return 53U + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES;
+            if (index_id_ == RSS_HYBRID_PROPERTY_INDEX_ID_FIRST +
+                static_cast<uint8_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN)) return 24U;
             const auto role = (index_id_ - RSS_HYBRID_PROPERTY_INDEX_ID_FIRST) % 4U;
             return role == 0 ? 16U : role == 3 ? 24U : 28U;
         }
@@ -3185,7 +3186,9 @@ namespace graph::storage {
         std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
         const CancellationCheckpoint *cancellation) const {
         if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || (!isHybridPropertyIndexId(indexId) && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
-            indexId != RSS_LARGE_VALUE_CONTENT_INDEX_ID) || !snapshot.isValid() ||
+            indexId != RSS_LARGE_VALUE_CONTENT_INDEX_ID) ||
+            (!RSS_SCAN_PATH_FORMAT_ENABLED && indexId == RSS_HYBRID_PROPERTY_INDEX_ID_FIRST +
+                static_cast<uint8_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN)) || !snapshot.isValid() ||
             !metadata_.ownsSnapshot(snapshot) || !memory || !sink || !source || !operationCount || operationCount > 8192U)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native map image planning requires bounded metadata-owned inputs");
         utils::OwnedAllocationScope scope(memory);

@@ -1,0 +1,349 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = ScanReadProofTest.*
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from ScanReadProofTest
+[ RUN      ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop
+[       OK ] ScanReadProofTest.PublicReadOnlyBackendStreamsPersistentMembershipAndHonorsPrefixStop (46 ms)
+[ RUN      ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp:150: Failure
+Value of: value.has_value()
+  Actual: false
+Expected: true
+
+[  FAILED  ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof (230 ms)
+[ RUN      ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile
+[       OK ] ScanReadProofTest.PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile (19 ms)
+[ RUN      ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority
+[       OK ] ScanReadProofTest.BuildingAndInvalidAccountsCannotMintCompleteAuthority (19 ms)
+[ RUN      ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds
+[       OK ] ScanReadProofTest.ScopeBindsSelectedIdsDescriptorStoreAndIoAndCopiesRequestedIds (38 ms)
+[ RUN      ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority
+[       OK ] ScanReadProofTest.PrefixStopsCancellationAndConsumerFailureNeverReplayOrLeaveAuthority (38 ms)
+[ RUN      ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification
+[       OK ] ScanReadProofTest.IoMutationInvalidatesCurrentAndFutureGrantsUntilFullReverification (40 ms)
+[ RUN      ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch
+[       OK ] ScanReadProofTest.NestedReadsRestoreOuterAuthorityAndMovingTheCallerHandleCannotRetagTheBatch (46 ms)
+[ RUN      ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification
+[       OK ] ScanReadProofTest.ValidMembershipChecksumsCannotReplaceCompletePrimaryLabelVerification (37 ms)
+[ RUN      ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority
+[       OK ] ScanReadProofTest.FieldReaderSkipsOnlyCertifiedOwnerRoutesAndNeverCachesVisitorAuthority (239 ms)
+[----------] 10 tests from ScanReadProofTest (756 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (757 ms total)
+[  PASSED  ] 9 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] ScanReadProofTest.PublicNamedFieldConsumerReadsScalarTextAndColdValuesUnderMembershipProof
+
+ 1 FAILED TEST

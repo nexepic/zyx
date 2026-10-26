@@ -1,0 +1,25 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 8 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 8 tests from StoredScanMembershipTest
+[ RUN      ] StoredScanMembershipTest.StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId
+[       OK ] StoredScanMembershipTest.StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId (107 ms)
+[ RUN      ] StoredScanMembershipTest.PackedMembershipsAcquireOneAuthenticatedPagePerStream
+[       OK ] StoredScanMembershipTest.PackedMembershipsAcquireOneAuthenticatedPagePerStream (9 ms)
+[ RUN      ] StoredScanMembershipTest.PackedStreamReacquiresAfterACallbackIoMutation
+[       OK ] StoredScanMembershipTest.PackedStreamReacquiresAfterACallbackIoMutation (38 ms)
+[ RUN      ] StoredScanMembershipTest.EmptyStorageAndExplicitPrefixStopsHaveDistinctCompletionResults
+[       OK ] StoredScanMembershipTest.EmptyStorageAndExplicitPrefixStopsHaveDistinctCompletionResults (10 ms)
+[ RUN      ] StoredScanMembershipTest.CancellationAfterDeliveryDoesNotReplayThePrefix
+[       OK ] StoredScanMembershipTest.CancellationAfterDeliveryDoesNotReplayThePrefix (14 ms)
+[ RUN      ] StoredScanMembershipTest.ForeignAndReleasedPinsCannotContinueAStoredStream
+[       OK ] StoredScanMembershipTest.ForeignAndReleasedPinsCannotContinueAStoredStream (14 ms)
+[ RUN      ] StoredScanMembershipTest.WorkspaceRefusalPrecedesAnyStorageReadOrConsumerCall
+[       OK ] StoredScanMembershipTest.WorkspaceRefusalPrecedesAnyStorageReadOrConsumerCall (3 ms)
+[ RUN      ] StoredScanMembershipTest.FullExhaustionRejectsAValidCrcButIncorrectDescriptorCount
+[       OK ] StoredScanMembershipTest.FullExhaustionRejectsAValidCrcButIncorrectDescriptorCount (12 ms)
+[----------] 8 tests from StoredScanMembershipTest (211 ms total)
+
+[----------] Global test environment tear-down
+[==========] 8 tests from 1 test suite ran. (211 ms total)
+[  PASSED  ] 8 tests.

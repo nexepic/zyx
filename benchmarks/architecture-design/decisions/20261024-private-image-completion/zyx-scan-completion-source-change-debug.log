@@ -1,0 +1,36 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1125: Failure
+Value of: change.changed
+  Actual: false
+Expected: true
+Google Test trace:
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1124: scan image failed actual whole-file space admission
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1125: Failure
+Value of: std::filesystem::exists(target)
+  Actual: true
+Expected: false
+Google Test trace:
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1124: scan image failed actual whole-file space admission
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1126: Failure
+Expected: static_cast<void>(builder->buildingRoot()) throws an exception of type std::logic_error.
+  Actual: it throws nothing.
+Google Test trace:
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1124: scan image failed actual whole-file space admission
+
+[  FAILED  ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (58 ms)
+[----------] 1 test from BuildingScanMembershipTest (58 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (58 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+
+ 1 FAILED TEST

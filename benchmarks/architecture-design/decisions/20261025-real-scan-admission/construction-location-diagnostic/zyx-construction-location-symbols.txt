@@ -1,0 +1,12 @@
+graph::storage::StorageIO::fileSizeUncached() const
+??:0
+graph::storage::BufferPool::readPages(graph::storage::BufferPoolPageKey, std::span<std::byte, 18446744073709551615ul>, graph::storage::BufferPoolReadHint)
+??:0
+graph::storage::StorageIO::readAt(graph::storage::BufferPoolPageKey, void*, unsigned long, graph::storage::BufferPoolReadHint) const
+??:0
+graph::storage::MetadataPageFile::readPage(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:0
+graph::storage::MetadataPageFile::readMetadataRadixUnresolved(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:0
+graph::storage::MetadataPageFile::resolveLogicalMetadataReferences(graph::storage::Superblock const&, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const
+??:0

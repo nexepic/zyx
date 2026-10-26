@@ -1,0 +1,36 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableMetadataPagePoolTest
+[ RUN      ] RelocatableMetadataPagePoolTest.PartialCapacityFailureRollsBackAllCreatedPoolsAndCanRetry
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_MetadataPagePoolCapacityRollback.cpp:25: Failure
+Expected equality of these values:
+  allocator.poolSlots()
+    Which is: { 8-byte object <01-00 00-00 00-00 00-00> }
+  oldPools
+    Which is: {}
+
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_MetadataPagePoolCapacityRollback.cpp:26: Failure
+Expected equality of these values:
+  limited->fileSize()
+    Which is: 262144
+  before
+    Which is: 131072
+
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_MetadataPagePoolCapacityRollback.cpp:31: Failure
+Expected equality of these values:
+  created.size()
+    Which is: 0
+  1U
+    Which is: 1
+
+[  FAILED  ] RelocatableMetadataPagePoolTest.PartialCapacityFailureRollsBackAllCreatedPoolsAndCanRetry (0 ms)
+[----------] 1 test from RelocatableMetadataPagePoolTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableMetadataPagePoolTest.PartialCapacityFailureRollsBackAllCreatedPoolsAndCanRetry
+
+ 1 FAILED TEST

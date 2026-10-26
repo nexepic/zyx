@@ -1,0 +1,826 @@
+{
+  "tests": 76,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T04:39:03Z",
+  "time": "0.976s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "PageBackedGraphNameResolverContractTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T04:39:03Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "SupportsVirtualDestructionThroughThePublicInterface",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 174,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "PageBackedGraphNameResolverContractTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeReadSessionTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T04:39:03Z",
+      "time": "0.1s",
+      "testsuite": [
+        {
+          "name": "KeepsTokenNamesBoundedAndReplacesExistingNames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 214,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "KeepsSelectedPropertyValuesAndMissingFieldsBounded",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 244,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "CachesPresentAndAbsentNodeExistenceWithTheEntityBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 258,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "EntityRecordCacheReplacementKeepsBoundedFifoOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 276,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "DoesNotRetainPropertyValuesOverTheByteBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 294,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.017s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 316,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.082s",
+          "classname": "NativeReadSessionTest"
+        },
+        {
+          "name": "OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 341,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0s",
+          "classname": "NativeReadSessionTest"
+        }
+      ]
+    },
+    {
+      "name": "PageBackedGraphReadAdapterTest",
+      "tests": 27,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T04:39:03Z",
+      "time": "0.289s",
+      "testsuite": [
+        {
+          "name": "RejectsReusingAReadSessionAcrossMetadataGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 361,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.001s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.006s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.005s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 437,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.011s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 508,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.012s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 579,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:03Z",
+          "time": "0.01s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 698,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.027s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ReusesNodeLabelsWithinOneReadSession",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 763,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.005s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 796,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.002s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 836,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.015s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 910,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 966,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1054,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.007s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1087,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.014s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1130,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1206,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.028s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "StreamsSupernodeVisitorsInBoundedLogicalBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1401,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.021s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "StreamsLargeAdjacencyTopologyThroughTypedEntityBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.026s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ReopensAndScansNativeEntityMapWithoutFixedRecords",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1520,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.006s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "PointReadsAndTypedNodeScansRejectCorruptEntityMap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1549,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.002s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "RejectsZeroLogicalIdsBeforeAccessingDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1577,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.004s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1592,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.001s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1615,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.001s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "RejectsStoresFromAnotherMetadataDomain",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1718,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.005s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1752,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.023s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1814,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.007s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        },
+        {
+          "name": "CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_PageBackedGraphReadAdapter.cpp",
+          "line": 1843,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.011s",
+          "classname": "PageBackedGraphReadAdapterTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataStoreTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T04:39:04Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "RejectsInvalidCheckpointLsnBeforeIdentityOrRetireQueuePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_RelocatableMetadataStoreIdentity.cpp",
+          "line": 11,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableOfflineVectorPqRebuildTest",
+      "tests": 38,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T04:39:04Z",
+      "time": "0.581s",
+      "testsuite": [
+        {
+          "name": "PublishesOnlyTheCompletePqGenerationThroughTheManifest",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 274,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RebuildsExistingPqGenerationWithoutBreakingPinnedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 318,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.016s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "ReplacementRebuildRecoversAsOneCompleteGenerationAtPublishBoundaries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 373,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.051s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "ReclaimsOnlyUnpublishedPqPagesAfterManifestPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 448,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.02s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "BoundsEveryReachablePqCandidateDuringReclamation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 488,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenTheManifestRootIsNotCurrent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 519,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingTargetsARawPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 539,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.014s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingTargetsTheWrongRecord",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 565,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.01s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenTheMappingDoesNotCoverRawVectors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 594,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.014s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingKeyIsNotCanonical",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 628,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.03s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingTargetsAZeroPageId",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 665,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingTargetsAnotherIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 688,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RefusesPqReclamationWhenAMappingTargetsALegacyPqPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 716,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.008s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RetainsNonPqManifestEntriesWhenPublishingTheDerivedGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 756,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "BeforePublicationFailureLeavesNoCandidateReachable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 773,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.018s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "AfterPublicationFailureMakesTheCompleteCandidateReachable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 822,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.011s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsATrainingInputThatDoesNotMatchDurableRawVectorSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 872,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.005s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsInvalidBoundedOptionsBeforeWritingDerivedObjects",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 898,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.027s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsPqPageBudgetBeforePublishingAnyDerivedObject",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 965,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.003s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "PublishesWhenTheCodebookWasPreparedBeforeTheRebuild",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1005,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.012s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsMappingTreePageBudgetBeforePublishingAnyDerivedObject",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1027,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.055s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAVisibleMappingWithAZeroTargetPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1065,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.029s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAnExistingCodebookWithDifferentDeterministicContents",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1087,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.007s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAnExistingCodebookWithADifferentPayloadShape",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.002s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "ReplacesAnyPriorPqManifestInventory",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1140,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.012s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RetainsNonPqManifestEntriesAcrossAPublishedGenerationReplacement",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1156,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.01s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAnAlreadyPublishedMappingWhosePqCodesWereCorrupted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1184,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.015s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsUnreachablePqManifestInventoryOnIdempotentRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.013s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsPqManifestRecordCountMismatchOnIdempotentRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1276,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.036s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAVisibleMappingWithDifferentRecordsOrCodes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1322,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.01s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAVisibleMappingWithDifferentVectorIds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1383,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.019s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsCheckpointLsnExhaustionBeforePublishingDerivedObjects",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1416,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.006s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAPqMappingThatPointsAtARawVectorPage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1446,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAPqMappingThatDoesNotContainTheMappedVectorId",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1470,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.009s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsStoresBoundToDifferentMetadataInstances",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1494,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.005s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAVisibleManifestWithTheWrongMappingRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1511,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.012s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsAnUnanchoredManifestThatClaimsAPqMappingRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1533,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.003s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        },
+        {
+          "name": "RejectsPublishedPqMappingWithMissingCanonicalVector",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_OfflineVectorPqRebuild.cpp",
+          "line": 1568,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T04:39:04Z",
+          "time": "0.023s",
+          "classname": "RelocatableOfflineVectorPqRebuildTest"
+        }
+      ]
+    }
+  ]
+}

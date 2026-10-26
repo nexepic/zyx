@@ -1,0 +1,21 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.SparseMetadataCompaction*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1079: Failure
+Expected: (metadataMoves) > (0U), actual: 0 vs 0
+Google Test trace:
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:1078: pool=13 frames=6 lower_free=49
+
+[  FAILED  ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (137 ms)
+[----------] 1 test from BuildingScanMembershipTest (137 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (137 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+
+ 1 FAILED TEST

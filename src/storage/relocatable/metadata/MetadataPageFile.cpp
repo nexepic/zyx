@@ -716,6 +716,22 @@ namespace graph::storage {
         batch.setHybridPropertyDescriptorRoot(reference);
     }
 
+    void MetadataPageFile::amendPreparedHybridPropertyDescriptor(MetadataWriteBatch &batch,
+        const HybridPropertyDescriptor &descriptor) const {
+        const auto reference = batch.candidate().hybrid_property_descriptor_root;
+        if (!RSS_SCAN_PATH_FORMAT_ENABLED || reference == batch.current().hybrid_property_descriptor_root ||
+            !batch.ownsAllocatedPage(reference) || batch.candidate().database_id != database_id_ ||
+            batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
+            descriptor.semantic_generation != batch.generation())
+            throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+                "scan descriptor merge requires this batch's unpublished owned frame");
+        const auto previous = readHybridPropertyDescriptor(reference, batch.candidate());
+        if (previous.generation != batch.generation() || previous.committed_lsn != batch.checkpointLsn())
+            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "scan descriptor merge lost its private publication fence");
+        const HybridPropertyDescriptorPage page{batch.generation(), batch.checkpointLsn(), descriptor};
+        writePage(reference, HybridPropertyDescriptorCodec::encode(page));
+    }
+
     void MetadataPageFile::prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch,
         const Superblock &snapshot) const {
         if (batch.current() != snapshot || snapshot.database_id != database_id_ ||

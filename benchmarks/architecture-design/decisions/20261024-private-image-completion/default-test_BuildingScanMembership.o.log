@@ -1,0 +1,127 @@
+<built-in>:78:28: error: expected unqualified-id
+   78 | #define __cpp_capture_star_this 201603L
+      |                            ^
+<built-in>:78:30: error: source file is not valid UTF-8
+   78 | #define __cpp_capture_star_this 201603L
+      |                              ^
+<built-in>:78:35: error: source file is not valid UTF-8
+   78 | #define __cpp_capture_star_this 201603L
+      |                                   ^
+<built-in>:78:38: error: source file is not valid UTF-8
+   78 | #define __cpp_capture_star_this 201603L
+      |                                      ^
+<built-in>:79:3: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |   ^
+<built-in>:79:6: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |      ^
+<built-in>:79:14: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |              ^
+<built-in>:79:22: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |                      ^
+<built-in>:79:27: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |                           ^
+<built-in>:79:30: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |                              ^
+<built-in>:79:35: error: source file is not valid UTF-8
+   79 | #define __cpp_if_constexpr 201606L
+      |                                   ^
+<built-in>:80:3: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |   ^
+<built-in>:80:11: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |           ^
+<built-in>:80:19: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |                   ^
+<built-in>:80:24: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |                        ^
+<built-in>:80:27: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |                           ^
+<built-in>:80:32: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |                                ^
+<built-in>:80:35: error: source file is not valid UTF-8
+   80 | #define __cpp_deduction_guides 201703L
+      |                                   ^
+<built-in>:81:4: error: source file is not valid UTF-8
+   81 | #define __cpp_template_auto 201606L
+      |    ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+Stack dump:
+0.	Program arguments: /workspace/zyx-sysroot/usr/bin/clang++-19 -std=c++20 -O0 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-designated-field-initializers -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/include -I/workspace/zyx/src -isystem /workspace/zyx-sysroot/usr/include -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=0 -DZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=0 -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -I/workspace/zyx/build-scan-work -Wno-missing-field-initializers -c /workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp -o /workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/private-completion/default-test_BuildingScanMembership.o
+1.	<invalid>: unknown current parser token
+ #0 0x00007f6e954c56ba llvm::sys::PrintStackTrace(llvm::raw_ostream&, int) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xeb06ba)
+ #1 0x00007f6e954c3264 llvm::sys::RunSignalHandlers() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xeae264)
+ #2 0x00007f6e95409184 (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xdf4184)
+ #3 0x00007f6e940b8d70 (/lib/x86_64-linux-gnu/libc.so.6+0x3fd70)
+ #4 0x00007f6e9ce1a3a0 clang::Lexer::LexCharConstant(clang::Token&, char const*, clang::tok::TokenKind) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbbb3a0)
+ #5 0x00007f6e9ce1f385 clang::Lexer::LexTokenInternal(clang::Token&, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbc0385)
+ #6 0x00007f6e9ce4ac06 clang::Preprocessor::SkipExcludedConditionalBlock(clang::SourceLocation, clang::SourceLocation, bool, bool, clang::SourceLocation) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbebc06)
+ #7 0x00007f6e9ce4f3b6 clang::Preprocessor::HandleIfDirective(clang::Token&, clang::Token const&, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbf03b6)
+ #8 0x00007f6e9ce4ea55 clang::Preprocessor::HandleDirective(clang::Token&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbefa55)
+ #9 0x00007f6e9ce1fab6 clang::Lexer::LexTokenInternal(clang::Token&, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbc0ab6)
+#10 0x00007f6e9ce8ad2d clang::Preprocessor::Lex(clang::Token&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc2bd2d)
+#11 0x00007f6e9ce99f4d (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc3af4d)
+#12 0x00007f6e9cf650c1 clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd060c1)
+#13 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#14 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#15 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#16 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#17 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#18 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#19 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#20 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#21 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#22 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#23 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#24 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#25 0x00007f6e9cf64fae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#26 0x00007f6e9cf650f6 clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd060f6)
+#27 0x00007f6e9ceab8e6 clang::Parser::SkipMalformedDecl() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc4c8e6)
+#28 0x00007f6e9ceaa6b0 clang::Parser::ParseDeclGroup(clang::ParsingDeclSpec&, clang::DeclaratorContext, clang::ParsedAttributes&, clang::Parser::ParsedTemplateInfo&, clang::SourceLocation*, clang::Parser::ForRangeInit*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc4b6b0)
+#29 0x00007f6e9cf698be clang::Parser::ParseDeclOrFunctionDefInternal(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec&, clang::AccessSpecifier) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0a8be)
+#30 0x00007f6e9cf6925f clang::Parser::ParseDeclarationOrFunctionDefinition(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec*, clang::AccessSpecifier) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0a25f)
+#31 0x00007f6e9cf6844c clang::Parser::ParseExternalDeclaration(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0944c)
+#32 0x00007f6e9cf668d7 clang::Parser::ParseTopLevelDecl(clang::OpaquePtr<clang::DeclGroupRef>&, clang::Sema::ModuleImportState&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd078d7)
+#33 0x00007f6e9ce9357e clang::ParseAST(clang::Sema&, bool, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc3457e)
+#34 0x00007f6e9efa6779 clang::FrontendAction::Execute() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2d47779)
+#35 0x00007f6e9ef15074 clang::CompilerInstance::ExecuteAction(clang::FrontendAction&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2cb6074)
+#36 0x00007f6e9f024bfe clang::ExecuteCompilerInvocation(clang::CompilerInstance*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2dc5bfe)
+#37 0x0000563eebc30c61 cc1_main(llvm::ArrayRef<char const*>, char const*, void*) (/workspace/zyx-sysroot/usr/bin/clang++-19+0x11c61)
+#38 0x0000563eebc2db35 (/workspace/zyx-sysroot/usr/bin/clang++-19+0xeb35)
+#39 0x00007f6e9eb944bd (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x29354bd)
+#40 0x00007f6e95408f20 llvm::CrashRecoveryContext::RunSafely(llvm::function_ref<void ()>) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xdf3f20)
+#41 0x00007f6e9eb93f51 clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2934f51)
+#42 0x00007f6e9eb59188 clang::driver::Compilation::ExecuteCommand(clang::driver::Command const&, clang::driver::Command const*&, bool) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x28fa188)
+#43 0x00007f6e9eb593fe clang::driver::Compilation::ExecuteJobs(clang::driver::JobList const&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&, bool) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x28fa3fe)
+#44 0x00007f6e9eb76bbc clang::driver::Driver::ExecuteCompilation(clang::driver::Compilation&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2917bbc)
+#45 0x0000563eebc2d574 clang_main(int, char**, llvm::ToolContext const&) (/workspace/zyx-sysroot/usr/bin/clang++-19+0xe574)
+#46 0x0000563eebc3b4ba main (/workspace/zyx-sysroot/usr/bin/clang++-19+0x1c4ba)
+#47 0x00007f6e940a2ca8 (/lib/x86_64-linux-gnu/libc.so.6+0x29ca8)
+#48 0x00007f6e940a2d65 __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d65)
+#49 0x0000563eebc2b731 _start (/workspace/zyx-sysroot/usr/bin/clang++-19+0xc731)
+clang++-19: error: clang frontend command failed with exit code 139 (use -v to see invocation)
+Debian clang version 19.1.7 (3+b1)
+Target: x86_64-pc-linux-gnu
+Thread model: posix
+InstalledDir: /workspace/zyx-sysroot/usr/lib/llvm-19/bin
+clang++-19: note: diagnostic msg: 
+********************
+
+PLEASE ATTACH THE FOLLOWING FILES TO THE BUG REPORT:
+Preprocessed source(s) and associated run script(s) are located at:
+clang++-19: note: diagnostic msg: /tmp/test_BuildingScanMembership-698495.cpp
+clang++-19: note: diagnostic msg: /tmp/test_BuildingScanMembership-698495.sh
+clang++-19: note: diagnostic msg: 
+
+********************

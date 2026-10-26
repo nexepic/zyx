@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-25T15:54:49.381390+00:00",
+  "scale": "medium",
+  "version": "v12",
+  "status": "tail_validation_and_truncation_passed_final_full_integrity_running",
+  "source_bytes": 309985280,
+  "current_target_bytes": 256507904,
+  "current_saving_fraction": 0.17251585623678645,
+  "completion_publication": false,
+  "query_benchmark": false,
+  "accepted_progress_percent": 15
+}

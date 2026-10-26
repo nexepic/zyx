@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.SparseMetadataCompaction*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+unknown file: Failure
+C++ exception with description "Page Directory bootstrap header checksum does not match" thrown in the test body.
+
+[  FAILED  ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (140 ms)
+[----------] 1 test from BuildingScanMembershipTest (140 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (140 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+
+ 1 FAILED TEST

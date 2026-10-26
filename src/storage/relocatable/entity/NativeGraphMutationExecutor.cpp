@@ -43,6 +43,21 @@ namespace graph::storage {
 
 	namespace {
 
+        std::shared_ptr<query::execution::MaterializedByteBudget> nativeFieldWorkspace() {
+            constexpr size_t bytes = 1024U * 1024U;
+            if (!RSS_SCAN_PATH_FORMAT_ENABLED)
+                return std::make_shared<query::execution::MaterializedByteBudget>(bytes);
+            auto parent = utils::OwnedAllocationScope::owner();
+            if (!parent) throw query::execution::MaterializedByteLimitExceeded();
+            auto credit = std::make_shared<utils::OwnedHeapReservation>(parent, bytes);
+            // The child may outlive the local staging branch inside its writer.
+            // Its deleter retains the parent credit through the last child user.
+            return {new query::execution::MaterializedByteBudget(bytes - 4096U),
+                [credit = std::move(credit)](query::execution::MaterializedByteBudget *value) {
+                    static_cast<void>(credit); delete value;
+                }};
+        }
+
         class NativeMutationCheckpoint final : public CancellationCheckpoint {
         public:
             explicit NativeMutationCheckpoint(const std::function<void()> &callback) : callback_(callback) {}
@@ -608,7 +623,7 @@ namespace graph::storage {
             if (native && allNative) {
                 if (batch.property_replacements.size() > 64U)
                     fail(FormatError::FERR_INVALID_STATE, "native public property batch exceeds64owners");
-                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                auto memory = nativeFieldWorkspace();
                 utils::OwnedHeapReservation inputCredit(memory);
                 size_t bytes = batch.property_replacements.size() * sizeof(PropertyCollectionRoot), entries = 0;
                 for (const auto &request : batch.property_replacements) {
@@ -658,7 +673,7 @@ namespace graph::storage {
             }
             if (native && allNative) {
                 if (patches.size() > 64U) fail(FormatError::FERR_INVALID_STATE, "native public patches exceed64owners");
-                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                auto memory = nativeFieldWorkspace();
                 utils::OwnedAllocationScope allocation(memory);
                 NativePropertyTokens nativeTokens(memory, writer_, system_catalog_, tokens_, snapshot);
                 {
@@ -690,7 +705,8 @@ namespace graph::storage {
             }
         }
         // The native lifecycle coordinator owns the complete Node/Edge deletion
-        // closure. Detach discovery is bounded and revalidated under the writer.
+        // closure, including scan membership in its same metadata publication.
+        // Detach discovery is bounded and revalidated under the writer.
         if (!options_.covered_adjacency_candidate_index && snapshot.superblock().hybrid_property_descriptor_root.isValid() && patches.empty() &&
             batch.property_replacements.empty() && batch.node_creates.empty() && batch.edge_creates.empty() &&
             batch.node_label_replacements.empty() && !batch.creation_identity_plan &&
@@ -704,10 +720,19 @@ namespace graph::storage {
                 checkpoint.check(); const bool routed = transaction.isHybridPropertyOwner({EntityPropertyOwnerKind::EPOK_EDGE, edge.edge_id}, &checkpoint);
                 native |= routed; allNative &= routed;
             }
-            if (native && allNative) {
+            size_t deletionClosureBound = batch.node_deletes.size();
+            bool boundedDeletionClosure = deletionClosureBound <= 64U && batch.edge_deletes.size() <= 64U - deletionClosureBound;
+            if (boundedDeletionClosure) deletionClosureBound += batch.edge_deletes.size();
+            for (const auto &node : batch.node_deletes) if (node.detach && boundedDeletionClosure) {
+                boundedDeletionClosure = node.maximum_detach_edges <= 64U - deletionClosureBound;
+                if (boundedDeletionClosure) deletionClosureBound += node.maximum_detach_edges;
+            }
+            // Admission to the optional all-native shortcut must not narrow
+            // the caller's ordinary topology bound for ROW fallback edges.
+            if (native && allNative && boundedDeletionClosure) {
                 if (batch.node_deletes.size() > 64U || batch.edge_deletes.size() > 64U - batch.node_deletes.size())
                     fail(FormatError::FERR_INVALID_STATE, "native public deletion exceeds64owners");
-                auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+                auto memory = nativeFieldWorkspace();
                 utils::OwnedAllocationScope allocation(memory);
                 std::array<EntityPropertyKey, 64> owners{}; size_t count = 0;
                 const auto append = [&](EntityPropertyKey owner) {

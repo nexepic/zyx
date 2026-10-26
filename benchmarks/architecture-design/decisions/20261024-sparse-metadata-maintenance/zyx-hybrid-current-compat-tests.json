@@ -1,0 +1,505 @@
+{
+  "tests": 41,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-24T22:30:31Z",
+  "time": "12.873s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyDescriptorTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:31Z",
+      "time": "0.03s",
+      "testsuite": [
+        {
+          "name": "VersionedPayloadAndIndependentLogicalRootsRoundTrip",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 27,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 46,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "PartialAndAliasedRootReferencesFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 79,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "IndependentTreePoolEpochsAreNotSemanticVisibilityBounds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 92,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 106,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0s",
+          "classname": "HybridPropertyDescriptorTest"
+        },
+        {
+          "name": "EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptor.cpp",
+          "line": 114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0.03s",
+          "classname": "HybridPropertyDescriptorTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyFieldRelocationTest",
+      "tests": 18,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:31Z",
+      "time": "6.515s",
+      "testsuite": [
+        {
+          "name": "RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 31,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 42,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:31Z",
+          "time": "1.22s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:32Z",
+          "time": "0.465s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:33Z",
+          "time": "0.176s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:33Z",
+          "time": "0.064s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "QuotaCancellationAndStaleFencesRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 143,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:33Z",
+          "time": "0.502s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:33Z",
+          "time": "0.064s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:33Z",
+          "time": "1.212s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 233,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:35Z",
+          "time": "0.142s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:35Z",
+          "time": "0.068s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:35Z",
+          "time": "0.406s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:35Z",
+          "time": "0.398s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:36Z",
+          "time": "0.924s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.249s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityPoolABRecoverySelectsOneCompleteMainRecordRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.196s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 410,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.085s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.1s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 466,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.234s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:37Z",
+      "time": "6.219s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InvalidCohortEnvelopeRefusesBeforeIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NonColumnGroupNeverPublishesAnEarlierPreparedGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.032s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "UnprofitableWholeCohortKeepsEveryRowAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:37Z",
+          "time": "0.034s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:38Z",
+          "time": "0.087s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:38Z",
+          "time": "0.248s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "row_steady_bytes": "917504",
+          "candidate_steady_bytes": "1048576",
+          "peak_allocated_bytes": "1179648",
+          "prepared_field_frames": "8",
+          "prepared_index_frames": "1",
+          "fresh_pool_bytes": "262144"
+        },
+        {
+          "name": "CancellationAfterCompleteCostPreparationKeepsAllRowRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:38Z",
+          "time": "0.145s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:38Z",
+          "time": "0.187s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InverseOneGroupPreservesOtherGroupAuthorityAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:38Z",
+          "time": "5.48s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "shared_field_pages": "0"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyColdConversionProbeTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:44Z",
+      "time": "0.107s",
+      "testsuite": [
+        {
+          "name": "ActualNodeSourceReachesColdPhysicalAndDirectoryPreparationWithoutWriting",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 61,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0.038s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ActualEdgeSourceReachesColdPreparationWithCorrectOwnerNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0.027s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ChangedWholeRootPayloadPlansNewDataAndManifestInTheSameNativeBatchOnly",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 63,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0.037s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        },
+        {
+          "name": "ColdPublicationAndUnsupportedProbeShapesRefuseBeforePreparingAnySource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdConversionProbe.cpp",
+          "line": 64,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyColdConversionProbeTest"
+        }
+      ]
+    },
+    {
+      "name": "ScanMembershipDirectoryTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:44Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "UsesTheCompleteNodeDomainAndBigEndianOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 38,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0s",
+          "classname": "ScanMembershipDirectoryTest"
+        }
+      ]
+    },
+    {
+      "name": "BuildingScanMembershipTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:44Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatCannotInstallOrPublishScanMembership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanMembership.cpp",
+          "line": 1254,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0s",
+          "classname": "BuildingScanMembershipTest"
+        }
+      ]
+    },
+    {
+      "name": "StoredScanMembershipTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-24T22:30:44Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "OrdinaryFormatsRejectTheStreamBeforeReadingStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_StoredScanMembership.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-24T22:30:44Z",
+          "time": "0s",
+          "classname": "StoredScanMembershipTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "query_benchmark": false,
+  "purpose": "diagnose slow constructor verification without restarting or changing graph data",
+  "method": "two brief ptrace program-location snapshots; second also filters possible code return addresses from 8 KiB of stack",
+  "limitations": "stack addresses are candidates, not a reliable unwound backtrace; samples do not establish CPU cost shares or remaining time",
+  "observed_functions": [
+    "MetadataPageReadContext::Scope::Scope",
+    "StorageIO::fileSizeUncached",
+    "MetadataPageFile::resolveLogicalMetadataReferences"
+  ],
+  "constructor_resumed_and_running": true,
+  "accepted_progress_percent": 15
+}

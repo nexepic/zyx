@@ -1,0 +1,88 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanMembershipTest.*:ScanMembershipDirectoryTest.*:ScanMembershipSourceTest.*:ScanFormatCloneCodecTest.*:ScanBuildingCloneTest.*
+[==========] Running 33 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 14 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (7 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (4 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsAndInsufficientMemoryNeverPublishAPrefix (2 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (1 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (6 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (11 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (3 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (2 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (2 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (1 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (12 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (0 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (2 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (37 ms)
+[----------] 14 tests from BuildingScanMembershipTest (97 ms total)
+
+[----------] 9 tests from ScanMembershipSourceTest
+[ RUN      ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes
+[       OK ] ScanMembershipSourceTest.ReadsCompletePrimaryMembershipIncludingPropertylessAndUnlabeledNodes (1 ms)
+[ RUN      ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup
+[       OK ] ScanMembershipSourceTest.RefusesCompleteLabelUnionWithoutEmittingATruncatedGroup (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup
+[       OK ] ScanMembershipSourceTest.LabelUnionLimitAppliesAcrossDifferentEntitiesInTheSameGroup (11 ms)
+[ RUN      ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup
+[       OK ] ScanMembershipSourceTest.EmptyInputDoesNotInventAMembershipGroup (0 ms)
+[ RUN      ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix
+[       OK ] ScanMembershipSourceTest.CancellationAndConsumerFailureNeverReplayAnEmittedPrefix (1 ms)
+[ RUN      ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery
+[       OK ] ScanMembershipSourceTest.WorkspaceDenialPrecedesSourceDelivery (0 ms)
+[ RUN      ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin
+[       OK ] ScanMembershipSourceTest.IdenticalDatabaseAndGenerationDoNotAuthorizeAForeignPin (0 ms)
+[ RUN      ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery
+[       OK ] ScanMembershipSourceTest.ReleasingThePinInAConsumerRefusesFurtherDelivery (1 ms)
+[ RUN      ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot
+[       OK ] ScanMembershipSourceTest.LogicalGroupsRemainOrderedWhenPhysicalPageOwnersAreNot (2 ms)
+[----------] 9 tests from ScanMembershipSourceTest (23 ms total)
+
+[----------] 5 tests from ScanFormatCloneCodecTest
+[ RUN      ] ScanFormatCloneCodecTest.PreservesLegacyIdentityRootsAndReserveButNeverProducesACompleteRoot
+[       OK ] ScanFormatCloneCodecTest.PreservesLegacyIdentityRootsAndReserveButNeverProducesACompleteRoot (0 ms)
+[ RUN      ] ScanFormatCloneCodecTest.AuthenticatesSourceBeforeChangingVersionsAndRetainsLegacyValidation
+[       OK ] ScanFormatCloneCodecTest.AuthenticatesSourceBeforeChangingVersionsAndRetainsLegacyValidation (23 ms)
+[ RUN      ] ScanFormatCloneCodecTest.EnvelopeTranslationPreservesOwnershipAndRejectsUnknownSources
+[       OK ] ScanFormatCloneCodecTest.EnvelopeTranslationPreservesOwnershipAndRejectsUnknownSources (0 ms)
+[ RUN      ] ScanFormatCloneCodecTest.CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation
+[       OK ] ScanFormatCloneCodecTest.CompleteSegmentAuthenticatesDeclaredPayloadBeforeMutation (19 ms)
+[ RUN      ] ScanFormatCloneCodecTest.MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum
+[       OK ] ScanFormatCloneCodecTest.MutablePoolsAuthenticateControlPeersWithoutInventingAWholePayloadChecksum (0 ms)
+[----------] 5 tests from ScanFormatCloneCodecTest (44 ms total)
+
+[----------] 4 tests from ScanBuildingCloneTest
+[ RUN      ] ScanBuildingCloneTest.CopiesIndependentImageWithoutPublishingOrChangingSource
+[       OK ] ScanBuildingCloneTest.CopiesIndependentImageWithoutPublishingOrChangingSource (0 ms)
+[ RUN      ] ScanBuildingCloneTest.RefusesFileAndWorkspaceBudgetsBeforeDestinationWrites
+[       OK ] ScanBuildingCloneTest.RefusesFileAndWorkspaceBudgetsBeforeDestinationWrites (0 ms)
+[ RUN      ] ScanBuildingCloneTest.CancellationAndChangingSourceLeaveOnlyBuildingTargets
+[       OK ] ScanBuildingCloneTest.CancellationAndChangingSourceLeaveOnlyBuildingTargets (0 ms)
+[ RUN      ] ScanBuildingCloneTest.CorruptSegmentPayloadIsNotCopiedOrPromoted
+[       OK ] ScanBuildingCloneTest.CorruptSegmentPayloadIsNotCopiedOrPromoted (0 ms)
+[----------] 4 tests from ScanBuildingCloneTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 33 tests from 5 test suites ran. (166 ms total)
+[  PASSED  ] 33 tests.

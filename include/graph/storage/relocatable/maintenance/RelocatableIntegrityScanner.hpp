@@ -13,6 +13,7 @@
 #include <memory_resource>
 
 #include "graph/storage/relocatable/format/Format.hpp"
+#include "graph/storage/CancellationCheckpoint.hpp"
 
 namespace graph::storage {
 	class StorageIO;
@@ -51,6 +52,7 @@ namespace graph::storage {
             std::shared_ptr<std::pmr::memory_resource> workspaceOwner = {});
 
 		[[nodiscard]] RelocatableIntegrityReport scan() const;
+        [[nodiscard]] RelocatableIntegrityReport scan(const CancellationCheckpoint *cancellation) const;
 
 	private:
 		std::shared_ptr<std::pmr::memory_resource> workspace_owner_;

@@ -1,0 +1,52 @@
+{
+  "tests": 3,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T13:26:23Z",
+  "time": "0.002s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableMetadataPagePoolTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T13:26:23Z",
+      "time": "0.002s",
+      "testsuite": [
+        {
+          "name": "PartialCapacityFailureRollsBackAllCreatedPoolsAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPagePoolCapacityRollback.cpp",
+          "line": 11,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T13:26:23Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "CapacityFailurePreservesExistingPoolFramesAndAllocatorHealth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPagePoolCapacityRollback.cpp",
+          "line": 37,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T13:26:23Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "FailedCapacityDoesNotLeaveARegisteredPoolInADurableFreeHole",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPagePoolCapacityRollback.cpp",
+          "line": 69,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T13:26:23Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        }
+      ]
+    }
+  ]
+}

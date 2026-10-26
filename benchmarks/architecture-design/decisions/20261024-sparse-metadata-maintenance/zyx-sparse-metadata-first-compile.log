@@ -1,0 +1,5 @@
+In file included from /workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanMembership.cpp:8:
+/workspace/zyx/include/graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp:269:32: error: no member named 'visitCatalog' in 'graph::storage::RelocatableMetadataStore'
+  269 |                     metadata_->visitCatalog(pin, [&](const CatalogEntry &entry) {
+      |                     ~~~~~~~~~~~^
+1 error generated.

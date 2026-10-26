@@ -1,0 +1,145 @@
+{
+  "plan": "scan-path-20261023",
+  "stage": "S2",
+  "status": "accepted_under_explicit_user_gate_revision",
+  "accepted_progress_percent": 35,
+  "previous_progress_percent": 15,
+  "user_instruction": "不需要一定按照文档要求提升5倍",
+  "revision_date": "2026-10-26",
+  "revision_scope": "Remove only the fixed 5x adoption threshold; preserve semantics, resource/space contracts, frozen evidence, lifecycle and regression requirements. Kuzu comparison and superiority objective remain explicit.",
+  "selected_candidate": "B_persistent_complete_scan_block",
+  "selection_evidence_freeze_sha256": "9d67cab04a5786aca203e858c9220df8ca97033642ec2efbc20ca0ecc544110d",
+  "primary_processes": 24,
+  "measured_samples": 960,
+  "all_primary_full_oracles_passed": true,
+  "all_eight_improve_against_initial_and_369_control": true,
+  "primary": [
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 3.7830101589184233,
+        "control": 3.094038771147385
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 92.00192,
+      "kuzu_p50_ms": 3.212253504898399,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 2.309393529611311,
+        "control": 2.0499174883060824
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 198.65669,
+      "kuzu_p50_ms": 1.177338999696076,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "valid": true,
+      "speedup": {
+        "initial": 3.2731547068402644,
+        "control": 3.2066344515221004
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 88.6422635,
+      "kuzu_p50_ms": 6.308279502263758,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.557247496566865,
+        "control": 2.35425357362578
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 148.8650205,
+      "kuzu_p50_ms": 8.363590000953991,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 2.680036452201161,
+        "control": 2.3531793812111763
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 83.4078575,
+      "kuzu_p50_ms": 2.663918501639273,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "all_nodes_property_filter",
+      "valid": true,
+      "speedup": {
+        "initial": 2.1035278613381525,
+        "control": 1.9060652730080883
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 158.2031425,
+      "kuzu_p50_ms": 1.0203914935118519,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.8977972268670094,
+        "control": 3.844787158692502
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 70.6242725,
+      "kuzu_p50_ms": 4.364867498225067,
+      "beats_kuzu": false
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "valid": true,
+      "speedup": {
+        "initial": 2.399599162447024,
+        "control": 2.7616653018521102
+      },
+      "passes_5x_each_control": false,
+      "candidate_p50_ms": 122.844528,
+      "kuzu_p50_ms": 7.1288864928646944,
+      "beats_kuzu": false
+    }
+  ],
+  "whole_database_saving_fraction": {
+    "medium": 0.17251585623678645,
+    "holdout": 0.14573877962682802
+  },
+  "targeted_tests": {
+    "scan_build": 83,
+    "compatible_read": 64,
+    "default_insertion": 5,
+    "failures": 0,
+    "full_suite_run": false
+  },
+  "later_stages": {
+    "S3": "pending abandoned-candidate cleanup and lifecycle delivery",
+    "S4": "pending remaining guards and final total-cost review",
+    "S5": "pending final consolidated acceptance and Kuzu goal review"
+  },
+  "not_claimed": [
+    "5x",
+    "Kuzu superiority",
+    "S3-S5 acceptance",
+    "100%",
+    "new performance campaign"
+  ]
+}

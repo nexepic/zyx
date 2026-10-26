@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-25",
+  "accepted_progress_percent": 15,
+  "stage": "S2 incomplete; private lifecycle implementation continues",
+  "profiles": {
+    "isolated": {
+      "core": "build-scan-candidate/libzyx_core.a",
+      "core_sha256_after_tests": "9ce2fc5575be16f96b971694a21610f173b6fdf775c5743fc4f87cd1417a88a0",
+      "tests": 58,
+      "failures": 0,
+      "result": "zyx-scan-proof-query-tests.json"
+    },
+    "default": {
+      "core": "build-scan-work/libzyx_core.a",
+      "core_sha256_after_tests": "8afa7caed2c4750b4c690a2bb95a2e19cda83288d411bfbfa3bc8d910554ea7c",
+      "tests": 4,
+      "failures": 0,
+      "result": "zyx-scan-proof-final-default-tests.json"
+    },
+    "compat": {
+      "core": "build-hybrid-compat/libzyx_core.a",
+      "core_sha256_after_tests": "f95c9f06e9bcbb87fdafddd0ef62b29a7d6360f3a5196d795319cf6f905be7fa",
+      "tests": 4,
+      "failures": 0,
+      "result": "zyx-scan-proof-final-compat-tests.json"
+    }
+  },
+  "source_hashes_unchanged": true,
+  "whole_unit_suite_run": false,
+  "new_query_benchmark_run": false,
+  "committed": false,
+  "pushed": false,
+  "notes": [
+    "Core hashes captured after passing runs; no claimed pre-run core hash.",
+    "The zero-test mistyped filter is diagnostic only.",
+    "Public read-only experimental access is not default adoption or real-dataset admission."
+  ]
+}

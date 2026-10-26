@@ -5,6 +5,8 @@
  */
 #pragma once
 #include <bit>
+#include <memory_resource>
+#include <vector>
 #include "graph/storage/PropertyScalarReadSink.hpp"
 #include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
@@ -153,6 +155,8 @@ public:
         }
         const auto memory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
             (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr);
+        const auto batchWindow = context.borrowColumnBatchWindow(
+            batches && owners.size() <= 512U && tokens.size() <= HybridPropertyColumnMembership::MAX_COLUMNS);
         utils::OwnedHeapReservation boundaryCredit(memory), referenceCredit(memory);
         const auto boundary = [&](size_t bytes) { boundaryCredit.set(bytes); };
         bool allHybrid = true;
@@ -233,14 +237,14 @@ public:
                 boundaryCredit.set(0);
                 if (consumed) { i = end - 1; continue; }
             }
-            if(batches && tokens.size()==1 && counts.empty() && i>=attemptedGroupEnd) {
+            if(batches && !tokens.empty() && tokens.size() <= HybridPropertyColumnMembership::MAX_COLUMNS &&
+                counts.empty() && i>=attemptedGroupEnd) {
                 size_t end=i+1;
                 while(end<owners.size() && owners[end].owner_kind==owners[i].owner_kind &&
                     hybridPropertyGroupFor(owners[end])==hybridPropertyGroupFor(owners[i]))++end;
                 attemptedGroupEnd=end;
                 bool consumed=false,producing=false;
-                try {consumed=context.visitColumnOwnersSorted(owners.subspan(i,end-i),tokens.front(),
-                    [&](const auto &,const HybridPropertyColumnRecord &column,const auto &,const auto &){
+                const auto emitColumn = [&](const HybridPropertyColumnRecord &column, size_t outputColumn) {
                         producing=true; // callback failures may never replay this group
                         std::array<size_t,64> ordinals{};std::array<uint64_t,64> words{};
                         std::array<std::array<char,HybridPropertyShortText::MAX_BYTES>,64> buffers{};
@@ -259,7 +263,7 @@ public:
                         size_t first=i;
                         while(first<end) {
                             const auto bit=UINT64_C(1)<<hybridPropertySlotFor(owners[first]);
-                            if(!(column.presence&bit)) {context.checkpoint();(*sink)(first++,0,std::nullopt);continue;}
+                            if(!(column.presence&bit)) {context.checkpoint();(*sink)(first++,outputColumn,std::nullopt);continue;}
                             const auto type=typeAt(first);size_t count=0;
                             while(first+count<end) {
                                 const auto row=first+count;const auto slot=hybridPropertySlotFor(owners[row]);
@@ -271,11 +275,36 @@ public:
                                 if(admission)(*admission)(sizeof(uint32_t)+CanonicalPropertyValueCodec::HEADER_BYTES+payload);
                                 ++count;
                             }
-                            if(type==PropertyType::STRING)(*batches).texts(std::span(ordinals).first(count),0,std::span(text).first(count));
-                            else (*batches).scalars(std::span(ordinals).first(count),0,type,std::span(words).first(count));
+                            if(type==PropertyType::STRING)(*batches).texts(std::span(ordinals).first(count),outputColumn,std::span(text).first(count));
+                            else (*batches).scalars(std::span(ordinals).first(count),outputColumn,type,std::span(words).first(count));
                             context.checkpoint();first+=count;
                         }
-                    },std::ref(boundary));
+                };
+                try {
+                    if (tokens.size() == 1U) {
+                        consumed = context.visitColumnOwnersSorted(owners.subspan(i,end-i),tokens.front(),
+                            [&](const auto &,const auto &column,const auto &,const auto &){emitColumn(column,0U);},
+                            std::ref(boundary));
+                    } else {
+                        // All requested columns must be admitted/authenticated
+                        // before any callback. A mixed/cold field can then
+                        // decline the whole group without replaying a prefix.
+                        std::pmr::vector<HybridPropertyColumnRecord> columns(
+                            memory ? memory.get() : std::pmr::get_default_resource());
+                        columns.reserve(tokens.size());
+                        consumed = true;
+                        for (const auto token : tokens) {
+                            if (!context.visitColumnOwnersSorted(owners.subspan(i,end-i),token,
+                                [&](const auto &,const auto &column,const auto &,const auto &){columns.push_back(column);},
+                                std::ref(boundary))) { consumed=false; break; }
+                        }
+                        if (consumed) {
+                            hybrid_property_detail::require(columns.size()==tokens.size(),
+                                "grouped field preflight changed its bounded column count");
+                            for (size_t column=0;column<columns.size();++column) emitColumn(columns[column],column);
+                            debug::PerfTrace::addValue("native_graph.hybrid.grouped_multi_column_batches",1);
+                        }
+                    }
                 } catch(const query::execution::MaterializedByteLimitExceeded &) {
                     if(producing)throw;
                     debug::PerfTrace::addValue("native_graph.hybrid.grouped_column_declined_admission",1);

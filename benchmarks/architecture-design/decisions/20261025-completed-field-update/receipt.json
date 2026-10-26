@@ -1,0 +1,12 @@
+{
+  "accepted_progress_percent": 15,
+  "tests": 14,
+  "failures": 0,
+  "core_sha256_after_tests": "fe21fb3b8d5761c3515f71c1f528d73b1b416d16166696907f5aead9d05d0bd7",
+  "test_source_sha256": "d0598555e3f0284c59d4258a7d8748021b8494c799cb4fcb1b99e042def80ba1",
+  "new_implementation_change": false,
+  "public_writable_open_enabled": false,
+  "new_query_benchmark_run": false,
+  "full_unit_suite_run": false,
+  "commit_push": false
+}

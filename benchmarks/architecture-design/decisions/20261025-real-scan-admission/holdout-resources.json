@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/tmp/zyx-scan-image-construction-v11",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-private-v11.zyx"
+  ],
+  "returncode": 0,
+  "wall_seconds": 8173.814107465994,
+  "user_seconds": 7600.582948,
+  "system_seconds": 532.690375,
+  "peak_rss_bytes": 78761984,
+  "os_read_bytes": 588193792,
+  "os_write_bytes": 22357905408,
+  "query_benchmark": false
+}

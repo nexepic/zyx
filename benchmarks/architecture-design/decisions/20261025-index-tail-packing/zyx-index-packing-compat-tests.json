@@ -1,0 +1,202 @@
+{
+  "tests": 18,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-25T08:53:58Z",
+  "time": "8.602s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyFieldRelocationTest",
+      "tests": 18,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-25T08:53:58Z",
+      "time": "8.602s",
+      "testsuite": [
+        {
+          "name": "RejectsDisabledOrUnconvertedSourcesBeforeAnyWrite",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 31,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:53:58Z",
+          "time": "0.006s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 42,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:53:58Z",
+          "time": "2.839s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "CopiesCurrentFramesOnlyAfterAColumnUpdateFragmentsTheSourcePool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:01Z",
+          "time": "0.697s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "ABRecoverySelectsACompletePhysicalRouteAndRetirementGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:01Z",
+          "time": "0.158s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "OldPinBlocksReleaseAndFreshLogicalPoolIdentityProtectsPhysicalReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:01Z",
+          "time": "0.054s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "QuotaCancellationAndStaleFencesRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 143,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:02Z",
+          "time": "0.468s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DamagedSourcePoolRefusesBeforeWritingAndCanRetryAfterRestoration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:02Z",
+          "time": "0.044s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryRelocationSupportsMixedPhysicalEpochWritesAndInverse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:02Z",
+          "time": "0.98s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryABRecoveryBindsTheDescriptorAndRootPhysicalGenerationTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 233,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:03Z",
+          "time": "0.127s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryPinsReleaseAndReusePhysicalSlotsAcrossIndependentEpochs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:03Z",
+          "time": "0.057s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "DirectoryQuotaCancellationAndWrongPoolKindRefuseBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:03Z",
+          "time": "0.344s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "ValidChecksumFreeBitmapCannotHideAStillRoutedFieldOrDirectoryFrame",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 303,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:04Z",
+          "time": "0.322s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityAndOverflowLabelReferencesSurvivePhysicalPoolRepacking",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 338,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:04Z",
+          "time": "1.34s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "RepackingSharedNodeEdgePoolCopiesCurrentMastersAndDrainsObsoleteEdgeFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:05Z",
+          "time": "0.301s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityPoolABRecoverySelectsOneCompleteMainRecordRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:06Z",
+          "time": "0.242s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "EntityPoolQuotaAndCancellationRefundBeforePhysicalReuse",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 410,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:06Z",
+          "time": "0.103s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "WritableReopenDeletesANodeFromRepackedEntityPagesAndKeepsTheOtherLabels",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:06Z",
+          "time": "0.152s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        },
+        {
+          "name": "Full31FrameEntityPoolRepackingStaysWithinOneMiBAndKeepsEveryStableRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyFieldRelocation.cpp",
+          "line": 466,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-25T08:54:06Z",
+          "time": "0.359s",
+          "classname": "HybridPropertyFieldRelocationTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "/tmp/zyx-mixed-source-BuildingScanMembership.o",
+  "/tmp/zyx-mixed-source-ScanReadProof.o",
+  "/tmp/zyx-mixed-source-packing.o",
+  "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+  "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+  "-lgtest_main",
+  "-lgtest",
+  "-lz",
+  "-llz4",
+  "-lxxhash",
+  "-lzstd",
+  "-lboost_filesystem",
+  "-lboost_atomic",
+  "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+  "-pthread",
+  "-o",
+  "/tmp/zyx-mixed-source-tests"
+]

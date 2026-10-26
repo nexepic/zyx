@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/tmp/zyx-scan-image-construction-v12",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-private-v12.zyx"
+  ],
+  "returncode": 0,
+  "wall_seconds": 12413.19192865699,
+  "user_seconds": 11423.757843,
+  "system_seconds": 905.104703,
+  "peak_rss_bytes": 79360000,
+  "os_read_bytes": 1946439680,
+  "os_write_bytes": 18476359680,
+  "query_benchmark": false
+}

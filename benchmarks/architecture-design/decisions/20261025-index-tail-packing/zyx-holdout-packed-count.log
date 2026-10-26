@@ -1,0 +1,7 @@
+{"catalog_metadata_pools":464,"allocated_metadata_frames":14189,"highest_metadata_pool":1744,"generation":10236}
+kind=1 count=339 highest_slot=1823
+kind=2 count=554 highest_slot=1821
+kind=3 count=391 highest_slot=1624
+kind=9 count=464 highest_slot=1744
+highest_property_slot=1821 byte_offset=238682112
+current_property_owner_kind=1 frames=30
