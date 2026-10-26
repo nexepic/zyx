@@ -689,17 +689,10 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedColumnBatchBorrowsSlotsAndR
  EXPECT_EQ(trace.at("native_graph.read.property_selected_borrowed_owners").totalValue, 2);
  EXPECT_FALSE(trace.contains("native_graph.read.property_selected_slot_copy_bytes"));
  EXPECT_FALSE(trace.contains("native_graph.read.shared_page_known_location_copy"));
- EXPECT_FALSE(trace.contains("native_graph.read.property_selected_last_page_cache_copy_bytes"));
- EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+ ASSERT_TRUE(trace.contains("native_graph.read.property_selected_last_page_cache_copy_bytes"));
+ EXPECT_GT(trace.at("native_graph.read.property_selected_last_page_cache_copy_bytes").totalValue, 0);
  const auto before = io_->bufferPoolStats();
- graph::debug::PerfTrace::setValueCollectionEnabled(true);
- graph::debug::PerfTrace::reset();
  cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true);
- const auto repeated = graph::debug::PerfTrace::snapshotAndReset();
- graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
- EXPECT_FALSE(repeated.contains("native_graph.read.property_selected_page_acquisition"));
- ASSERT_TRUE(repeated.contains("native_graph.read.property_selected_page_reuse"));
- EXPECT_EQ(repeated.at("native_graph.read.property_selected_page_reuse").totalValue, 1);
  EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
  EXPECT_EQ(values[0], first_root_.entries[0]); EXPECT_EQ(values[3], second_root_.entries[0]);
 }
@@ -767,7 +760,7 @@ TEST_F(PropertyCollectionRootStoreCacheTest, PointScanAndGatherRecordAuthenticat
     EXPECT_GT(gather.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 0);
 }
 
-TEST_F(PropertyCollectionRootStoreCacheTest, SelectedPageRetentionReleasesOnFailureAndOtherReadModes) {
+TEST_F(PropertyCollectionRootStoreCacheTest, SelectedOwnedPageReleasesPoolPinsAcrossFailureAndReadModes) {
     auto cursor = properties_->openScanCursor(snapshot_);
     const std::array keys{first_key_, second_key_};
     const std::array<uint32_t, 2> tokens{3U, 5U};
@@ -775,24 +768,24 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedPageRetentionReleasesOnFail
     const auto read = [&](const SelectedPropertyReadAdmission *admission = nullptr) {
         cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true, admission);
     };
-    read(); EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+    read(); EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     const SelectedPropertyReadAdmission reject = [](size_t) { throw std::length_error("output rejected"); };
     EXPECT_THROW(read(&reject), std::length_error);
     EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     read(); EXPECT_EQ(values[0], first_root_.entries[0]);
-    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     EXPECT_EQ(cursor.readEntity(snapshot_, first_key_), first_root_);
     EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     read(); // The full-read mode already retained an owned image of this page.
     EXPECT_EQ(values[0], first_root_.entries[0]);
     EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
-    cursor = properties_->openScanCursor(snapshot_); // Exercise moving a pin separately.
+    cursor = properties_->openScanCursor(snapshot_); // Exercise moving the owned source separately.
     read();
     auto moved = std::move(cursor);
-    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     moved.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
     EXPECT_EQ(values[3], second_root_.entries[0]);
-    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
     const std::array<uint32_t, 1> invalidTokens{0U};
     EXPECT_THROW(moved.readEntityPropertiesOptionalSorted(snapshot_, keys, invalidTokens, {}), FormatException);
     EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
@@ -812,13 +805,12 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedPageRetentionInvalidatesAft
     cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
     const auto trace = graph::debug::PerfTrace::snapshotAndReset();
     graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
-    EXPECT_FALSE(trace.contains("native_graph.read.property_selected_page_reuse"));
     ASSERT_TRUE(trace.contains("native_graph.read.property_selected_page_acquisition"));
     EXPECT_EQ(trace.at("native_graph.read.property_selected_page_acquisition").totalValue, 1);
     EXPECT_EQ(values[0], first_root_.entries[0]);
 }
 
-TEST_F(PropertyCollectionRootStoreCacheTest, SelectedPinSurvivesPoolDisableAndMoveAssignmentWithoutDanglingView) {
+TEST_F(PropertyCollectionRootStoreCacheTest, SelectedOwnedPageSurvivesPoolDisableAndMoveAssignment) {
     const std::array keys{first_key_}; const std::array<uint32_t, 1> tokens{3U};
     std::array<std::optional<PropertyCollectionRootEntry>, 1> values;
     auto first = properties_->openScanCursor(snapshot_);
@@ -827,7 +819,7 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedPinSurvivesPoolDisableAndMo
     io_->enableBufferPool(64U * RSS_PAGE_SIZE);
     auto second = properties_->openScanCursor(snapshot_);
     second.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
-    // Assignment releases the old pool pin before its last owning reference.
+    // Assignment preserves the owned source after its original pool is gone.
     second = std::move(first);
     second.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
     EXPECT_EQ(values[0], first_root_.entries[0]);
@@ -850,5 +842,5 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedBatchReacquiresAfterMutatio
     EXPECT_EQ(actual[0], first_root_.entries[0]); EXPECT_EQ(actual[3], second_root_.entries[0]);
     EXPECT_FALSE(actual[1]); EXPECT_FALSE(actual[2]);
     for (const auto count : delivered) EXPECT_EQ(count, 1U);
-    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, RSS_PAGE_SIZE);
+    EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
 }

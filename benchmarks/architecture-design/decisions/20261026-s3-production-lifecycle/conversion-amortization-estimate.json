@@ -1,0 +1,73 @@
+{
+  "query_benchmark": false,
+  "estimation_only": true,
+  "basis": "Recorded complete construction wall time and preserved corrected primary P50 values; use the faster of both controls. Excludes conversion failures and future maintenance, so not a payback guarantee.",
+  "workloads": [
+    {
+      "scale": "medium",
+      "case": "label_scan_filter",
+      "recorded_construction_seconds": 12413.19192865699,
+      "saved_query_seconds_estimate": 0.19265558750000003,
+      "estimated_queries_to_equal_construction_wall": 64433
+    },
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "recorded_construction_seconds": 12413.19192865699,
+      "saved_query_seconds_estimate": 0.20857313300000005,
+      "estimated_queries_to_equal_construction_wall": 59515
+    },
+    {
+      "scale": "medium",
+      "case": "aggregation_count_by_group",
+      "recorded_construction_seconds": 12413.19192865699,
+      "saved_query_seconds_estimate": 0.19560107249999997,
+      "estimated_queries_to_equal_construction_wall": 63462
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "recorded_construction_seconds": 12413.19192865699,
+      "saved_query_seconds_estimate": 0.20160098600000004,
+      "estimated_queries_to_equal_construction_wall": 61574
+    },
+    {
+      "scale": "holdout",
+      "case": "label_scan_filter",
+      "recorded_construction_seconds": 8173.814,
+      "saved_query_seconds_estimate": 0.11286579299999998,
+      "estimated_queries_to_equal_construction_wall": 72421
+    },
+    {
+      "scale": "holdout",
+      "case": "all_nodes_property_filter",
+      "recorded_construction_seconds": 8173.814,
+      "saved_query_seconds_estimate": 0.1433423735,
+      "estimated_queries_to_equal_construction_wall": 57024
+    },
+    {
+      "scale": "holdout",
+      "case": "aggregation_count_by_group",
+      "recorded_construction_seconds": 8173.814,
+      "saved_query_seconds_estimate": 0.1340305485,
+      "estimated_queries_to_equal_construction_wall": 60985
+    },
+    {
+      "scale": "holdout",
+      "case": "multi_key_group",
+      "recorded_construction_seconds": 8173.814,
+      "saved_query_seconds_estimate": 0.1719330985,
+      "estimated_queries_to_equal_construction_wall": 47541
+    }
+  ],
+  "balanced_four_case_cycles": {
+    "medium": {
+      "saved_seconds_per_four_queries_estimate": 0.798430779,
+      "cycles_to_equal_construction_wall_estimate": 15547
+    },
+    "holdout": {
+      "saved_seconds_per_four_queries_estimate": 0.5621718135,
+      "cycles_to_equal_construction_wall_estimate": 14540
+    }
+  }
+}

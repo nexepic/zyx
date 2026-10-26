@@ -1,0 +1,156 @@
+{
+  "query_benchmark": false,
+  "attempts": [
+    {
+      "evidence": "diagnostics/v10-construction/holdout-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v10",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-private-v10.zyx"
+      ],
+      "returncode": 1,
+      "wall_seconds": 5877.809390528011,
+      "user_seconds": 5465.910113,
+      "system_seconds": 382.063442,
+      "peak_rss_bytes": 78868480,
+      "os_read_bytes": 321191936,
+      "os_write_bytes": 16249913344,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v10-construction/medium-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v10",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-private-v10.zyx"
+      ],
+      "returncode": -15,
+      "wall_seconds": 7102.509404213008,
+      "user_seconds": 6574.506717,
+      "system_seconds": 485.980395,
+      "peak_rss_bytes": 79626240,
+      "os_read_bytes": 498491392,
+      "os_write_bytes": 26536816640,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v11-construction/holdout-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v11",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-private-v11.zyx"
+      ],
+      "returncode": 0,
+      "wall_seconds": 8173.814107465994,
+      "user_seconds": 7600.582948,
+      "system_seconds": 532.690375,
+      "peak_rss_bytes": 78761984,
+      "os_read_bytes": 588193792,
+      "os_write_bytes": 22357905408,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v11-construction/medium-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v11",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-private-v11.zyx"
+      ],
+      "returncode": 1,
+      "wall_seconds": 7922.99871641201,
+      "user_seconds": 7333.387912,
+      "system_seconds": 536.885145,
+      "peak_rss_bytes": 79425536,
+      "os_read_bytes": 482390016,
+      "os_write_bytes": 22555066368,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v12-construction/medium-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v12",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-private-v12.zyx"
+      ],
+      "returncode": 0,
+      "wall_seconds": 12413.19192865699,
+      "user_seconds": 11423.757843,
+      "system_seconds": 905.104703,
+      "peak_rss_bytes": 79360000,
+      "os_read_bytes": 1946439680,
+      "os_write_bytes": 18476359680,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v9-construction/holdout-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v9",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.scan-private-v9.zyx"
+      ],
+      "returncode": -15,
+      "wall_seconds": 2982.582809116997,
+      "user_seconds": 2748.635398,
+      "system_seconds": 205.907888,
+      "peak_rss_bytes": 78761984,
+      "os_read_bytes": 359706624,
+      "os_write_bytes": 18017460224,
+      "query_benchmark": false
+    },
+    {
+      "evidence": "diagnostics/v9-construction/medium-resources.json",
+      "command": [
+        "/tmp/zyx-scan-image-construction-v9",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-private-v9.zyx"
+      ],
+      "returncode": -15,
+      "wall_seconds": 2981.701357099999,
+      "user_seconds": 2724.699317,
+      "system_seconds": 226.734873,
+      "peak_rss_bytes": 79470592,
+      "os_read_bytes": 393383936,
+      "os_write_bytes": 20411396096,
+      "query_benchmark": false
+    }
+  ],
+  "recorded_attempt_totals": {
+    "wall_seconds_sum": 47454.60771349301,
+    "os_write_bytes_sum": 144604917760,
+    "peak_process_rss_bytes": 79626240
+  },
+  "accounting_limits": {
+    "source_workspace_bytes": 1048576,
+    "maintenance_workspace_bytes": 7340032,
+    "raw_cache_bytes": 67108864,
+    "metadata_cache_bytes": 1048576,
+    "metadata_cache_entries": 128,
+    "additional_cache_bytes": 0,
+    "combined_file_length_bytes": 2147483648
+  },
+  "limitations": [
+    "Sum of worker wall times is not elapsed campaign time; workers may overlap.",
+    "OS write bytes include repeated writes and are not peak file length.",
+    "File length is bounded by construction admission; these receipts do not sample its exact peak.",
+    "Earlier attempts without resource receipts are excluded from numeric totals and remain in diagnostics.",
+    "Failed or stopped construction attempts are retained in these totals, not presented as accepted throughput."
+  ],
+  "admitted_images": [
+    {
+      "scale": "medium",
+      "status": "completed",
+      "source_bytes": 309985280,
+      "target_bytes": 256507904,
+      "saving_fraction": 0.17251585623678645,
+      "construction_evidence": "diagnostics/v12-construction/medium-resources.json"
+    },
+    {
+      "scale": "holdout",
+      "status": "completed",
+      "source_bytes": 259915776,
+      "target_bytes": 222035968,
+      "saving_fraction": 0.14573877962682802,
+      "construction_evidence": "diagnostics/v11-construction/holdout-resources.json"
+    }
+  ]
+}

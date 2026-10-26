@@ -1,0 +1,3 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_scan_convert.dir/apps/scan_convert/main.cpp.o
+[2/3] Linking CXX executable zyx-scan-convert

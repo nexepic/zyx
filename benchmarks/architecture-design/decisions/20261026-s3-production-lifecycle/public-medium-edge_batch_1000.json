@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "query_benchmark": false,
+  "full_oracle": true,
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s3-lifecycle/values-b",
+    "check-write",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s3-lifecycle/public-medium-edge_batch_1000.db",
+    "edge_batch_1000",
+    "0",
+    "1"
+  ]
+}

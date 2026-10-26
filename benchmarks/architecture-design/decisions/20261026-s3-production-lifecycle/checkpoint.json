@@ -1,0 +1,93 @@
+{
+  "stage": "S3",
+  "status": "accepted",
+  "accepted_progress_percent": 65,
+  "previous_progress_percent": 35,
+  "selected_candidate": "B_persistent_complete_scan_block",
+  "removed_candidate": "A cross-batch ROW page pin",
+  "source_sha256": {
+    "include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": "39201fd221433ad151ca8cac065bddb42056b3cf1744b12d3eed21bd4f40dd43",
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "4c85ae72edb41c8e3faf6d500176db3f3d75015269bd2df8f142ca8047b55c56",
+    "tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp": "344417bafa3f6ba1f8bd411aeab43a94a965f934473db4472bd3bf3357f369da"
+  },
+  "core_builds": [
+    "5/31 default",
+    "13/39 compatible",
+    "15/41 experimental native scan"
+  ],
+  "targeted_tests": {
+    "candidate": {
+      "tests": 108,
+      "failures": 0
+    },
+    "default": {
+      "tests": 25,
+      "failures": 0
+    },
+    "compat": {
+      "tests": 89,
+      "failures": 0
+    }
+  },
+  "public_complete_oracles": [
+    {
+      "scale": "medium",
+      "family": "primary",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "scale": "medium",
+      "family": "property_set",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_batch_1000",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "scale": "medium",
+      "family": "property_noop",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "scale": "medium",
+      "family": "edge_create_delete",
+      "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af"
+    },
+    {
+      "scale": "holdout",
+      "family": "primary",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_set",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_batch_1000",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "scale": "holdout",
+      "family": "property_noop",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    },
+    {
+      "scale": "holdout",
+      "family": "edge_create_delete",
+      "source_sha256": "ddee2229f226ade796adc4088e05bca8072acedd4739d8b3ca123c0b1c11e96c"
+    }
+  ],
+  "generality": "16384 nodes, 512 mixed mutation batches, old pins and full property/label oracles, integrity and 4KiB-cache reopen passed",
+  "converter": "zyx_scan_convert built; --help passed; explicit offline path, BUILDING refusal, actual prepared whole-file space and fresh full integrity preserved",
+  "adoption": "Explicit experimental build and offline conversion; no automatic migration or default format change. Conversion cost and illustrative payback estimates recorded separately.",
+  "full_unit_suite_run": false,
+  "new_query_benchmark_run": false,
+  "pending_stages": [
+    "S4 stable guard/total-cost review",
+    "S5 final consolidated measurement, Kuzu comparison and delivery"
+  ]
+}
