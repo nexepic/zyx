@@ -1333,7 +1333,7 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBatchesFullAdjacencyEndpoin
 
 	logical::LogicalTraversal traversal(
 			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}),
-			"source", "edge", "", "", "out", {}, {}, {{"weight", PropertyValue(int64_t{2})}});
+			"source", "edge", "", "", "out", {}, {}, PropertyValue::MapType{{"weight", PropertyValue(int64_t{2})}});
 	std::vector<uint64_t> edgeIds;
 	const LogicalPlanReadRuntimeStats stats = runtime.execute(
 			traversal, limits, [&edgeIds](const LogicalPlanReadRow &row) {

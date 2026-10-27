@@ -396,6 +396,11 @@ namespace graph::storage {
 		};
 
 		struct MutableNode final {
+			MutableNode() = default;
+			MutableNode(const MutableNode &) = delete;
+			MutableNode &operator=(const MutableNode &) = delete;
+			MutableNode(MutableNode &&) noexcept = default;
+			MutableNode &operator=(MutableNode &&) noexcept = default;
 			CatalogRadixPage page;
 			std::map<uint32_t, std::unique_ptr<MutableNode>> node_children;
 			std::map<uint32_t, std::unique_ptr<MutableLeaf>> leaf_children;

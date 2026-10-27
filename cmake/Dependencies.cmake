@@ -102,7 +102,7 @@ function(zyx_find_common_dependencies)
         add_library(zyx::boost ALIAS zyx_boost_stub)
     endif()
 
-    if(ZYX_BUILD_APPS)
+    if(ZYX_BUILD_APPS OR ZYX_BUILD_TESTS)
         find_package(CLI11 QUIET CONFIG)
         if(TARGET CLI11::CLI11)
             add_library(zyx::cli11 ALIAS CLI11::CLI11)

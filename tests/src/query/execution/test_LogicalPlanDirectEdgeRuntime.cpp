@@ -203,7 +203,7 @@ namespace graph::query::execution {
 		logical::LogicalTraversal traversal(
 				std::move(source), "a", "r", "b", "KNOWS", "out", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(2)}},
-				{{"weight", PropertyValue(7)}});
+				PropertyValue::MapType{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edges;
 		const LogicalPlanReadRuntimeStats stats =
@@ -234,7 +234,7 @@ namespace graph::query::execution {
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
 		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-											{{"weight", PropertyValue(7)}});
+											PropertyValue::MapType{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -261,7 +261,7 @@ namespace graph::query::execution {
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
 		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-											{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
+											PropertyValue::MapType{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
 		LogicalPlanReadRuntimeBounds bounds = directBounds();
 		bounds.maximum_materialized_bytes = 1U * 1024U * 1024U;
 
@@ -283,7 +283,7 @@ namespace graph::query::execution {
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
 		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-											{{"weight", PropertyValue(7)}, {"tier", PropertyValue(1)}});
+											PropertyValue::MapType{{"weight", PropertyValue(7)}, {"tier", PropertyValue(1)}});
 
 		std::vector<uint64_t> edges;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
@@ -308,7 +308,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
-											"out", {}, {}, {{"weight", PropertyValue(7)}});
+											"out", {}, {}, PropertyValue::MapType{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -330,7 +330,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
-											"out", {}, {}, {{"weight", PropertyValue(7)}});
+											"out", {}, {}, PropertyValue::MapType{{"weight", PropertyValue(7)}});
 		auto bounds = directBounds();
 		bounds.maximum_edge_records = 1024U;
 		bounds.maximum_edges_per_node = 1024U;
@@ -385,7 +385,7 @@ namespace graph::query::execution {
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("source"), "source",
 											"relationship", "target", "KNOWS", "out", std::vector<std::string>{},
 											std::vector<std::pair<std::string, PropertyValue>>{},
-											{{"weight", PropertyValue(7)}});
+											PropertyValue::MapType{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -411,7 +411,7 @@ namespace graph::query::execution {
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("source"), "source",
 											"relationship", "target", "KNOWS", "out", std::vector<std::string>{},
 											std::vector<std::pair<std::string, PropertyValue>>{},
-											{{"weight", PropertyValue(7)}});
+											PropertyValue::MapType{{"weight", PropertyValue(7)}});
 
 		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(),
 													   [](const LogicalPlanReadRow &) { return true; })),
@@ -508,7 +508,7 @@ namespace graph::query::execution {
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
 											"out", {}, {},
-											{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
+											PropertyValue::MapType{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
 		LogicalPlanReadRuntimeBounds bounds = directBounds();
 		bounds.maximum_materialized_bytes = 1U * 1024U * 1024U;
 

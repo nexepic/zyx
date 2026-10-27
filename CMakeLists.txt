@@ -245,6 +245,7 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             zyx::core
             zyx::gtest
             zyx::gmock
+            zyx::cli11
     )
     # The runner creates an isolated process group and reaps its descendants.
     # This prevents debugger and crash-handler children from surviving CTest on
