@@ -38,7 +38,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out",
-											{}, {}, {{"payload", payload}});
+											{}, {}, PropertyValue::MapType{{"payload", payload}});
 		LogicalPlanReadRuntimeBounds limits = directBounds();
 		limits.maximum_materialized_bytes = 1024U;
 
@@ -163,7 +163,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out",
-											{}, {}, {{"missing", PropertyValue(1)}});
+											{}, {}, PropertyValue::MapType{{"missing", PropertyValue(1)}});
 		LogicalPlanReadRuntimeBounds limits = directBounds();
 		limits.maximum_materialized_bytes = 64U;
 
@@ -185,7 +185,7 @@ namespace graph::query::execution {
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(
 				std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Person"}), "a", "r", "b", "",
-				"out", {}, {}, {{"payload", payload}});
+				"out", {}, {}, PropertyValue::MapType{{"payload", payload}});
 		LogicalPlanReadRuntimeBounds limits = directBounds();
 		limits.maximum_materialized_bytes = 1024U;
 
@@ -1797,7 +1797,7 @@ namespace graph::query::execution {
 		LogicalPlanReadRuntime runtime(backend);
 		logical::LogicalTraversal traversal(
 			std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Person"}),
-			"a", "r", "b", "KNOWS", "out", {"MissingLabel"}, {}, {{"tier", PropertyValue(1)}});
+			"a", "r", "b", "KNOWS", "out", {"MissingLabel"}, {}, PropertyValue::MapType{{"tier", PropertyValue(1)}});
 		auto bounds = directBounds();
 		bounds.maximum_edges_per_node = 120;
 		bounds.maximum_edge_records = 128;

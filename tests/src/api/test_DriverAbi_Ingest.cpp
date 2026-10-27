@@ -75,8 +75,9 @@ namespace {
 		if (!data->is_open()) {
 			throw std::runtime_error("crash-test child cannot open database Superblocks");
 		}
-		const file_handle_t dataWrite = portable_open_rw(databasePath.c_str());
-		const file_handle_t dataRead = portable_open(databasePath.c_str(), O_RDONLY);
+		const auto databasePathString = databasePath.string();
+		const file_handle_t dataWrite = portable_open_rw(databasePathString.c_str());
+		const file_handle_t dataRead = portable_open(databasePathString.c_str(), O_RDONLY);
 		if (dataWrite == INVALID_FILE_HANDLE || dataRead == INVALID_FILE_HANDLE) {
 			if (dataWrite != INVALID_FILE_HANDLE) {
 				static_cast<void>(portable_close_rw(dataWrite));
