@@ -1,0 +1,82 @@
+{
+  "plan": "scan-supply-20261026",
+  "stage_exit": "passed_with_explicit_adoption_restrictions",
+  "cumulative_progress_percent": 100,
+  "timestamp_utc": "2026-10-27T01:07:02.757591+00:00",
+  "stages": {
+    "V0": {
+      "cumulative_percent": 15,
+      "evidence": "../20261026-scan-supply-v0/acceptance-registration.json"
+    },
+    "V1": {
+      "cumulative_percent": 45,
+      "evidence": "../20261026-scan-supply-v1/acceptance.json"
+    },
+    "V2": {
+      "cumulative_percent": 70,
+      "decision": "Retain64-owner logical/persistent format; locally pack same-field records across bounded private BUILDING cohorts. Default1, opt-in<=8.",
+      "evidence": [
+        "b-field-cohort-registration.json",
+        "b-field-cohort/medium-validation/receipt.json",
+        "b-field-cohort/final-primary/gates.json"
+      ]
+    },
+    "V3": {
+      "cumulative_percent": 90,
+      "decision": "Lifecycle and generic correctness pass; adopt only within explicit workload restrictions, retain repeatable regressions.",
+      "evidence": [
+        "b-cohort-strengthened/receipt.json",
+        "b-field-cohort/generality-lifecycle-receipt.json",
+        "b-field-cohort/write-costs/summary.json",
+        "b-field-cohort/guard-review-1/combined-review.json"
+      ]
+    },
+    "V4": {
+      "cumulative_percent": 100,
+      "decision": "One frozen primary window plus original guards and targeted failed-comparison reproduction complete; no primary rerun.",
+      "evidence": [
+        "b-field-cohort/final-primary/summary.json",
+        "b-field-cohort/final-guards/summary.json",
+        "b-field-cohort/guard-review-1/summary-recovery.json"
+      ]
+    }
+  },
+  "restrictions": [
+    "Combined candidate performance acceptance is limited to explicitly selected experimental SCAN images, long-lived handles and read-heavy analytical workloads. It is not a general rollout endorsement for other profiles.",
+    "Do not adopt for write-heavy workloads: repeated edge-batch P50 and medium no-op regressions remain. Edge completed-write bytes rise5.95%/8.97%. Correct writes remain supported, but improved write performance is not claimed.",
+    "Do not promise strict point-query/tail-latency or short-lived-open SLOs: original and pooled tails and direct open dispersion remain disclosed.",
+    "Offline conversion is explicit and costly; no hidden preparation or automatic in-place migration. Default cohort remains1; up to8 is opt-in.",
+    "Numerical primary gain is2.0021887x with little margin and material process dispersion, not a proven stable2x guarantee. Kuzu remains9.31\u201388.97x faster on primary P50."
+  ],
+  "primary_geomean_speedup": 2.002188734454638,
+  "kuzu_target_passed": false,
+  "kuzu_candidate_ratio_range": [
+    9.307190626925738,
+    88.96642653652528
+  ],
+  "current_selected_module_tests": {
+    "scan": 62,
+    "hybrid": 32,
+    "row": 3,
+    "total": 97
+  },
+  "oracles": {
+    "primary": 720,
+    "original_guards": 720,
+    "original_open": 12,
+    "untimed_writes": 12,
+    "focused_guards": 360,
+    "focused_open": 8
+  },
+  "measurement_corrections": [
+    "Initial score fixture failed to form native column; original failure retained, corrected10-case module passed without changing measured engine. Immutable measured source archive plus separate test-source supplement retained.",
+    "All28 focused workers passed. Original summary requested an intentionally unmeasured case; offline per-scale recovery reverified frozen sources/binaries/inputs and all oracles, without rerunning any worker. Metadata clarification records2 additional opens, not stale copied3."
+  ],
+  "platforms": {
+    "Linux": "executed selected modules and formal window",
+    "macOS": "not executed",
+    "Windows": "not executed",
+    "WASM": "not executed"
+  },
+  "completion_scope": "Completion of this registered V0\u2013V4 architecture optimization round, not achievement of Kuzu superiority or universal workload speedup."
+}

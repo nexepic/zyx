@@ -1,0 +1,12 @@
+{
+  "returncode": 0,
+  "samples": 12,
+  "sampled_median_ms": 555.2968060000001,
+  "control_median_ms": 741.4661435,
+  "ratio": 0.7489172781090038,
+  "within_five_percent": false,
+  "complete_oracle": "12 passed",
+  "formal_performance": false,
+  "observed_cpu": "user time accounts for almost all query wall time; no major faults and few involuntary switches; this does not identify why CPU cost varies",
+  "quality_conclusion": "Not eligible for CPU share or layout selection: sampled/control median ratio outside frozen 5% quality check. Query CPU tracks wall time, few involuntary switches and no major faults."
+}

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-probes/allocation",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-work/allocation.db",
+    "all_nodes_property_filter",
+    "2",
+    "1"
+  ],
+  "complete_oracle": "passed",
+  "latency_usable": false,
+  "last_window": "# window 2 allocations 30859 requested_bytes 36281326 frees 30857 failed 0 sample_interval 256",
+  "heap_allocations": 30859,
+  "target": 36000,
+  "work_gate_passed": true,
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "binary_sha256": "7e237a3aa8e3d7d164360fc1131d97cb5fd2d2316e907aba6aff5b8e35a405fb"
+}

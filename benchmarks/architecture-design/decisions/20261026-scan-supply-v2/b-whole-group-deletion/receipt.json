@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-whole-group-deletion/module",
+    "--gtest_filter=BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-whole-group-deletion/test.json"
+  ],
+  "returncode": 1,
+  "source_sha256": "0fb772dc462a6c462221ee3633f85e670624f5e88a38de4e1ba865e6a75fc36f",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "scope": "One new whole-group deletion case only; existing cases not rerun; source freeze unchanged for engine"
+}

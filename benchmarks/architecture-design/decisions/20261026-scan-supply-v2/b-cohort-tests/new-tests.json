@@ -1,0 +1,92 @@
+{
+  "tests": 7,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T19:21:56Z",
+  "time": "8.09s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "BuildingScanFieldCohortTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:21:56Z",
+      "time": "8.09s",
+      "testsuite": [
+        {
+          "name": "PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:21:56Z",
+          "time": "0.546s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "SharedPageMutationKeepsOtherGroupsAndOldValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:21:56Z",
+          "time": "1.163s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "CancellationAfterBorrowingThePriorArenaPublishesNothing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:21:57Z",
+          "time": "2.59s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "BudgetRefusalAfterArenaTransferRefundsAllPrivateState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 118,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:22:00Z",
+          "time": "0.961s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "PublicationRecoverySelectsAllEightGroupsOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 132,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:22:01Z",
+          "time": "1.212s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "HolesAndPartialGroupsKeepExactValuesAndValidateWidth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:22:02Z",
+          "time": "1.546s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:22:04Z",
+          "time": "0.066s",
+          "classname": "BuildingScanFieldCohortTest"
+        }
+      ]
+    }
+  ]
+}

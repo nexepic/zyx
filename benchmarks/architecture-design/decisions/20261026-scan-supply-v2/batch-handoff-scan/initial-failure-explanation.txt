@@ -1,0 +1,1 @@
+The LIMIT/projection fixture did not construct a NodeColumnReceiver with consumeDirect; certified batches are currently enabled only for direct column aggregate input. Zero provider calls confirmed the wrong test route. Replace this new fixture with an aggregate plus maximum_node_records=3 and preserve exact sum/count and one-source assertions. Production code unchanged.

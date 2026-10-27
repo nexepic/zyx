@@ -1,0 +1,9 @@
+{
+  "purpose": "Untimed exact score-column page coverage on real medium file; no CPU-share inference",
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "source_workspace_bytes": 1048576,
+  "control_workspace_bytes": 1048576,
+  "grant": "Real VerifiedScanRoot, CertifiedScanMembership and producer grant for each batch; no supplied in-memory descriptor",
+  "access": "Diagnostic friend shim exposes existing internal grouped-column visitor only",
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35"
+}

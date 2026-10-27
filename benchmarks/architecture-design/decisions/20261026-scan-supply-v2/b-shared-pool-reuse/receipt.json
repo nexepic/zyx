@@ -1,0 +1,13 @@
+{
+  "returncode": 1,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-shared-pool-reuse/module",
+    "--gtest_filter=BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-shared-pool-reuse/test.json"
+  ],
+  "source_sha256": "81aec074e71369a14393fdfe89f5eb34a4e1fc1b2c7cb846bd8d3d6804d691c7",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "existing_nine_cases_and_fixture_unchanged": true,
+  "scope": "One new post-window retirement/pin-release/physical-slot reuse case only; no full suite or performance rerun",
+  "performance_source_archive": "b-field-cohort/frozen-source.tar.gz"
+}

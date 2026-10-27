@@ -1,0 +1,1177 @@
+{
+  "tests": 110,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T17:33:59Z",
+  "time": "3.949s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableBTreeIndexTest",
+      "tests": 21,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:33:59Z",
+      "time": "0.069s",
+      "testsuite": [
+        {
+          "name": "FindsAndScansOneSnapshotPinnedLeaf",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ScanChecksCancellationBeforeReturningPartialResults",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "TraversesInternalSeparatorsAndLeafSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 299,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "StreamsBoundedOrderedSourcesFromIndependentCursors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 402,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsMissingChildrenAndBrokenLeafLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 472,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 493,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "DescendsMultipleInternalLevelsWithinSeparatorRanges",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 505,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAChildOwnedByAnotherIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAChildAtTheWrongLevel",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 578,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsRootLeafSiblingLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 596,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsNonreciprocalLeafLinks",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 616,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAnEmptyNonRootLeafReachedThroughASiblingLink",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 638,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsReciprocalSiblingOutsideTheRoutedLeafSequence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 662,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsCyclicLeafChains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 689,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsUnorderedLeafChains",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 711,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsLeafKeysOutsideTheirSeparatorRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 733,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsALeftLeafKeyAtItsExclusiveUpperSeparator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 755,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "RelocatableBTreeIndexTest"
+        },
+        {
+          "name": "RejectsAnInternalSeparatorOutsideItsParentRange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndex.cpp",
+          "line": 774,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.002s",
+          "classname": "RelocatableBTreeIndexTest"
+        }
+      ]
+    },
+    {
+      "name": "BTreeIndexScanCacheTest",
+      "tests": 16,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:33:59Z",
+      "time": "0.086s",
+      "testsuite": [
+        {
+          "name": "KeepsRoutingPagesResidentAndStreamsLeafChainTransiently",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RejectsAnInvalidReadHintBeforeResolvingThePageRoute",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 229,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.006s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeCursorChecksCancellationBeforeOpeningStorage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 259,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 272,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 293,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.008s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "PointLookupReusesAuthenticatedLeafEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 318,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.006s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 332,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "CursorStateDenialPrecedesRootIoAndRefundsItsAttempt",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 367,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 396,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 413,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 427,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.004s",
+          "classname": "BTreeIndexScanCacheTest"
+        },
+        {
+          "name": "EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreeIndexScanCache.cpp",
+          "line": 454,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0.005s",
+          "classname": "BTreeIndexScanCacheTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableBTreePageCodecTest",
+      "tests": 31,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:33:59Z",
+      "time": "2.634s",
+      "testsuite": [
+        {
+          "name": "ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RoundTripsLeafAndInternalPageHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 85,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsMalformedPageHeaders",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RoundTripsVariableKeysAndRejectsMalformedEntries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 159,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "StoresOrderedEntriesInPackedPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "BulkMaterializesOneValidatedPackedPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 258,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:33:59Z",
+          "time": "1.663s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FindsKeysAcrossPackedRestartGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 296,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RoundTripsAnOrderedKeyThatExtendsItsPredecessor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 316,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 328,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0.024s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "StoresKeyOnlyLeafEntriesWithoutValueBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 364,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsCorruptPackedPayloadMetadataAndStreams",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 389,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsInvalidPackedLayoutsAndTruncatedEntryValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 489,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RebindsTypedOwnerWithoutChangingTheLogicalTreePage",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 591,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsAReusedPackedPayloadSlotGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 633,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:00Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 661,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FailsClosedForPageOwnershipAndSlottedRecordInvariants",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 695,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "DecodedCompressedKeysRemainIndependentAcrossRestartGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 756,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "EntriesValidateAndReturnOnePackedDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 776,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "RebindingPackedPagesDecodesOnceRegardlessOfEntryCount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 794,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "MutationsReuseTheFullyAuthenticatedSourceDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 826,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 855,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.928s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "PackedSizeRejectsTheSameInvalidEntriesAsEncoding",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 884,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 896,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.006s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "TransfersFullyValidatedEntriesWithIndependentOwnership",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 916,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 945,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "MetadataBuffersUseNativeCreditAndEscapedEntriesKeepTheirSourceAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 969,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "LegacyIndexReadDoesNotBorrowPropertyOutputAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 999,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1014,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.001s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1036,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatablePropertyCollectionRootTest",
+      "tests": 18,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:34:01Z",
+      "time": "0.021s",
+      "testsuite": [
+        {
+          "name": "RoundTripsCanonicalOwnerKeyedCollections",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.001s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "SelectiveDecodeReturnsOnlyTheRequestedToken",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 83,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "SelectedAdmissionRunsBeforeVariablePayloadDecode",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.001s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 167,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "RoundTripsOwnerNeutralLargeValuePayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 234,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.008s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "RejectsInvalidOwnerIdentitiesAndTokenOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 275,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "FailsClosedForMalformedPersistentBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 305,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "RejectsOrExactlyRoundTripsEverySingleBitMutation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 356,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.008s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "FullAdmissionPrecedesAllVariableDecodeAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 373,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "FullInlineTokenValidationPrecedesAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 419,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "LargeValueDirectoryValidationPrecedesSlotRejection",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 431,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 441,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "InlineSelectedSlotsRejectBeforeValueDecodeAndRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 469,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 534,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        }
+      ]
+    },
+    {
+      "name": "EntityPropertyLargeValuePayloadCodecTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:34:01Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 487,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "EntityPropertyLargeValuePayloadCodecTest"
+        },
+        {
+          "name": "PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 507,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "EntityPropertyLargeValuePayloadCodecTest"
+        },
+        {
+          "name": "PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 517,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0s",
+          "classname": "EntityPropertyLargeValuePayloadCodecTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockDirectoryTest",
+      "tests": 21,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T17:34:01Z",
+      "time": "1.136s",
+      "testsuite": [
+        {
+          "name": "CodecKeepsOrderedBigEndianPrefixAndLittleEndianLocatorSuffix",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 51,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "NativeCompoundReplacementRetainsOldPinAndReopensExactLocator",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 65,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.02s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "PrefixDuplicationIsCorruptionEvenWhenNativeKeysAreUnique",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 84,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "ExplicitLeafLayoutCannotChangeWithinOneTransaction",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.002s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "SplitSharedTreeUsesTypedLayoutAndBoundedPointLookups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:01Z",
+          "time": "0.037s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "AdmissionFailurePreventsEmissionAndAllowsCleanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 123,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.025s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "ExhaustedPinnedPoolRebuildPreservesKeyOnlyLayoutAndAllOldGenerations",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.359s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "WholeMapRetirementRemovesCurrentRootButRetainsPinnedRead",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 184,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.006s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "EveryBootstrapInterruptionRecoversExactlyOneCompletePrefixValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.013s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "ExistingU64TreeCannotBeReinterpretedAsAKeyOnlyMap",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 216,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.002s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "OwnerPrefixEnumerationIsBoundedAndDoesNotVisitAnotherOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 235,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.015s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "PrefixEnumerationRejectsDuplicateOwnershipAcrossLeavesBeforeDelivery",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 260,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "TypedOwnerEnumerationValidatesSourcesAndKeepsTokenOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 280,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.005s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "MalformedOwnerMembershipCannotReachTypedVisitor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 308,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "BoundDirectoryRejectsAnotherSnapshotDespiteStableLogicalRootAndEpoch",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 323,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "BoundDirectoryRejectsForeignDatabaseRootPageEpochAndAbsentTree",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 352,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.074s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "WholeMapIntegrityCursorKeepsBoundsOrderAndAdmissionAcrossLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 372,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.406s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:02Z",
+          "time": "0.061s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:03Z",
+          "time": "0.006s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:03Z",
+          "time": "0.067s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyPreparationPropagatesOwnerCheckpointExceptions",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 496,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T17:34:03Z",
+          "time": "0.001s",
+          "classname": "PropertySubblockDirectoryTest"
+        }
+      ]
+    }
+  ]
+}

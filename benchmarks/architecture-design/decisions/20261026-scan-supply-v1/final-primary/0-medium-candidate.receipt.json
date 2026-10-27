@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/public-b",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-v4-primary-0-medium-candidate.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "3",
+    "10"
+  ],
+  "oracle": "passed",
+  "samples": 40,
+  "resources": {
+    "returncode": 0,
+    "timed_out": false,
+    "process_peak_rss_kib": 243584,
+    "process_user_cpu_seconds": 31.636401,
+    "process_system_cpu_seconds": 3.830958,
+    "process_input_blocks": 2536,
+    "process_output_blocks": 424,
+    "scope": "whole worker including open, private copy, queries and close; block counts are OS accounting, not attributed query I/O"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/values-b-final",
+    "check-write",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-v4-b-field-cohort-write-work-medium-property_noop-control.db",
+    "property_noop",
+    "0",
+    "1"
+  ],
+  "complete_oracle": "passed",
+  "timing_benchmark": false,
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 80644,
+    "process_user_cpu_seconds": 9.127567,
+    "process_system_cpu_seconds": 0.741869,
+    "process_input_blocks": 8,
+    "process_output_blocks": 32,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  }
+}

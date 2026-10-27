@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-residual-cpu",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-record-view-residual.db",
+    "all_nodes_property_filter",
+    "4",
+    "80"
+  ],
+  "formal_performance": false,
+  "complete_oracles": 80,
+  "sampled_median_ms": 181.05350149999998,
+  "control_median_ms": 194.340237,
+  "ratio": 0.9316315771499238,
+  "within_five_percent": false,
+  "library_sha256": "ecb83bca75776e13302f504bd02afb922d9aa40fd13c19af30b8925ffadd49da"
+}

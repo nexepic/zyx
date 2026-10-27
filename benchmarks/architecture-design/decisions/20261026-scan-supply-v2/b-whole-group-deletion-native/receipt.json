@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-whole-group-deletion-native/module",
+    "--gtest_filter=BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-whole-group-deletion-native/test.json"
+  ],
+  "returncode": 0,
+  "source_sha256": "95b1fc3a4afd74fc863cd33de3c1c60fb4bb356cf60782fe9edee8a50a483337",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "scope": "One new whole-group deletion regression, native coordinator also used by logical executor; no full suite",
+  "initial_failure": "b-whole-group-deletion/receipt.json",
+  "initial_failure_cause": "Fixture invoked raw ROW erase instead of supported native owner-deletion coordinator; graph/old-pin/oracle assertions unchanged"
+}

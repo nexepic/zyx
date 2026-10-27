@@ -5,6 +5,10 @@ namespace graph::storage {
 // opening always loads the pinned durable root and keeps its nonempty guard.
 class HybridPropertyReadContextTestAccess {
 public:
+    static std::optional<HybridPropertyGroupRecord> group(const HybridPropertyReadContext &context,
+        EntityPropertyKey owner) { return context.findGroup(owner, {}, nullptr, true, true); }
+    static HybridPropertyColumnMembership membership(const HybridPropertyReadContext &context,
+        const HybridPropertyGroupRecord &group) { return context.columnMembership(group); }
     static HybridPropertyReadContext open(std::shared_ptr<StorageIO> io, SlottedPagePool &pages,
         RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
         const HybridPropertyDescriptor &descriptor, const CancellationCheckpoint *cancellation = nullptr) {

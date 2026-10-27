@@ -1,0 +1,5 @@
+{
+  "all_four_complete_oracles": "passed",
+  "all_source_rows_use_direct_borrowed_id_supply": true,
+  "timing_benchmark": false
+}

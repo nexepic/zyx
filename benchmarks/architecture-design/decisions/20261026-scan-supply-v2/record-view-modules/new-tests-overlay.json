@@ -1,0 +1,114 @@
+{
+  "tests": 7,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T16:17:46Z",
+  "time": "0.345s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableBTreePageCodecTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:17:46Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1014,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:46Z",
+          "time": "0.003s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1036,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:46Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatablePropertyCollectionRootTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:17:46Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 534,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:46Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:46Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockDirectoryTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:17:46Z",
+      "time": "0.341s",
+      "testsuite": [
+        {
+          "name": "FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:46Z",
+          "time": "0.218s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 449,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:47Z",
+          "time": "0.003s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 475,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:17:47Z",
+          "time": "0.118s",
+          "classname": "PropertySubblockDirectoryTest"
+        }
+      ]
+    }
+  ]
+}

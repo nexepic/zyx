@@ -1,0 +1,10 @@
+{"timing_benchmark":true,"case":"property_set","iteration":0,"latency_ms":19.948910000000001,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":1,"latency_ms":20.864035000000001,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":2,"latency_ms":22.678138000000001,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":3,"latency_ms":20.154243999999998,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":4,"latency_ms":20.371451,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":5,"latency_ms":19.457782000000002,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":6,"latency_ms":21.034927,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":7,"latency_ms":22.428802999999998,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":8,"latency_ms":18.030197000000001,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}
+{"timing_benchmark":true,"case":"property_set","iteration":9,"latency_ms":14.456175,"rows":[[["double",-1]]],"postcondition_rows":[[["double",-1]]]}

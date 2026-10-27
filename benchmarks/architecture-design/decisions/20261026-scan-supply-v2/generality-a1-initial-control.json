@@ -1,0 +1,7 @@
+{
+  "status": "failed_initial_oracle_default_query_timeout",
+  "returncode": 1,
+  "full_lifecycle": false,
+  "baseline_binary_sha256": "32290c4e2122098faf10ed1778aef277305ee4fc97880f29ef63c6bd8c26ccb0",
+  "inference": "A2 regression not established: frozen A1 also times out on a fresh original fixture copy; historical A1 full lifecycle passed."
+}

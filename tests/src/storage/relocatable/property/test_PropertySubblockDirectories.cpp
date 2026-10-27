@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <array>
 #include <vector>
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 #include "graph/storage/relocatable/index/FixedBTreeMap.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
@@ -385,4 +388,133 @@ TEST_F(PropertySubblockDirectoryTest, WholeMapIntegrityCursorKeepsBoundsOrderAnd
     EXPECT_EQ(emitted, 0U);
     EXPECT_THROW(map.visitAll(pin, 0, [](const auto &) { return true; }), FormatException);
     EXPECT_THROW(map.visitAll(pin, (std::numeric_limits<size_t>::max)(), [](const auto &) { return true; }), FormatException);
+}
+
+TEST_F(PropertySubblockDirectoryTest, FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission) {
+    // Stay within the initial builder's bounded input while forcing multiple leaves.
+    constexpr size_t count = 2000;
+    std::vector<BTreePageEntry> records;
+    for (uint64_t id = 1; id <= count; ++id) records.push_back(entry(id, 1, {100 + id, 3, 7}));
+    create(records);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto pin = metadata_->openSnapshot();
+        BTreeIndex index(DIRECTORY_INDEX, *btree_pages_, *metadata_, BTreeLeafValueLayout::BLVL_EMPTY);
+        class Cancel final : public CancellationCheckpoint {
+        public:
+            bool armed = false;
+            void check() const override { if (armed) throw std::logic_error("fixed stream cancelled"); }
+        } cancel;
+        const auto lower = key(25, 1);
+        auto generic = index.openRangeCursor(pin, std::span<const std::byte>(lower), 5000);
+        auto fixed = index.openFixedKeyRangeCursor(pin, std::span<const std::byte>(lower), 5000,
+            Directory::Record{}.size(), BufferPoolReadHint::BPRH_NORMAL, false, &cancel);
+        ASSERT_EQ(fixed.fixedKeyWidth(), Directory::Record{}.size());
+        struct Refusal {};
+        bool rejectBoundary = true; size_t refusals = 0, seen = 0;
+        const std::function<void(size_t)> admission = [&](size_t bytes) {
+            if (bytes && rejectBoundary) { rejectBoundary = false; throw Refusal{}; }
+        };
+        for (;;) {
+            if (seen == 10) {
+                cancel.armed = true;
+                EXPECT_THROW(static_cast<void>(fixed.nextFixedKey(admission)), std::logic_error);
+                cancel.armed = false;
+            }
+            std::optional<BTreeFixedKey> actual;
+            try { actual = fixed.nextFixedKey(admission); }
+            catch (const Refusal &) { ++refusals; continue; }
+            const auto expected = generic.next();
+            ASSERT_EQ(actual.has_value(), expected.has_value());
+            if (!actual) break;
+            ASSERT_EQ(actual->key().size(), expected->key.size());
+            EXPECT_TRUE(std::equal(actual->key().begin(), actual->key().end(), expected->key.begin()));
+            ++seen;
+        }
+        EXPECT_EQ(seen, count - 24U); EXPECT_EQ(refusals, 1U);
+        auto bounded = index.openFixedKeyRangeCursor(pin, std::nullopt, 2, Directory::Record{}.size());
+        ASSERT_NE(bounded.fixedKeyWidth(), 0U);
+        ASSERT_TRUE(bounded.nextFixedKey()); ASSERT_TRUE(bounded.nextFixedKey());
+        EXPECT_THROW(static_cast<void>(bounded.nextFixedKey()), FormatException);
+        Directory map(DIRECTORY_INDEX, *btree_pages_, *metadata_); size_t mapped = 0;
+        EXPECT_TRUE(map.visitAll(pin, 5000, [&](const auto &value) {
+            ++mapped; EXPECT_EQ(value.key, key(mapped, 1)); return true;
+        }));
+        EXPECT_EQ(mapped, count);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(PropertySubblockDirectoryTest, FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor) {
+    const auto original = entry(1, 1, {101, 3, 7}); create(std::span(&original, 1));
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto pin = metadata_->openSnapshot();
+        BTreeIndex index(DIRECTORY_INDEX, *btree_pages_, *metadata_, BTreeLeafValueLayout::BLVL_EMPTY);
+        graph::utils::OwnedHeapReservation pressure(memory);
+        struct Inject { decltype(memory) budget; graph::utils::OwnedHeapReservation *pressure; bool injected = false; } inject{memory, &pressure};
+        graph::debug::PerfTrace::ScopedObserver observer(&inject,
+            [](void *state, std::string_view name, int64_t, bool duration) noexcept {
+                auto &value = *static_cast<Inject *>(state);
+                if (!duration && name == "native_btree.read.fixed_key_cursor_preparation") {
+                    try { value.pressure->set(value.budget->available()); value.injected = true; }
+                    catch (...) { std::terminate(); }
+                }
+            });
+        auto cursor = index.openFixedKeyRangeCursor(pin, std::nullopt, 2, Directory::Record{}.size());
+        ASSERT_TRUE(inject.injected); EXPECT_EQ(cursor.fixedKeyWidth(), 0U);
+        pressure.set(0);
+        const auto actual = cursor.next(); ASSERT_TRUE(actual);
+        EXPECT_EQ(Directory::decode(*actual).key, key(1, 1)); EXPECT_FALSE(cursor.next());
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(PropertySubblockDirectoryTest, FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves) {
+    std::vector<BTreePageEntry> records;
+    for (uint64_t id = 1; id <= 2000; ++id) records.push_back(entry(id, 1, {100 + id, 3, 7}));
+    records.push_back(entry(1200, 1, {9999, 4, 8}));
+    std::ranges::sort(records, [](const auto &a, const auto &b) { return a.key < b.key; });
+    create(records);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
+    graph::utils::OwnedAllocationScope scope(memory);
+    auto pin = metadata_->openSnapshot();
+    Directory map(DIRECTORY_INDEX, *btree_pages_, *metadata_);
+    size_t delivered = 0; int64_t fixedPages = 0;
+    graph::debug::PerfTrace::ScopedObserver observer(&fixedPages,
+        [](void *state, std::string_view name, int64_t value, bool duration) noexcept {
+            if (!duration && name == "native_btree.read.fixed_key_page_decodes") *static_cast<int64_t *>(state) += value;
+        });
+    EXPECT_THROW(map.visitAll(pin, 3000, [&](const auto &value) {
+        EXPECT_NE(value.key, key(1200, 1)); ++delivered; return true;
+    }), FormatException);
+    EXPECT_EQ(delivered, 1199U); EXPECT_GT(fixedPages, 0);
+}
+
+TEST_F(PropertySubblockDirectoryTest, FixedKeyPreparationPropagatesOwnerCheckpointExceptions) {
+    const auto original = entry(1, 1, {101, 3, 7}); create(std::span(&original, 1));
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto pin = metadata_->openSnapshot();
+        BTreeIndex index(DIRECTORY_INDEX, *btree_pages_, *metadata_, BTreeLeafValueLayout::BLVL_EMPTY);
+        class OwnerCheck final : public CancellationCheckpoint {
+        public:
+            mutable bool armed = false;
+            void check() const override {
+                if (armed) { armed = false; throw graph::query::execution::MaterializedByteLimitExceeded(); }
+            }
+        } checkpoint;
+        graph::debug::PerfTrace::ScopedObserver observer(&checkpoint,
+            [](void *state, std::string_view name, int64_t, bool duration) noexcept {
+                if (!duration && name == "native_btree.read.fixed_key_cursor_preparation")
+                    static_cast<OwnerCheck *>(state)->armed = true;
+            });
+        EXPECT_THROW(static_cast<void>(index.openFixedKeyRangeCursor(pin, std::nullopt, 2,
+            Directory::Record{}.size(), BufferPoolReadHint::BPRH_NORMAL, false, &checkpoint)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U);
 }

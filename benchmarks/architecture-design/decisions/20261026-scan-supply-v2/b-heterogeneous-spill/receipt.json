@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-heterogeneous-spill/module",
+    "--gtest_filter=BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-heterogeneous-spill/test.json"
+  ],
+  "returncode": 0,
+  "source_sha256": "137472875de90cf77c1dd520fbd5de072854b17f438f3d929d6378217f26a5d1",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "scope": "One new heterogeneous >64-token overflow case only; all complete values, missing owners, old pin, actual shared overflow page, integrity and reopen checked; no full suite"
+}

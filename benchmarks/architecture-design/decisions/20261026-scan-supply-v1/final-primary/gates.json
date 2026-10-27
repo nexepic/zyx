@@ -1,0 +1,6 @@
+{
+  "primary_geomean_speedup": 1.2327074430688114,
+  "gain_gate_passed": false,
+  "kuzu_p50_target_passed": false,
+  "guards_and_lifecycle_required_separately": true
+}

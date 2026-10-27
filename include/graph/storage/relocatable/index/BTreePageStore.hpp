@@ -204,6 +204,9 @@ namespace graph::storage {
         [[nodiscard]] BTreePage readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
             utils::OwnedStdVector<BTreePageEntry> &decodedEntries,
             BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		[[nodiscard]] BTreePage readFixedKeys(const MetadataSnapshotPin &snapshot, PageId pageId,
+			utils::OwnedStdVector<BTreeFixedKey> &keys, size_t keyWidth,
+			BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		[[nodiscard]] BTreePage readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
 			std::vector<BTreePageEntry> &decodedEntries,
 			BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;

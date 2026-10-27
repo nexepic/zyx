@@ -1,0 +1,125 @@
+{
+  "scope": "direct open/close clock intervals; one observation per independent worker, three per engine/dataset; not process wall subtraction",
+  "samples": [
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 7033.473416,
+      "close_ms": 14.889226,
+      "engine": "control",
+      "scale": "medium",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 7659.430611,
+      "close_ms": 10.460039,
+      "engine": "candidate",
+      "scale": "medium",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 5242.807921,
+      "close_ms": 9.005403,
+      "engine": "control",
+      "scale": "holdout",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 6328.474115,
+      "close_ms": 11.4324,
+      "engine": "candidate",
+      "scale": "holdout",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 10910.692921,
+      "close_ms": 44.698319,
+      "engine": "candidate",
+      "scale": "medium",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 6417.919146,
+      "close_ms": 7.301882,
+      "engine": "control",
+      "scale": "medium",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 4698.625701,
+      "close_ms": 12.538416,
+      "engine": "candidate",
+      "scale": "holdout",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 5795.805471,
+      "close_ms": 10.571631,
+      "engine": "control",
+      "scale": "holdout",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 7070.807982,
+      "close_ms": 8.478029,
+      "engine": "control",
+      "scale": "medium",
+      "round": 2
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 6626.972696,
+      "close_ms": 9.034607,
+      "engine": "candidate",
+      "scale": "medium",
+      "round": 2
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 5141.061349,
+      "close_ms": 11.868055,
+      "engine": "control",
+      "scale": "holdout",
+      "round": 2
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 13340.348434,
+      "close_ms": 18.734936,
+      "engine": "candidate",
+      "scale": "holdout",
+      "round": 2
+    }
+  ]
+}

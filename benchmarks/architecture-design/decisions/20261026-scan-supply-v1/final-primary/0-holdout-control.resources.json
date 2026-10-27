@@ -1,0 +1,10 @@
+{
+  "returncode": 0,
+  "timed_out": false,
+  "process_peak_rss_kib": 243584,
+  "process_user_cpu_seconds": 19.898139,
+  "process_system_cpu_seconds": 1.714383,
+  "process_input_blocks": 81304,
+  "process_output_blocks": 424,
+  "scope": "whole worker including open, private copy, queries and close; block counts are OS accounting, not attributed query I/O"
+}

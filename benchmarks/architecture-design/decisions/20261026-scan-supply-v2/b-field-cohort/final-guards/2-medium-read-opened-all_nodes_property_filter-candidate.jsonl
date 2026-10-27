@@ -1,0 +1,2 @@
+{"timing_benchmark":true,"case":"all_nodes_property_filter","iteration":0,"latency_ms":105.312313,"rows":[[["integer",10076]]]}
+{"event":"handle_lifecycle","case":"all_nodes_property_filter","iteration":0,"open_ms":6626.9726959999998,"close_ms":9.0346069999999994}

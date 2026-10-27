@@ -694,6 +694,41 @@ namespace graph::storage {
 				return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens, admission, slotsAdmission)};
 	}
 
+	EntityPropertyCollectionRootCodec::TokenDirectoryView
+	EntityPropertyCollectionRootCodec::tokenDirectoryView(std::span<const std::byte> bytes,
+		const CancellationCheckpoint *cancellation) {
+		if (cancellation) cancellation->check();
+		static_cast<void>(decodeOwner(bytes));
+		const auto count = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
+		const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+		const auto directory = offsetDirectoryBytes(payload, count);
+		validateOffsetDirectory(payload, directory, count, cancellation);
+		if (cancellation) cancellation->check();
+		return TokenDirectoryView(payload, count);
+	}
+
+	uint32_t EntityPropertyCollectionRootCodec::TokenDirectoryView::token(size_t ordinal) const {
+		if (ordinal >= count_)
+			throwRootError(FormatError::FERR_INVALID_HEADER, "borrowed Property token ordinal is outside its directory");
+		const auto start = LittleEndianCodec::readU32(payload_, ordinal * sizeof(uint32_t));
+		return LittleEndianCodec::readU32(payload_, start);
+	}
+
+	std::optional<std::span<const std::byte>>
+	EntityPropertyCollectionRootCodec::TokenDirectoryView::find(uint32_t selected) const {
+		if (!selected)
+			throwRootError(FormatError::FERR_INVALID_HEADER, "borrowed Property lookup requires a nonzero token");
+		uint32_t lower = 0, upper = count_;
+		while (lower < upper) {
+			const auto middle = lower + (upper - lower) / 2U;
+			if (token(middle) < selected) lower = middle + 1U;
+			else upper = middle;
+		}
+		if (lower == count_ || token(lower) != selected) return {};
+		const auto [start, end] = entryBounds(payload_, size_t(count_) * sizeof(uint32_t), count_, lower);
+		return payload_.subspan(start + sizeof(uint32_t), end - start - sizeof(uint32_t));
+	}
+
 	std::vector<uint32_t> EntityPropertyCollectionRootCodec::decodeTokens(
 		const std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *slotsAdmission, const CancellationCheckpoint *cancellation) {
 		if (cancellation) cancellation->check();

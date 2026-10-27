@@ -1,0 +1,249 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 80 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin
+[       OK ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin (904 ms)
+[ RUN      ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues
+[       OK ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues (1974 ms)
+[ RUN      ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing
+[       OK ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing (496 ms)
+[ RUN      ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState
+[       OK ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState (522 ms)
+[ RUN      ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone
+[       OK ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone (794 ms)
+[ RUN      ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth
+[       OK ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth (753 ms)
+[ RUN      ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget
+[       OK ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget (98 ms)
+[----------] 7 tests from BuildingScanFieldCohortTest (5544 ms total)
+
+[----------] 1 test from ScanMembershipDirectoryTest
+[ RUN      ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder
+[       OK ] ScanMembershipDirectoryTest.UsesTheCompleteNodeDomainAndBigEndianOrder (0 ms)
+[----------] 1 test from ScanMembershipDirectoryTest (0 ms total)
+
+[----------] 40 tests from BuildingScanMembershipTest
+[ RUN      ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen
+[       OK ] BuildingScanMembershipTest.PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen (29 ms)
+[ RUN      ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites
+[       OK ] BuildingScanMembershipTest.StaleDuplicateEmptyAndCompleteTargetsRefuseBeforeWrites (13 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotForgePrimaryLabelFallbackForAnOrdinaryGroup (17 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo
+[       OK ] BuildingScanMembershipTest.OversizedCompleteLabelsPublishExplicitFallbackAndTinyMemoryStillRefusesBeforeIo (11 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot
+[       OK ] BuildingScanMembershipTest.CancellationAfterPrivateDataWritesKeepsTheOldBuildingRoot (6 ms)
+[ RUN      ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup
+[       OK ] BuildingScanMembershipTest.PartialRootWriteRecoversNoMembershipAndCompleteWriteRecoversTheWholeGroup (16 ms)
+[ RUN      ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership
+[       OK ] BuildingScanMembershipTest.CompleteIntegrityRequiresEveryPrimaryNodeAndChecksCountsAndPhysicalOwnership (31 ms)
+[ RUN      ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership
+[       OK ] BuildingScanMembershipTest.ValidChecksumsCannotCertifyIncorrectCompleteLabelMembership (8 ms)
+[ RUN      ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup
+[       OK ] BuildingScanMembershipTest.ReverseOwnershipRefusesAValidRecordOwnedByAnotherDirectoryGroup (7 ms)
+[ RUN      ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller
+[       OK ] BuildingScanMembershipTest.IntegritySourceWorkspaceRemainsChargedToTheCaller (6 ms)
+[ RUN      ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount
+[       OK ] BuildingScanMembershipTest.UnknownBoundedAllocatorCannotBeReplacedByAnUnchargedSourceAccount (5 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins
+[       OK ] BuildingScanMembershipTest.BuilderDiscoversAllLogicalGroupsWithoutRetainingIntermediateRootPins (49 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial
+[       OK ] BuildingScanMembershipTest.BuilderRefusesCompletedImagesAndPreIoBudgetDenial (3 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage
+[       OK ] BuildingScanMembershipTest.BuilderCancellationAfterOnePublicationLeavesOnlyAnIncompleteBuildingImage (8 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose
+[       OK ] BuildingScanMembershipTest.OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose (248 ms)
+[ RUN      ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource
+[       OK ] BuildingScanMembershipTest.OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource (204 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues
+[       OK ] BuildingScanMembershipTest.PrivateFieldConstructionDefersWholeFileGateAndPreservesMembershipAndFallbackValues (1650 ms)
+[ RUN      ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix
+[       OK ] BuildingScanMembershipTest.OversizedFieldSourceKeepsTheWholeRowGroupWithoutPublishingAPrefix (277 ms)
+[ RUN      ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback
+[       OK ] BuildingScanMembershipTest.CancellationWithAnAdmissionExceptionIsNotMisclassifiedAsRowFallback (17 ms)
+[ RUN      ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication
+[       OK ] BuildingScanMembershipTest.RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication (725 ms)
+[ RUN      ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup
+[       OK ] BuildingScanMembershipTest.MoreThan64TypedFieldsKeepAllValuesInTheOriginalRowGroup (65 ms)
+[ RUN      ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary
+[       OK ] BuildingScanMembershipTest.OrdinaryRootCannotMintDeferredAdmissionAtEitherWriteBoundary (4 ms)
+[ RUN      ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization
+[       OK ] BuildingScanMembershipTest.BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization (47 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites
+[       OK ] BuildingScanMembershipTest.SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites (32 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringCloneDeletesTheExclusivePrivateTarget (40 ms)
+[ RUN      ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage
+[       OK ] BuildingScanMembershipTest.SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage (45 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceRefusesOrdinaryStaleAndUnadmittedRequests (4 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots (305 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceAdmitsLegacyRouteWorkspaceBeforeCollection (261 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot
+[       OK ] BuildingScanMembershipTest.MetadataMaintenanceABFaultsRecoverACompleteBuildingRoot (496 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority
+[       OK ] BuildingScanMembershipTest.PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority (62 ms)
+[ RUN      ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding
+[       OK ] BuildingScanMembershipTest.PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding (78 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding (439 ms)
+[ RUN      ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate
+[       OK ] BuildingScanMembershipTest.MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate (39 ms)
+[ RUN      ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity
+[       OK ] BuildingScanMembershipTest.SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity (872 ms)
+[ RUN      ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes
+[       OK ] BuildingScanMembershipTest.ConsecutiveMembershipsShareACowPageAndPreserveOldSlotRoutes (17 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages
+[       OK ] BuildingScanMembershipTest.CompletionRejectsUnconstructedAndUnsavedImages (37 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption
+[       OK ] BuildingScanMembershipTest.CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption (78 ms)
+[ RUN      ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage
+[       OK ] BuildingScanMembershipTest.SourceChangeDuringPreparedCompletionDiscardsThePrivateImage (84 ms)
+[ RUN      ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource
+[       OK ] BuildingScanMembershipTest.CompletionPublishesAtomicallyAndReadyOutlivesItsSource (263 ms)
+[----------] 40 tests from BuildingScanMembershipTest (6622 ms total)
+
+[----------] 12 tests from HybridPropertyColdPublicConversionTest
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:99: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate (1446 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup
+[       OK ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup (224 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:120: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues (1675 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen
+unknown file: Failure
+C++ exception with description "scan membership omits a live primary Node group" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen (312 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:150: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups (2952 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:159: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins (1058 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:173: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries (1774 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:190: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *reopened, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:190: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *reopened, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone (930 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend
+unknown file: Failure
+C++ exception with description "scan membership omits a live primary Node group" thrown in the test body.
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend (151 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:250: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether (412 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows
+[       OK ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows (67 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyColdPublicConversion.cpp:291: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows (1375 ms)
+[----------] 12 tests from HybridPropertyColdPublicConversionTest (12383 ms total)
+
+[----------] 11 tests from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories
+[       OK ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity
+[       OK ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity (11 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner
+[       OK ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing
+[       OK ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate
+[       OK ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors
+[       OK ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues
+[       OK ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues
+[       OK ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues (20 ms)
+[----------] 11 tests from HybridPropertyConversionPreparationTest (43 ms total)
+
+[----------] 9 tests from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (0 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO
+[       OK ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO (3 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup
+[       OK ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup (55 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority
+[       OK ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority (68 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation
+[       OK ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation (110 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyCohortAdmission.cpp:159: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent (210 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots
+[       OK ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots (273 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone
+[       OK ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone (181 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyCohortAdmission.cpp:244: Failure
+Expected: (void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "scan membership omits a live primary Node group".
+
+[  FAILED  ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins (12238 ms)
+[----------] 9 tests from HybridPropertyCohortAdmissionTest (13143 ms total)
+
+[----------] Global test environment tear-down
+[==========] 80 tests from 6 test suites ran. (37739 ms total)
+[  PASSED  ] 68 tests.
+[  FAILED  ] 12 tests, listed below:
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues
+[  FAILED  ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries
+[  FAILED  ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend
+[  FAILED  ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether
+[  FAILED  ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows
+[  FAILED  ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent
+[  FAILED  ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins
+
+12 FAILED TESTS

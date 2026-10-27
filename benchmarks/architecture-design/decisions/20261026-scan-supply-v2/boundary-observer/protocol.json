@@ -1,0 +1,8 @@
+{
+  "purpose": "Attribute field supply excluding downstream callbacks, on medium all-node only; not formal timing",
+  "method": "GNU linker wrap external PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted call. Same unmodified full core. CLOCK_THREAD_CPUTIME_ID around outer source and callbacks; preserve all contracts and outputs. No signal sampling.",
+  "schedule": "80 recorded queries, balanced randomized sampled/control pairs, fixed seed 0x92873, CPU0, four warmups",
+  "quality": "unchanged sampled/control median within 5%; complete oracle for every sample; require observed source calls and callbacks; no CPU-share/layout selection if quality fails",
+  "source_boundary": "source inclusive minus owning/scalar/text/run/admission callbacks; rest is query CPU minus inclusive source; nested invocations avoid double counting",
+  "decision": "Consider B only with credible dominant source cost and a separately documented layout cost model supporting frozen gain. Otherwise continue common execution path. No gate relaxation."
+}

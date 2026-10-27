@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/workspace/zyx/build-scan-candidate/zyx-scan-convert",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/generality.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/generality.zyx",
+    "--field-cohort",
+    "8"
+  ],
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 31924,
+    "process_user_cpu_seconds": 69.496901,
+    "process_system_cpu_seconds": 5.217335,
+    "process_input_blocks": 2872,
+    "process_output_blocks": 777984,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  },
+  "conversion_wall_seconds": 77.62907513000391,
+  "source_sha256_before": "9ee3efbf3f4176be680efc7ac8dd5ccc998b317a3caf8774890504fb4a14b53f",
+  "source_sha256_after": "9ee3efbf3f4176be680efc7ac8dd5ccc998b317a3caf8774890504fb4a14b53f",
+  "target_bytes": 5505024,
+  "target_sha256": "1440f2f030b320ae8ad0d54611bb0e7cc84de05d025c5d3b63cd9fec697152fb",
+  "converter_sha256": "14520147673287f8255c8f2bc320b2b3f7fb9c4e8df10c6901169ee76c7f5711",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "query_benchmark": false,
+  "measurement_scope": "conversion; may overlap other preparation, no latency comparison claimed"
+}

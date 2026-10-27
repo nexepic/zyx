@@ -1,0 +1,17 @@
+{
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-strengthened/module",
+    "--gtest_filter=BuildingScanFieldCohortTest.*",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-strengthened/test.json"
+  ],
+  "test_source_sha256": "949d9715fa542eec58052085f5241b51e687108015dbc79beb0dd5c4ef0a6017",
+  "tests": 10,
+  "passed": 10,
+  "scope": "Affected cohort module only; replaces earlier nine cases, does not add them",
+  "engine_library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "previous_failed_case": "../b-shared-pool-reuse/receipt.json",
+  "fixture_correction": "Nullable DOUBLE score actually forms native column; assert existence, exact page count, native-before/demoted-after, pin retirement and physical-slot reuse",
+  "performance_engine_unchanged": true,
+  "test_source_archive_sha256": "6ffde0a90fa4aa4c1337671745cff28649d13bfe9bb54a478ffe696040f7bfda"
+}

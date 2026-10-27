@@ -1,0 +1,66 @@
+START 0-medium-read-point_lookup_indexed-control
+PASS 0-medium-read-point_lookup_indexed-control
+START 0-medium-write-property_noop-control
+PASS 0-medium-write-property_noop-control
+START 0-medium-write-edge_batch_1000-control
+PASS 0-medium-write-edge_batch_1000-control
+START 0-medium-read-opened-all_nodes_property_filter-control
+PASS 0-medium-read-opened-all_nodes_property_filter-control
+START 0-medium-read-point_lookup_indexed-candidate
+PASS 0-medium-read-point_lookup_indexed-candidate
+START 0-medium-write-property_noop-candidate
+PASS 0-medium-write-property_noop-candidate
+START 0-medium-write-edge_batch_1000-candidate
+PASS 0-medium-write-edge_batch_1000-candidate
+START 0-medium-read-opened-all_nodes_property_filter-candidate
+PASS 0-medium-read-opened-all_nodes_property_filter-candidate
+START 0-holdout-read-point_lookup_indexed-control
+PASS 0-holdout-read-point_lookup_indexed-control
+START 0-holdout-write-edge_batch_1000-control
+PASS 0-holdout-write-edge_batch_1000-control
+START 0-holdout-read-opened-all_nodes_property_filter-control
+PASS 0-holdout-read-opened-all_nodes_property_filter-control
+START 0-holdout-read-point_lookup_indexed-candidate
+PASS 0-holdout-read-point_lookup_indexed-candidate
+START 0-holdout-write-edge_batch_1000-candidate
+PASS 0-holdout-write-edge_batch_1000-candidate
+START 0-holdout-read-opened-all_nodes_property_filter-candidate
+PASS 0-holdout-read-opened-all_nodes_property_filter-candidate
+START 1-medium-read-point_lookup_indexed-candidate
+PASS 1-medium-read-point_lookup_indexed-candidate
+START 1-medium-write-property_noop-candidate
+PASS 1-medium-write-property_noop-candidate
+START 1-medium-write-edge_batch_1000-candidate
+PASS 1-medium-write-edge_batch_1000-candidate
+START 1-medium-read-opened-all_nodes_property_filter-candidate
+PASS 1-medium-read-opened-all_nodes_property_filter-candidate
+START 1-medium-read-point_lookup_indexed-control
+PASS 1-medium-read-point_lookup_indexed-control
+START 1-medium-write-property_noop-control
+PASS 1-medium-write-property_noop-control
+START 1-medium-write-edge_batch_1000-control
+PASS 1-medium-write-edge_batch_1000-control
+START 1-medium-read-opened-all_nodes_property_filter-control
+PASS 1-medium-read-opened-all_nodes_property_filter-control
+START 1-holdout-read-point_lookup_indexed-candidate
+PASS 1-holdout-read-point_lookup_indexed-candidate
+START 1-holdout-write-edge_batch_1000-candidate
+PASS 1-holdout-write-edge_batch_1000-candidate
+START 1-holdout-read-opened-all_nodes_property_filter-candidate
+PASS 1-holdout-read-opened-all_nodes_property_filter-candidate
+START 1-holdout-read-point_lookup_indexed-control
+PASS 1-holdout-read-point_lookup_indexed-control
+START 1-holdout-write-edge_batch_1000-control
+PASS 1-holdout-write-edge_batch_1000-control
+START 1-holdout-read-opened-all_nodes_property_filter-control
+PASS 1-holdout-read-opened-all_nodes_property_filter-control
+Traceback (most recent call last):
+  File "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/review-b-flagged-guards.py", line 53, in <module>
+    record[engine]=stat([x['latency_ms'] for x in rows if x['scale']==scale and x['case']==case and x['engine']==engine])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/review-b-flagged-guards.py", line 47, in stat
+    return {'p50_ms':statistics.median(xs),'p95_ms':xs[i]+(xs[min(i+1,len(xs)-1)]-xs[i])*(q-i),'samples':len(xs)}
+                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/statistics.py", line 617, in median
+    raise StatisticsError("no median for empty data")
+statistics.StatisticsError: no median for empty data

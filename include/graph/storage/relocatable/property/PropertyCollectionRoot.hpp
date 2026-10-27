@@ -139,6 +139,23 @@ namespace graph::storage {
 				const SelectedPropertyReadAdmission *admission = nullptr,
 				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		[[nodiscard]] static size_t entryCount(std::span<const std::byte> bytes);
+		// Borrows an immutable canonical inline root. The caller retains its
+		// authenticated bytes for this view's complete synchronous lifetime.
+		class TokenDirectoryView final {
+			friend class EntityPropertyCollectionRootCodec;
+			std::span<const std::byte> payload_;
+			uint32_t count_;
+			TokenDirectoryView(std::span<const std::byte> payload, uint32_t count)
+				: payload_(payload), count_(count) {}
+		public:
+			[[nodiscard]] size_t size() const noexcept { return count_; }
+			[[nodiscard]] uint32_t token(size_t ordinal) const;
+			[[nodiscard]] std::optional<std::span<const std::byte>> find(uint32_t token) const;
+		};
+		// Performs the same owner and complete offset/token validation as
+		// decodeTokens, with no token-vector allocation or value decoding.
+		[[nodiscard]] static TokenDirectoryView tokenDirectoryView(std::span<const std::byte> bytes,
+			const CancellationCheckpoint *cancellation = nullptr);
 		// Validates the owner and complete offset/token directory without decoding
 		// values. The caller authenticates containing pages; this is not a value
 		// integrity scan. Capacity is admitted before allocating the token vector.

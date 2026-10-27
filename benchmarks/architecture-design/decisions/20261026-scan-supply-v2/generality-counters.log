@@ -1,0 +1,43 @@
+query=dense_sum
+query=cold_presence
+counter native_graph.read.node_page_scan.pages 16
+counter native_graph.read.shared_page_known_location_pin 9214
+counter native_btree.read.packed_page_decodes 6164
+counter native_graph.hybrid.owner_route_checks 3066
+counter native_graph.read.metadata_decodes.allocator 2
+counter native_graph.read.shared_page_known_location_copy 6151
+counter storage.buffer_pool.physical_read_bytes 65536
+counter native_graph.read.shared_page_route_resolution 6152
+counter native_graph.read.decoded_metadata_copy_fixed_bytes 1921584
+counter storage.buffer_pool.misses 16
+counter native_graph.read.resolved_metadata_route_cache_hits 80066
+counter native_graph.read.records_decoded 1023
+counter native_graph.read.decoded_metadata_cache_hits 362670
+counter native_btree.read.range_cursor_root_descent 3072
+counter logical_plan.bound_program.admitted_bytes 2832
+counter native_graph.hybrid.group_decodes 3066
+counter native_graph.read.metadata_decodes.radix 28
+counter storage.checksum.bytes 91260562
+counter native_graph.read.radix_resolved_children 73882
+counter native_graph.hybrid.owner_route_checks_performed 3066
+counter native_graph.hybrid.cold_block_decodes 3066
+counter native_graph.hybrid.column_membership_decodes 3066
+counter native_graph.read.metadata_decodes.hybrid_descriptor 3070
+counter storage.checksum.incremental_bytes 37086336
+counter native_graph.read.distinct_page_pins 44
+counter native_graph.read.metadata_decodes.bootstrap 2
+counter native_graph.read.metadata_decodes.catalog 3
+counter native_graph.read.property_token_resolution 3
+counter native_graph.read.node_page_scan.records 1023
+counter native_graph.read.decoded_metadata_borrow_fixed_bytes 1255116184
+counter native_graph.read.distinct_page_pins_incomplete 0
+counter native_graph.read.metadata_pages_read 3129
+counter native_graph.read.root_descents 3072
+counter native_graph.read.entity_scan_catalog_cache_hits 15
+counter native_graph.read.radix_requested_children 76948
+counter storage.buffer_pool.hits 33834
+counter native_graph.read.metadata_decodes.route_leaf 8
+counter native_graph.read.metadata_decodes.location 16
+counter logical_plan.materialized_budget_peak_bytes 22888298
+counter storage_io.file_size_calls 33859
+Query exceeded timeout of 30000ms

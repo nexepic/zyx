@@ -1,0 +1,21 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:233: Failure
+Value of: ordinal
+  Actual: false
+Expected: true
+
+[  FAILED  ] BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot (131 ms)
+[----------] 1 test from BuildingScanFieldCohortTest (131 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (131 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot
+
+ 1 FAILED TEST

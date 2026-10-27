@@ -1,0 +1,85 @@
+{
+  "scope": "Direct open/close clock intervals, two additional observations per engine/dataset",
+  "samples": [
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 5640.330889,
+      "close_ms": 12.221385,
+      "engine": "candidate",
+      "scale": "holdout",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 11590.500277,
+      "close_ms": 12.9929,
+      "engine": "control",
+      "scale": "holdout",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 10845.314186,
+      "close_ms": 19.400648,
+      "engine": "candidate",
+      "scale": "medium",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 16539.246538,
+      "close_ms": 10.708207,
+      "engine": "control",
+      "scale": "medium",
+      "round": 0
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 6249.962613,
+      "close_ms": 11.974729,
+      "engine": "candidate",
+      "scale": "holdout",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 6677.395927,
+      "close_ms": 11.941273,
+      "engine": "control",
+      "scale": "holdout",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 8875.663248,
+      "close_ms": 11.19386,
+      "engine": "candidate",
+      "scale": "medium",
+      "round": 1
+    },
+    {
+      "event": "handle_lifecycle",
+      "case": "all_nodes_property_filter",
+      "iteration": 0,
+      "open_ms": 9091.828495,
+      "close_ms": 13.009145,
+      "engine": "control",
+      "scale": "medium",
+      "round": 1
+    }
+  ]
+}

@@ -55,6 +55,14 @@ public:
         std::copy_n(record.key.begin() + KeyBytes, ValueBytes, result.value.begin());
         return result;
     }
+    [[nodiscard]] static Entry decode(const BTreeFixedKey &record) {
+        if (record.width != KeyBytes + ValueBytes || record.width > BTreeFixedKey::MAX_BYTES)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "fixed B+Tree inline record has wrong width");
+        Entry result{};
+        std::copy_n(record.bytes.begin(), KeyBytes, result.key.begin());
+        std::copy_n(record.bytes.begin() + KeyBytes, ValueBytes, result.value.begin());
+        return result;
+    }
     // Read only the visited prefix and one following record. Two suffixes for
     // the same prefix are corruption, never last-wins or missing-value fallback.
     // The callback is passed to the existing authenticated cursor for boundary
@@ -128,20 +136,36 @@ private:
         std::span<const std::byte> firstKey = {}) const {
         if (maximumEntries == (std::numeric_limits<size_t>::max)())
             throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "fixed map prefix lookahead bound overflowed");
-        auto cursor = index_.openRangeCursor(snapshot, firstKey.empty() ? prefix : firstKey, maximumEntries + 1U,
-            BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
+        auto cursor = [&] {
+            if constexpr (KeyBytes + ValueBytes <= BTreeFixedKey::MAX_BYTES) {
+                // Point/prefix probes retain their existing representation;
+                // a long stream amortizes the initial optional conversion.
+                if (prefix.empty() && maximumEntries >= 64U)
+                    return index_.openFixedKeyRangeCursor(snapshot, firstKey.empty() ? prefix : firstKey,
+                        maximumEntries + 1U, KeyBytes + ValueBytes, BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
+            }
+            return index_.openRangeCursor(snapshot, firstKey.empty() ? prefix : firstKey, maximumEntries + 1U,
+                BufferPoolReadHint::BPRH_NORMAL, false, cancellation);
+        }();
+        const auto nextRecord = [&]() -> std::optional<Entry> {
+            if (cursor.fixedKeyWidth()) {
+                const auto raw = cursor.nextFixedKey(boundaryAdmission);
+                return raw ? std::optional(decode(*raw)) : std::nullopt;
+            }
+            const auto raw = cursor.next(boundaryAdmission);
+            return raw ? std::optional(decode(*raw)) : std::nullopt;
+        };
         const auto matches = [prefix](const Entry &entry) {
             return std::equal(prefix.begin(), prefix.end(), entry.key.begin());
         };
-        auto first = cursor.next(boundaryAdmission);
+        auto first = nextRecord();
         if (!first) return true;
-        Entry pending = decode(*first);
+        Entry pending = *first;
         if (!matches(pending)) return true;
         size_t emitted = 0;
         for (;;) {
             if (cancellation) cancellation->check();
-            const auto following = cursor.next(boundaryAdmission);
-            const auto next = following ? std::optional(decode(*following)) : std::nullopt;
+            const auto next = nextRecord();
             if (next && next->key == pending.key)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "fixed B+Tree map has duplicate logical ownership");
             if (!visitor(pending)) return false;

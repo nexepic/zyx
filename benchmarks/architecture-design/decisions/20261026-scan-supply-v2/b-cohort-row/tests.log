@@ -1,0 +1,21 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 3 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyColdPublicConversionTest
+[ RUN      ] HybridPropertyColdPublicConversionTest.DefaultFormatRejectsColdPublicationBeforeIo
+[       OK ] HybridPropertyColdPublicConversionTest.DefaultFormatRejectsColdPublicationBeforeIo (5 ms)
+[----------] 1 test from HybridPropertyColdPublicConversionTest (5 ms total)
+
+[----------] 1 test from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[----------] 1 test from HybridPropertyConversionPreparationTest (0 ms total)
+
+[----------] 1 test from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (3 ms)
+[----------] 1 test from HybridPropertyCohortAdmissionTest (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 3 test suites ran. (10 ms total)
+[  PASSED  ] 3 tests.

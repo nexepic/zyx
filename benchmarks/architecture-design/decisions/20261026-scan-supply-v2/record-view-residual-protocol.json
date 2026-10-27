@@ -1,0 +1,11 @@
+{
+  "purpose": "attribute residual medium all-node cost after failed formal gate; not acceptance or holdout tuning",
+  "input": "medium.scan-corrected-v1.zyx",
+  "binary": "current core linked to existing 50ms leaf sampler",
+  "cpu": 0,
+  "warmups": 4,
+  "iterations": 80,
+  "observer": "alternating sampled/control query blocks; whole results checked",
+  "quality": "sampled/control median must remain within frozen 5%; otherwise do not select layout from CPU shares",
+  "guards": "Do not run full guards or repeat full primary matrix for this failed version"
+}

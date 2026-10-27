@@ -1,0 +1,18 @@
+{
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-probes/generality",
+    "verify",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-probes/generality-private.zyx"
+  ],
+  "source_sha256_before": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "source_sha256_after": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "binary_sha256": "79cf06b731a3df5e8bf049284766561671849c3e3d837d5c93ce49c258069796",
+  "library_sha256": "ecb83bca75776e13302f504bd02afb922d9aa40fd13c19af30b8925ffadd49da",
+  "default_query_timeout_ms": 30000,
+  "owners": 16384,
+  "mixed_mutation_batches": 512,
+  "wall_seconds": 155.67099430200324,
+  "target_bytes": 128712704,
+  "timing_benchmark": false
+}

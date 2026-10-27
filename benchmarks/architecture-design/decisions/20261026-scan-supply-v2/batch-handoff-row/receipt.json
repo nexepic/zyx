@@ -1,0 +1,7 @@
+{
+  "profile": "row",
+  "tests": 67,
+  "failures": 0,
+  "library_sha256": "a7aa4ef7be6981389a7afa15ca3ec7b775154001676808da9d97ad2707a24d71",
+  "scope": "three selected query module files, full matching core; no full unit suite"
+}

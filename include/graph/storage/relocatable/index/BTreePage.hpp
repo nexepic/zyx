@@ -96,6 +96,15 @@ namespace graph::storage {
 		[[nodiscard]] static BTreePageEntry decode(std::span<const std::byte> bytes);
 	};
 
+	// A bounded in-memory representation for key-only fixed-record directories.
+	// It changes no persisted bytes and owns no per-key allocation.
+	struct BTreeFixedKey {
+		static constexpr size_t MAX_BYTES = 32U;
+		std::array<std::byte, MAX_BYTES> bytes{};
+		uint8_t width = 0;
+		[[nodiscard]] std::span<const std::byte> key() const;
+	};
+
 	// Packed page payload codec. Entries are prefix-compressed between restart
 	// points. Leaf pages optionally omit values entirely, while a lookup still
 	// probes raw bytes without first materializing the complete page.
@@ -123,6 +132,9 @@ namespace graph::storage {
 		// lookups use this before probing one restart group; full entry validation
 		// remains the responsibility of decode() and integrity scans.
 		[[nodiscard]] static uint32_t entryCount(std::span<const std::byte> bytes);
+		// Complete canonical decode of an EMPTY-value leaf with fixed-width keys.
+		[[nodiscard]] static utils::OwnedStdVector<BTreeFixedKey>
+		decodeFixedKeys(std::span<const std::byte> bytes, size_t keyWidth);
 		[[nodiscard]] static std::optional<BTreePageEntry>
 		find(BTreeNodeKind kind, std::span<const std::byte> bytes, std::span<const std::byte> key,
 			 BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
@@ -144,6 +156,8 @@ namespace graph::storage {
         // Adopt an already authenticated slotted page without serializing a second image.
         [[nodiscard]] static BTreePage open(SlottedPage page);
         [[nodiscard]] static BTreePage openDecoded(SlottedPage page, utils::OwnedStdVector<BTreePageEntry> &decodedEntries);
+		[[nodiscard]] static BTreePage openFixedKeys(SlottedPage page,
+			utils::OwnedStdVector<BTreeFixedKey> &keys, size_t keyWidth);
         [[nodiscard]] static BTreePage openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
             utils::OwnedStdVector<BTreePageEntry> &decodedEntries);
         [[nodiscard]] static BTreePage openDecoded(SlottedPage page, std::vector<BTreePageEntry> &decodedEntries);

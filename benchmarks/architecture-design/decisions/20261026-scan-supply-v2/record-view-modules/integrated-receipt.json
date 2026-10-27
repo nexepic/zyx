@@ -1,0 +1,9 @@
+{
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-modules/modules",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-modules/integrated-tests.json"
+  ],
+  "library_sha256": "ecb83bca75776e13302f504bd02afb922d9aa40fd13c19af30b8925ffadd49da",
+  "scope": "five selected index/root-codec module files against integrated O3 SCAN1 core; unchanged StorageIO test-hook overlay only"
+}

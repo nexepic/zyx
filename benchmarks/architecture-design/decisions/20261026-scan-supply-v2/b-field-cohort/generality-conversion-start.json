@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/workspace/zyx/build-scan-candidate/zyx-scan-convert",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/generality.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/generality.zyx",
+    "--field-cohort",
+    "8"
+  ],
+  "source": {
+    "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/generality.zyx",
+    "sha256": "9ee3efbf3f4176be680efc7ac8dd5ccc998b317a3caf8774890504fb4a14b53f",
+    "bytes": 15728640
+  },
+  "cohort_groups": 8,
+  "timing_benchmark": false,
+  "limits": {
+    "address_space_bytes": 6442450944,
+    "file_bytes": 2147483648,
+    "process_timeout_seconds": 1200
+  }
+}

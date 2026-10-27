@@ -1010,3 +1010,46 @@ TEST(RelocatableBTreePageCodecTest, LegacyIndexReadDoesNotBorrowPropertyOutputAd
     const std::array key{std::byte{'a'}};
     const auto found = page.find(key); ASSERT_TRUE(found); EXPECT_EQ(found->value_or_child, 11U);
 }
+
+TEST(RelocatableBTreePageCodecTest, FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups) {
+    for (const size_t width : {1U, 8U, 24U, 32U}) {
+        std::vector<BTreePageEntry> entries;
+        for (unsigned i = 0; i < 120; ++i) {
+            std::vector<std::byte> bytes(width, std::byte{0x53});
+            bytes.back() = std::byte(i);
+            entries.push_back({std::move(bytes), 0U});
+        }
+        const auto bytes = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries, BTreeLeafValueLayout::BLVL_EMPTY);
+        const auto generic = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, bytes, BTreeLeafValueLayout::BLVL_EMPTY);
+        const auto fixed = PackedBTreePageCodec::decodeFixedKeys(bytes, width);
+        ASSERT_EQ(fixed.size(), generic.size());
+        for (size_t i = 0; i < generic.size(); ++i) {
+            ASSERT_EQ(fixed[i].key().size(), generic[i].key.size());
+            EXPECT_TRUE(std::equal(fixed[i].key().begin(), fixed[i].key().end(), generic[i].key.begin()));
+        }
+        EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bytes, 0)), FormatException);
+        EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bytes, 33)), FormatException);
+        EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bytes, width == 1 ? 2 : 1)), FormatException);
+    }
+}
+
+TEST(RelocatableBTreePageCodecTest, FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation) {
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 40; ++i)
+        entries.push_back({{std::byte{0x51}, std::byte(i)}, 0U});
+    const auto bytes = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries, BTreeLeafValueLayout::BLVL_EMPTY);
+    auto bad = bytes;
+    LittleEndianCodec::writeU32(bad, RSS_BTREE_PACKED_HEADER_BYTES, 1U);
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+    bad = bytes; bad.pop_back();
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+    bad = bytes; bad.push_back(std::byte{0});
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+    const auto restarts = LittleEndianCodec::readU32(bytes, 16U);
+    const auto stream = RSS_BTREE_PACKED_HEADER_BYTES + restarts * sizeof(uint32_t);
+    bad = bytes; bad[stream] = std::byte{1};
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+    // The second entry's one-byte suffix must not duplicate the first key.
+    bad = bytes; bad[stream + 6U] = std::byte{0};
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+}

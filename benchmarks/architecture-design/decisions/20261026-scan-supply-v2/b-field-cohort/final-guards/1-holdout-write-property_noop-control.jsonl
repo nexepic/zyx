@@ -1,0 +1,10 @@
+{"timing_benchmark":true,"case":"property_noop","iteration":0,"latency_ms":17.296659999999999,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":1,"latency_ms":9.1703759999999992,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":2,"latency_ms":4.7870489999999997,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":3,"latency_ms":5.6782890000000004,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":4,"latency_ms":5.5470240000000004,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":5,"latency_ms":4.957084,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":6,"latency_ms":4.9591250000000002,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":7,"latency_ms":5.1199960000000004,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":8,"latency_ms":6.4913850000000002,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}
+{"timing_benchmark":true,"case":"property_noop","iteration":9,"latency_ms":5.3474279999999998,"rows":[[["double",568.98639800000001]]],"postcondition_rows":[[["double",568.98639800000001]]]}

@@ -1,0 +1,12 @@
+{
+  "actual_independent_processes_per_engine_case": 2,
+  "actual_direct_open_observations_per_engine_dataset": 2,
+  "rounds": [
+    "AB",
+    "BA"
+  ],
+  "warmups": 3,
+  "iterations": 10,
+  "explanation": "Copied protocol retained stale open observation description of three, while preregistered executable loop and processes field specify two. No experiment changed; original metadata preserved. All two rounds are retained.",
+  "runner_sha256": "df6279185bac2d86dfbad543aee37120aafc67c1a4d8ba244df97715433c25f3"
+}

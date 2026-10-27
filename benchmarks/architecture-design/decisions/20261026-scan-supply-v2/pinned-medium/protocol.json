@@ -1,0 +1,23 @@
+{
+  "formal_acceptance": false,
+  "scope": "medium all-node query only",
+  "cpu": 0,
+  "order": [
+    "control",
+    "candidate",
+    "candidate",
+    "control"
+  ],
+  "warmups": 3,
+  "iterations": 10,
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "binary_sha256": {
+    "control": "41d939c3c35a0acfff8fb3a70513611c91764ee914c59e8f596cb70c0bc36872",
+    "candidate": "e214bb737ed7cd05b222bdd84f5b0c11f670e182251e91700748a24b07246e4e"
+  },
+  "quality": {
+    "each_worker_mad_over_median_max": 0.1,
+    "within_engine_process_median_max_over_min": 1.2
+  },
+  "reason": "Check repeatability with CPU placement and temporal drift controlled; no gate relaxation"
+}

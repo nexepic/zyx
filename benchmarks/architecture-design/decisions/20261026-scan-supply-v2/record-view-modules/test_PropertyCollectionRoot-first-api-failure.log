@@ -1,0 +1,16 @@
+/workspace/zyx/tests/src/storage/relocatable/property/test_PropertyCollectionRoot.cpp:547:42: error: no member named 'encode' in 'graph::storage::CanonicalPropertyValueCodec'
+  547 |             CanonicalPropertyValueCodec::encode(value.entries[i].value));
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1885:69: note: expanded from macro 'EXPECT_EQ'
+ 1885 |   EXPECT_PRED_FORMAT2(::testing::internal::EqHelper::Compare, val1, val2)
+      |                                                                     ^~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest_pred_impl.h:144:40: note: expanded from macro 'EXPECT_PRED_FORMAT2'
+  144 |   GTEST_PRED_FORMAT2_(pred_format, v1, v2, GTEST_NONFATAL_FAILURE_)
+      |                                        ^~
+/workspace/zyx-sysroot/usr/include/gtest/gtest_pred_impl.h:134:43: note: expanded from macro 'GTEST_PRED_FORMAT2_'
+  134 |   GTEST_ASSERT_(pred_format(#v1, #v2, v1, v2), on_failure)
+      |                                           ^~
+/workspace/zyx-sysroot/usr/include/gtest/gtest_pred_impl.h:79:52: note: expanded from macro 'GTEST_ASSERT_'
+   79 |   if (const ::testing::AssertionResult gtest_ar = (expression)) \
+      |                                                    ^~~~~~~~~~
+1 error generated.

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/generality-presence",
+    "verify",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/generality-presence-private.zyx"
+  ],
+  "returncode": 0,
+  "source_sha256_before": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "source_sha256_after": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "binary_sha256": "abd3c00dee3f9616fc77e2dc11da3c01cb6e1fb715422cbdd2dd7c15d2cf7431",
+  "library_sha256": "1604abb172a964de930b6acf5c47372bedcf00fbb9e9f3bb4362698052a80aff",
+  "wall_seconds": 219.37326237700472,
+  "target_bytes": 128712704,
+  "query_benchmark": false,
+  "default_query_timeout_ms": 30000,
+  "owners": 16384,
+  "mixed_mutation_batches": 512
+}

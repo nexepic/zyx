@@ -1,0 +1,77 @@
+{
+  "scope": "Exact immutable input sizes and fresh-launcher whole-primary-worker RSS; not a guard/adoption acceptance and not query-only memory. Kuzu Python runtime is not normalized.",
+  "file_sizes": {
+    "medium": {
+      "control_bytes": 256507904,
+      "candidate_bytes": 259391488,
+      "candidate_over_control": 1.0112416964741953,
+      "review_required": false
+    },
+    "holdout": {
+      "control_bytes": 222035968,
+      "candidate_bytes": 224002048,
+      "candidate_over_control": 1.0088547815820543,
+      "review_required": false
+    }
+  },
+  "primary_worker_rss": {
+    "medium-control": {
+      "process_peak_rss_kib": [
+        80756,
+        80608,
+        80620
+      ],
+      "median_peak_kib": 80620,
+      "maximum_peak_kib": 80756
+    },
+    "medium-candidate": {
+      "process_peak_rss_kib": [
+        81116,
+        81024,
+        81256
+      ],
+      "median_peak_kib": 81116,
+      "maximum_peak_kib": 81256,
+      "maximum_over_control_maximum": 1.0061914904155729,
+      "max_review_required": false
+    },
+    "medium-kuzu": {
+      "process_peak_rss_kib": [
+        54400,
+        54400,
+        54400
+      ],
+      "median_peak_kib": 54400,
+      "maximum_peak_kib": 54400
+    },
+    "holdout-control": {
+      "process_peak_rss_kib": [
+        80604,
+        80736,
+        80812
+      ],
+      "median_peak_kib": 80736,
+      "maximum_peak_kib": 80812
+    },
+    "holdout-candidate": {
+      "process_peak_rss_kib": [
+        81044,
+        80732,
+        80892
+      ],
+      "median_peak_kib": 80892,
+      "maximum_peak_kib": 81044,
+      "maximum_over_control_maximum": 1.002870860763253,
+      "max_review_required": false
+    },
+    "holdout-kuzu": {
+      "process_peak_rss_kib": [
+        54272,
+        54272,
+        54272
+      ],
+      "median_peak_kib": 54272,
+      "maximum_peak_kib": 54272
+    }
+  }
+}

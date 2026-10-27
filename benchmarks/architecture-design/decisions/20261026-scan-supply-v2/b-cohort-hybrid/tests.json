@@ -1,0 +1,373 @@
+{
+  "tests": 32,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T19:33:56Z",
+  "time": "32.715s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdPublicConversionTest",
+      "tests": 12,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:33:56Z",
+      "time": "13.985s",
+      "testsuite": [
+        {
+          "name": "PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:56Z",
+          "time": "1.099s",
+          "classname": "HybridPropertyColdPublicConversionTest",
+          "row_steady_bytes": "1441792",
+          "candidate_steady_bytes": "1048576"
+        },
+        {
+          "name": "UnprofitableColdCohortNeverInstallsAnEarlierGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 102,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:57Z",
+          "time": "0.136s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 116,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:57Z",
+          "time": "1.39s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:58Z",
+          "time": "0.279s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 134,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:59Z",
+          "time": "1.615s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "PublicInverseRetainsSevenConvertedGroupsAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 152,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:00Z",
+          "time": "2.028s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:02Z",
+          "time": "1.254s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "PartialAndCompletePublicationRecoverAllColdGroupsOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 175,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:04Z",
+          "time": "1.697s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 194,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:05Z",
+          "time": "0.89s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:06Z",
+          "time": "1.901s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 252,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:08Z",
+          "time": "0.08s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        },
+        {
+          "name": "RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 272,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:08Z",
+          "time": "1.607s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyConversionPreparationTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:34:10Z",
+      "time": "0.054s",
+      "testsuite": [
+        {
+          "name": "FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 37,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 62,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "CompleteMembershipBoundPacksIntoActualSlottedPageCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.007s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 123,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 159,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 224,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 241,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 253,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        },
+        {
+          "name": "IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 268,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.029s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:34:10Z",
+      "time": "18.672s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InvalidCohortEnvelopeRefusesBeforeIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 49,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NonColumnGroupNeverPublishesAnEarlierPreparedGroup",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.048s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "UnprofitableWholeCohortKeepsEveryRowAuthority",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.089s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.175s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 112,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:10Z",
+          "time": "0.473s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "row_steady_bytes": "917504",
+          "candidate_steady_bytes": "1048576",
+          "peak_allocated_bytes": "1179648",
+          "prepared_field_frames": "8",
+          "prepared_index_frames": "1",
+          "fresh_pool_bytes": "262144"
+        },
+        {
+          "name": "CancellationAfterCompleteCostPreparationKeepsAllRowRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 161,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:11Z",
+          "time": "0.261s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:11Z",
+          "time": "0.382s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        },
+        {
+          "name": "InverseOneGroupPreservesOtherGroupAuthorityAndOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:34:11Z",
+          "time": "17.235s",
+          "classname": "HybridPropertyCohortAdmissionTest",
+          "shared_field_pages": "0"
+        }
+      ]
+    }
+  ]
+}

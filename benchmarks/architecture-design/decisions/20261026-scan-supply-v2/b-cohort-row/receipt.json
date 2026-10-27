@@ -1,0 +1,12 @@
+{
+  "profile": "row",
+  "tests": 3,
+  "failures": 0,
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-row/modules",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-row/tests.json"
+  ],
+  "library_sha256": "5731a53a9d1085d57dfb3cbba6bc9a6871fcd9c86c969547ff99c249aff74d21",
+  "scope": "three matching-profile ordinary conversion modules, no full suite"
+}

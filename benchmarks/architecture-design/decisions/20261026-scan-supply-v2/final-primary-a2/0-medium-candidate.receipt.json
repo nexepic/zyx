@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/public-a2-final",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-v4-a2-primary-0-medium-candidate.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "3",
+    "10"
+  ],
+  "oracle": "passed",
+  "samples": 40,
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 81500,
+    "process_user_cpu_seconds": 150.972967,
+    "process_system_cpu_seconds": 15.901636,
+    "process_input_blocks": 6824,
+    "process_output_blocks": 424,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  }
+}

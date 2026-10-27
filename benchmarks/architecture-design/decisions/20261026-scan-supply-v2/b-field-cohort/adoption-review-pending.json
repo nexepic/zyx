@@ -1,0 +1,85 @@
+{
+  "stage_exit": "pending",
+  "progress_percent": 45,
+  "scope": "Local field-page replacement inside experimental SCAN BUILDING conversion; logical64-owner groups unchanged",
+  "primary_gate": {
+    "primary_geomean_speedup": 2.002188734454638,
+    "gain_gate_passed": true,
+    "kuzu_p50_target_passed": false,
+    "guards_and_lifecycle_required_separately": true
+  },
+  "correctness": {
+    "primary_oracles": 720,
+    "guard_oracles": 720,
+    "direct_handle_observations": 12,
+    "untimed_write_oracles": 12,
+    "selected_module_tests": 97,
+    "generic_entities": 16384,
+    "generic_mixed_batches": 512,
+    "actual_physical_slot_reuse": "../b-cohort-strengthened/receipt.json"
+  },
+  "layout_work": {
+    "score_pages": [
+      3437,
+      859
+    ],
+    "group_score_union_pages": [
+      3443,
+      1718
+    ],
+    "value_bytes_and_entity_counts": "unchanged"
+  },
+  "costs": {
+    "medium_holdout_file_growth_percent": [
+      1.124,
+      0.885
+    ],
+    "medium_holdout_primary_peak_rss_growth_percent": [
+      0.619,
+      0.287
+    ],
+    "edge_completed_write_bytes_medium": [
+      1105921,
+      1171780
+    ],
+    "edge_completed_write_bytes_holdout": [
+      1041216,
+      1134596
+    ],
+    "conversion_wall_seconds_medium_holdout": [
+      12738.766272,
+      10051.10773
+    ],
+    "conversion_peak_rss_kib_medium_holdout": [
+      77532,
+      77428
+    ],
+    "measurement_limits": "Engine completed writes are not hardware media writes; whole-process RSS is not query-only; conversion overlapped other preparation and cannot establish fair speedup"
+  },
+  "adoption_proposal_pending_review": {
+    "default_cohort": 1,
+    "opt_in_cohort_max": 8,
+    "intended_workload": "Long-lived read-heavy experimental SCAN images with amortized offline conversion and full-open authentication",
+    "excluded_performance_claims": [
+      "No general write-heavy rollout",
+      "No point-lookup or tail-latency SLO guarantee",
+      "No short-lived-open performance guarantee",
+      "No evidence of Kuzu superiority",
+      "No claim that larger logical groups or a backend rewrite fixes residual gap"
+    ],
+    "compatibility": "Existing persistent format and public ABI retained relative to A; source copied privately, source hashes preserved, no in-place conversion or automatic migration"
+  },
+  "remaining": [
+    "Complete preregistered guard-review-1 without selecting best samples",
+    "Assess original and focused P50/P95/process dispersion together",
+    "Finalize explicit adoption limits and V2/V3/V4 exit evidence; no milestone credited yet"
+  ],
+  "platform_validation": {
+    "Linux": "selected tests executed",
+    "macOS": "not executed",
+    "Windows": "not executed",
+    "WASM": "not executed"
+  },
+  "kuzu_target_passed": false,
+  "superseded_by": "../acceptance.json"
+}

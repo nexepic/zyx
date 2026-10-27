@@ -1,0 +1,26 @@
+{
+  "profile": "row",
+  "tests": 110,
+  "failures": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-row/modules",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-row/tests.json"
+  ],
+  "library_sha256": "c59b8bb52ba75cab85dbc45d421c456d408deab33447f204704f080d939ad148",
+  "source_job_timing_checks": [
+    {
+      "source": "src/storage/relocatable/index/BTreeIndex.cpp",
+      "compile_after_edit": true
+    },
+    {
+      "source": "src/storage/relocatable/index/BTreePage.cpp",
+      "compile_after_edit": true
+    },
+    {
+      "source": "src/storage/relocatable/property/HybridPropertyColdRowInspection.cpp",
+      "compile_after_edit": true
+    }
+  ],
+  "recompiled_uncertain_objects": [],
+  "scope": "full matching-profile O3 core; unchanged StorageIO test-hook object only; selected modules, not full suite"
+}

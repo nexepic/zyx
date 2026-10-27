@@ -1,0 +1,10 @@
+{
+  "oracle": "passed",
+  "latency_usable": false,
+  "last_window": "# window 2 allocations 49499 requested_bytes 36883608 frees 49497 failed 0 sample_interval 256",
+  "heap_allocations": 49499,
+  "allocation_gate_passed": true,
+  "limit": 65000,
+  "A1_allocations": 181225,
+  "protocol": "same observer and warmup/count-only invocation as A1; final observed window after two warmups"
+}

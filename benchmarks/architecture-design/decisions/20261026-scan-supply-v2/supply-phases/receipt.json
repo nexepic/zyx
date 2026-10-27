@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/supply-phases/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-medium-supply-phases.db",
+    "all_nodes_property_filter",
+    "4",
+    "80"
+  ],
+  "formal_performance": false,
+  "complete_oracles": 80,
+  "sampled_control_median_ratio": 1.0535170908587839,
+  "quality_passed": false,
+  "phase_basis": "elapsed time from calibrated invariant TSC",
+  "cpu_wall_median_ratio": 1.0000033009244498,
+  "tsc_calibration_audit_ratio": 0.999901249544,
+  "source_inclusive_median_ms": 148.5844095,
+  "callback_median_ms": 5.4695425,
+  "source_exclusive_elapsed_median_share": 0.6489112602107665,
+  "source_calls_median": 440.0,
+  "callback_calls_median": 11938.0,
+  "query_cpu_median_ms": 220.05000000000052,
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+  "interpretation": "Elapsed attribution eligible only if quality_passed; not exact CPU shares; boundary excludes higher-level adapter and membership supply"
+}

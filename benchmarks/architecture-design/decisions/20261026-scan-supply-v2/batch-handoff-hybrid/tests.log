@@ -1,0 +1,152 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 67 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from LogicalPlanCertifiedBatchHandoffTest
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.BorrowsReusedBatchesAndPreservesPhysicalFloatingOrder
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.BorrowsReusedBatchesAndPreservesPhysicalFloatingOrder (1 ms)
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.InvalidIdsFailBeforeSourceAccessAndNeverReplay
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.InvalidIdsFailBeforeSourceAccessAndNeverReplay (2 ms)
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.ProviderDeclineRetainsOrdinaryReferencePath
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.ProviderDeclineRetainsOrdinaryReferencePath (0 ms)
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.GuardFailureDuringProductionIsNotRetried
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.GuardFailureDuringProductionIsNotRetried (0 ms)
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.PrivateBytePressureSplitsWithoutDuplicateCounts
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.PrivateBytePressureSplitsWithoutDuplicateCounts (5 ms)
+[ RUN      ] LogicalPlanCertifiedBatchHandoffTest.RecordBoundDoesNotFetchNextSourceBatch
+[       OK ] LogicalPlanCertifiedBatchHandoffTest.RecordBoundDoesNotFetchNextSourceBatch (1 ms)
+[----------] 6 tests from LogicalPlanCertifiedBatchHandoffTest (11 ms total)
+
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows
+[       OK ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath
+[       OK ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath (2 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults (3 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry (8 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches (9 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry (2 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch
+[       OK ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch (5 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery
+[       OK ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates
+[       OK ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates (52 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure
+[       OK ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics
+[       OK ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution (3 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn
+[       OK ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches (2 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure (0 ms)
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest (98 ms total)
+
+[----------] 10 tests from LogicalPlanDirectColumnAggregateTest
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.CompleteTupleGroupingDistinctAndNumericStateMatchLegacy
+[       OK ] LogicalPlanDirectColumnAggregateTest.CompleteTupleGroupingDistinctAndNumericStateMatchLegacy (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.StringAndNumericPredicatesFeedGroupedCountsWithoutRows
+[       OK ] LogicalPlanDirectColumnAggregateTest.StringAndNumericPredicatesFeedGroupedCountsWithoutRows (1 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.DistinctPreservesTypesNullAndEmbeddedStringBytes
+[       OK ] LogicalPlanDirectColumnAggregateTest.DistinctPreservesTypesNullAndEmbeddedStringBytes (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics
+[       OK ] LogicalPlanDirectColumnAggregateTest.EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.AccumulationPreservesPhysicalScanOrder
+[       OK ] LogicalPlanDirectColumnAggregateTest.AccumulationPreservesPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks
+[       OK ] LogicalPlanDirectColumnAggregateTest.SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput
+[       OK ] LogicalPlanDirectColumnAggregateTest.PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics
+[       OK ] LogicalPlanDirectColumnAggregateTest.ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics (9 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.GuardAdmissionTypedExceptionDuringProductionIsNeverRetried
+[       OK ] LogicalPlanDirectColumnAggregateTest.GuardAdmissionTypedExceptionDuringProductionIsNeverRetried (0 ms)
+[ RUN      ] LogicalPlanDirectColumnAggregateTest.PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay
+[       OK ] LogicalPlanDirectColumnAggregateTest.PartialTextCountsMergeAcrossBatchesAndMixedTypeFallbackWithoutReplay (1 ms)
+[----------] 10 tests from LogicalPlanDirectColumnAggregateTest (15 ms total)
+
+[----------] 25 tests from BoundedBatchTest
+[ RUN      ] BoundedBatchTest.EnforcesRowsAndReusesStorageAfterClear
+[       OK ] BoundedBatchTest.EnforcesRowsAndReusesStorageAfterClear (0 ms)
+[ RUN      ] BoundedBatchTest.EnforcesByteBudgetAndRejectsOversizedValue
+[       OK ] BoundedBatchTest.EnforcesByteBudgetAndRejectsOversizedValue (0 ms)
+[ RUN      ] BoundedBatchTest.RecalculatesBytesAfterRowsAreEnriched
+[       OK ] BoundedBatchTest.RecalculatesBytesAfterRowsAreEnriched (0 ms)
+[ RUN      ] BoundedBatchTest.RejectsInvalidConstruction
+[       OK ] BoundedBatchTest.RejectsInvalidConstruction (0 ms)
+[ RUN      ] BoundedBatchTest.CapsEagerReservationByTheByteBudget
+[       OK ] BoundedBatchTest.CapsEagerReservationByTheByteBudget (0 ms)
+[ RUN      ] BoundedBatchTest.SharesLiveBytesAcrossOwnersAndRefundsClearAndDestruction
+[       OK ] BoundedBatchTest.SharesLiveBytesAcrossOwnersAndRefundsClearAndDestruction (0 ms)
+[ RUN      ] BoundedBatchTest.SharedRecalculationAndOwnershipTransferPreserveAccounting
+[       OK ] BoundedBatchTest.SharedRecalculationAndOwnershipTransferPreserveAccounting (0 ms)
+[ RUN      ] BoundedBatchTest.ChargedPopKeepsMovedValueInTheSharedBudget
+[       OK ] BoundedBatchTest.ChargedPopKeepsMovedValueInTheSharedBudget (0 ms)
+[ RUN      ] BoundedBatchTest.ChargedAppendTransfersAnExistingRowWithoutDoubleCharge
+[       OK ] BoundedBatchTest.ChargedAppendTransfersAnExistingRowWithoutDoubleCharge (0 ms)
+[ RUN      ] BoundedBatchTest.ReservationSplitTransfersBytesWithoutChangingTheSharedTotal
+[       OK ] BoundedBatchTest.ReservationSplitTransfersBytesWithoutChangingTheSharedTotal (0 ms)
+[ RUN      ] BoundedBatchTest.ReservationAbsorbTransfersLiveBytesWithoutRefunding
+[       OK ] BoundedBatchTest.ReservationAbsorbTransfersLiveBytesWithoutRefunding (0 ms)
+[ RUN      ] BoundedBatchTest.FailedInsertionRefundsSharedReservation
+[       OK ] BoundedBatchTest.FailedInsertionRefundsSharedReservation (0 ms)
+[ RUN      ] BoundedBatchTest.ReservationsMoveWithoutDuplicatingChargesAndCannotOverflow
+[       OK ] BoundedBatchTest.ReservationsMoveWithoutDuplicatingChargesAndCannotOverflow (0 ms)
+[ RUN      ] BoundedBatchTest.MoveConstructionEmptiesSourceAndRetainsItsSharedBudgetForReuse
+[       OK ] BoundedBatchTest.MoveConstructionEmptiesSourceAndRetainsItsSharedBudgetForReuse (0 ms)
+[ RUN      ] BoundedBatchTest.MoveAssignmentRefundsOldOwnerAndKeepsBothBatchesReusable
+[       OK ] BoundedBatchTest.MoveAssignmentRefundsOldOwnerAndKeepsBothBatchesReusable (0 ms)
+[ RUN      ] BoundedBatchTest.FailedEstimatorCopyPreservesSourceDestinationAndReservations
+[       OK ] BoundedBatchTest.FailedEstimatorCopyPreservesSourceDestinationAndReservations (0 ms)
+[ RUN      ] BoundedBatchTest.RecalculationAbsorbsEnrichmentWithoutChargingTwice
+[       OK ] BoundedBatchTest.RecalculationAbsorbsEnrichmentWithoutChargingTwice (0 ms)
+[ RUN      ] BoundedBatchTest.CapacityOwnerRefundsOnlyAfterClearReleasesItsBuffer
+[       OK ] BoundedBatchTest.CapacityOwnerRefundsOnlyAfterClearReleasesItsBuffer (0 ms)
+[ RUN      ] BoundedBatchTest.CapacityAdmissionFailureRefundsPayloadAndKeepsBatchReusable
+[       OK ] BoundedBatchTest.CapacityAdmissionFailureRefundsPayloadAndKeepsBatchReusable (0 ms)
+[ RUN      ] BoundedBatchTest.CapacityMoveAcrossBudgetsTransfersTheAllocatorOwnerAndRefundsOldSlots
+[       OK ] BoundedBatchTest.CapacityMoveAcrossBudgetsTransfersTheAllocatorOwnerAndRefundsOldSlots (0 ms)
+[ RUN      ] BoundedBatchTest.MoveConstructionPreservesEmbeddedObjectClassification
+[       OK ] BoundedBatchTest.MoveConstructionPreservesEmbeddedObjectClassification (0 ms)
+[ RUN      ] BoundedBatchTest.EscapedEmbeddedValueDenialLeavesThePublishedBatchIntact
+[       OK ] BoundedBatchTest.EscapedEmbeddedValueDenialLeavesThePublishedBatchIntact (0 ms)
+[ RUN      ] BoundedBatchTest.ThrowingEscapeMoveRestoresTheEmbeddedChargeBeforeRetry
+[       OK ] BoundedBatchTest.ThrowingEscapeMoveRestoresTheEmbeddedChargeBeforeRetry (0 ms)
+[ RUN      ] BoundedBatchTest.DiscardDestroysPayloadBeforeRefundingItsSharedCharge
+[       OK ] BoundedBatchTest.DiscardDestroysPayloadBeforeRefundingItsSharedCharge (0 ms)
+[ RUN      ] BoundedBatchTest.FailedChargedInsertionDestroysRejectedPayloadBeforeRefunding
+[       OK ] BoundedBatchTest.FailedChargedInsertionDestroysRejectedPayloadBeforeRefunding (0 ms)
+[----------] 25 tests from BoundedBatchTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 67 tests from 4 test suites ran. (125 ms total)
+[  PASSED  ] 67 tests.

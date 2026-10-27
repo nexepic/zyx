@@ -1,0 +1,19 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+unknown file: Failure
+C++ exception with description "native hybrid candidate rejects unadapted writes and pool reconciliation" thrown in the test body.
+
+[  FAILED  ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin (282 ms)
+[----------] 1 test from BuildingScanFieldCohortTest (282 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (282 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+
+ 1 FAILED TEST

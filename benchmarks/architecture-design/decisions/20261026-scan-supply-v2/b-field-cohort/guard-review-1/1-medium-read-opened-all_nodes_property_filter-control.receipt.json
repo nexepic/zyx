@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/public-b-final",
+    "read-opened",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-v4-b-review-1-medium-read-opened-all_nodes_property_filter-control.db",
+    "all_nodes_property_filter",
+    "0",
+    "1"
+  ],
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 79684,
+    "process_user_cpu_seconds": 8.870112,
+    "process_system_cpu_seconds": 0.747613,
+    "process_input_blocks": 0,
+    "process_output_blocks": 8,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  },
+  "oracle": "passed",
+  "samples": 1
+}

@@ -1,0 +1,25 @@
+{
+  "limit_and_nonzero_exit": {
+    "returncode": 7,
+    "process_peak_rss_kib": 640,
+    "process_user_cpu_seconds": 0.0,
+    "process_system_cpu_seconds": 0.004943,
+    "process_input_blocks": 0,
+    "process_output_blocks": 0,
+    "timed_out": false,
+    "launcher_returncode": 7,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  },
+  "observed_limits": [
+    "6291456",
+    "4194304"
+  ],
+  "timeout_group_cleanup": {
+    "returncode": -9,
+    "resources_unavailable": true,
+    "timed_out": true,
+    "launcher_returncode": -9,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  },
+  "formal_performance": false
+}

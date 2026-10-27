@@ -1,0 +1,14 @@
+{
+  "scan_run_tests": 80,
+  "scan_run_failures": 12,
+  "common_error": "scan membership omits a live primary Node group",
+  "fixture_precondition": "HybridPropertyColdPublicConversion and HybridPropertyCohortAdmission construct ordinary HYBRID data without the mandatory SCAN primary membership directory. They must run against HYBRID1/SCAN0; code/assertions remain unchanged.",
+  "source_rule": "HybridPropertyDirectoryIntegrity.hpp checks primary group coverage under SCAN; untouched by candidate B. Field-major packing is additionally gated to BUILDING, absent in these ordinary fixtures.",
+  "correct_scan_selection": [
+    "BuildingScanFieldCohortTest",
+    "BuildingScanMembershipTest",
+    "ScanMembershipDirectoryTest",
+    "HybridPropertyConversionPreparationTest"
+  ],
+  "ordinary_selection": "Run complete ColdPublicConversion, CohortAdmission, ConversionPreparation modules against matching HYBRID1/SCAN0 and ROW0 profiles; preserve mismatched results, do not count them as passing."
+}

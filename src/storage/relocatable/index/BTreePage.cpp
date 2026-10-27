@@ -602,6 +602,56 @@ namespace graph::storage {
 		return entries;
 	}
 
+	std::span<const std::byte> BTreeFixedKey::key() const {
+		if (!width || width > bytes.size())
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree key has an invalid width");
+		return std::span<const std::byte>(bytes).first(width);
+	}
+
+	utils::OwnedStdVector<BTreeFixedKey>
+	PackedBTreePageCodec::decodeFixedKeys(std::span<const std::byte> bytes, size_t keyWidth) {
+		if (!keyWidth || keyWidth > BTreeFixedKey::MAX_BYTES)
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree key width exceeds its bounded representation");
+		debug::PerfTrace::addValue("native_btree.read.packed_page_decodes", 1);
+		debug::PerfTrace::addValue("native_btree.read.fixed_key_page_decodes", 1);
+		const auto header = decodePackedHeader(bytes);
+		const auto restarts = restartOffsets(bytes, header);
+		const auto stream = bytes.subspan(header.stream_offset, header.stream_bytes);
+		// A distinct fixed-width key needs two length varints and at least one
+		// suffix byte. Reject impossible counts before reserving decoded storage.
+		if (header.entry_count > stream.size() / 3U)
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree entry count exceeds its stream");
+		utils::OwnedStdVector<BTreeFixedKey> keys;
+		keys.reserve(header.entry_count);
+		size_t offset = 0;
+		BTreeFixedKey previous;
+		for (uint32_t index = 0; index < header.entry_count; ++index) {
+			const bool restart = index % header.restart_interval == 0U;
+			if (restart && offset != restarts[index / header.restart_interval])
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree restart does not point to an entry");
+			if (offset == stream.size())
+				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL, "fixed B+Tree entry stream ended early");
+			const auto shared = readVarint(stream, offset);
+			const auto suffix = readVarint(stream, offset);
+			if ((restart && shared != 0U) || shared > previous.width || shared > keyWidth ||
+				suffix != keyWidth - shared || suffix > stream.size() - offset)
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree key has a noncanonical prefix or width");
+			BTreeFixedKey key = previous;
+			key.width = static_cast<uint8_t>(keyWidth);
+			std::copy_n(stream.begin() + static_cast<std::ptrdiff_t>(offset), static_cast<size_t>(suffix),
+				key.bytes.begin() + static_cast<std::ptrdiff_t>(shared));
+			offset += static_cast<size_t>(suffix);
+			if (index && !lessKey(previous.key(), key.key()))
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree keys are not strictly ordered");
+			keys.push_back(key);
+			previous = key;
+		}
+		if (offset != stream.size())
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree entry stream has trailing bytes");
+		debug::PerfTrace::addValue("native_btree.read.fixed_keys_decoded", header.entry_count);
+		return keys;
+	}
+
 	uint32_t PackedBTreePageCodec::entryCount(std::span<const std::byte> bytes) {
 		const PackedHeader header = decodePackedHeader(bytes);
 		static_cast<void>(restartOffsets(bytes, header));
@@ -737,6 +787,20 @@ namespace graph::storage {
         decodedEntries = std::move(validated);
         return page;
     }
+
+	BTreePage BTreePage::openFixedKeys(SlottedPage source,
+		utils::OwnedStdVector<BTreeFixedKey> &keys, size_t keyWidth) {
+		BTreePage page(std::move(source));
+		const auto payload = page.validatePackedEnvelope();
+		const auto header = page.header();
+		if (header.kind != BTreeNodeKind::BPN_LEAF || header.leaf_value_layout != BTreeLeafValueLayout::BLVL_EMPTY)
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed-key decode requires a key-only leaf");
+		auto decoded = withIndexRecord(page.page_, payload, [&](auto bytes) {
+			return PackedBTreePageCodec::decodeFixedKeys(bytes, keyWidth);
+		});
+		keys = std::move(decoded);
+		return page;
+	}
 
     BTreePage BTreePage::openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
             utils::OwnedStdVector<BTreePageEntry> &decodedEntries) {

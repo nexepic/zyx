@@ -1,0 +1,82 @@
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:27: error: implicit conversion from 'unsigned int' to 'uint16_t' (aka 'unsigned short') changes value from 4294967295 to 65535 [-Werror,-Wconstant-conversion]
+   69 |                 [](auto &v) { v.flags = UINT32_MAX; }}) {
+      |                                       ~ ^~~~~~~~~~
+/usr/include/stdint.h:118:23: note: expanded from macro 'UINT32_MAX'
+  118 | # define UINT32_MAX             (4294967295U)
+      |                                  ^~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2655:7: note: in instantiation of function template specialization 'RelocatableBTreePageCodecTest_ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata_Test::TestBody()::(anonymous class)::operator()<graph::storage::PageOwnerHeader>' requested here
+ 2655 |       std::declval<_Fn>()(std::declval<_Args>()...)
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2666:29: note: while substituting deduced template arguments into function template '_S_test' [with _Fn = (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3) &, _Args = (no value)]
+ 2666 |       using type = decltype(_S_test<_Functor, _ArgTypes...>(0));
+      |                             ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2672:14: note: in instantiation of template class 'std::__result_of_impl<false, false, (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3) &, graph::storage::PageOwnerHeader &>' requested here
+ 2672 |     : public __result_of_impl<
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:3035:29: note: in instantiation of template class 'std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3) &, graph::storage::PageOwnerHeader &>' requested here
+ 3035 |                                __void_t<typename _Result::type>>
+      |                                                  ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: during template argument deduction for class template partial specialization '__is_invocable_impl<_Result, _Ret, true, __void_t<typename _Result::type>>' [with _Result = std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3) &, graph::storage::PageOwnerHeader &>, _Ret = void]
+  349 |         : __is_invocable_impl<_Res2, _Res>::type
+      |           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: in instantiation of template class 'std::__is_invocable_impl<std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3) &, graph::storage::PageOwnerHeader &>, void>' requested here
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:353:34: note: in instantiation of template class 'std::function<void (graph::storage::PageOwnerHeader &)>::_Callable<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3)>' requested here
+  353 |         using _Requires = __enable_if_t<_Cond::value, _Tp>;
+      |                                         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:434:33: note: in instantiation of template type alias '_Requires' requested here
+  434 |                typename _Constraints = _Requires<_Callable<_Functor>>>
+      |                                        ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:435:2: note: in instantiation of default argument for 'function<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3)>' required here
+  435 |         function(_Functor&& __f)
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~
+  436 |         noexcept(_Handler<_Functor>::template _S_nothrow_init<_Functor>())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |         : _Function_base()
+      |         ~~~~~~~~~~~~~~~~~~
+  438 |         {
+      |         ~
+  439 |           static_assert(is_copy_constructible<__decay_t<_Functor>>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |               "std::function target must be copy-constructible");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  441 |           static_assert(is_constructible<__decay_t<_Functor>, _Functor>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  442 |               "std::function target must be constructible from the "
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  443 |               "constructor argument");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~
+  444 | 
+  445 |           using _My_handler = _Handler<_Functor>;
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  446 | 
+  447 |           if (_My_handler::_M_not_empty_function(__f))
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |             {
+      |             ~
+  449 |               _My_handler::_M_init_functor(_M_functor,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                                            std::forward<_Functor>(__f));
+      |                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3: note: while substituting deduced template arguments into function template 'function' [with _Functor = (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:69:3), _Constraints = (no value)]
+   69 |                 [](auto &v) { v.flags = UINT32_MAX; }}) {
+      |                 ^
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:66:18: error: loop variable 'change' creates a copy from type 'std::function<void (graph::storage::PageOwnerHeader &)> const' [-Werror,-Wrange-loop-construct]
+   66 |         for (const auto change : std::vector<std::function<void(PageOwnerHeader &)>>{
+      |                         ^
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:66:7: note: use reference type 'std::function<void (graph::storage::PageOwnerHeader &)> const &' to prevent copying
+   66 |         for (const auto change : std::vector<std::function<void(PageOwnerHeader &)>>{
+      |              ^~~~~~~~~~~~~~~~~~~
+      |                         &
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:987:22: error: ignoring return value of function declared with 'nodiscard' attribute [-Werror,-Wunused-result]
+  987 |         EXPECT_THROW(page->header(), graph::query::execution::MaterializedByteLimitExceeded);
+      |                      ^~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+3 errors generated.

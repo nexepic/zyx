@@ -1,0 +1,44 @@
+{
+  "candidate": "B: field-major private BUILDING cohorts; existing 64-owner records and persistent format retained",
+  "before_implementation": true,
+  "entry_evidence": {
+    "qualified_property_supply_exclusive_elapsed_share": 0.6397217301631271,
+    "qualified_observer_ratio": 1.0061500115032966,
+    "allnode_score_groups": 3437,
+    "distinct_score_pages": 3437,
+    "encoded_score_bytes": 1979712,
+    "score_page_coverage_bytes": 14077952,
+    "single_score_group_pages": 3437,
+    "source": "layout-census/result.json; boundary-observer-tsc/receipt.json"
+  },
+  "limits_of_evidence": "Detailed phase observers failed original quality gate; their percentages do not justify selection. Entry is a falsifiable experiment based on qualified dominant supply boundary plus exact one-score-group-per-page amplification. No stage or adoption acceptance yet.",
+  "implementation": [
+    "Use existing gated <=8-group private BUILDING conversion, 1 MiB source account unchanged; default/offline cohort=1 retained, opt-in up to8",
+    "Across one atomic cohort, reuse bounded open pages per column token; separate group+membership metadata and cold ROW/extension bodies from hot columns",
+    "Keep group and its compact membership on the same page, preserve complete codecs, source/grant/epoch/old-pin/cancellation validation",
+    "No new public DB persistent format, no relaxed checks or owner budget; online non-BUILDING conversion behavior unchanged",
+    "Preflight consecutive eligible groups, stop at holes/schema/work bounds; no catch-and-reclassify after partial field publication",
+    "Same COW mutation/demotion, retirement, recovery and reopen paths must work with shared pages"
+  ],
+  "work_gate": {
+    "score_pages_max_fraction_of_A": 0.3,
+    "score_and_group_page_union_max_fraction_of_A": 0.65,
+    "full_result_oracles": "all four medium primaries plus lifecycle; logical count, identity and encoded scalar values unchanged"
+  },
+  "cost_model": {
+    "encoded_column_record_bytes": 576,
+    "slot_bytes": 16,
+    "cohort_groups_max": 8,
+    "hypothesis": "Six 576-byte records can share one 4KiB field page; eight same-field groups require about two pages. Separate group/membership pages are included in union gate. Cold bodies do not enter a hot-only read.",
+    "conditional_latency_model": "If r is fraction of query cost improved by page/layout work and q is measured remaining page-work fraction, extra gain=1/(1-r*(1-q)); r is not taken from failed profilers. End-to-end frozen gate still decides.",
+    "adoption_costs": "Measure full conversion/maintenance/file growth, resource peaks, point-write and read P50/P95. Fix or explicitly restrict any reproducible material regression; never silently default-adopt."
+  },
+  "validation": [
+    "new same-field multi-group packing + complete old/new value oracles",
+    "holes/partial last group/missing/NULL/mixed and wide fallback",
+    "old pin, shared page update/deletion/demotion and reopen",
+    "cancellation/budget refusal/rollback and publication failpoints",
+    "necessary conversion/BUILDING/native mutation module tests only; no full suite"
+  ],
+  "timing": "No full matrix during implementation; one final frozen three-way window after selected tests, work/lifecycle gates stabilize; keep every rejected window; same original 2x/Kuzu gates"
+}

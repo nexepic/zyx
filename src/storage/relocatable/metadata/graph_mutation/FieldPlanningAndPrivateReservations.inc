@@ -202,6 +202,8 @@
             auto largeFields = utils::OwnedVector<HybridPropertyLargeFieldPreparation>(
                 utils::OwnedPmrAllocator<HybridPropertyLargeFieldPreparation>(conversion.memory));
             std::shared_ptr<HybridPropertyConversionPreparation> fields;
+            const bool fieldMajorCohort = RSS_SCAN_PATH_FORMAT_ENABLED && conversion.cold_row_remainder &&
+                conversion.group_count > 1U && (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
             for (uint64_t groupOffset = 0; groupOffset < conversion.group_count; ++groupOffset) {
             const auto groupId = conversion.group_id + groupOffset;
             auto preparedGroup = [&] {
@@ -308,7 +310,8 @@
                 const HybridPropertyConversionPreparation::WholeRootResolver rootResolver = std::ref(resolveRoot);
                 return utils::shareOwned(std::unique_ptr<HybridPropertyConversionPreparation>(
                     new HybridPropertyConversionPreparation(batch, plan, checkpoint, largeResolver,
-                        conversion.compact_column_memberships, conversion.cold_row_remainder, rootResolver)));
+                        conversion.compact_column_memberships, conversion.cold_row_remainder, rootResolver,
+                        fieldMajorCohort, fieldMajorCohort ? fields.get() : nullptr)));
             }();
             if (!fields) fields = std::move(preparedGroup);
             else {
@@ -316,7 +319,12 @@
                     target.reserve(target.size() + part.size());
                     target.insert(target.end(), std::make_move_iterator(part.begin()), std::make_move_iterator(part.end()));
                 };
-                append(fields->pages_, preparedGroup->pages_);
+                if (fieldMajorCohort) {
+                    // Preparation borrowed the prior private arena. Restore the
+                    // complete cohort only after its next group succeeded.
+                    fields->pages_.swap(preparedGroup->pages_);
+                    fields->lanes_.swap(preparedGroup->lanes_);
+                } else append(fields->pages_, preparedGroup->pages_);
                 append(fields->owners_, preparedGroup->owners_);
                 append(fields->columns_, preparedGroup->columns_);
                 append(fields->extensions_, preparedGroup->extensions_);

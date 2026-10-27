@@ -1,0 +1,95 @@
+{
+  "scope": "Engine completed-write counters within mutation only, excluding private copy/open/postcondition queries; not physical media writes. Peak is maximum observed individual materialized account, not process RSS. Edge logical input is 1000 fixed-width source/target/weight triples; property set is one double. No-op has no changed payload.",
+  "rows": [
+    {
+      "scale": "medium",
+      "case": "property_set",
+      "logical_fixed_width_input_bytes": 8,
+      "control": {
+        "completed_storage_write_bytes": 218112,
+        "largest_materialized_account_peak_bytes": 115296,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 222208,
+        "largest_materialized_account_peak_bytes": 115296,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    },
+    {
+      "scale": "medium",
+      "case": "property_noop",
+      "logical_fixed_width_input_bytes": 0,
+      "control": {
+        "completed_storage_write_bytes": 0,
+        "largest_materialized_account_peak_bytes": 87459,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 0,
+        "largest_materialized_account_peak_bytes": 89924,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    },
+    {
+      "scale": "medium",
+      "case": "edge_batch_1000",
+      "logical_fixed_width_input_bytes": 24000,
+      "control": {
+        "completed_storage_write_bytes": 1105921,
+        "largest_materialized_account_peak_bytes": 738272,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 1171780,
+        "largest_materialized_account_peak_bytes": 738272,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    },
+    {
+      "scale": "holdout",
+      "case": "property_set",
+      "logical_fixed_width_input_bytes": 8,
+      "control": {
+        "completed_storage_write_bytes": 218176,
+        "largest_materialized_account_peak_bytes": 115392,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 222336,
+        "largest_materialized_account_peak_bytes": 115392,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    },
+    {
+      "scale": "holdout",
+      "case": "property_noop",
+      "logical_fixed_width_input_bytes": 0,
+      "control": {
+        "completed_storage_write_bytes": 0,
+        "largest_materialized_account_peak_bytes": 86842,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 0,
+        "largest_materialized_account_peak_bytes": 89830,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    },
+    {
+      "scale": "holdout",
+      "case": "edge_batch_1000",
+      "logical_fixed_width_input_bytes": 24000,
+      "control": {
+        "completed_storage_write_bytes": 1041216,
+        "largest_materialized_account_peak_bytes": 738272,
+        "binary_sha256": "14d085448a5d8d941f51dfc3dd6f7851658da39d49e53f4b5448ba40d3ed8d2c"
+      },
+      "candidate": {
+        "completed_storage_write_bytes": 1134596,
+        "largest_materialized_account_peak_bytes": 738272,
+        "binary_sha256": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5"
+      }
+    }
+  ]
+}

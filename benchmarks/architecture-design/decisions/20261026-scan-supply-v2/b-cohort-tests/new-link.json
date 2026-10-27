@@ -1,0 +1,19 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/StorageIO.o",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-tests/test_BuildingScanFieldCohorts.o",
+  "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+  "-L/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu",
+  "-lgtest_main",
+  "-lgtest",
+  "-lz",
+  "-llz4",
+  "-lxxhash",
+  "-lzstd",
+  "-lboost_filesystem",
+  "-lboost_atomic",
+  "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+  "-pthread",
+  "-o",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-tests/new-tests"
+]

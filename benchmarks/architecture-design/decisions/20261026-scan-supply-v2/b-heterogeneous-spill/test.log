@@ -1,0 +1,12 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields
+[       OK ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields (874 ms)
+[----------] 1 test from BuildingScanFieldCohortTest (874 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (874 ms total)
+[  PASSED  ] 1 test.

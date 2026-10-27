@@ -1,0 +1,130 @@
+{
+  "records": [
+    {
+      "engine": "control",
+      "index": 0,
+      "command": [
+        "/usr/bin/taskset",
+        "-c",
+        "0",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/public-b-final",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/pinned-medium/0-control.db",
+        "all_nodes_property_filter",
+        "3",
+        "10"
+      ],
+      "oracle": "10 passed",
+      "median_ms": 726.3703215,
+      "mad_over_median": 0.36360486611649095,
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 80220,
+        "process_user_cpu_seconds": 32.770267,
+        "process_system_cpu_seconds": 4.487882,
+        "process_input_blocks": 2840,
+        "process_output_blocks": 502968,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 1,
+      "command": [
+        "/usr/bin/taskset",
+        "-c",
+        "0",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/public-a2-final",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/pinned-medium/1-candidate.db",
+        "all_nodes_property_filter",
+        "3",
+        "10"
+      ],
+      "oracle": "10 passed",
+      "median_ms": 340.311863,
+      "mad_over_median": 0.06943444107912271,
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 80848,
+        "process_user_cpu_seconds": 18.495144,
+        "process_system_cpu_seconds": 2.603423,
+        "process_input_blocks": 2168,
+        "process_output_blocks": 502920,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 2,
+      "command": [
+        "/usr/bin/taskset",
+        "-c",
+        "0",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/public-a2-final",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/pinned-medium/2-candidate.db",
+        "all_nodes_property_filter",
+        "3",
+        "10"
+      ],
+      "oracle": "10 passed",
+      "median_ms": 345.3607855,
+      "mad_over_median": 0.08863630089236066,
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 81096,
+        "process_user_cpu_seconds": 39.92563,
+        "process_system_cpu_seconds": 4.675804,
+        "process_input_blocks": 0,
+        "process_output_blocks": 502960,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    },
+    {
+      "engine": "control",
+      "index": 3,
+      "command": [
+        "/usr/bin/taskset",
+        "-c",
+        "0",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/s4-native-write-cost/public-b-final",
+        "read",
+        "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+        "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/pinned-medium/3-control.db",
+        "all_nodes_property_filter",
+        "3",
+        "10"
+      ],
+      "oracle": "10 passed",
+      "median_ms": 1623.3824835,
+      "mad_over_median": 0.3528214316844943,
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 80116,
+        "process_user_cpu_seconds": 43.20304,
+        "process_system_cpu_seconds": 5.200553,
+        "process_input_blocks": 2792,
+        "process_output_blocks": 502992,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    }
+  ],
+  "process_spread": {
+    "control": 2.2349240262840224,
+    "candidate": 1.0148361636749643
+  },
+  "quality_passed": false,
+  "formal_acceptance": false
+}

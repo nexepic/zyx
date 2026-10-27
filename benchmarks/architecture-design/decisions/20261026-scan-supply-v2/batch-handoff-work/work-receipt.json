@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-probes/values",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-work/work.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "0",
+    "1"
+  ],
+  "complete_oracles": 4,
+  "timing_benchmark": false,
+  "binary_sha256": "a18a979f37b2bc7476e1b68cb6b3f64aa9d9e11bf4c239c89654e80b1e6c3bef"
+}

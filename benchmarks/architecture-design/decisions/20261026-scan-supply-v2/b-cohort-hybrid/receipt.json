@@ -1,0 +1,12 @@
+{
+  "profile": "hybrid",
+  "tests": 32,
+  "failures": 0,
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-hybrid/modules",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-hybrid/tests.json"
+  ],
+  "library_sha256": "f879759f7459aa801c3e660c82772effba9c0406905e9e5deb53d044373417ee",
+  "scope": "three matching-profile ordinary conversion modules, no full suite"
+}

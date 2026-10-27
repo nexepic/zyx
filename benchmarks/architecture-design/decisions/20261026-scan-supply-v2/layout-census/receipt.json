@@ -1,0 +1,9 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/layout-census/census",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/layout-census/private.db"
+  ],
+  "returncode": 0,
+  "source_unchanged": true,
+  "timing_benchmark": false
+}

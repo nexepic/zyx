@@ -1,0 +1,9 @@
+{
+  "returncode": 1,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-tests/modules",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-cohort-tests/tests.json"
+  ],
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "scope": "five selected conversion/BUILDING module files, not full suite"
+}

@@ -1,0 +1,23 @@
+{
+  "purpose": "Decompose previously qualified ~64% property supply boundary; medium only; no engine implementation edits",
+  "phases": [
+    "source remainder",
+    "group lookup/fence",
+    "column binding",
+    "field frame acquisition/cache",
+    "record decode/validation",
+    "membership cache/validation",
+    "typed group preparation",
+    "consumer/admission callbacks"
+  ],
+  "method": "One diagnostic-only PropertyCollectionRootStore object from exact current source with RAII scope additions in copied context header/selected include. TSC elapsed, nested exclusive scopes, original account and semantic paths retained. Full production core unchanged. Same observer on/off within-process quality check <=5%, CPU/wall and calibration audits unchanged.",
+  "source_sha256": {
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "a447c1b2dde97e3269a678ac4ddc620634c6fa282834d2c679d6571b1d3797b8",
+    "include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp": "820b0cd4c60a5c99f61fe345291b009d7e02b1dbbf466a9df50432ccf4a2c87a",
+    "src/storage/relocatable/property/property_read/SelectedColumnSupply.inc": "14e876eef98a01a98aed6d18ad8b2214cf5a48a58f6a32d9ccff17978716180d"
+  },
+  "queries": 80,
+  "warmups": 4,
+  "cpu": 0,
+  "coverage": "Record per-query phase counts; disclose unassigned source remainder; no attribution if quality or full oracle fails"
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "phase": "source remainder",
+    "estimated_query_elapsed_median_share": 0.044390921194675095,
+    "calls_median": 55.0
+  },
+  {
+    "phase": "group lookup/fence",
+    "estimated_query_elapsed_median_share": 0.02423553917014476,
+    "calls_median": 872.0
+  },
+  {
+    "phase": "column binding",
+    "estimated_query_elapsed_median_share": 0.0026531431058028692,
+    "calls_median": 432.0
+  },
+  {
+    "phase": "field frame acquisition/cache",
+    "estimated_query_elapsed_median_share": 0.3566420097072911,
+    "calls_median": 1312.0
+  },
+  {
+    "phase": "record decode/validation",
+    "estimated_query_elapsed_median_share": 0.11170010373336303,
+    "calls_median": 1312.0
+  },
+  {
+    "phase": "membership cache/validation",
+    "estimated_query_elapsed_median_share": 0.03519765231476118,
+    "calls_median": 1304.0
+  },
+  {
+    "phase": "typed group preparation",
+    "estimated_query_elapsed_median_share": 0.04576301308820818,
+    "calls_median": 432.0
+  },
+  {
+    "phase": "consumer/admission callbacks",
+    "estimated_query_elapsed_median_share": 0.025316900258999502,
+    "calls_median": 1376.0
+  }
+]

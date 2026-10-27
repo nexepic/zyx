@@ -1,0 +1,74 @@
+{
+  "tests": 3,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T19:33:54Z",
+  "time": "0.01s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyColdPublicConversionTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:33:54Z",
+      "time": "0.005s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRejectsColdPublicationBeforeIo",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyColdPublicConversion.cpp",
+          "line": 294,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:54Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyColdPublicConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyConversionPreparationTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:33:54Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyConversionPreparation.cpp",
+          "line": 37,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:54Z",
+          "time": "0s",
+          "classname": "HybridPropertyConversionPreparationTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyCohortAdmissionTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T19:33:54Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatRefusesBeforeAnyConversionIO",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyCohortAdmission.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T19:33:54Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyCohortAdmissionTest"
+        }
+      ]
+    }
+  ]
+}

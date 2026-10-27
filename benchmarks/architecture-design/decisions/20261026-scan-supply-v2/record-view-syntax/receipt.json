@@ -1,0 +1,18 @@
+[
+  {
+    "source": "src/storage/relocatable/index/BTreePage.cpp",
+    "returncode": 0
+  },
+  {
+    "source": "src/storage/relocatable/index/BTreeIndex.cpp",
+    "returncode": 0
+  },
+  {
+    "source": "src/storage/relocatable/property/PropertyCollectionRoot.cpp",
+    "returncode": 0
+  },
+  {
+    "source": "src/storage/relocatable/property/HybridPropertyColdRowInspection.cpp",
+    "returncode": 0
+  }
+]

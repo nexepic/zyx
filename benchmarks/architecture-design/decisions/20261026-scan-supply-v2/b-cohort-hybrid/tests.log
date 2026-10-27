@@ -1,0 +1,79 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 32 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 12 tests from HybridPropertyColdPublicConversionTest
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate
+[       OK ] HybridPropertyColdPublicConversionTest.PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate (1099 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup
+[       OK ] HybridPropertyColdPublicConversionTest.UnprofitableColdCohortNeverInstallsAnEarlierGroup (136 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues
+[       OK ] HybridPropertyColdPublicConversionTest.PublicEdgeConversionPreservesActualEdgeAuthorityAndAllValues (1390 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen
+[       OK ] HybridPropertyColdPublicConversionTest.RealConvertedRowsSupportProductionFilterGroupAndColdPointAfterReopen (279 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups
+[       OK ] HybridPropertyColdPublicConversionTest.ConvertedHotDemotionAndLargeColdWriteRetainOriginalRowsAndOtherGroups (1615 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins
+[       OK ] HybridPropertyColdPublicConversionTest.PublicInverseRetainsSevenConvertedGroupsAndOldPins (2028 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries
+[       OK ] HybridPropertyColdPublicConversionTest.PublicColdCancellationAfterCompleteCostPreparationHasNoVisiblePrefixAndRetries (1254 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone
+[       OK ] HybridPropertyColdPublicConversionTest.PartialAndCompletePublicationRecoverAllColdGroupsOrNone (1697 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend
+[       OK ] HybridPropertyColdPublicConversionTest.ActualConvertedPartialGroupSupportsSealedBirthAndDeletionThroughTheBackend (890 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether
+[       OK ] HybridPropertyColdPublicConversionTest.ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether (1901 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows
+[       OK ] HybridPropertyColdPublicConversionTest.MissingAdmissionAndInsufficientPeakAllowanceCannotPublishColdRows (80 ms)
+[ RUN      ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows
+[       OK ] HybridPropertyColdPublicConversionTest.RealConvertedFieldPoolMovesWithoutBreakingOtherGroupsOrPinnedRows (1607 ms)
+[----------] 12 tests from HybridPropertyColdPublicConversionTest (13985 ms total)
+
+[----------] 11 tests from HybridPropertyConversionPreparationTest
+[ RUN      ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation
+[       OK ] HybridPropertyConversionPreparationTest.FormatFlagControlsPrivatePreparationWithoutPublishingAnIdReservation (0 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories
+[       OK ] HybridPropertyConversionPreparationTest.MetadataAssignedIdsBindActualTypedRecordsAndAllFinalDirectories (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity
+[       OK ] HybridPropertyConversionPreparationTest.CompleteMembershipBoundPacksIntoActualSlottedPageCapacity (7 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner
+[       OK ] HybridPropertyConversionPreparationTest.PreparedBytesOutliveBorrowedRowsAndRetainTheirAllocationOwner (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing
+[       OK ] HybridPropertyConversionPreparationTest.StaleGenerationAndOversizedInlineValueRefuseWithoutPublishing (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate
+[       OK ] HybridPropertyConversionPreparationTest.AllocationFailureAndCancellationAfterIdAssignmentDiscardOnlyThePrivateCandidate (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationBindsWholeRowsAndHotLocatorsWithoutPerFieldDirectories (4 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors
+[       OK ] HybridPropertyConversionPreparationTest.ColdOnlyAndPropertylessPreparationKeepNativeOwnerIdentityWithoutSelectors (1 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues
+[       OK ] HybridPropertyConversionPreparationTest.OversizedColdRowsRequireSameBatchResolverAndNeverPublishIndependentValues (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource
+[       OK ] HybridPropertyConversionPreparationTest.ColdPreparationCancellationAfterPrivateIdsRefundsAndRetriesSameSource (2 ms)
+[ RUN      ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues
+[       OK ] HybridPropertyConversionPreparationTest.IncompressibleRowsThatIndividuallyFitSplitWithoutRequiringLargeValues (29 ms)
+[----------] 11 tests from HybridPropertyConversionPreparationTest (54 ms total)
+
+[----------] 9 tests from HybridPropertyCohortAdmissionTest
+[ RUN      ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO
+[       OK ] HybridPropertyCohortAdmissionTest.DefaultFormatRefusesBeforeAnyConversionIO (0 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO
+[       OK ] HybridPropertyCohortAdmissionTest.InvalidCohortEnvelopeRefusesBeforeIO (3 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup
+[       OK ] HybridPropertyCohortAdmissionTest.NonColumnGroupNeverPublishesAnEarlierPreparedGroup (48 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority
+[       OK ] HybridPropertyCohortAdmissionTest.UnprofitableWholeCohortKeepsEveryRowAuthority (89 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation
+[       OK ] HybridPropertyCohortAdmissionTest.SharedGrantExhaustionKeepsAllRootsAndRefundsPreparation (175 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent
+[       OK ] HybridPropertyCohortAdmissionTest.NarrowShortTextCohortRetainsRowWhenWholeAllocationDoesNotSaveTenPercent (473 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots
+[       OK ] HybridPropertyCohortAdmissionTest.CancellationAfterCompleteCostPreparationKeepsAllRowRoots (261 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone
+[       OK ] HybridPropertyCohortAdmissionTest.PartialAndCompleteInactiveSlotRecoverTheWholeCohortOrNone (382 ms)
+[ RUN      ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins
+[       OK ] HybridPropertyCohortAdmissionTest.InverseOneGroupPreservesOtherGroupAuthorityAndOldPins (17235 ms)
+[----------] 9 tests from HybridPropertyCohortAdmissionTest (18672 ms total)
+
+[----------] Global test environment tear-down
+[==========] 32 tests from 3 test suites ran. (32715 ms total)
+[  PASSED  ] 32 tests.

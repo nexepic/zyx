@@ -1,0 +1,28 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.*
+[==========] Running 9 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 9 tests from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin
+[       OK ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin (2550 ms)
+[ RUN      ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues
+[       OK ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues (3268 ms)
+[ RUN      ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+[       OK ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin (1511 ms)
+[ RUN      ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing
+[       OK ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing (288 ms)
+[ RUN      ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState
+[       OK ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState (314 ms)
+[ RUN      ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone
+[       OK ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone (440 ms)
+[ RUN      ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth
+[       OK ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth (312 ms)
+[ RUN      ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget
+[       OK ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget (18 ms)
+[ RUN      ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields
+[       OK ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields (966 ms)
+[----------] 9 tests from BuildingScanFieldCohortTest (9670 ms total)
+
+[----------] Global test environment tear-down
+[==========] 9 tests from 1 test suite ran. (9671 ms total)
+[  PASSED  ] 9 tests.

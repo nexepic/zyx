@@ -1,0 +1,1012 @@
+{
+  "all_nodes_property_filter": {
+    "header": "# user_cpu_seconds 15.678254000 system_cpu_seconds 0.279449000 wall_seconds 16.005954556 samples 148",
+    "independent_samples": 148,
+    "leaves": [
+      [
+        "unresolved /lib/x86_64-linux-gnu/libc.so.6",
+        31
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+        8
+      ],
+      [
+        "crc32_z",
+        8
+      ],
+      [
+        "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+        7
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::validate() const",
+        5
+      ],
+      [
+        "unresolved linux-vdso.so.1",
+        5
+      ],
+      [
+        "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        4
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const",
+        4
+      ],
+      [
+        "graph::storage::PageOwnerHeaderCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+        3
+      ],
+      [
+        "std::_Function_handler<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&)",
+        3
+      ],
+      [
+        "graph::query::execution::detail::ColumnFilterStats graph::query::execution::detail::BoundNodeColumnPredicates::filter<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'()>(graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector&, graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'()) const",
+        3
+      ],
+      [
+        "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+        3
+      ],
+      [
+        "graph::query::execution::BoundedBatch<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef>::append(graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef)",
+        2
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::operator=(graph::utils::OwnedStdVector<std::byte> const&) requires std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>",
+        2
+      ],
+      [
+        "graph::storage::ScanBatchReadScope::ScanBatchReadScope(graph::storage::ScanBatchReadGrant const&, std::span<unsigned long const, 18446744073709551615ul>)",
+        2
+      ],
+      [
+        "_init",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::visitColumnOwnersSorted(std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, unsigned int, std::function<void (graph::storage::HybridPropertyGroupRecord const&, graph::storage::HybridPropertyColumnRecord const&, graph::storage::SlottedSlotReference const&, graph::storage::SlottedSlotReference const&)> const&, std::function<void (unsigned long)> const&) const",
+        2
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::validateSnapshot(bool) const",
+        2
+      ],
+      [
+        "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+        2
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+        2
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::find(graph::storage::MetadataPageReadContext::Key const&)",
+        2
+      ],
+      [
+        "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+        2
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::cell(unsigned long, graph::query::execution::detail::BatchRowId) const",
+        2
+      ],
+      [
+        "fstat",
+        2
+      ],
+      [
+        "__pthread_mutex_lock",
+        2
+      ],
+      [
+        "__dynamic_cast",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::authenticateOwnerRoutes(graph::storage::HybridPropertyGroupRecord const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColdRowBindings::collect(std::array<graph::storage::HybridPropertyColdRowBindings::Group, 64ul>&) const",
+        1
+      ],
+      [
+        "graph::storage::CatalogTree::find(graph::storage::Superblock const&, graph::storage::StrongUInt64<graph::storage::SegmentIdTag>) const",
+        1
+      ],
+      [
+        "std::_Function_handler<void (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::PropertyType, std::span<unsigned long const, 18446744073709551615ul>), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'(std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::PropertyType, std::span<unsigned long const, 18446744073709551615ul>)>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, graph::PropertyType&&, std::span<unsigned long const, 18446744073709551615ul>&&)",
+        1
+      ],
+      [
+        "std::shared_ptr<graph::storage::CatalogRadixPage const> graph::storage::MetadataPageReadContext::findView<graph::storage::CatalogRadixPage>(graph::storage::PhysicalPageRef)",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::Superblock::Superblock()",
+        1
+      ],
+      [
+        "graph::query::QueryGuard::checkNow()",
+        1
+      ],
+      [
+        "graph::storage::FixedBTreeMap<8ul, 16ul>::decode(graph::storage::BTreePageEntry const&)",
+        1
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_29::operator()(std::span<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> const, 18446744073709551615ul>, graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector const&, std::span<unsigned long const, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(graph::storage::Superblock const&)",
+        1
+      ],
+      [
+        "graph::storage::EntityPropertyKey::directoryId() const",
+        1
+      ],
+      [
+        "graph::storage::CertifiedScanMembership::visit(graph::storage::VerifiedScanRoot const&, std::shared_ptr<graph::storage::StorageIO> const&, graph::storage::RelocatableMetadataStore&, graph::storage::MetadataSnapshotPin const&, std::shared_ptr<graph::query::execution::MaterializedByteBudget> const&, unsigned long, unsigned long, std::span<unsigned long const, 18446744073709551615ul>, std::function<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::storage::ScanBatchReadGrant const&)> const&, graph::storage::CancellationCheckpoint const*)::'lambda0'()::operator()() const",
+        1
+      ],
+      [
+        "graph::storage::EntityPropertyCollectionRootCodec::decodeTokens(std::span<std::byte const, 18446744073709551615ul>, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*)",
+        1
+      ],
+      [
+        "graph::storage::PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<std::basic_string_view<char, std::char_traits<char>> const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*) const",
+        1
+      ],
+      [
+        "std::optional<graph::storage::MetadataPageReadContext::CachedRoute> graph::storage::MetadataPageReadContext::find<graph::storage::MetadataPageReadContext::CachedRoute>(graph::storage::PhysicalPageRef, unsigned long)",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::resize(unsigned long) requires std::is_default_constructible_v<T>",
+        1
+      ],
+      [
+        "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+        1
+      ],
+      [
+        "void std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>::_M_range_initialize<__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>>(__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, __gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::StorageIO::pinTypedPage(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::storage::BufferPool::bytesForPin(graph::storage::BufferPoolPageKey) const",
+        1
+      ],
+      [
+        "graph::storage::BufferPool::unpin(graph::storage::BufferPoolPageKey)",
+        1
+      ],
+      [
+        "void std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>::_M_range_initialize<__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>>(__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>, __gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyDescriptorCodec::decode(std::span<std::byte const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::DatabaseIdTag>, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::totalMemberships() const",
+        1
+      ],
+      [
+        "graph::storage::BTreeIndex::descendToLeafFromRoot(graph::storage::MetadataSnapshotPin const&, graph::storage::BTreePage const&, std::optional<std::span<std::byte const, 18446744073709551615ul>>, graph::storage::BufferPoolReadHint, graph::storage::CancellationCheckpoint const*, graph::utils::OwnedStdVector<graph::storage::BTreeIndex::TraversalStep>*, graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>*, graph::storage::BTreeIndex::LeafRoute*, graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>*) const",
+        1
+      ],
+      [
+        "graph::storage::PageBackedGraphReadAdapter::readNodePropertyCellsSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*) const",
+        1
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        1
+      ],
+      [
+        "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyGroupRecord::validate() const",
+        1
+      ],
+      [
+        "cfree",
+        1
+      ],
+      [
+        "posix_memalign",
+        1
+      ],
+      [
+        "std::chrono::_V2::steady_clock::now()",
+        1
+      ],
+      [
+        "unresolved /lib/x86_64-linux-gnu/libstdc++.so.6",
+        1
+      ],
+      [
+        "LZ4_decompress_safe",
+        1
+      ]
+    ],
+    "overrun_weighted_leaves": [
+      [
+        "unresolved /lib/x86_64-linux-gnu/libc.so.6",
+        31
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+        8
+      ],
+      [
+        "crc32_z",
+        8
+      ],
+      [
+        "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+        7
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::validate() const",
+        5
+      ],
+      [
+        "unresolved linux-vdso.so.1",
+        5
+      ],
+      [
+        "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        4
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const",
+        4
+      ],
+      [
+        "graph::storage::PageOwnerHeaderCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+        3
+      ],
+      [
+        "std::_Function_handler<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&)",
+        3
+      ],
+      [
+        "graph::query::execution::detail::ColumnFilterStats graph::query::execution::detail::BoundNodeColumnPredicates::filter<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'()>(graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector&, graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'()) const",
+        3
+      ],
+      [
+        "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+        3
+      ],
+      [
+        "graph::query::execution::BoundedBatch<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef>::append(graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef)",
+        2
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::operator=(graph::utils::OwnedStdVector<std::byte> const&) requires std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>",
+        2
+      ],
+      [
+        "graph::storage::ScanBatchReadScope::ScanBatchReadScope(graph::storage::ScanBatchReadGrant const&, std::span<unsigned long const, 18446744073709551615ul>)",
+        2
+      ],
+      [
+        "_init",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::visitColumnOwnersSorted(std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, unsigned int, std::function<void (graph::storage::HybridPropertyGroupRecord const&, graph::storage::HybridPropertyColumnRecord const&, graph::storage::SlottedSlotReference const&, graph::storage::SlottedSlotReference const&)> const&, std::function<void (unsigned long)> const&) const",
+        2
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::validateSnapshot(bool) const",
+        2
+      ],
+      [
+        "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+        2
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+        2
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::find(graph::storage::MetadataPageReadContext::Key const&)",
+        2
+      ],
+      [
+        "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+        2
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::cell(unsigned long, graph::query::execution::detail::BatchRowId) const",
+        2
+      ],
+      [
+        "fstat",
+        2
+      ],
+      [
+        "__pthread_mutex_lock",
+        2
+      ],
+      [
+        "__dynamic_cast",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::authenticateOwnerRoutes(graph::storage::HybridPropertyGroupRecord const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColdRowBindings::collect(std::array<graph::storage::HybridPropertyColdRowBindings::Group, 64ul>&) const",
+        1
+      ],
+      [
+        "graph::storage::CatalogTree::find(graph::storage::Superblock const&, graph::storage::StrongUInt64<graph::storage::SegmentIdTag>) const",
+        1
+      ],
+      [
+        "std::_Function_handler<void (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::PropertyType, std::span<unsigned long const, 18446744073709551615ul>), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const::'lambda'(std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::PropertyType, std::span<unsigned long const, 18446744073709551615ul>)>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, graph::PropertyType&&, std::span<unsigned long const, 18446744073709551615ul>&&)",
+        1
+      ],
+      [
+        "std::shared_ptr<graph::storage::CatalogRadixPage const> graph::storage::MetadataPageReadContext::findView<graph::storage::CatalogRadixPage>(graph::storage::PhysicalPageRef)",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::Superblock::Superblock()",
+        1
+      ],
+      [
+        "graph::query::QueryGuard::checkNow()",
+        1
+      ],
+      [
+        "graph::storage::FixedBTreeMap<8ul, 16ul>::decode(graph::storage::BTreePageEntry const&)",
+        1
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_29::operator()(std::span<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>> const, 18446744073709551615ul>, graph::query::execution::detail::DirectPropertyColumns const&, graph::query::execution::SelectionVector const&, std::span<unsigned long const, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::storage::RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(graph::storage::Superblock const&)",
+        1
+      ],
+      [
+        "graph::storage::EntityPropertyKey::directoryId() const",
+        1
+      ],
+      [
+        "graph::storage::CertifiedScanMembership::visit(graph::storage::VerifiedScanRoot const&, std::shared_ptr<graph::storage::StorageIO> const&, graph::storage::RelocatableMetadataStore&, graph::storage::MetadataSnapshotPin const&, std::shared_ptr<graph::query::execution::MaterializedByteBudget> const&, unsigned long, unsigned long, std::span<unsigned long const, 18446744073709551615ul>, std::function<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::storage::ScanBatchReadGrant const&)> const&, graph::storage::CancellationCheckpoint const*)::'lambda0'()::operator()() const",
+        1
+      ],
+      [
+        "graph::storage::EntityPropertyCollectionRootCodec::decodeTokens(std::span<std::byte const, 18446744073709551615ul>, std::function<void (unsigned long)> const*, graph::storage::CancellationCheckpoint const*)",
+        1
+      ],
+      [
+        "graph::storage::PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<std::basic_string_view<char, std::char_traits<char>> const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*) const",
+        1
+      ],
+      [
+        "std::optional<graph::storage::MetadataPageReadContext::CachedRoute> graph::storage::MetadataPageReadContext::find<graph::storage::MetadataPageReadContext::CachedRoute>(graph::storage::PhysicalPageRef, unsigned long)",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::resize(unsigned long) requires std::is_default_constructible_v<T>",
+        1
+      ],
+      [
+        "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+        1
+      ],
+      [
+        "void std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>::_M_range_initialize<__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>>(__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, __gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::StorageIO::pinTypedPage(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::storage::BufferPool::bytesForPin(graph::storage::BufferPoolPageKey) const",
+        1
+      ],
+      [
+        "graph::storage::BufferPool::unpin(graph::storage::BufferPoolPageKey)",
+        1
+      ],
+      [
+        "void std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>::_M_range_initialize<__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>>(__gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>, __gnu_cxx::__normal_iterator<std::byte const*, std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte>>>, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyDescriptorCodec::decode(std::span<std::byte const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::DatabaseIdTag>, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::totalMemberships() const",
+        1
+      ],
+      [
+        "graph::storage::BTreeIndex::descendToLeafFromRoot(graph::storage::MetadataSnapshotPin const&, graph::storage::BTreePage const&, std::optional<std::span<std::byte const, 18446744073709551615ul>>, graph::storage::BufferPoolReadHint, graph::storage::CancellationCheckpoint const*, graph::utils::OwnedStdVector<graph::storage::BTreeIndex::TraversalStep>*, graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>*, graph::storage::BTreeIndex::LeafRoute*, graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>*) const",
+        1
+      ],
+      [
+        "graph::storage::PageBackedGraphReadAdapter::readNodePropertyCellsSorted(graph::storage::MetadataSnapshotPin const&, std::span<unsigned long const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::NativeReadSession*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*) const",
+        1
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        1
+      ],
+      [
+        "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyGroupRecord::validate() const",
+        1
+      ],
+      [
+        "cfree",
+        1
+      ],
+      [
+        "posix_memalign",
+        1
+      ],
+      [
+        "std::chrono::_V2::steady_clock::now()",
+        1
+      ],
+      [
+        "unresolved /lib/x86_64-linux-gnu/libstdc++.so.6",
+        1
+      ],
+      [
+        "LZ4_decompress_safe",
+        1
+      ]
+    ],
+    "quality": true
+  },
+  "label_scan_filter": {
+    "header": "# user_cpu_seconds 13.513593000 system_cpu_seconds 0.476785000 wall_seconds 14.436282812 samples 143",
+    "independent_samples": 143,
+    "leaves": [
+      [
+        "unresolved /lib/x86_64-linux-gnu/libc.so.6",
+        36
+      ],
+      [
+        "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+        15
+      ],
+      [
+        "crc32_z",
+        9
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::validate() const",
+        6
+      ],
+      [
+        "unresolved linux-vdso.so.1",
+        6
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        3
+      ],
+      [
+        "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        3
+      ],
+      [
+        "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+        3
+      ],
+      [
+        "__libc_malloc",
+        2
+      ],
+      [
+        "graph::query::execution::detail::BatchColumnSource::direct(graph::query::execution::detail::DirectPropertyColumns const&, unsigned long)::'lambda'(void const*, graph::query::execution::detail::BatchRowId, unsigned long)::__invoke(void const*, graph::query::execution::detail::BatchRowId, unsigned long)",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::decodePayload(std::span<std::byte const, 18446744073709551615ul>, graph::storage::EntityPropertyOwnerKind, unsigned long, graph::storage::StrongUInt64<graph::storage::GenerationTag>)",
+        2
+      ],
+      [
+        "graph::query::execution::BoundedBatch<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef>::append(graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef)",
+        2
+      ],
+      [
+        "graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const",
+        2
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+        2
+      ],
+      [
+        "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+        2
+      ],
+      [
+        "std::chrono::_V2::steady_clock::now()",
+        2
+      ],
+      [
+        "__pthread_mutex_lock",
+        1
+      ],
+      [
+        "cfree",
+        1
+      ],
+      [
+        "void std::vector<char, std::pmr::polymorphic_allocator<char>>::_M_range_insert<char const*>(__gnu_cxx::__normal_iterator<char*, std::vector<char, std::pmr::polymorphic_allocator<char>>>, char const*, char const*, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnRecord::validate() const",
+        1
+      ],
+      [
+        "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+        1
+      ],
+      [
+        "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+        1
+      ],
+      [
+        "graph::storage::MetadataSnapshotRegistry::owns(graph::storage::MetadataSnapshotPin const&) const",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+        1
+      ],
+      [
+        "std::_Function_handler<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&)",
+        1
+      ],
+      [
+        "std::optional<graph::storage::MetadataPageReadContext::CachedRoute> graph::storage::MetadataPageReadContext::find<graph::storage::MetadataPageReadContext::CachedRoute>(graph::storage::PhysicalPageRef, unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::isLive(graph::storage::EntityPropertyKey, graph::storage::HybridPropertyGroupRecord const&)",
+        1
+      ],
+      [
+        "graph::query::QueryGuard::checkSlow()",
+        1
+      ],
+      [
+        "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char>>, long)",
+        1
+      ],
+      [
+        "std::shared_ptr<graph::storage::PageDirectoryBootstrap const> graph::storage::MetadataPageReadContext::findView<graph::storage::PageDirectoryBootstrap>(graph::storage::PhysicalPageRef)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::findGroup(graph::storage::EntityPropertyKey, std::function<void (unsigned long)> const&, graph::storage::SlottedSlotReference*, bool, bool, graph::storage::HybridPropertyReadContext::FieldPageCursor*) const",
+        1
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)::'lambda'(graph::storage::HybridPropertyColumnRecord const&, unsigned long)::operator()(graph::storage::HybridPropertyColumnRecord const&, unsigned long) const::'lambda'(unsigned long)::operator()(unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::MetadataPageRouteDirectory(graph::storage::MetadataPageFile&)",
+        1
+      ],
+      [
+        "graph::storage::FixedBTreeMap<8ul, 16ul>::decode(graph::storage::BTreePageEntry const&)",
+        1
+      ],
+      [
+        "std::_Function_handler<bool (unsigned long, unsigned long), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)>::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::operator=(graph::utils::OwnedStdVector<std::byte> const&) requires std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyShortText::validate(unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::RelocatableMetadataStore::findIndexRootOptional(graph::storage::MetadataSnapshotPin const&, unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+        1
+      ],
+      [
+        "graph::storage::BTreeIndex::nextRangeCursor(graph::storage::BTreeIndex::RangeCursor::State&, std::function<void (unsigned long)> const&) const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColdRowBindings::decode(unsigned long, graph::storage::HybridColdRowLocationEncoding, unsigned short, std::span<std::byte const, 18446744073709551615ul>)",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageFile::readMetadataPageRouteLeaf(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::DirectPropertyColumns(graph::storage::LogicalGraphReadSnapshot const&, unsigned long, unsigned long, graph::query::execution::MaterializedByteBudget&, std::pmr::memory_resource*)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::totalMemberships() const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::visitColdOwnersSorted(std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, unsigned int, std::function<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul>>)> const&, std::function<void (unsigned long)> const&, graph::storage::LargeValueStore*) const",
+        1
+      ],
+      [
+        "graph::query::execution::AggregateAccumulator::takeResult()",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyGroupRecord::validate() const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+        1
+      ],
+      [
+        "graph::storage::(anonymous namespace)::readVarint(std::span<std::byte const, 18446744073709551615ul>, unsigned long&)",
+        1
+      ],
+      [
+        "graph::storage::StorageIO::readAt(graph::storage::BufferPoolPageKey, void*, unsigned long, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+        1
+      ],
+      [
+        "graph::query::expressions::LiteralExpression::isString() const",
+        1
+      ],
+      [
+        "graph::query::QueryContext::checkGuardNow() const",
+        1
+      ],
+      [
+        "graph::storage::CertifiedScanMembership::visit(graph::storage::VerifiedScanRoot const&, std::shared_ptr<graph::storage::StorageIO> const&, graph::storage::RelocatableMetadataStore&, graph::storage::MetadataSnapshotPin const&, std::shared_ptr<graph::query::execution::MaterializedByteBudget> const&, unsigned long, unsigned long, std::span<unsigned long const, 18446744073709551615ul>, std::function<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::storage::ScanBatchReadGrant const&)> const&, graph::storage::CancellationCheckpoint const*)::'lambda0'()::operator()() const",
+        1
+      ],
+      [
+        "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::BTreeIndex::openRangeCursor(graph::storage::MetadataSnapshotPin const&, std::optional<std::span<std::byte const, 18446744073709551615ul>>, unsigned long, graph::storage::BufferPoolReadHint, bool, graph::storage::CancellationCheckpoint const*) const",
+        1
+      ],
+      [
+        "_init",
+        1
+      ],
+      [
+        "graph::utils::calculateCrc(void const*, unsigned long)",
+        1
+      ]
+    ],
+    "overrun_weighted_leaves": [
+      [
+        "unresolved /lib/x86_64-linux-gnu/libc.so.6",
+        44
+      ],
+      [
+        "graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)",
+        16
+      ],
+      [
+        "crc32_z",
+        10
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::validate() const",
+        6
+      ],
+      [
+        "unresolved linux-vdso.so.1",
+        6
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU64(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        3
+      ],
+      [
+        "graph::query::QueryGuard::checkSlow()",
+        3
+      ],
+      [
+        "graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        3
+      ],
+      [
+        "__cxxabiv1::__si_class_type_info::__do_dyncast(long, __cxxabiv1::__class_type_info::__sub_kind, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info const*, void const*, __cxxabiv1::__class_type_info::__dyncast_result&) const",
+        3
+      ],
+      [
+        "std::_Hash_bytes(void const*, unsigned long, unsigned long)",
+        3
+      ],
+      [
+        "__libc_malloc",
+        2
+      ],
+      [
+        "graph::query::execution::detail::BatchColumnSource::direct(graph::query::execution::detail::DirectPropertyColumns const&, unsigned long)::'lambda'(void const*, graph::query::execution::detail::BatchRowId, unsigned long)::__invoke(void const*, graph::query::execution::detail::BatchRowId, unsigned long)",
+        2
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::decodePayload(std::span<std::byte const, 18446744073709551615ul>, graph::storage::EntityPropertyOwnerKind, unsigned long, graph::storage::StrongUInt64<graph::storage::GenerationTag>)",
+        2
+      ],
+      [
+        "graph::query::execution::BoundedBatch<graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef>::append(graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::PendingNodeRef)",
+        2
+      ],
+      [
+        "graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const",
+        2
+      ],
+      [
+        "std::_Hashtable<graph::storage::MetadataPageReadContext::Key, std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>, std::pmr::polymorphic_allocator<std::pair<graph::storage::MetadataPageReadContext::Key const, graph::storage::MetadataPageReadContext::Entry>>, std::__detail::_Select1st, std::equal_to<graph::storage::MetadataPageReadContext::Key>, graph::storage::MetadataPageReadContext::KeyHash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>>::_M_find_before_node(unsigned long, graph::storage::MetadataPageReadContext::Key const&, unsigned long) const",
+        2
+      ],
+      [
+        "graph::storage::BTreeIndex::openRangeCursor(graph::storage::MetadataSnapshotPin const&, std::optional<std::span<std::byte const, 18446744073709551615ul>>, unsigned long, graph::storage::BufferPoolReadHint, bool, graph::storage::CancellationCheckpoint const*) const",
+        2
+      ],
+      [
+        "std::chrono::_V2::steady_clock::now()",
+        2
+      ],
+      [
+        "__pthread_mutex_lock",
+        1
+      ],
+      [
+        "cfree",
+        1
+      ],
+      [
+        "void std::vector<char, std::pmr::polymorphic_allocator<char>>::_M_range_insert<char const*>(__gnu_cxx::__normal_iterator<char*, std::vector<char, std::pmr::polymorphic_allocator<char>>>, char const*, char const*, std::forward_iterator_tag)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnRecord::validate() const",
+        1
+      ],
+      [
+        "graph::storage::(anonymous namespace)::decodeOne(std::span<std::byte const, 18446744073709551615ul>, unsigned long&, graph::utils::OwnedStdVector<std::byte>&, bool, bool)",
+        1
+      ],
+      [
+        "graph::storage::SlottedPageReadView::open(graph::storage::PageOwnerHeader const&, std::span<std::byte const, 18446744073709551615ul>)",
+        1
+      ],
+      [
+        "graph::storage::MetadataSnapshotRegistry::owns(graph::storage::MetadataSnapshotPin const&) const",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::reserve(unsigned long)",
+        1
+      ],
+      [
+        "std::_Function_handler<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_3>::_M_invoke(std::_Any_data const&, std::span<unsigned long const, 18446744073709551615ul>&&, unsigned long&&, std::function<void (std::span<unsigned long const, 18446744073709551615ul>, std::function<void (unsigned long, unsigned long, std::optional<graph::PropertyValue>)> const&, graph::storage::PropertyColumnBatchReadSinks const&, std::function<void (unsigned long)> const&)> const&)",
+        1
+      ],
+      [
+        "std::optional<graph::storage::MetadataPageReadContext::CachedRoute> graph::storage::MetadataPageReadContext::find<graph::storage::MetadataPageReadContext::CachedRoute>(graph::storage::PhysicalPageRef, unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::isLive(graph::storage::EntityPropertyKey, graph::storage::HybridPropertyGroupRecord const&)",
+        1
+      ],
+      [
+        "graph::debug::PerfTrace::addValue(std::basic_string_view<char, std::char_traits<char>>, long)",
+        1
+      ],
+      [
+        "std::shared_ptr<graph::storage::PageDirectoryBootstrap const> graph::storage::MetadataPageReadContext::findView<graph::storage::PageDirectoryBootstrap>(graph::storage::PhysicalPageRef)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::findGroup(graph::storage::EntityPropertyKey, std::function<void (unsigned long)> const&, graph::storage::SlottedSlotReference*, bool, bool, graph::storage::HybridPropertyReadContext::FieldPageCursor*) const",
+        1
+      ],
+      [
+        "graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageReadContext::Scope::Scope(std::shared_ptr<graph::storage::MetadataPageReadContext>, graph::storage::StorageIO const&)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)::'lambda'(graph::storage::HybridPropertyColumnRecord const&, unsigned long)::operator()(graph::storage::HybridPropertyColumnRecord const&, unsigned long) const::'lambda'(unsigned long)::operator()(unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::MetadataPageRouteDirectory(graph::storage::MetadataPageFile&)",
+        1
+      ],
+      [
+        "graph::storage::FixedBTreeMap<8ul, 16ul>::decode(graph::storage::BTreePageEntry const&)",
+        1
+      ],
+      [
+        "std::_Function_handler<bool (unsigned long, unsigned long), graph::query::execution::(anonymous namespace)::tryVisitBatchedNativeNodeRefScan(graph::query::logical::LogicalNodeScan const&, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, graph::PropertyValue>>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_2::operator()() const::'lambda'(unsigned long, unsigned long)>::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)",
+        1
+      ],
+      [
+        "graph::utils::OwnedStdVector<std::byte>::operator=(graph::utils::OwnedStdVector<std::byte> const&) requires std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyShortText::validate(unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::LittleEndianCodec::readU32(std::span<std::byte const, 18446744073709551615ul>, unsigned long)",
+        1
+      ],
+      [
+        "graph::storage::RelocatableMetadataStore::findIndexRootOptional(graph::storage::MetadataSnapshotPin const&, unsigned long) const",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const",
+        1
+      ],
+      [
+        "graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)",
+        1
+      ],
+      [
+        "graph::storage::BTreeIndex::nextRangeCursor(graph::storage::BTreeIndex::RangeCursor::State&, std::function<void (unsigned long)> const&) const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColdRowBindings::decode(unsigned long, graph::storage::HybridColdRowLocationEncoding, unsigned short, std::span<std::byte const, 18446744073709551615ul>)",
+        1
+      ],
+      [
+        "graph::storage::MetadataPageFile::readMetadataPageRouteLeaf(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::query::execution::detail::DirectPropertyColumns::DirectPropertyColumns(graph::storage::LogicalGraphReadSnapshot const&, unsigned long, unsigned long, graph::query::execution::MaterializedByteBudget&, std::pmr::memory_resource*)",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyColumnMembership::totalMemberships() const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyReadContext::visitColdOwnersSorted(std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, unsigned int, std::function<void (unsigned long, std::optional<std::span<std::byte const, 18446744073709551615ul>>)> const&, std::function<void (unsigned long)> const&, graph::storage::LargeValueStore*) const",
+        1
+      ],
+      [
+        "graph::query::execution::AggregateAccumulator::takeResult()",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyGroupRecord::validate() const",
+        1
+      ],
+      [
+        "graph::storage::HybridPropertyValueReader::readSelected(graph::storage::HybridPropertyReadContext const&, graph::storage::MetadataSnapshotPin const&, std::span<graph::storage::EntityPropertyKey const, 18446744073709551615ul>, std::span<unsigned int const, 18446744073709551615ul>, std::span<std::optional<graph::storage::PropertyCollectionRootEntry>, 18446744073709551615ul>, std::span<std::optional<unsigned long>, 18446744073709551615ul>, graph::storage::LargeValueStore*, std::function<void (unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::optional<graph::storage::PropertyCollectionRootEntry>)> const*, std::function<void (unsigned long, unsigned long, graph::PropertyType, unsigned long)> const*, std::function<void (unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char>>)> const*, graph::storage::PropertyColumnBatchReadSinks const*)",
+        1
+      ],
+      [
+        "graph::storage::(anonymous namespace)::readVarint(std::span<std::byte const, 18446744073709551615ul>, unsigned long&)",
+        1
+      ],
+      [
+        "graph::storage::StorageIO::readAt(graph::storage::BufferPoolPageKey, void*, unsigned long, graph::storage::BufferPoolReadHint) const",
+        1
+      ],
+      [
+        "graph::storage::PackedBTreePageCodec::decode(graph::storage::BTreeNodeKind, std::span<std::byte const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)",
+        1
+      ],
+      [
+        "graph::query::expressions::LiteralExpression::isString() const",
+        1
+      ],
+      [
+        "graph::query::QueryContext::checkGuardNow() const",
+        1
+      ],
+      [
+        "graph::storage::CertifiedScanMembership::visit(graph::storage::VerifiedScanRoot const&, std::shared_ptr<graph::storage::StorageIO> const&, graph::storage::RelocatableMetadataStore&, graph::storage::MetadataSnapshotPin const&, std::shared_ptr<graph::query::execution::MaterializedByteBudget> const&, unsigned long, unsigned long, std::span<unsigned long const, 18446744073709551615ul>, std::function<bool (std::span<unsigned long const, 18446744073709551615ul>, unsigned long, graph::storage::ScanBatchReadGrant const&)> const&, graph::storage::CancellationCheckpoint const*)::'lambda0'()::operator()() const",
+        1
+      ],
+      [
+        "graph::query::execution::detail::ResourceLease::trySet(unsigned long)",
+        1
+      ],
+      [
+        "_init",
+        1
+      ],
+      [
+        "graph::utils::calculateCrc(void const*, unsigned long)",
+        1
+      ]
+    ],
+    "quality": false
+  }
+}

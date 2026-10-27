@@ -530,3 +530,46 @@ TEST(EntityPropertyLargeValuePayloadCodecTest, PmrEncodingQuotaAndMidOutputCance
     }
     EXPECT_EQ(memory->used(), 0U);
 }
+
+TEST(RelocatablePropertyCollectionRootTest, BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues) {
+    const PropertyCollectionRoot value{91, Node::typeId, {
+        {1, PropertyValue()}, {7, PropertyValue(int64_t{42})},
+        {11, PropertyValue(std::string("a\0b", 3))},
+        {1000, PropertyValue(std::vector<PropertyValue>{PropertyValue(true), PropertyValue("nested")})}}};
+    const auto bytes = EntityPropertyCollectionRootCodec::encode(value);
+    const auto owned = EntityPropertyCollectionRootCodec::decodeTokens(bytes);
+    const auto view = EntityPropertyCollectionRootCodec::tokenDirectoryView(bytes);
+    ASSERT_EQ(view.size(), owned.size());
+    for (size_t i = 0; i < owned.size(); ++i) {
+        EXPECT_EQ(view.token(i), owned[i]);
+        const auto encoded = view.find(owned[i]); ASSERT_TRUE(encoded);
+        std::vector<std::byte> expected;
+        CanonicalPropertyValueCodec::append(expected, value.entries[i].value);
+        EXPECT_EQ(std::vector<std::byte>(encoded->begin(), encoded->end()),
+            expected);
+    }
+    EXPECT_FALSE(view.find(2)); EXPECT_FALSE(view.find(UINT32_MAX));
+    EXPECT_THROW(static_cast<void>(view.find(0)), FormatException);
+    EXPECT_THROW(static_cast<void>(view.token(view.size())), FormatException);
+    const auto empty = EntityPropertyCollectionRootCodec::encode({91, Node::typeId, {}});
+    const auto emptyView = EntityPropertyCollectionRootCodec::tokenDirectoryView(empty);
+    EXPECT_EQ(emptyView.size(), 0U); EXPECT_FALSE(emptyView.find(1));
+}
+
+TEST(RelocatablePropertyCollectionRootTest, BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation) {
+    const auto bytes = EntityPropertyCollectionRootCodec::encode(
+        {91, Node::typeId, {{1, PropertyValue(int64_t{1})}, {7, PropertyValue(int64_t{2})}}});
+    auto bad = bytes;
+    LittleEndianCodec::writeU32(bad, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES, 0U);
+    EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::tokenDirectoryView(bad)), FormatException);
+    bad = bytes;
+    const auto second = LittleEndianCodec::readU32(bad, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES + sizeof(uint32_t));
+    LittleEndianCodec::writeU32(bad, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES + second, 1U);
+    EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::tokenDirectoryView(bad)), FormatException);
+    bad = bytes; bad.pop_back();
+    EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::tokenDirectoryView(bad)), FormatException);
+    class Cancel final : public CancellationCheckpoint {
+    public: void check() const override { throw std::logic_error("token directory cancelled"); }
+    } cancel;
+    EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::tokenDirectoryView(bytes, &cancel)), std::logic_error);
+}

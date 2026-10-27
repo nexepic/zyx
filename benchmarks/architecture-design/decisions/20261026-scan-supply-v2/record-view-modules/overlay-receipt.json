@@ -1,0 +1,10 @@
+{
+  "returncode": 0,
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-modules/new-tests-overlay",
+    "--gtest_filter=RelocatableBTreePageCodecTest.FixedKey*:RelocatablePropertyCollectionRootTest.Borrowed*:PropertySubblockDirectoryTest.FixedKey*",
+    "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-modules/new-tests-overlay.json"
+  ],
+  "scope": "preliminary module-local O0 overlay; final integrated O3 regression required",
+  "initial_failure": "test fixture exceeded initial builder bounded transaction-local input; 2000-record fixture still requires multiple leaves and keeps exact oracles"
+}

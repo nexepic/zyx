@@ -1,0 +1,30 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableBTreePageCodecTest.FixedKey*:RelocatablePropertyCollectionRootTest.Borrowed*:PropertySubblockDirectoryTest.FixedKey*
+[==========] Running 7 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from RelocatableBTreePageCodecTest
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups (3 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation (0 ms)
+[----------] 2 tests from RelocatableBTreePageCodecTest (3 ms total)
+
+[----------] 2 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation (0 ms)
+[----------] 2 tests from RelocatablePropertyCollectionRootTest (0 ms total)
+
+[----------] 3 tests from PropertySubblockDirectoryTest
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission
+[       OK ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission (218 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor
+[       OK ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves
+[       OK ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves (118 ms)
+[----------] 3 tests from PropertySubblockDirectoryTest (341 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 3 test suites ran. (345 ms total)
+[  PASSED  ] 7 tests.

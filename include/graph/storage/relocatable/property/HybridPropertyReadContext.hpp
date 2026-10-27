@@ -51,6 +51,15 @@ class HybridPropertyReadContext final {
         uint64_t epoch = UINT64_MAX;
         size_t count = 0;
         bool valid = false;
+        bool busy = false;
+        // Index outlives its cursor; neither owns a per-call admission callback.
+        std::optional<BTreeIndex> directory;
+        std::optional<BTreeIndex::RangeCursor> continuation;
+        std::optional<HybridPropertyGroupDirectoryMap::Entry> pending;
+        std::optional<HybridPropertyGroupDirectoryMap::Key> last;
+        void releaseDirectory() {
+            continuation.reset(); directory.reset(); pending.reset(); last.reset();
+        }
     };
     mutable BatchReadWindow *batch_read_window_ = nullptr;
     template<class Visitor>
@@ -122,25 +131,38 @@ public:
         const HybridPropertyReadContext &context_;
         BatchReadWindow window_;
         BatchReadWindow *previous_ = nullptr;
-        bool installed_ = false;
-        ColumnBatchLease(const HybridPropertyReadContext &context, bool enabled)
+        bool installed_ = false, reused_ = false;
+        ColumnBatchLease(const HybridPropertyReadContext &context, bool enabled, bool query = false)
             : frame_(context.membership_memory_owner_), context_(context) {
             if (!enabled || !context.membership_memory_owner_) return;
+            previous_ = context_.batch_read_window_;
+            if (previous_ && !previous_->busy && !query) {
+                previous_->busy = true; reused_ = true; return;
+            }
+            // A rejected nested lease must not accidentally mutate the active
+            // parent's optional state. Restore the parent even on this fallback.
+            if (previous_) {
+                previous_->releaseFields(); context_.batch_read_window_ = nullptr; installed_ = true;
+            }
             try { frame_.set(sizeof(ColumnBatchLease)); }
             catch (const query::execution::MaterializedByteLimitExceeded &) { return; }
             catch (const query::execution::detail::ResourceAdmissionDenied &) { return; }
-            previous_ = context_.batch_read_window_;
-            // Reentrant consumers never retain two optional physical views.
-            if (previous_) previous_->releaseFields();
+            window_.busy = !query;
             context_.batch_read_window_ = &window_; installed_ = true;
         }
     public:
         ColumnBatchLease(const ColumnBatchLease &) = delete;
         ColumnBatchLease &operator=(const ColumnBatchLease &) = delete;
-        ~ColumnBatchLease() { if (installed_) context_.batch_read_window_ = previous_; }
+        ~ColumnBatchLease() {
+            if (reused_) previous_->busy = false;
+            else if (installed_) context_.batch_read_window_ = previous_;
+        }
     };
     [[nodiscard]] ColumnBatchLease borrowColumnBatchWindow(bool enabled) const {
         return ColumnBatchLease(*this, enabled);
+    }
+    [[nodiscard]] ColumnBatchLease borrowQueryWindow() const {
+        return ColumnBatchLease(*this, true, true);
     }
     HybridPropertyReadContext(std::shared_ptr<StorageIO> io, SlottedPagePool &pages,
         RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
@@ -767,6 +789,67 @@ private:
 #endif
         return false;
     }
+    // One bounded continuation for certified monotonic windows. Seeking a
+    // sparse jump never walks more than eight unrelated records before restart.
+    void refillGroupDirectory(BatchReadWindow &window, const HybridPropertyGroupDirectoryMap::Key &key,
+        EntityPropertyOwnerKind kind, uint64_t epoch) const {
+        utils::OwnedAllocationScope owner(membership_memory_owner_);
+        const auto start = [&] {
+            window.releaseDirectory();
+            const auto binding = bind(kind, 3);
+            window.directory.emplace(binding.root.index_id, trees_, metadata_, BTreeLeafValueLayout::BLVL_EMPTY, binding);
+            size_t limit = (std::numeric_limits<size_t>::max)() - 1U;
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+            limit = size_t((std::min)(descriptor_->scan_membership_group_count,
+                uint64_t((std::numeric_limits<size_t>::max)() - 2U))) + 2U;
+#endif
+            window.continuation.emplace(window.directory->openFixedKeyRangeCursor(snapshot_,
+                std::span<const std::byte>(key), limit, HybridPropertyGroupDirectoryMap::Record{}.size(),
+                BufferPoolReadHint::BPRH_NORMAL, false, cancellation_));
+            debug::PerfTrace::addValue("native_graph.hybrid.group_directory_cursor_restarts", 1);
+        };
+        try {
+            if (!window.continuation || window.kind != kind || window.epoch != epoch ||
+                (window.last && key <= *window.last)) start();
+            const auto nextRecord = [&]() -> std::optional<HybridPropertyGroupDirectoryMap::Entry> {
+                if (window.continuation->fixedKeyWidth()) {
+                    const auto raw = window.continuation->nextFixedKey();
+                    return raw ? std::optional(HybridPropertyGroupDirectoryMap::decode(*raw)) : std::nullopt;
+                }
+                const auto raw = window.continuation->next();
+                return raw ? std::optional(HybridPropertyGroupDirectoryMap::decode(*raw)) : std::nullopt;
+            };
+            const auto take = [&]() -> std::optional<HybridPropertyGroupDirectoryMap::Entry> {
+                check();
+                auto first = window.pending;
+                if (!first) {
+                    first = nextRecord();
+                    if (!first) return {};
+                }
+                // The cursor owns separator credit in the original account.
+                // Do not supply an admission closure that dies with this batch.
+                const auto next = nextRecord();
+                require(!next || next->key != first->key, "group directory has duplicate logical ownership");
+                window.pending = next; window.last = first->key;
+                return first;
+            };
+            auto entry = take(); size_t skipped = 0;
+            while (entry && entry->key < key && skipped < BatchReadWindow::GROUPS) {
+                ++skipped; entry = take();
+            }
+            if (entry && entry->key < key) { start(); entry = take(); }
+            require(!entry || entry->key >= key, "group directory continuation precedes its lower bound");
+            while (entry && window.count < BatchReadWindow::GROUPS) {
+                window.groups[window.count++] = *entry;
+                if (window.count < BatchReadWindow::GROUPS) entry = take();
+            }
+            window.first = key; window.kind = kind; window.epoch = epoch;
+            window.valid = membership_io_->dataMutationEpoch() == epoch;
+            if (!window.valid) window.releaseDirectory();
+        } catch (...) {
+            window.valid = false; window.count = 0; window.releaseDirectory(); throw;
+        }
+    }
     std::optional<HybridPropertyGroupRecord> findGroup(EntityPropertyKey owner,
         const std::function<void(size_t)> &boundaryAdmission, SlottedSlotReference *source = nullptr,
         bool authenticateOwner = true, bool allowRemainderRead = false, FieldPageCursor *pageCursor = nullptr) const {
@@ -813,11 +896,7 @@ private:
                 // At most eight records plus the existing duplicate lookahead;
                 // a sparse/random request never walks an unrelated long gap.
                 window.valid = false; window.count = 0;
-                static_cast<void>(groups.visitFrom(snapshot_, key, BatchReadWindow::GROUPS,
-                    [&](const auto &entry) { window.groups[window.count++] = entry; return true; },
-                    boundaryAdmission, cancellation_));
-                window.first = key; window.kind = owner.owner_kind; window.epoch = epoch;
-                window.valid = membership_io_->dataMutationEpoch() == epoch;
+                refillGroupDirectory(window, key, owner.owner_kind, epoch);
                 debug::PerfTrace::addValue("native_graph.hybrid.group_directory_window_refills", 1);
                 if (!window.valid) return groups.find(snapshot_, key, boundaryAdmission, cancellation_);
                 return cached();

@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/boundary-observer-tsc/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-medium-boundary-observer-tsc.db",
+    "all_nodes_property_filter",
+    "4",
+    "80"
+  ],
+  "formal_performance": false,
+  "complete_oracles": 80,
+  "sampled_control_median_ratio": 1.0061500115032966,
+  "quality_passed": true,
+  "phase_basis": "elapsed time from calibrated invariant TSC",
+  "cpu_wall_median_ratio": 0.9999910403125538,
+  "tsc_calibration_audit_ratio": 1.000052033403,
+  "source_inclusive_median_ms": 131.950144,
+  "callback_median_ms": 5.072125,
+  "source_exclusive_elapsed_median_share": 0.6397217301631271,
+  "source_calls_median": 440.0,
+  "callback_calls_median": 11938.0,
+  "query_cpu_median_ms": 193.10850000000147,
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+  "interpretation": "Elapsed attribution eligible only if quality_passed; not exact CPU shares; boundary excludes higher-level adapter and membership supply"
+}

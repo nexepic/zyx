@@ -1,0 +1,31 @@
+{
+  "plan": "scan-supply-20261026",
+  "candidate": "A2 retained-layout supply refinement; not a third layout candidate",
+  "before_implementation": true,
+  "source_control": "e5e48d50",
+  "evidence": {
+    "all_node_heap_allocations": 181225,
+    "requested_allocation_bytes_cumulative": 60234098,
+    "sampled_allocation_stacks": 708,
+    "packed_decode_stacks": 517,
+    "packed_decode_via_findGroup_stacks": 489,
+    "group_directory_refills": 440,
+    "public_root_descents": 449,
+    "public_packed_decodes": 993
+  },
+  "hypothesis": "Execution batches repeatedly recreate storage-directory traversal and materialize the same packed leaf keys. Retain bounded query/snapshot-owned directory continuation instead.",
+  "implementation_scope": [
+    "query-owned hybrid reader with active-call protection and epoch invalidation",
+    "persistent bounded directory cursor and decoded leaf across certified monotonic scan batches",
+    "bounded sparse skip/restart, duplicate-prefix validation before output, ordinary-read authority remains separate",
+    "retained key/leaf buffers own original resource account; never retain per-call admission callbacks"
+  ],
+  "work_targets": {
+    "all_node_root_descents_max": 120,
+    "all_node_packed_decodes_max": 300,
+    "all_node_heap_allocations_max": 65000
+  },
+  "acceptance": "Original V0 registration unchanged: >=2x geometric mean and >=2x all-node on each dataset, 5% guard/resource review; Kuzu separately. No threshold relaxation.",
+  "tuning": "medium and synthetic only; freeze before next holdout candidate run",
+  "timing": "No guard/full-matrix reruns until refined source and modules stabilize; preserve failed A1 window"
+}

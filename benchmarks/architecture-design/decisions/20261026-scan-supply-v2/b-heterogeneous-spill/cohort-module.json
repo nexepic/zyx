@@ -1,0 +1,112 @@
+{
+  "tests": 9,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T21:14:52Z",
+  "time": "9.671s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "BuildingScanFieldCohortTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T21:14:52Z",
+      "time": "9.67s",
+      "testsuite": [
+        {
+          "name": "PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:14:52Z",
+          "time": "2.55s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "SharedPageMutationKeepsOtherGroupsAndOldValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 90,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:14:54Z",
+          "time": "3.268s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 117,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:14:58Z",
+          "time": "1.511s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "CancellationAfterBorrowingThePriorArenaPublishesNothing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 149,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:14:59Z",
+          "time": "0.288s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "BudgetRefusalAfterArenaTransferRefundsAllPrivateState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:14:59Z",
+          "time": "0.314s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "PublicationRecoverySelectsAllEightGroupsOrNone",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 174,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:15:00Z",
+          "time": "0.44s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "HolesAndPartialGroupsKeepExactValuesAndValidateWidth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 189,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:15:00Z",
+          "time": "0.312s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:15:01Z",
+          "time": "0.018s",
+          "classname": "BuildingScanFieldCohortTest"
+        },
+        {
+          "name": "HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_BuildingScanFieldCohorts.cpp",
+          "line": 202,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T21:15:01Z",
+          "time": "0.966s",
+          "classname": "BuildingScanFieldCohortTest"
+        }
+      ]
+    }
+  ]
+}

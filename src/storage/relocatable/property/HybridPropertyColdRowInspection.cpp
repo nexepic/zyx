@@ -22,7 +22,9 @@ HybridPropertyColdRowInspection::HybridPropertyColdRowInspection(const MetadataS
     const CancellationCheckpoint *cancellation)
     : snapshot_(snapshot), generation_(snapshot.superblock().generation), database_(snapshot.superblock().database_id),
       row_(row), owner_(owner), values_(values), cancellation_(cancellation),
-      proxy_credit_(memory, 8U * utils::detail::standardContainerProxyBytes()),
+      // The inline token directory borrows the body; only the remaining
+      // seven standard containers need their separate debug-STL proxies.
+      proxy_credit_(memory, 7U * utils::detail::standardContainerProxyBytes()),
       reference_credit_(memory), manifest_credit_(memory), range_credit_(memory), header_credit_(memory), directory_credit_(memory) {
     require(memory && owner.isValid() && blockGeneration.isValid() &&
         blockGeneration <= snapshot.superblock().generation && row.owner_slot == hybridPropertySlotFor(owner) &&
@@ -36,8 +38,7 @@ HybridPropertyColdRowInspection::HybridPropertyColdRowInspection(const MetadataS
         const auto identity = EntityPropertyCollectionRootCodec::decodeOwner(row.root);
         require(identity.owner_entity_id == owner.entity_id && identity.owner_entity_type == ownerType(owner),
             "cold ROW inspection has a foreign inline owner");
-        const SelectedPropertyReadAdmission admit = [&](size_t bytes) { directory_credit_.set(bytes); };
-        inline_tokens_ = EntityPropertyCollectionRootCodec::decodeTokens(row.root, &admit, cancellation);
+        inline_tokens_ = EntityPropertyCollectionRootCodec::tokenDirectoryView(row.root, cancellation);
     } else {
         require(values != nullptr, "cold ROW LargeValue requires its pinned immutable store");
         // The existing owner-keyed reference decoder may allocate its bounded
@@ -78,7 +79,7 @@ HybridPropertyColdRowInspection::HybridPropertyColdRowInspection(const MetadataS
 }
 uint32_t HybridPropertyColdRowInspection::token(size_t ordinal) const {
     require(ordinal < count(), "cold ROW token ordinal is outside its directory");
-    return row_.large_value_reference ? locations_[ordinal].key_token : inline_tokens_[ordinal];
+    return row_.large_value_reference ? locations_[ordinal].key_token : inline_tokens_->token(ordinal);
 }
 std::vector<std::byte> HybridPropertyColdRowInspection::readRange(uint64_t offset, uint64_t size) {
     check();
@@ -91,10 +92,15 @@ void HybridPropertyColdRowInspection::visitSelected(std::span<const uint32_t> to
     uint32_t previous = 0;
     for (const auto token : tokens) { check(); require(token && token > previous, "cold ROW selected tokens are not canonical"); previous = token; }
     if (!row_.large_value_reference) {
-        EntityPropertyCollectionRootCodec::visitSelectedEncoded(row_.root, owner_.entity_id, ownerType(owner_), tokens,
-            [&](size_t ordinal, std::optional<std::span<const std::byte>> value) {
-                check(); if (value) validateSelected(*value); sink(ordinal, value);
-            }, admission, cancellation_);
+        for (size_t ordinal = 0; ordinal < tokens.size(); ++ordinal) {
+            check();
+            const auto value = inline_tokens_->find(tokens[ordinal]);
+            if (value) {
+                if (admission) (*admission)(sizeof(uint32_t) + value->size());
+                validateSelected(*value);
+            }
+            check(); sink(ordinal, value);
+        }
     } else for (size_t ordinal = 0; ordinal < tokens.size(); ++ordinal) {
         check();
         const auto found = std::lower_bound(locations_.begin(), locations_.end(), tokens[ordinal],

@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx-tools/bin/python",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/kuzu-worker.py",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.kuzu",
+    "/tmp/zyx-v4-b-field-cohort-primary-1-holdout-kuzu.db",
+    "all_nodes_property_filter,label_scan_filter,aggregation_count_by_group,multi_key_group",
+    "3",
+    "10"
+  ],
+  "oracle": "passed",
+  "samples": 40,
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 54272,
+    "process_user_cpu_seconds": 0.335622,
+    "process_system_cpu_seconds": 0.187354,
+    "process_input_blocks": 32,
+    "process_output_blocks": 424,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  }
+}

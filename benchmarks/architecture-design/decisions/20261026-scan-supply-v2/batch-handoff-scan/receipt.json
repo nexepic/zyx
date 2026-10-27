@@ -1,0 +1,7 @@
+{
+  "profile": "scan",
+  "tests": 67,
+  "failures": 0,
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+  "scope": "three selected query module files, full matching core; no full unit suite"
+}

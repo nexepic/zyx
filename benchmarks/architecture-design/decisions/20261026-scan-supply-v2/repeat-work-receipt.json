@@ -1,0 +1,80 @@
+{
+  "complete_oracles": "6 passed",
+  "warmups": 2,
+  "iterations": 6,
+  "timing_benchmark": false,
+  "selected_work_counts_including_warmups": {
+    "native_graph.read.root_descents": [
+      10,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "native_btree.read.packed_page_decodes": [
+      106,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86
+    ],
+    "native_graph.hybrid.group_decodes": [
+      3516,
+      3516,
+      3516,
+      3516,
+      3516,
+      3516,
+      3516,
+      3516
+    ],
+    "native_graph.hybrid.column_decodes": [
+      3437,
+      3437,
+      3437,
+      3437,
+      3437,
+      3437,
+      3437,
+      3437
+    ],
+    "storage_io.file_size_calls": [
+      7818,
+      7637,
+      7637,
+      7637,
+      7637,
+      7637,
+      7637,
+      7637
+    ],
+    "native_graph.read.decoded_metadata_cache_hits": [
+      62266,
+      61451,
+      61451,
+      61451,
+      61451,
+      61451,
+      61451,
+      61451
+    ],
+    "storage.checksum.bytes": [
+      18026021,
+      17269861,
+      17269861,
+      17269861,
+      17269861,
+      17269861,
+      17269861,
+      17269861
+    ]
+  },
+  "all_selected_postwarm_counts_constant": true,
+  "inference": "Selected engine work is stable; latency dispersion is not explained by growing work counts. This does not rule out allocator or CPU/cache cost variation."
+}

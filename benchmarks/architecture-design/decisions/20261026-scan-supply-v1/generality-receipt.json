@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/generality",
+    "verify",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/generality-private.zyx"
+  ],
+  "returncode": 0,
+  "query_benchmark": false,
+  "binary_sha256": "32290c4e2122098faf10ed1778aef277305ee4fc97880f29ef63c6bd8c26ccb0",
+  "source_sha256_before": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "source_sha256_after": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "target_bytes": 128712704,
+  "owners": 16384,
+  "mixed_mutation_batches": 512,
+  "old_pin": true,
+  "reopen_raw_cache_bytes": 4096
+}

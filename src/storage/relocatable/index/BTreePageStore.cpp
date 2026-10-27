@@ -97,6 +97,13 @@ namespace graph::storage {
         return BTreePage::openDecoded(pages_.read(snapshot, pageId, hint), decodedEntries);
     }
 
+    BTreePage BTreePageStore::readFixedKeys(const MetadataSnapshotPin &snapshot, PageId pageId,
+            utils::OwnedStdVector<BTreeFixedKey> &keys, size_t keyWidth, BufferPoolReadHint hint) const {
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+        return BTreePage::openFixedKeys(pages_.read(snapshot, pageId, hint), keys, keyWidth);
+    }
+
     BTreePage BTreePageStore::readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
             std::vector<BTreePageEntry> &decodedEntries, BufferPoolReadHint hint) const {
         utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()

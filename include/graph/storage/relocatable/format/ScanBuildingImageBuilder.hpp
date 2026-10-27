@@ -125,7 +125,10 @@ namespace graph::storage {
         }
 
         [[nodiscard]] FieldConstructionCounts constructFields(const CancellationCheckpoint *cancellation = nullptr,
-            const std::shared_ptr<query::execution::MaterializedByteBudget> &integrityMemory = {}) {
+            const std::shared_ptr<query::execution::MaterializedByteBudget> &integrityMemory = {},
+            uint8_t maximumCohortGroups = 1U) {
+            if (!maximumCohortGroups || maximumCohortGroups > 8U)
+                throw std::invalid_argument("offline field cohorts require 1..8 logical groups");
             if (discardIfSourceChanged())
                 throw FormatException(FormatError::FERR_INVALID_STATE, "offline source changed before field construction");
             if (fields_constructed_) throw std::logic_error("private image fields were already constructed");
@@ -138,7 +141,7 @@ namespace graph::storage {
                 // publication. Drain between transactions, with no discovery
                 // pin retaining the just-retired ROW or metadata generations.
                 recordKnownRoot(published);
-                if (++publications % 32U != 0U) return;
+                if (++publications % (32U / maximumCohortGroups) != 0U) return;
                 for (;;) {
                     const auto retired = releaseRetiredPoolOnce(maintenance, cancellation);
                     if (retired.blocked)
@@ -151,7 +154,7 @@ namespace graph::storage {
                 }
             };
             auto counts = constructFieldsForBuilding(target_, *metadata_, memory_, first_slot_, last_slot_,
-                field_pool_owner_, cancellation, drainRetired);
+                field_pool_owner_, cancellation, drainRetired, maximumCohortGroups);
             if (discardIfSourceChanged())
                 throw FormatException(FormatError::FERR_INVALID_STATE, "offline source changed during field construction");
             recordKnownRoot(buildingRoot());
@@ -167,14 +170,17 @@ namespace graph::storage {
             const std::shared_ptr<query::execution::MaterializedByteBudget> &memory,
             PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, uint64_t fieldPoolOwner,
             const CancellationCheckpoint *cancellation = nullptr,
-            const std::function<void(const Superblock &)> &afterPublication = {}) {
+            const std::function<void(const Superblock &)> &afterPublication = {},
+            uint8_t maximumCohortGroups = 1U) {
 #if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
             static_cast<void>(io); static_cast<void>(metadata); static_cast<void>(memory);
             static_cast<void>(firstSlot); static_cast<void>(lastSlot); static_cast<void>(fieldPoolOwner);
             static_cast<void>(cancellation);
-            static_cast<void>(afterPublication);
+            static_cast<void>(afterPublication); static_cast<void>(maximumCohortGroups);
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan field construction requires the isolated format");
 #else
+            if (!maximumCohortGroups || maximumCohortGroups > 8U)
+                throw std::invalid_argument("offline field cohorts require 1..8 logical groups");
             constexpr size_t limit = 1024U * 1024U;
             if (!io || !metadata.usesDataStorage(io) || !memory || memory->used() > limit ||
                 memory->available() > limit - memory->used() || !firstSlot.isValid() || lastSlot < firstSlot || !fieldPoolOwner)
@@ -209,6 +215,7 @@ namespace graph::storage {
                 std::optional<EntityPropertyKey> next;
                 uint64_t group = 0;
                 bool eligible = false;
+                uint8_t cohortGroups = 1U;
                 {
                     const auto snapshot = metadata.openSnapshot();
                     requireBuilding(snapshot.superblock());
@@ -224,30 +231,59 @@ namespace graph::storage {
                     }
                     group = hybridPropertyGroupFor(*next);
                     debug::PerfTrace::addValue("native_graph.scan_build.field_group_preflight", 1);
-                    eligible = preflightFields(snapshot, *next, group, entities, properties, memory, check);
+                    size_t memberships = 0;
+                    eligible = preflightFields(snapshot, *next, group, entities, properties, memory, check, &memberships);
+                    // Only consecutive eligible ROW groups enter one atomic
+                    // cohort. Do not skip holes or consume a failed preflight.
+                    // Retained cohort work stays within the original one-group
+                    // membership bound and the original 1 MiB account.
+                    while (eligible && cohortGroups < maximumCohortGroups &&
+                        group <= RSS_HYBRID_MAX_GROUP_ID - cohortGroups) {
+                        const uint64_t priorLast = (std::min)((group + cohortGroups - 1U) * 64U,
+                            RSS_HYBRID_MAX_ENTITY_ID);
+                        std::optional<EntityPropertyKey> candidate;
+                        const auto exhaustedNext = metadata.visitEntityPropertyLocationsAfter(snapshot,
+                            EntityPropertyKey{next->owner_kind, priorLast}.directoryId(),
+                            (std::numeric_limits<size_t>::max)(), [&](const EntityPropertyLocation &location) {
+                                check(); candidate = location.key; return false;
+                            });
+                        if (!candidate) {
+                            if (!exhaustedNext) throw FormatException(FormatError::FERR_INVALID_STATE,
+                                "field cohort discovery made no progress");
+                            break;
+                        }
+                        if (candidate->owner_kind != next->owner_kind ||
+                            hybridPropertyGroupFor(*candidate) != group + cohortGroups) break;
+                        size_t extra = 0;
+                        if (!preflightFields(snapshot, *candidate, group + cohortGroups,
+                            entities, properties, memory, check, &extra) ||
+                            extra > HybridPropertyGroupConversion::MAX_MEMBERSHIPS - memberships) break;
+                        memberships += extra; ++cohortGroups;
+                    }
                 }
-                ++counts.examined_groups;
+                counts.examined_groups += eligible ? cohortGroups : 1U;
                 std::optional<Superblock> published;
                 if (eligible) {
                     auto transaction = planner.beginTransaction();
                     const auto before = transaction.baseSuperblock().generation;
                     transaction.stageHybridPropertyConversion(next->owner_kind, group, memory, cancellation, true,
-                        NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID, true, {}, 1U, true);
+                        NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID, true, {}, cohortGroups, true);
                     const auto result = transaction.commit();
                     if (!result.committed())
                         throw FormatException(FormatError::FERR_INVALID_STATE, "private field construction conflicted");
                     if (result.superblock.generation == before)
                         throw FormatException(FormatError::FERR_INVALID_STATE, "eligible private field group was not published");
-                    requireBuilding(result.superblock); ++counts.converted_groups;
+                    requireBuilding(result.superblock); counts.converted_groups += cohortGroups;
                     published = result.superblock;
-                    debug::PerfTrace::addValue("native_graph.scan_build.field_groups_converted", 1);
+                    debug::PerfTrace::addValue("native_graph.scan_build.field_groups_converted", cohortGroups);
+                    debug::PerfTrace::addValue("native_graph.scan_build.field_cohort_publications", 1);
                 } else {
                     ++counts.row_fallback_groups;
                     debug::PerfTrace::addValue("native_graph.scan_build.field_groups_row_fallback", 1);
                 }
                 if (published && afterPublication) afterPublication(*published);
                 constexpr uint64_t maximumOwner = (UINT64_C(1) << 63U) - 1U;
-                const auto last = (std::min)(group * 64U, maximumOwner);
+                const auto last = (std::min)((group + cohortGroups - 1U) * 64U, maximumOwner);
                 after = EntityPropertyKey{next->owner_kind, last}.directoryId();
                 if (after == UINT64_MAX) break;
             }
@@ -787,7 +823,7 @@ namespace graph::storage {
         static bool preflightFields(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &first,
             uint64_t group, EntityPageStore &entities, PropertyCollectionRootStore &properties,
             const std::shared_ptr<query::execution::MaterializedByteBudget> &memory,
-            const std::function<void()> &check) {
+            const std::function<void()> &check, size_t *sourceMemberships = nullptr) {
             // Complete scan membership and label authority cover Nodes. Keep
             // relationship Properties on their ordinary ROW path instead of
             // constructing unrelated field indexes during this conversion.
@@ -854,6 +890,7 @@ namespace graph::storage {
                 if (plan.columns().size() > 64U) {
                     debug::PerfTrace::addValue("native_graph.scan_build.field_typed_bound_refusal", 1); return false;
                 }
+                if (sourceMemberships) *sourceMemberships = memberships;
                 return true;
             } catch (const query::execution::MaterializedByteLimitExceeded &) {
                 if (checkpointFailed) throw;

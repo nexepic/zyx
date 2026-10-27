@@ -1,0 +1,6 @@
+{
+  "experiment": "same prlimit exec /bin/true child, no preexec_fn; before and after touching 160MiB parent allocation",
+  "small_parent_child_peak_rss_kib": 9344,
+  "large_parent_child_peak_rss_kib": 173056,
+  "notes": "limits applied by Linux prlimit command; no Python child code before exec"
+}

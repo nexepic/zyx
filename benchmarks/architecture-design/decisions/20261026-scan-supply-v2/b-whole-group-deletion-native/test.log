@@ -1,0 +1,12 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+[       OK ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin (1661 ms)
+[----------] 1 test from BuildingScanFieldCohortTest (1661 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1662 ms total)
+[  PASSED  ] 1 test.

@@ -19,6 +19,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/utils/OwnedPmrObject.hpp"
 #include "graph/utils/OwnedSharedPtr.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 namespace graph::storage {
 
@@ -56,6 +57,15 @@ namespace graph::storage {
 		size_t emitted = 0U;
 		bool exhausted = false;
 		std::optional<BTreePage> leaf;
+        struct FixedLeafEntries final : utils::OwnedPmrObject {
+            utils::OwnedStdVector<BTreeFixedKey> keys;
+        };
+        std::unique_ptr<FixedLeafEntries> fixed;
+        size_t fixed_key_width = 0;
+        [[nodiscard]] size_t entryCount() const { return fixed ? fixed->keys.size() : entries.size(); }
+        [[nodiscard]] std::span<const std::byte> keyAt(size_t index) const {
+            return fixed ? fixed->keys[index].key() : std::span<const std::byte>(entries[index].key);
+        }
 		utils::OwnedStdVector<BTreePageEntry> entries;
 		size_t entry_index = 0U;
 		utils::OwnedStdVector<BTreeIndex::TraversalStep> traversal;
@@ -74,8 +84,34 @@ namespace graph::storage {
 			throwBTreeIndexError(FormatError::FERR_INVALID_STATE,
 								 "relocatable B+Tree range cursor has no snapshot-bound state");
 		}
+        if (state_->fixed_key_width)
+            throwBTreeIndexError(FormatError::FERR_INVALID_STATE, "fixed-key cursor requires its fixed result interface");
 		return state_->index->nextRangeCursor(*state_, boundaryKeyAdmission);
 	}
+
+    size_t BTreeIndex::RangeCursor::fixedKeyWidth() const noexcept {
+        return state_ ? state_->fixed_key_width : 0U;
+    }
+    std::optional<BTreeFixedKey> BTreeIndex::RangeCursor::nextFixedKey(
+            const std::function<void(size_t)> &boundaryKeyAdmission) {
+        if (!state_ || !state_->index || !state_->snapshot || !state_->fixed_key_width)
+            throwBTreeIndexError(FormatError::FERR_INVALID_STATE, "fixed-key cursor has no fixed snapshot-bound state");
+        if (!state_->index->prepareRangeCursorNext(*state_, boundaryKeyAdmission)) return {};
+        const auto key = state_->keyAt(state_->entry_index);
+        if (key.size() != state_->fixed_key_width)
+            throwBTreeIndexError(FormatError::FERR_INVALID_HEADER, "fixed-key cursor encountered a foreign width");
+        BTreeFixedKey result;
+        result.width = static_cast<uint8_t>(key.size());
+        std::copy(key.begin(), key.end(), result.bytes.begin());
+        if (!state_->fixed) {
+            // A pressured successor may use the ordinary representation.
+            // Release consumed key payloads at the same point as next(),
+            // rather than retaining them until that entire leaf is exhausted.
+            [[maybe_unused]] BTreePageEntry released = std::move(state_->entries[state_->entry_index]);
+        }
+        ++state_->entry_index; ++state_->emitted;
+        return result;
+    }
 
 	BTreeIndex::BTreeIndex(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
 						   BTreeLeafValueLayout leafValueLayout, std::optional<BTreeRootReadBinding> rootBinding) :
@@ -512,13 +548,61 @@ namespace graph::storage {
 		return RangeCursor(std::move(state));
 	}
 
-	std::optional<BTreePageEntry> BTreeIndex::nextRangeCursor(RangeCursor::State &state,
+    BTreeIndex::RangeCursor BTreeIndex::openFixedKeyRangeCursor(
+            const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
+            size_t maximumEntries, size_t keyWidth, BufferPoolReadHint hint, bool excludeLowerBound,
+            const CancellationCheckpoint *cancellation) const {
+        if (!keyWidth || keyWidth > BTreeFixedKey::MAX_BYTES || leaf_value_layout_ != BTreeLeafValueLayout::BLVL_EMPTY)
+            throwBTreeIndexError(FormatError::FERR_INVALID_HEADER, "fixed-key cursor requires bounded keys and an EMPTY-value tree");
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+        auto cursor = openRangeCursor(snapshot, lowerBound, maximumEntries, hint, excludeLowerBound, cancellation);
+        debug::PerfTrace::addValue("native_btree.read.fixed_key_cursor_preparation", 1);
+        if (cancellation) cancellation->check();
+        try {
+            auto fixed = std::unique_ptr<RangeCursor::State::FixedLeafEntries>(
+                new (utils::OwnedAllocationScope::owner()) RangeCursor::State::FixedLeafEntries());
+            fixed->keys.reserve(cursor.state_->entries.size());
+            for (const auto &entry : cursor.state_->entries) {
+                if (entry.key.size() != keyWidth || entry.value_or_child)
+                    throwBTreeIndexError(FormatError::FERR_INVALID_HEADER, "fixed-key initial leaf has a foreign width or value");
+                BTreeFixedKey key; key.width = static_cast<uint8_t>(keyWidth);
+                std::copy(entry.key.begin(), entry.key.end(), key.bytes.begin());
+                fixed->keys.push_back(key);
+            }
+            // Prepare every potentially throwing allocation before replacing
+            // the ordinary representation. The optional conversion can decline.
+            utils::OwnedStdVector<BTreePageEntry> empty;
+            cursor.state_->entries.swap(empty);
+            cursor.state_->fixed = std::move(fixed);
+            cursor.state_->fixed_key_width = keyWidth;
+            debug::PerfTrace::addValue("native_btree.read.fixed_key_cursor_adoptions", 1);
+        } catch (const query::execution::MaterializedByteLimitExceeded &) {
+            debug::PerfTrace::addValue("native_btree.read.fixed_key_cursor_declines", 1);
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            debug::PerfTrace::addValue("native_btree.read.fixed_key_cursor_declines", 1);
+        }
+        // A copy is bounded by one authenticated leaf. Owner checkpoint
+        // exceptions must not be mistaken for optional allocator rejection.
+        if (cancellation) cancellation->check();
+        return cursor;
+    }
+
+    std::optional<BTreePageEntry> BTreeIndex::nextRangeCursor(RangeCursor::State &state,
+            const std::function<void(size_t)> &boundaryKeyAdmission) const {
+        if (!prepareRangeCursorNext(state, boundaryKeyAdmission)) return {};
+        BTreePageEntry result = std::move(state.entries[state.entry_index]);
+        ++state.entry_index; ++state.emitted;
+        return result;
+    }
+
+	bool BTreeIndex::prepareRangeCursorNext(RangeCursor::State &state,
 		const std::function<void(size_t)> &boundaryKeyAdmission) const {
         utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
             : state.previous_leaf_last_key_credit.owner());
 		if (state.exhausted) {
 			if (boundaryKeyAdmission) boundaryKeyAdmission(0U);
-			return std::nullopt;
+			return false;
 		}
 		for (;;) {
 			if (state.cancellation != nullptr) {
@@ -529,7 +613,7 @@ namespace graph::storage {
 						? state.previous_leaf_last_key->capacity() : 0U);
 			}
 			if (state.emitted == state.maximum_entries) {
-				if (state.entry_index < state.entries.size()) {
+				if (state.entry_index < state.entryCount()) {
 					throwBTreeIndexError(FormatError::FERR_INVALID_STATE,
 									 "relocatable B+Tree range cursor exceeded its configured entry bound");
 				}
@@ -560,15 +644,15 @@ namespace graph::storage {
 									 "relocatable B+Tree range cursor exceeded its configured entry bound");
 				}
 				state.exhausted = true;
-				return std::nullopt;
+				return false;
 			}
-			if (state.entry_index < state.entries.size()) {
+			if (state.entry_index < state.entryCount()) {
 				// Only the final key of a leaf participates in sibling validation.
 				// Admit and copy before mutating the emission position, so budget
 				// rejection or allocation failure cannot consume an entry.
-                if (state.entry_index + 1U == state.entries.size() &&
+                if (state.entry_index + 1U == state.entryCount() &&
                     state.leaf->header().right_sibling.isValid() && !state.previous_leaf_last_key.has_value()) {
-                    const auto &key = state.entries[state.entry_index].key;
+                    const auto key = state.keyAt(state.entry_index);
                     if (boundaryKeyAdmission) boundaryKeyAdmission(key.size());
                     else state.previous_leaf_last_key_credit.set(utils::detail::addStandardHeapBytes(
                         utils::detail::standardContainerProxyBytes(),
@@ -576,7 +660,7 @@ namespace graph::storage {
                     try {
                         // Construct in its final optional: moving a temporary
                         // would allocate another empty proxy on debug MSVC STL.
-                        state.previous_leaf_last_key.emplace(key);
+                        state.previous_leaf_last_key.emplace(key.begin(), key.end());
                     } catch (...) {
                         if (!boundaryKeyAdmission) state.previous_leaf_last_key_credit.set(0U);
                         throw;
@@ -585,20 +669,40 @@ namespace graph::storage {
                     else state.previous_leaf_last_key_credit.set(
                         utils::detail::standardVectorHeapBufferBytes(*state.previous_leaf_last_key));
                 }
-				BTreePageEntry result = std::move(state.entries[state.entry_index]);
-                ++state.entry_index;
-				++state.emitted;
-				return result;
+                return true;
 			}
 			if (!state.leaf.has_value() || !state.leaf->header().right_sibling.isValid()) {
 				state.exhausted = true;
-				return std::nullopt;
+				return false;
 			}
 
 			const BTreePageHeader header = state.leaf->header();
 			utils::OwnedStdVector<BTreePageEntry> siblingEntries;
-			BTreePage sibling = pages_.readDecoded(*state.snapshot, header.right_sibling, siblingEntries,
-																	 BufferPoolReadHint::BPRH_SEQUENTIAL);
+            std::unique_ptr<RangeCursor::State::FixedLeafEntries> siblingFixed;
+            BTreePage sibling = [&] {
+                if (state.fixed_key_width) {
+                    try {
+                        siblingFixed.reset(new (utils::OwnedAllocationScope::owner()) RangeCursor::State::FixedLeafEntries());
+                        return pages_.readFixedKeys(*state.snapshot, header.right_sibling, siblingFixed->keys,
+                            state.fixed_key_width, BufferPoolReadHint::BPRH_SEQUENTIAL);
+                    } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                        siblingFixed.reset();
+                    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        siblingFixed.reset();
+                    }
+                }
+                return pages_.readDecoded(*state.snapshot, header.right_sibling, siblingEntries,
+                    BufferPoolReadHint::BPRH_SEQUENTIAL);
+            }();
+            if (state.fixed_key_width && !siblingFixed) {
+                for (const auto &entry : siblingEntries)
+                    if (entry.key.size() != state.fixed_key_width || entry.value_or_child)
+                        throwBTreeIndexError(FormatError::FERR_INVALID_HEADER, "fixed-key fallback leaf has a foreign width or value");
+            }
+            const auto siblingCount = siblingFixed ? siblingFixed->keys.size() : siblingEntries.size();
+            const auto siblingKey = [&](size_t index) -> std::span<const std::byte> {
+                return siblingFixed ? siblingFixed->keys[index].key() : std::span<const std::byte>(siblingEntries[index].key);
+            };
 			validateIndexPage(sibling, index_id_);
 			const BTreePageHeader siblingHeader = sibling.header();
 			const uint8_t invalidSibling = static_cast<uint8_t>(siblingHeader.kind != BTreeNodeKind::BPN_LEAF) |
@@ -609,12 +713,12 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree leaf sibling link is not reciprocal");
 			}
-			if (siblingEntries.empty()) {
+			if (!siblingCount) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree linked non-root leaf is empty");
 			}
 			if (state.previous_leaf_last_key.has_value() &&
-				!lessKey(*state.previous_leaf_last_key, siblingEntries.front().key)) {
+				!lessKey(*state.previous_leaf_last_key, siblingKey(0U))) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree leaf siblings are not globally ordered");
 			}
@@ -624,12 +728,13 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree sibling is outside the routed leaf sequence");
 			}
-			for (const BTreePageEntry &entry: siblingEntries) {
+			for (size_t ordinal = 0; ordinal < siblingCount; ++ordinal) {
+                const auto entryKey = siblingKey(ordinal);
 				const uint8_t outsideRange =
 						static_cast<uint8_t>(successor.lower_inclusive.has_value() &&
-													 lessKey(entry.key, *successor.lower_inclusive)) |
+													 lessKey(entryKey, *successor.lower_inclusive)) |
 						static_cast<uint8_t>(successor.upper_exclusive.has_value() &&
-													 !lessKey(entry.key, *successor.upper_exclusive));
+													 !lessKey(entryKey, *successor.upper_exclusive));
 				if (outsideRange != 0U) {
 					throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 													 "relocatable B+Tree sibling key violates its routed separator range");
@@ -638,7 +743,8 @@ namespace graph::storage {
 			state.previous_leaf_last_key.reset();
             state.previous_leaf_last_key_credit.set(0U);
 			state.leaf.emplace(std::move(sibling));
-			state.entries = std::move(siblingEntries);
+			state.entries.swap(siblingEntries);
+            state.fixed.swap(siblingFixed);
 			state.entry_index = 0U;
 			if (boundaryKeyAdmission) boundaryKeyAdmission(0U);
 		}

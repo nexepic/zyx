@@ -129,7 +129,7 @@ namespace graph::query::execution::direct_edge_test {
 			return found == properties.end() ? nullptr : &found->value;
 		}
 
-		class DirectEdgeSnapshot final : public LogicalGraphReadSnapshot {
+		class DirectEdgeSnapshot : public LogicalGraphReadSnapshot {
 		public:
 			explicit DirectEdgeSnapshot(DirectEdgeGraph &graph) : graph_(graph) {}
 

@@ -1,0 +1,37 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableBTreePageCodecTest.FixedKey*:RelocatablePropertyCollectionRootTest.Borrowed*:PropertySubblockDirectoryTest.FixedKey*
+[==========] Running 7 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from RelocatableBTreePageCodecTest
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups (9 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation (0 ms)
+[----------] 2 tests from RelocatableBTreePageCodecTest (9 ms total)
+
+[----------] 2 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation (0 ms)
+[----------] 2 tests from RelocatablePropertyCollectionRootTest (0 ms total)
+
+[----------] 3 tests from PropertySubblockDirectoryTest
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission
+unknown file: Failure
+C++ exception with description "relocatable initial B+Tree plan exceeds its bounded transaction-local input" thrown in the test body.
+
+[  FAILED  ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission (15 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor
+[       OK ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor (2 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves
+[       OK ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves (116 ms)
+[----------] 3 tests from PropertySubblockDirectoryTest (134 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 3 test suites ran. (147 ms total)
+[  PASSED  ] 6 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission
+
+ 1 FAILED TEST

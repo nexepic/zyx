@@ -1,0 +1,24 @@
+[
+  {
+    "profile": "scan",
+    "tests": 91,
+    "failures": 0,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/presence-scan-modules",
+      "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/presence-scan-modules.json"
+    ],
+    "library_sha256": "1604abb172a964de930b6acf5c47372bedcf00fbb9e9f3bb4362698052a80aff",
+    "binary_sha256": "d0cb85ae8c13c29296f41892c52b325052372dd4cf6615fc5886a26a26febb35"
+  },
+  {
+    "profile": "hybrid",
+    "tests": 102,
+    "failures": 0,
+    "command": [
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/hybrid/modules",
+      "--gtest_output=json:/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/presence-hybrid-modules.json"
+    ],
+    "library_sha256": "cd2e0567fd1d775561ce063641780899cdaa21c0dfd0275e8d0f171f8b80539a",
+    "binary_sha256": "a8a9ff6cab62ff077fca3e58be53de672a82bd5da47666178a687ba11d9d9df8"
+  }
+]

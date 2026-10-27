@@ -1,0 +1,7 @@
+{
+  "returncode": -15,
+  "resources_unavailable": true,
+  "timed_out": false,
+  "launcher_returncode": -15,
+  "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+}

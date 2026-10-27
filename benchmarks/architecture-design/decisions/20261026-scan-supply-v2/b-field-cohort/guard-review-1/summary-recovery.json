@@ -1,0 +1,8 @@
+{
+  "measurement_workers": 28,
+  "all_worker_returncodes": 0,
+  "guard_oracles": 360,
+  "open_oracles": 8,
+  "problem": "Original summary enumerated global case set and requested holdout property_noop, which was intentionally not measured. Recovery groups cases by scale. No measurements rerun.",
+  "source_and_inputs_reverified": true
+}

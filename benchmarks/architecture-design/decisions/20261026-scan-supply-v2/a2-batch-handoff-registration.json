@@ -1,0 +1,16 @@
+{
+  "candidate": "A2 shared execution batch handoff; retain persistent layout",
+  "evidence": "Certified provider supplies synchronous borrowed ID span; NodeSupplyAndSorting constructs one PendingNodeRef and performs per-row BoundedBatch accounting, then reconstructs IDs and lookup order. Medium all-node has 225000 input rows in 440 source batches. CPU sampler quality false; no CPU-share or layout-B claim.",
+  "change": "Borrow certified IDs only within provider callback; materialize EntityRef only for owning row fallback; retain generic pending path, original source admission, ordering and duplicate validation, split/stop/exception boundaries.",
+  "work_target": "certified path 0 PendingNodeRef appends; all 225000 candidate IDs handed off in bounded batches",
+  "tests": [
+    "synchronous source lifetime and multiple reused batches",
+    "physical order through sort/inverse mapping",
+    "NULL/missing and numeric aggregate semantics",
+    "duplicate/zero IDs rejected without replay",
+    "byte-pressure split and cancellation/early stop",
+    "ordinary provider-decline path unchanged"
+  ],
+  "performance": "no new full matrix while changing implementation; first validate selected modules and untimed public/lifecycle oracles; existing gates unchanged",
+  "monotonic_fast_path": "Already-sorted certified IDs remain a borrowed span through field supply; no sorted ordinal or owner-ID vector. Duplicate validation and inverse identity map remain. Unsorted provider batches retain bounded sort and inverse ordering."
+}

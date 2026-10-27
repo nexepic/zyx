@@ -78,8 +78,17 @@
 			pending.reserve(batchCapacity);
 			bool continueVisitor = true;
             const storage::LogicalGraphNodeScanProvider::NodeScanPropertySource *certifiedSource = nullptr;
+            // The provider owns these IDs until this synchronous callback returns.
+            // Keep the batch intact instead of constructing and charging one
+            // temporary EntityRef per candidate before rebuilding lookup IDs.
+            std::span<const uint64_t> certifiedIds;
+            const auto referenceAt = [&](size_t ordinal) -> storage::EntityRef {
+                if (certifiedSource) return {certifiedIds[ordinal], false, 0U, 0U, 0U};
+                return pending.values()[ordinal].reference;
+            };
+            const auto pendingCount = [&] { return certifiedSource ? certifiedIds.size() : pending.size(); };
 			const auto flushPending = [&]() {
-				if (pending.empty()) {
+				if (!pendingCount()) {
 					return continueVisitor;
 				}
 				std::vector<std::string_view> keyViews;
@@ -96,26 +105,43 @@
 						if (lookupBytes.wouldExceed(scratch))
 							throw NodeColumnBytePressure{};
 						lookupBytes.set(scratch);
-						std::vector<size_t> sortedOrdinals(end - begin);
-						std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), begin);
-                        const auto ownerLess = [&](size_t left, size_t right) {
-                            return pending.values()[left].reference.entity_id < pending.values()[right].reference.entity_id;
-                        };
-                        if (!std::ranges::is_sorted(sortedOrdinals, ownerLess))
-                            std::ranges::sort(sortedOrdinals, ownerLess);
-						std::vector<uint64_t> nodeIds;
-						nodeIds.reserve(end - begin);
-						std::vector<size_t> lookupOrdinals(end - begin);
-						for (size_t sorted = 0U; sorted < sortedOrdinals.size(); ++sorted) {
-							const size_t original = sortedOrdinals[sorted];
-							const uint64_t id = pending.values()[original].reference.entity_id;
-							if (!nodeIds.empty() && nodeIds.back() == id) {
-								throw std::runtime_error(
-										"logical graph native Node reference scan returned duplicate Node IDs");
-							}
-							nodeIds.push_back(id);
-							lookupOrdinals[original - begin] = sorted;
-						}
+                        std::vector<size_t> lookupOrdinals(end - begin);
+                        std::vector<uint64_t> ownedNodeIds;
+                        std::span<const uint64_t> nodeIds;
+                        const auto borrowed = certifiedSource ? certifiedIds.subspan(begin, end - begin) :
+                            std::span<const uint64_t>{};
+                        if (certifiedSource && std::ranges::is_sorted(borrowed)) {
+                            // The native complete scan is monotonic. Pass its
+                            // authenticated ID span directly to the field source;
+                            // preserve an identity ordinal map for every consumer.
+                            uint64_t previous = 0;
+                            for (const auto id : borrowed) {
+                                if (!id || id <= previous)
+                                    throw std::runtime_error("logical graph native Node reference scan returned duplicate Node IDs");
+                                previous = id;
+                            }
+                            nodeIds = borrowed;
+                            std::iota(lookupOrdinals.begin(), lookupOrdinals.end(), size_t{0});
+                            debug::PerfTrace::addValue("logical_plan.certified_scan.direct_id_rows", static_cast<int64_t>(nodeIds.size()));
+                        } else {
+                            std::vector<size_t> sortedOrdinals(end - begin);
+                            std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), begin);
+                            const auto ownerLess = [&](size_t left, size_t right) {
+                                return referenceAt(left).entity_id < referenceAt(right).entity_id;
+                            };
+                            if (!std::ranges::is_sorted(sortedOrdinals, ownerLess))
+                                std::ranges::sort(sortedOrdinals, ownerLess);
+                            ownedNodeIds.reserve(end - begin);
+                            for (size_t sorted = 0; sorted < sortedOrdinals.size(); ++sorted) {
+                                const size_t original = sortedOrdinals[sorted];
+                                const uint64_t id = referenceAt(original).entity_id;
+                                if (!ownedNodeIds.empty() && ownedNodeIds.back() == id)
+                                    throw std::runtime_error("logical graph native Node reference scan returned duplicate Node IDs");
+                                ownedNodeIds.push_back(id);
+                                lookupOrdinals[original - begin] = sorted;
+                            }
+                            nodeIds = ownedNodeIds;
+                        }
 						if (columnReceiver && columnReceiver->consumeDirect &&
 							state.shared.snapshot.supportsNodePropertyCellBatches()) {
 							std::optional<detail::DirectPropertyColumns> direct;
@@ -234,7 +260,7 @@
 							for (const auto &key: propertyKeys)
 								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
 						};
-						if (!columnReceiver) prepareRow(pending.values()[begin].reference);
+						if (!columnReceiver) prepareRow(referenceAt(begin));
 						size_t structuralBytes = columnReceiver ? 0U : logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes.wouldExceed(structuralBytes))
 							throw NodeColumnBytePressure{};
@@ -335,7 +361,7 @@
 							return continueVisitor;
 						}
 						if (columnReceiver) {
-							prepareRow(pending.values()[begin].reference);
+							prepareRow(referenceAt(begin));
 							structuralBytes = logicalReadRowBytes(row, state.shared.context);
 							if (rowBytes.wouldExceed(structuralBytes)) throw NodeColumnBytePressure{};
 							rowBytes.set(structuralBytes);
@@ -348,7 +374,7 @@
 							if (selection && !selection->includes(sorted)) continue;
 							if (index != begin) {
 								row = LogicalPlanReadRow{};
-								prepareRow(pending.values()[index].reference);
+								prepareRow(referenceAt(index));
 								rowBytes.set(structuralBytes);
 							}
 							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
@@ -377,7 +403,7 @@
 					const size_t middle = begin + (end - begin) / 2U;
 					return processRange(begin, middle) && processRange(middle, end);
 				};
-				continueVisitor = processRange(0U, pending.size());
+				continueVisitor = processRange(0U, pendingCount());
 				pending.clear();
 				return continueVisitor;
 			};
@@ -401,15 +427,19 @@
                             if (ids.size() > batchCapacity || examined < ids.size() || examined > batchCapacity)
                                 throw std::runtime_error("certified scan batch changed its bounded cardinality");
                             checkGuardNow(state);
-                            for (size_t i = 0; i < examined; ++i)
-                                incrementBounded(state.task.stats.nodes_scanned, "logical-plan Node counter overflowed");
-                            for (const auto id : ids) {
+                            if (!pending.empty() || certifiedSource)
+                                throw std::logic_error("certified scan batch overlaps an active source");
+                            if (examined > (std::numeric_limits<size_t>::max)() - state.task.stats.nodes_scanned)
+                                throw std::overflow_error("logical-plan Node counter overflowed");
+                            state.task.stats.nodes_scanned += examined;
+                            for (const auto id : ids)
                                 if (!id) throw std::runtime_error("certified scan batch returned a zero Node ID");
-                                pending.append(PendingNodeRef{{id, false, 0U, 0U, 0U}});
-                            }
+                            debug::PerfTrace::addValue("logical_plan.certified_scan.borrowed_ids", static_cast<int64_t>(ids.size()));
+                            certifiedIds = ids;
                             certifiedSource = &source;
-                            try { const bool more = flushPending(); certifiedSource = nullptr; return more; }
-                            catch (...) { certifiedSource = nullptr; throw; }
+                            const auto release = [&] { certifiedSource = nullptr; certifiedIds = {}; };
+                            try { const bool more = flushPending(); release(); return more; }
+                            catch (...) { release(); throw; }
                         }, [&](size_t bytes) { batchSourceBytes.set(bytes); });
                 } catch (const MaterializedByteLimitExceeded &) {
                     if (emittedBatch) throw;

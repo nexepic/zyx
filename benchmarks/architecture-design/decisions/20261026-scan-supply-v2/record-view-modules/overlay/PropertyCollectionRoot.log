@@ -1,0 +1,7 @@
+/workspace/zyx/src/storage/relocatable/property/PropertyCollectionRoot.cpp:206:20: warning: result of comparison of constant 1537228672809129301 with expression of type 'const uint32_t' (aka 'const unsigned int') is always false [-Wtautological-constant-out-of-range-compare]
+  206 |                                 if (entryCount > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyLargeValueEntryLocation)) {
+      |                                     ~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/src/storage/relocatable/property/PropertyCollectionRoot.cpp:348:19: warning: result of comparison of constant 256204778801521550 with expression of type 'uint32_t' (aka 'unsigned int') is always false [-Wtautological-constant-out-of-range-compare]
+  348 |                         if (entryCount > std::numeric_limits<size_t>::max() / sizeof(PropertyCollectionRootEntry)) {
+      |                             ~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.

@@ -1602,6 +1602,139 @@ TEST_F(ScanReadProofTest, ExhaustedNativeRowPoolUsesFreshCowDestinationAndPreser
     EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo(), store(), work).scan()));
 }
 
+TEST_F(ScanReadProofTest, PresenceProbesReuseSnapshotContextAndDropItAfterEpochChange) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto pin = store().openSnapshot();
+        SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        LargeValueStore large(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        PropertyCollectionRootStore properties(pages, large, store());
+        auto cursor = properties.openScanCursor(pin);
+        int64_t descriptors = 0;
+        graph::debug::PerfTrace::ScopedObserver observer(&descriptors,
+            [](void *owner, std::string_view name, int64_t value, bool duration) noexcept {
+                if (!duration && name == "native_graph.read.metadata_decodes.hybrid_descriptor")
+                    *static_cast<int64_t *>(owner) += value;
+            });
+        for (uint64_t id = 1; id <= 64; ++id) {
+            const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, id};
+            EXPECT_TRUE(cursor.readEntityPropertyExists(pin, owner, 1U, true));
+            EXPECT_TRUE(cursor.readEntityPropertyExists(pin, owner, 2U, true));
+            EXPECT_EQ(cursor.readEntityPropertyExists(pin, owner, 3U, true), id == 1U);
+        }
+        EXPECT_EQ(descriptors, 1);
+        std::byte original{}; targetIo()->readAt(0, &original, 1U);
+        targetIo()->writeAt(0, &original, 1U);
+        EXPECT_TRUE(cursor.readEntityPropertyExists(pin, {EntityPropertyOwnerKind::EPOK_NODE, 1U}, 1U, true));
+        EXPECT_EQ(descriptors, 2);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(ScanReadProofTest, QueryDirectoryContinuationSurvivesExecutionBatchesAndRestartsBackwardReads) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 2048U));
+    targetIo()->enableBufferPool(1024U * 1024U, work);
+    auto verified = VerifiedScanRoot::verifyComplete(targetIo(), store(), work, control);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    auto rows = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto pin = store().openSnapshot();
+        SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        LargeValueStore large(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        PropertyCollectionRootStore properties(pages, large, store());
+        auto cursor = properties.openScanCursor(pin);
+        struct Counts { int64_t restarts = 0, refills = 0; } counts;
+        graph::debug::PerfTrace::ScopedObserver observer(&counts,
+            [](void *state, std::string_view name, int64_t value, bool duration) noexcept {
+                if (duration) return;
+                auto &c = *static_cast<Counts *>(state);
+                if (name == "native_graph.hybrid.group_directory_cursor_restarts") c.restarts += value;
+                if (name == "native_graph.hybrid.group_directory_window_refills") c.refills += value;
+            });
+        std::array<unsigned, 2048> seen{};
+        const std::array<uint32_t, 1> tokens{1U};
+        for (unsigned pass = 0; pass < 2; ++pass) {
+            ASSERT_TRUE(CertifiedScanMembership::visit(verified, targetIo(), store(), pin, rows, SIZE_MAX, 256, {},
+                [&](auto ids, size_t, const auto &grant) {
+                    std::vector<EntityPropertyKey> owners;
+                    for (auto id : ids) owners.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+                    auto alive = std::make_shared<bool>(true);
+                    const SelectedPropertyReadAdmission admission = [alive](size_t) { EXPECT_TRUE(*alive); };
+                    const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> owning =
+                        [](auto, auto, auto) { ADD_FAILURE() << "unexpected owning scalar fallback"; };
+                    const PropertyScalarReadSink scalar = [&](size_t row, size_t column, auto type, uint64_t value) {
+                        ASSERT_LT(row, ids.size()); EXPECT_EQ(column, 0U);
+                        EXPECT_EQ(type, graph::PropertyType::INTEGER); EXPECT_EQ(value, ids[row]);
+                        ASSERT_LE(ids[row], seen.size()); ++seen[ids[row] - 1U];
+                    };
+                    const PropertyTextReadSink text = [](auto, auto, auto) { ADD_FAILURE() << "unexpected text"; };
+                    const PropertyColumnBatchReadSinks batches{
+                        [&](auto ordinals, auto column, auto type, auto values) {
+                            for (size_t n = 0; n < ordinals.size(); ++n) scalar(ordinals[n], column, type, values[n]);
+                        }, [](auto, auto, auto) { ADD_FAILURE() << "unexpected text run"; }};
+                    grant.read(ids, [&] {
+                        cursor.readEntityPropertiesOptionalSorted(pin, owners, tokens, {}, true,
+                            &admission, &owning, &scalar, &text, &batches);
+                    });
+                    *alive = false;
+                    return true;
+                }));
+            for (auto count : seen) EXPECT_EQ(count, pass + 1U);
+            // Eight execution batches share one storage traversal, then a new
+            // lower bound on the second pass deliberately restarts that stream.
+            EXPECT_EQ(counts.restarts, pass + 1U);
+            EXPECT_EQ(counts.refills, 4U * (pass + 1U));
+            EXPECT_EQ(rows->used(), 0U);
+        }
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(ScanReadProofTest, QueryDirectoryContinuationDropsExpiredStateBeforeAFreshProducerGrant) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 1024U));
+    auto verified = VerifiedScanRoot::verifyComplete(targetIo(), store(), work, control);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    auto rows = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    graph::utils::OwnedAllocationScope scope(memory);
+    auto pin = store().openSnapshot();
+    SlottedPagePool pages(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    LargeValueStore large(targetIo(), store(), SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    PropertyCollectionRootStore properties(pages, large, store()); auto cursor = properties.openScanCursor(pin);
+    std::array<unsigned, 1024> seen{}; const std::array<uint32_t, 1> tokens{1U};
+    bool alterEpoch = true;
+    const auto visit = [&](const auto &proof) {
+        return CertifiedScanMembership::visit(proof, targetIo(), store(), pin, rows, SIZE_MAX, 512, {},
+            [&](auto ids, size_t, const auto &grant) {
+                std::vector<EntityPropertyKey> owners;
+                for (auto id : ids) owners.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+                const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> owning =
+                    [](auto, auto, auto) { ADD_FAILURE() << "unexpected owning fallback"; };
+                const PropertyScalarReadSink scalar = [&](size_t row, size_t column, auto, uint64_t value) {
+                    EXPECT_EQ(column, 0U); ASSERT_LT(row, ids.size()); EXPECT_EQ(value, ids[row]); ++seen[ids[row] - 1U];
+                };
+                const PropertyTextReadSink text = [](auto, auto, auto) { ADD_FAILURE() << "unexpected text"; };
+                const PropertyColumnBatchReadSinks batches{
+                    [&](auto ordinals, auto column, auto type, auto values) {
+                        for (size_t n = 0; n < ordinals.size(); ++n) scalar(ordinals[n], column, type, values[n]);
+                    }, [](auto, auto, auto) { ADD_FAILURE() << "unexpected text run"; }};
+                grant.read(ids, [&] { cursor.readEntityPropertiesOptionalSorted(pin, owners, tokens, {}, true,
+                    nullptr, &owning, &scalar, &text, &batches); });
+                if (alterEpoch) { std::byte byte{}; targetIo()->readAt(0, &byte, 1); targetIo()->writeAt(0, &byte, 1); }
+                return true;
+            });
+    };
+    EXPECT_THROW(static_cast<void>(visit(verified)), FormatException);
+    for (size_t i = 0; i < seen.size(); ++i) EXPECT_EQ(seen[i], i < 512U ? 1U : 0U);
+    alterEpoch = false; seen.fill(0);
+    auto fresh = VerifiedScanRoot::verifyComplete(targetIo(), store(), work, control);
+    ASSERT_TRUE(visit(fresh));
+    for (auto count : seen) EXPECT_EQ(count, 1U);
+    EXPECT_EQ(rows->used(), 0U);
+}
+
 #else
 TEST(ScanReadProofTest, OrdinaryFormatsRejectVerificationBeforeIo) {
     const auto path = std::filesystem::temp_directory_path() /

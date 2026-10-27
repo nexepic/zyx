@@ -27,7 +27,7 @@ class HybridPropertyColdRowInspection final {
     LargeValueManifest manifest_;
     LargeValueStore::RangeReadCache range_;
     std::vector<std::byte> header_;
-    std::vector<uint32_t> inline_tokens_;
+    std::optional<EntityPropertyCollectionRootCodec::TokenDirectoryView> inline_tokens_;
     std::vector<EntityPropertyLargeValueEntryLocation> locations_;
 public:
     HybridPropertyColdRowInspection(const MetadataSnapshotPin &snapshot, HybridColdRowInput row,
@@ -36,7 +36,8 @@ public:
         const CancellationCheckpoint *cancellation = nullptr);
     HybridPropertyColdRowInspection(const HybridPropertyColdRowInspection &) = delete;
     HybridPropertyColdRowInspection &operator=(const HybridPropertyColdRowInspection &) = delete;
-    [[nodiscard]] size_t count() const { return row_.large_value_reference ? locations_.size() : inline_tokens_.size(); }
+    [[nodiscard]] size_t count() const { return row_.large_value_reference ? locations_.size() :
+        (inline_tokens_ ? inline_tokens_->size() : 0U); }
     [[nodiscard]] uint32_t token(size_t ordinal) const;
     [[nodiscard]] const std::optional<EntityPropertyLargeValueReference> &reference() const & { return reference_; }
     const std::optional<EntityPropertyLargeValueReference> &reference() const && = delete;

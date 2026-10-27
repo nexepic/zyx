@@ -5,6 +5,7 @@
  */
 #pragma once
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDirectory.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyPageImage.hpp"
@@ -26,6 +27,12 @@ class HybridPropertyConversionPreparationTestAccess;
 class HybridPropertyConversionPreparation final {
     friend class RelocatableMetadataStore;
     friend class HybridPropertyConversionPreparationTestAccess;
+    enum class PlacementRole : uint8_t { HPPR_METADATA, HPPR_COLUMN, HPPR_COLD, HPPR_EXTENSION, HPPR_SPILL };
+    struct PlacementLane { PlacementRole role; uint32_t token; size_t page; };
+    // Private physical packing only: logical owner groups remain 64 entities.
+    // This bounded state never survives the cohort's atomic publication.
+    utils::OwnedVector<PlacementLane> lanes_;
+    bool field_major_ = false;
     utils::OwnedVector<HybridPropertyPageImage> pages_;
     utils::OwnedVector<HybridPropertyOwnerMap::Entry> owners_;
     utils::OwnedVector<HybridPropertyFieldDirectoryMap::Entry> columns_, extensions_;
@@ -38,8 +45,10 @@ class HybridPropertyConversionPreparation final {
     using LargeFieldResolver = std::function<std::pmr::vector<std::byte>(EntityPropertyKey, uint32_t, const PropertyValue &)>;
     HybridPropertyConversionPreparation(MetadataWriteBatch &batch, const HybridPropertyGroupConversion &plan,
         const std::function<void()> &checkpoint = {}, const LargeFieldResolver &largeField = {}, bool compactColumns = false,
-        bool coldRows = false, const WholeRootResolver &wholeRoot = {})
-        : pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(plan.memoryOwner())),
+        bool coldRows = false, const WholeRootResolver &wholeRoot = {},
+        bool fieldMajor = false, HybridPropertyConversionPreparation *cohort = nullptr)
+        : lanes_(utils::OwnedPmrAllocator<PlacementLane>(plan.memoryOwner())), field_major_(fieldMajor),
+          pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(plan.memoryOwner())),
           owners_(utils::OwnedPmrAllocator<HybridPropertyOwnerMap::Entry>(plan.memoryOwner())),
           columns_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
           extensions_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
@@ -56,19 +65,51 @@ class HybridPropertyConversionPreparation final {
         });
         owners_.reserve(coldRows ? 0U : compact_ ? size_t(extensionCount) : plan.members().size()); columns_.reserve(plan.columns().size());
         extensions_.reserve(coldRows ? 0U : size_t(extensionCount));
-        const auto destination = [&](size_t bytes) -> HybridPropertyPageImage & {
+        if (cohort) {
+            hybrid_property_detail::require(field_major_ && cohort->field_major_ &&
+                pages_.get_allocator() == cohort->pages_.get_allocator(),
+                "field-major cohort lost its original staging account");
+            pages_.swap(cohort->pages_); lanes_.swap(cohort->lanes_);
+        }
+        const auto destination = [&](size_t bytes, PlacementRole role = PlacementRole::HPPR_METADATA,
+                uint32_t token = 0U) -> HybridPropertyPageImage & {
             hybrid_property_detail::require(bytes <= RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
                 "native field record exceeds a fresh slotted frame");
-            if (pages_.empty() || pages_.back().stats().contiguous_free_bytes < bytes + RSS_SLOTTED_PAGE_SLOT_BYTES) {
-                // Grow the charged holder before consuming an identity. These
-                // pages are append-only, so contiguous free is exact here.
+            constexpr size_t absent = (std::numeric_limits<size_t>::max)();
+            size_t lane = absent;
+            if (field_major_) {
+                const auto locate = [&] {
+                    for (size_t i = 0; i < lanes_.size(); ++i)
+                        if (lanes_[i].role == role && lanes_[i].token == token) return i;
+                    return absent;
+                };
+                lane = locate();
+                if (lane == absent && role == PlacementRole::HPPR_COLUMN &&
+                    std::count_if(lanes_.begin(), lanes_.end(), [](const auto &entry) {
+                        return entry.role == PlacementRole::HPPR_COLUMN;
+                    }) >= 64) {
+                    // Wide heterogeneous schemas remain bounded and correct;
+                    // only the overflow lane gives up same-token clustering.
+                    role = PlacementRole::HPPR_SPILL; token = 0; lane = locate();
+                }
+                if (lane == absent) { lane = lanes_.size(); lanes_.push_back({role, token, absent}); }
+            }
+            size_t page = field_major_ ? lanes_[lane].page : pages_.empty() ? absent : pages_.size() - 1U;
+            if (page == absent || pages_[page].stats().contiguous_free_bytes < bytes + RSS_SLOTTED_PAGE_SLOT_BYTES) {
                 if (pages_.size() == pages_.capacity()) pages_.reserve(pages_.empty() ? 1U : pages_.size() * 2U);
                 const auto id = batch.allocateLogicalPageId();
-                // Neutral physical epoch is never persisted. Later private
-                // owner binding installs the actual assigned pool epoch.
                 pages_.push_back(HybridPropertyPageImage::create(id, Generation(1), batch.generation(), plan.memoryOwner()));
+                page = pages_.size() - 1U;
+                if (field_major_) {
+                    lanes_[lane].page = page;
+                    debug::PerfTrace::addValue("native_graph.hybrid.field_major.private_pages", 1);
+                }
+            } else if (field_major_) {
+                debug::PerfTrace::addValue("native_graph.hybrid.field_major.destination_reuses", 1);
+                if (role == PlacementRole::HPPR_COLUMN)
+                    debug::PerfTrace::addValue("native_graph.hybrid.field_major.column_destination_reuses", 1);
             }
-            return pages_.back();
+            return pages_[page];
         };
         std::optional<HybridPropertyColumnMembership> matrix;
         if (compact_ && !plan.columns().empty()) matrix = HybridPropertyColumnMembership::fromColumns(group, plan.columns());
@@ -90,7 +131,7 @@ class HybridPropertyConversionPreparation final {
         size_t columnOrdinal = 0;
         for (const auto &column : plan.columns()) {
             if (checkpoint) checkpoint();
-            const auto slot = destination(column.wireSize()).appendColumn(column, group, batch.generation());
+            const auto slot = destination(column.wireSize(), PlacementRole::HPPR_COLUMN, column.identity.token).appendColumn(column, group, batch.generation());
             if (matrix) matrix->locators[columnOrdinal++] = slot;
             else columns_.push_back({HybridPropertyDirectoryCodec::columnKey(group.group_id, column.identity.token),
                     HybridPropertyDirectoryCodec::locatorValue(slot)});
@@ -163,7 +204,7 @@ class HybridPropertyConversionPreparation final {
                         rowBytes(end) <= HybridPropertyColdRowBlock::MAX_STORED_BYTES - size) size += rowBytes(end++);
                     encoded = encode();
                 }
-                const auto slot = destination(encoded.size()).appendColdRows(encoded, group.owner_kind, group.group_id);
+                const auto slot = destination(encoded.size(), PlacementRole::HPPR_COLD).appendColdRows(encoded, group.owner_kind, group.group_id);
                 for (size_t i = first; i < end; ++i) {
                     matrix->cold_rows.owners |= UINT64_C(1) << rows[i].owner_slot;
                     matrix->cold_rows.roots[rows[i].owner_slot] = slot;
@@ -195,7 +236,7 @@ class HybridPropertyConversionPreparation final {
                     RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, *plan.memoryOwner());
             utils::OwnedHeapReservation referenceCredit(plan.memoryOwner());
             const auto admitReference = [&](size_t retained) { referenceCredit.set(retained); };
-            const auto slot = destination(bytes.size()).appendExtension(bytes, owner, member.token, group, batch.generation(),
+            const auto slot = destination(bytes.size(), PlacementRole::HPPR_EXTENSION).appendExtension(bytes, owner, member.token, group, batch.generation(),
                 std::ref(admitReference));
             extensions_.push_back({HybridPropertyDirectoryCodec::ownerKey(owner, member.token),
                 HybridPropertyDirectoryCodec::locatorValue(slot)});

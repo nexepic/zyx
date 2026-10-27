@@ -1,0 +1,9 @@
+{
+  "status": "stopped_early_no_acceptance",
+  "reason": "first medium pair shows material regression with very high per-query dispersion; preserve partial window and investigate on medium only; no remaining full guards",
+  "terminated_resource_launcher_process_groups": [
+    42653
+  ],
+  "gate_thresholds_unchanged": true,
+  "full_eight_case_gate_not_computed": true
+}

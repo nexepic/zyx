@@ -59,6 +59,8 @@ namespace graph::storage {
 			// before a new copy. Rejection before emission permits retry.
 			// Decoded leaf entries and cursor pages are separate buffers.
 			[[nodiscard]] std::optional<BTreePageEntry> next(const std::function<void(size_t)> &boundaryKeyAdmission = {});
+			[[nodiscard]] std::optional<BTreeFixedKey> nextFixedKey(const std::function<void(size_t)> &boundaryKeyAdmission = {});
+			[[nodiscard]] size_t fixedKeyWidth() const noexcept;
 
 		private:
 			struct State;
@@ -94,6 +96,15 @@ namespace graph::storage {
 				size_t maximumEntries,
 				BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
 				bool excludeLowerBound = false, const CancellationCheckpoint *cancellation = nullptr) const;
+		// Optional fixed-key representation for long scans over EMPTY-value leaves.
+		// The initial descent keeps ordinary validation; successor leaves decode
+		// into one accounted array instead of individually allocated key vectors.
+		// Resource pressure during conversion retains the ordinary cursor.
+		[[nodiscard]] RangeCursor openFixedKeyRangeCursor(
+			const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
+			size_t maximumEntries, size_t keyWidth,
+			BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
+			bool excludeLowerBound = false, const CancellationCheckpoint *cancellation = nullptr) const;
 		// Produces fresh, sequential cursors over one pinned tree without retaining
 		// the full tree in memory. The snapshot must outlive every opened cursor.
 		[[nodiscard]] OrderedBTreeEntrySource orderedSource(const MetadataSnapshotPin &snapshot,
@@ -146,6 +157,8 @@ namespace graph::storage {
 																					 const CancellationCheckpoint *cancellation) const;
 		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state,
 				const std::function<void(size_t)> &boundaryKeyAdmission) const;
+		[[nodiscard]] bool prepareRangeCursorNext(RangeCursor::State &state,
+			const std::function<void(size_t)> &boundaryKeyAdmission) const;
 
 		std::optional<BTreeRootReadBinding> root_binding_;
 		uint64_t index_id_ = 0;

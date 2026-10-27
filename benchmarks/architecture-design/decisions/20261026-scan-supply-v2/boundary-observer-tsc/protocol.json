@@ -1,0 +1,10 @@
+{
+  "purpose": "Attribute field supply excluding downstream callbacks, on medium all-node only; not formal timing",
+  "method": "GNU link wrap unchanged engine; invariant x86 TSC elapsed intervals, one-time CLOCK_MONOTONIC_RAW calibration during warmup. rdtsc fenced; record CPU/wall agreement and original <=5% observer quality gate. Callback exclusion retained.",
+  "schedule": "80 recorded queries, balanced randomized sampled/control pairs, fixed seed 0x92873, CPU0, four warmups",
+  "quality": "unchanged sampled/control median within 5%; complete oracle for every sample; require observed source calls and callbacks; no CPU-share/layout selection if quality fails",
+  "source_boundary": "source inclusive minus owning/scalar/text/run/admission callbacks; rest is query CPU minus inclusive source; nested invocations avoid double counting",
+  "decision": "Consider B only with credible dominant source cost and a separately documented layout cost model supporting frozen gain. Otherwise continue common execution path. No gate relaxation.",
+  "reason": "Previous observer produced 11938 callbacks/query, hence ~24000 thread-CPU clock syscalls; measured observer median overhead 7.3% failed gate. Replace intrusive per-callback clock syscalls, not the gate.",
+  "phase_basis": "elapsed time; no exact CPU-time claim; require median query CPU/wall agreement within 5% and calibration audit within 1% before architecture attribution"
+}

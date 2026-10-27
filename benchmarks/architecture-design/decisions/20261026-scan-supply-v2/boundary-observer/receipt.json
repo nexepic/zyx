@@ -1,0 +1,26 @@
+{
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/boundary-observer/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/tmp/zyx-medium-boundary-observer.db",
+    "all_nodes_property_filter",
+    "4",
+    "80"
+  ],
+  "formal_performance": false,
+  "complete_oracles": 80,
+  "sampled_control_median_ratio": 1.0729720709357315,
+  "quality_passed": false,
+  "source_inclusive_median_ms": 145.7402685,
+  "callback_median_ms": 9.6970405,
+  "source_exclusive_median_share": 0.6344738513574621,
+  "source_calls_median": 440.0,
+  "callback_calls_median": 11938.0,
+  "query_cpu_median_ms": 212.26650000000012,
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+  "interpretation": "CPU shares/layout decision eligible only if quality_passed; boundary excludes higher-level adapter and membership supply"
+}

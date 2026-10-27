@@ -1,0 +1,30 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = BuildingScanFieldCohortTest.*
+[==========] Running 10 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 10 tests from BuildingScanFieldCohortTest
+[ RUN      ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin
+[       OK ] BuildingScanFieldCohortTest.PacksSameFieldAcrossGroupsAndPreservesTheOldRowPin (841 ms)
+[ RUN      ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues
+[       OK ] BuildingScanFieldCohortTest.SharedPageMutationKeepsOtherGroupsAndOldValues (1047 ms)
+[ RUN      ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin
+[       OK ] BuildingScanFieldCohortTest.DeletingOneWholeGroupPreservesSharedNeighborsAndOldPin (675 ms)
+[ RUN      ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing
+[       OK ] BuildingScanFieldCohortTest.CancellationAfterBorrowingThePriorArenaPublishesNothing (119 ms)
+[ RUN      ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState
+[       OK ] BuildingScanFieldCohortTest.BudgetRefusalAfterArenaTransferRefundsAllPrivateState (115 ms)
+[ RUN      ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone
+[       OK ] BuildingScanFieldCohortTest.PublicationRecoverySelectsAllEightGroupsOrNone (180 ms)
+[ RUN      ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth
+[       OK ] BuildingScanFieldCohortTest.HolesAndPartialGroupsKeepExactValuesAndValidateWidth (174 ms)
+[ RUN      ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget
+[       OK ] BuildingScanFieldCohortTest.OverWideSourceRetainsItsRowRepresentationWithinTheSameBudget (17 ms)
+[ RUN      ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields
+[       OK ] BuildingScanFieldCohortTest.HeterogeneousCohortUsesBoundedSpillAndPreservesMissingFields (625 ms)
+[ RUN      ] BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot
+[       OK ] BuildingScanFieldCohortTest.SharedPoolRetirementWaitsForOldPinThenReusesItsPhysicalSlot (719 ms)
+[----------] 10 tests from BuildingScanFieldCohortTest (4518 ms total)
+
+[----------] Global test environment tear-down
+[==========] 10 tests from 1 test suite ran. (4518 ms total)
+[  PASSED  ] 10 tests.

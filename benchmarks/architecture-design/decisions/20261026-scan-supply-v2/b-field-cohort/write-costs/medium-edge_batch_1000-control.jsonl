@@ -1,0 +1,1 @@
+{"timing_benchmark":false,"case":"edge_batch_1000","iteration":0,"rows":[[["integer",1000]]],"postcondition_rows":[[["integer",1001]]]}

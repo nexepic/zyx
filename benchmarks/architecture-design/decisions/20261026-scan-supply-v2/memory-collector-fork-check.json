@@ -1,0 +1,6 @@
+{
+  "experiment": "same /bin/true child; Python preexec_fn; before and after touching 160MiB parent allocation",
+  "small_parent_child_peak_rss_kib": 6064,
+  "large_parent_child_peak_rss_kib": 169916,
+  "inference": "wait4 child ru_maxrss includes pre-exec fork memory; original formal memory metric is unsuitable for candidate comparison"
+}

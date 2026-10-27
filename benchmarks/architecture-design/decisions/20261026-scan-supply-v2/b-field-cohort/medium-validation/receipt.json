@@ -1,0 +1,10 @@
+{
+  "work_gate_passed": true,
+  "complete_public_oracles": 4,
+  "timing_benchmark": false,
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "probe_receipt_sha256": "b4725bd0acb3e3ba36a098accf1c5c66dfb734b1b4a8a6360aaa1e6a8c93e748",
+  "score_page_ratio": 0.2499272621472214,
+  "union_page_ratio": 0.4989834446703456,
+  "progress_percent": 45
+}

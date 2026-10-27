@@ -1,0 +1,28 @@
+{
+  "before_implementation": true,
+  "candidate": "A2 retained-layout source refinement, no third layout candidate",
+  "evidence": {
+    "all_node_allocations": 49499,
+    "sampled_stacks": 194,
+    "packed_decode_inclusive_stacks": 58,
+    "stored_membership_inclusive_stacks": 93,
+    "inline_token_vector_stacks": 22,
+    "postwarm_work_counts_stable": true,
+    "cpu_share_usable": false
+  },
+  "changes": [
+    "fixed <=32-byte packed-key scan representation with one original-account-owned array per leaf; existing generic initial descent and long-key/point path retained",
+    "whole-leaf canonical validation before output, routed sibling and duplicate logical-prefix checks unchanged",
+    "borrow validated immutable inline ROW token/offset directory instead of materializing one token vector per owner; large-value path unchanged"
+  ],
+  "work_target": {
+    "all_node_allocations_max": 36000
+  },
+  "correctness": [
+    "fixed stream matches generic across leaves, lower bounds and stops",
+    "bad restarts, ordering, widths, truncation rejected before leaf output",
+    "original owner admission, low-budget fallback, cancellation and memory refunds",
+    "cold NULL/missing/mixed/large/old-pin and reopen oracles"
+  ],
+  "timing": "No new full matrix while implementation changes; preserve prior rejected window; thresholds unchanged"
+}

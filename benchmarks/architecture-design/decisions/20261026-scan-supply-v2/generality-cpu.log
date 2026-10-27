@@ -1,0 +1,3 @@
+query=dense_sum
+query=cold_presence
+Query exceeded timeout of 30000ms

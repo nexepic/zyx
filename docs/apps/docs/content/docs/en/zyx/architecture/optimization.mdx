@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Scan Supply Architecture Optimization Plan
 
-Updated: 2026-10-26. Plan ID: `scan-supply-20261026`. Status: V0 and V1 accepted; V2–V4 pending. **Cumulative progress is 45%; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
+Updated: 2026-10-27. Plan ID: `scan-supply-20261026`. Status: V0–V4 accepted with explicit adoption restrictions; Kuzu target failed. **This round is 100% complete; documentation, old test reruns and diagnostics that fail quality gates earn no implementation credit.**
 
 This is the sole active optimization roadmap. The former `scan-path-20261023` text is preserved under repository `benchmarks/architecture-design/archive/20261026-completed-scan-path/`. Historical evidence remains intact. Old stage numbers, 100% status, waivers and timing order do not govern this plan. Update this plan and the decision record before expanding its scope.
 
@@ -29,21 +29,27 @@ New interfaces, cache entries, counters or isolated function fixes do not substi
 - The V0 frozen control groups at most 64 owners, calls admission per value and builds temporary position/value arrays. Query admission invokes guard checks and budget updates. Workspace candidate changes are not yet accepted results; individual administrative costs remain unquantified.
 - Metadata cache hits still involve lookup, locking and LRU; I/O mutation epochs invalidate caches/proofs. Locks do not establish contention, and mixed-write invalidation does not explain every read-only gap.
 - Native columns, runs, batch proofs and cross-group directory read-ahead already exist. Inspect adoption before implementing duplicate wrappers.
-- Use accepted `20261026-scan-supply-v0` attribution for selection. Earlier high-disturbance diagnostics remain historical evidence only. With 50 ms leaf sampling, all-node/label sampled-to-control median ratios were 0.9571/0.9700, but only 208/71 independent samples were collected; these do not establish precise function time shares.
+- Frozen boundaries/gain gates follow `20261026-scan-supply-v0`; V2 records B's additional entry evidence. Earlier high-disturbance diagnostics remain historical evidence only. With 50 ms leaf sampling, all-node/label sampled-to-control median ratios were 0.9571/0.9700, but only 208/71 independent samples were collected; these do not establish precise function time shares.
 - Historical integrity, conversion, write and snapshot evidence applies to its recorded versions; acceptance is not inherited by new candidates.
 
-### 2.1 Current baseline and limits
+### 2.1 Current formal comparison: restricted B adoption; round complete
 
-An initial comparison of the frozen control exists under `benchmarks/architecture-design/decisions/20261026-scan-supply-v0/baseline/`: `freeze.json`, raw samples and `summary.json`. Values below are P50 milliseconds; ratios are ZYX/Kuzu, lower is better.
+Current B includes retained-layout supply refinements, certified-ID borrowing and shared-field pages. The core library SHA is `fa911d08…`; per-file source hashes, a reconstructable source archive, binaries and input lineage are in `benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/`. Its `final-primary/` window covers both datasets and four queries, three independent processes per engine with three warmups and ten measured iterations each. All 720 complete sample oracles passed. P50 is in ms; higher control/candidate and lower candidate/Kuzu are better.
 
-| Query | medium ZYX / Kuzu | Ratio | holdout ZYX / Kuzu | Ratio |
-|---|---|---|---|---|
-| All-node property filter | 490.262 / 2.782 | 176.2x | 302.878 / 2.125 | 142.5x |
-| Label property filter | 238.214 / 6.237 | 38.2x | 155.730 / 5.254 | 29.6x |
-| Single-key grouping | 212.428 / 9.094 | 23.4x | 160.321 / 8.134 | 19.7x |
-| Multi-key grouping | 284.877 / 13.715 | 20.8x | 232.806 / 14.219 | 16.4x |
+| Dataset | Query | Frozen control | Candidate B | Kuzu | Control/candidate | Candidate/Kuzu |
+|---|---|---|---|---|---|---|
+| medium | all_nodes_property_filter | 244.148 | 109.394 | 1.230 | 2.232 | 88.97 |
+| medium | label_scan_filter | 118.293 | 60.518 | 3.516 | 1.955 | 17.21 |
+| medium | aggregation_count_by_group | 120.500 | 58.792 | 6.317 | 2.050 | 9.31 |
+| medium | multi_key_group | 173.815 | 111.603 | 9.296 | 1.557 | 12.01 |
+| holdout | all_nodes_property_filter | 168.167 | 68.080 | 0.957 | 2.470 | 71.18 |
+| holdout | label_scan_filter | 79.134 | 37.170 | 2.563 | 2.129 | 14.50 |
+| holdout | aggregation_count_by_group | 77.323 | 38.182 | 3.817 | 2.025 | 10.00 |
+| holdout | multi_key_group | 130.882 | 75.163 | 6.027 | 1.741 | 12.47 |
 
-These are pre-optimization observations, not candidate gains. Process medians and P95 vary substantially: medium all-node ZYX P95 is 1594.303 ms. Do not subtract absolute times across measurement windows to claim regression or improvement. Remeasure frozen control, candidate and Kuzu in the same final window. Documentation cleanup does not require repeating the existing initial baseline.
+Under the frozen pooled-P50 rule, the eight-primary geometric-mean speedup is **2.0022x**, with medium/holdout all-node speedups **2.2318x/2.4702x**, passing the original minimum gain gate. The margin above 2x is small and process dispersion remains material: medium all-node candidate process P50s are 179.914/99.001/107.303 ms. Preserve full P50/P95, process medians and raw samples; this does not establish a generous stable-gain margin. Do not choose a best sample or rerun the full window to improve the result.
+
+**The Kuzu target failed: candidate P50 remains 9.31–88.97x slower.** Numerical primary gain is 2.0022x with little margin and material process dispersion, not a stable 2x guarantee. Full guards, targeted regression reproduction and adoption costs are complete. Accept only explicit experimental SCAN, long-lived handles and read-heavy analytics, not write-heavy, strict point/tail-latency or frequent-open workloads. **V0–V4 are 100% complete**, independently of Kuzu attainment. See `scan-supply-v2/acceptance.json` and `README.md` for exits, costs and restrictions. Failed A/A2 windows remain historical and are not mixed to claim gains.
 
 ### 2.2 Order for validating the core problem
 
@@ -56,7 +62,7 @@ These are pre-optimization observations, not candidate gains. Process medians an
 
 V0 all-node execution processed 225,000 candidates in 440 batches, with 3,516 group/membership decodes, 3,437 column decodes and 83,614 metadata-cache hits. The layer experiment delivered 220,000 field values through 220,880 admissions; the label path delivered 100,000 through 100,880 admissions. **The batch interface has not sufficiently batched resource administration: this structural repetition is the first target.**
 
-The inclusive field-supply/callback interval is substantial, but includes predicate computation and is not pure storage time. Cache-hit counts do not establish contention or disk waits. Evidence does not establish that 64 is too small, that replacing the tree solves the gap, or that a complete rewrite is necessary. Test the retained-layout supply path first; let residual dominant costs govern physical design.
+The inclusive field-supply/callback interval is substantial, but includes predicate computation and is not pure storage time. Cache-hit counts do not establish contention or disk waits. Evidence does not establish that 64 is too small, that replacing the tree solves the gap, or that a complete rewrite is necessary. The retained-layout supply candidate has been tested and missed the gain gate; B must still pass V2 work, complete-result and end-to-end criteria.
 
 ## 3. Architecture boundaries and change order
 
@@ -101,9 +107,9 @@ Fixed weights: V0 15%, V1 30%, V2 25%, V3 20%, V4 10%. Award cumulative progress
 |---|---|---|
 | V0 Attribution and freeze | 15% | Passed; see scan-supply-v0 decision |
 | V1 Supply path | 45% | Passed; see scan-supply-v1 decision |
-| V2 Layout decision | 70% | Pending |
-| V3 Lifecycle and generality | 90% | Pending |
-| V4 Formal comparison | 100% | Pending |
+| V2 Layout decision | 70% | Accepted; local field-page sharing with adoption restrictions |
+| V3 Lifecycle and generality | 90% | Accepted; lifecycle and costs complete, regressions retained |
+| V4 Formal comparison | 100% | Accepted; original window and focused review complete; Kuzu failed |
 
 ### V0: Current attribution and experiment freeze (15%)
 
@@ -147,9 +153,34 @@ Follow these dependencies as one candidate. Completing the first item alone does
 
 Written code, source splitting or one passing module establishes implementation status only. Do not claim 2x or Kuzu attainment before the final paired comparison. V1 may exit on correctness and work evidence. V2 performance selection and V3 performance guards may share V4's single formal window and remain pending until evidence exists; stage ordering must not force repeated full matrices.
 
+#### Implemented retained-layout refinement (A2, historical status)
+
+A2 moved bounded directory continuation, fixed leaf keys and field-reader state to query/pinned-snapshot lifetime, borrowed completely validated cold ROW token/offset directories, and fixed per-entity presence probes rebuilding contexts. The subsequent shared execution handoff borrows monotonic certified IDs synchronously rather than rebuilding temporary entity references per row. Unsorted, complex and ordinary scans retain their fallbacks. The 32-byte fixed-key limit is not entity-group capacity; persistent groups remain 64.
+
+Fresh producer authorization, original accounts, cancellation/budgets, epoch invalidation, reentrancy, old pins and no replay remain required. See `scan-supply-v2/a2-registration.json`, `a2-record-view-registration.json`, `a2-batch-handoff-registration.json` and their versioned work/module evidence. These implemented changes are not new TODOs; do not sum tests from different versions to validate current B.
+
 ### V2: Layout decision and minimum complete candidate (25%)
 
+One implementation is accepted with restrictions: B shared-field pages. Section 2.1 records B's current primary window; A's failures remain in historical decisions. The handoff's untimed same-medium work counts are 10 root descents, 106 packed decodes and 25,581 heap allocations; see `batch-handoff-work/`. Counts are not speedups.
+
+B's entry evidence combines qualified supply-boundary attribution with real page distribution. `boundary-observer-tsc/` passed with enabled/control median ratio 1.00615, calibration audit ratio 1.000052 and 80 complete oracles. Property supply excluding consumption/admission callbacks accounts for approximately 63.97% of query elapsed time, not exact function CPU shares. More detailed observers failed the original quality gate and cannot select a layout; their raw failures remain preserved.
+
+Resource observation uses a freshly executed small launcher before fork/`wait4`, excluding contamination by a large Python oracle parent's earlier RSS peak. V0 memory/file and query limits remain unchanged; see `resource-helper-validation.json`. Offline supervision is separately limited to six hours: historical medium construction took approximately 3.45 hours, exceeding the earlier two-hour watchdog. The adjustment did not restart workers or change query timeouts/gain gates, and full construction cost remains reported. See `b-field-cohort/offline-supervision-adjustment.json`.
+
 At most two candidates: A is V1 with retained layout; B is a local contiguous field-block design. Implement B only if A's remaining dominant cost is group location, page distribution or decoding and the cost model supports substantial potential gain.
+
+The minimal B candidate registered in `b-field-cohort-registration.json` is implemented but not accepted. Qualified property supply attribution is approximately 64%. The untimed `layout-census/` found 225,000 candidates and 3,437 score groups on 3,437 distinct pages, one score group per page: 1,979,712 encoded column bytes cover 14,077,952 page bytes. Failed detailed phase observers provide no CPU-share evidence.
+
+Use existing atomic BUILDING cohorts of at most eight logical groups, reuse pages per field token, and separate group/membership metadata, cold ROW and extension payloads. Logical groups remain 64 entities; encoding, format version, original account, 1 MiB source workspace and COW/reclaim/recovery protocols remain intact. Column lanes are bounded with a correctness-preserving overflow lane. Consecutive-group preflight stops at holes, ineligible groups or the total work bound; post-publication failures are never reclassified as ROW fallback. Ordinary non-BUILDING online conversion keeps its existing physical path. Explicitly select B with `zyx-scan-convert SOURCE DESTINATION --field-cohort 8`; default 1 retains group-local placement. Full-entity point reads, write amplification and space cost still determine adoption limits.
+
+Current source passed 62/32/3 selected tests under matching SCAN/HYBRID/ROW profiles, 97 total. Ten current regressions cover shared column/metadata pages, old ROW pins, neighboring groups and old pins after updates/demotion, integrity/reopen, cancellation and budget refunds without a visible prefix, A/B publication recovery, holes/partial groups, wide-group ROW retention and deletion of an entire 64-entity group with neighbor/old-pin/reopen oracles; an 80-token/3,840-membership heterogeneous cohort also validates actual shared overflow pages and missing fields. A subsequent fixture audit found that mixed integer/double score values never formed the intended native column. Nullable DOUBLE plus explicit existence, exact packing, demotion-state and physical-slot reuse assertions now pass all ten affected cases; see `b-cohort-strengthened/receipt.json`. Ten replace the previous nine without double counting; original failure and measured-source archive are retained. Ordinary HYBRID fixtures incorrectly run under SCAN remain preserved and pass in their matching profile; no assertions were removed. B passed the complete lifecycle oracle with 16,384 entities, 512 mixed mutation batches, old/new pins, the unchanged 30-second default query limit and a 4 KiB cache reopen. The original converted input hash is unchanged; see `b-field-cohort/generality-lifecycle-receipt.json`. Medium and holdout completed construction with frozen source and width 8; both original source hashes remain unchanged and holdout was not used for tuning. All four complete medium public oracles passed with 225,000 entities, 3,516 logical groups and encoded value bytes unchanged. Score pages are 859 and group/score union pages 1,718, passing the registered 30%/65% work gates. All 720 primary oracles and frozen numerical gain gates passed; guards, adoption scope and complete stage exits are accepted with restrictions. This round is 100% complete; see `scan-supply-v2/README.md`.
+
+Execute the remaining steps in this order; evidence paths are relative to `benchmarks/architecture-design/decisions/20261026-scan-supply-v2/`:
+
+1. **Complete:** medium/holdout conversion receipts passed. Source hashes must remain unchanged, and targets must pass integrity and whole-file admission. The existing builder requires actual target bytes at most 90% of the ROW source and combined source/target bytes at most 2 GiB. These differ from the 5% adoption-cost review line versus frozen A; do not relax or conflate them. An incomplete BUILDING image cannot supply formal queries.
+2. **Complete:** `check-b-field-cohort.py` checks all four complete medium public results and exact page counts: score pages at most 30% of the original 3,437, and group/score page union at most 65% of the original 3,443. Entity/group counts and encoded field bytes must remain identical. Page-work success is not performance success.
+3. **Complete:** only after preceding checks and frozen-source validation pass, run the single B window with `final-primary-b.py --validated-run`. Control uses frozen A input, candidate uses B with explicit conversion lineage, and Kuzu uses its original data. Check complete results under identical resource limits. Preserve a failed section 5.1 gain gate without running the full guard matrix.
+4. **Complete:** all 720 original guard, 12 original open, 12 untimed write, 360 focused guard and 8 focused open oracles passed. Edge-batch P50 and medium no-op regressions reproduced; point tails did not reproduce in the focused window, but holdout pooled P95 still regressed. Edge-write bytes rose 5.95%/8.97%. Adoption is explicitly restricted, not default rollout. See `acceptance.json`, `README.md` and `b-field-cohort/guard-review-1/combined-review.json`. Empty-set summary failure was recovered offline without repeating measurements.
 
 B specifies block size, types/NULL/sparsity, ID location, visibility, update granularity and maintenance. Base plus bounded delta is only an option: define merge reads, delta bounds, consolidation triggers, old snapshots, atomic publication, recovery and reclaim together. An update-free array scan cannot win selection.
 
@@ -191,7 +222,7 @@ V0 exit evidence and frozen gates: `benchmarks/architecture-design/decisions/202
 - Report Kuzu separately: candidate P50 must be no higher than Kuzu for every primary query to claim attainment under the registration. Disclose P95 and process dispersion; averages cannot hide losing cases.
 - Resources: one thread, 64 MiB each for query materialization and BufferPool, 6 GiB address-space and 2 GiB file limits. Primary/guard P50/P95, peak memory or file growth crossing the registered 5% review line requires explanation and repeatability assessment, never silent relaxation.
 - Tune only on medium or separate synthetic fixtures; freeze selection before candidate holdout execution. Disclose that the initial holdout baseline is already known.
-- Each handoff records source commit or uncommitted scope, candidate, passed and unexecuted modules, raw evidence directory, remaining blockers and next action. V1 is accepted against current source and matching binaries; later candidates do not inherit these results.
+- Each handoff records source commit or uncommitted scope, candidate, passed and unexecuted modules, raw evidence directory, remaining blockers and next action. V1 acceptance applies to its registered version `e5e48d50` and matching binaries; current B and later candidates do not inherit those test results.
 - If A misses the gain gate, verify public adoption, actual elimination of administration and remaining dominant costs. Implement B only when location/page/decode evidence meets V2 conditions. If operator consumption dominates, continue improving shared execution. Revise the design and retain failures when gates cannot be met; document completion is not performance completion.
 
-V1 exit evidence: `benchmarks/architecture-design/decisions/20261026-scan-supply-v1/acceptance.json`. All 277 module cases and four complete public oracles pass. For identical work, total admissions fall from 220,880/100,880 to 4,349/2,474. Work reduction is not query speedup. Page reuse and decodes did not improve on this input; no layout benefit is claimed. V2–V4 and Kuzu attainment remain pending.
+V1 exit evidence: `benchmarks/architecture-design/decisions/20261026-scan-supply-v1/acceptance.json`. All 277 module cases and four complete public oracles pass. For identical work, total admissions fall from 220,880/100,880 to 4,349/2,474. Work reduction is not query speedup. Page reuse and decodes did not improve on this input; no layout benefit is claimed. V2–V4 are accepted with restrictions; the Kuzu target failed.

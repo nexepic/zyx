@@ -1,0 +1,23 @@
+[
+  {
+    "profile": "scan",
+    "tests": 67,
+    "failures": 0,
+    "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+    "scope": "three selected query module files, full matching core; no full unit suite"
+  },
+  {
+    "profile": "hybrid",
+    "tests": 67,
+    "failures": 0,
+    "library_sha256": "5dd309934080f970a3f955e65565dfc0f59df7ba5cef25d46e4b410f4398606c",
+    "scope": "three selected query module files, full matching core; no full unit suite"
+  },
+  {
+    "profile": "row",
+    "tests": 67,
+    "failures": 0,
+    "library_sha256": "a7aa4ef7be6981389a7afa15ca3ec7b775154001676808da9d97ad2707a24d71",
+    "scope": "three selected query module files, full matching core; no full unit suite"
+  }
+]

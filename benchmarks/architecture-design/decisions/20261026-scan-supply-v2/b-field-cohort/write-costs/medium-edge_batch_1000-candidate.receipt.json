@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/probes/values",
+    "check-write",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium.zyx",
+    "/tmp/zyx-v4-b-field-cohort-write-work-medium-edge_batch_1000-candidate.db",
+    "edge_batch_1000",
+    "0",
+    "1"
+  ],
+  "complete_oracle": "passed",
+  "timing_benchmark": false,
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 86252,
+    "process_user_cpu_seconds": 8.601138,
+    "process_system_cpu_seconds": 0.695012,
+    "process_input_blocks": 136,
+    "process_output_blocks": 40,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/workspace/zyx/build-scan-candidate/zyx-scan-convert",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/holdout.zyx",
+    "--field-cohort",
+    "8"
+  ],
+  "source": {
+    "path": "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/holdout.zyx",
+    "sha256": "2d0a37f0c7657f68f4c191f8393daae45337a19bdd01b0a0249fb65ae40b99a6",
+    "bytes": 259915776
+  },
+  "cohort_groups": 8,
+  "timing_benchmark": false,
+  "limits": {
+    "address_space_bytes": 6442450944,
+    "file_bytes": 2147483648,
+    "process_timeout_seconds": 1200
+  }
+}

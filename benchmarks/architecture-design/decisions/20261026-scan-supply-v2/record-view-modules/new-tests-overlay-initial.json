@@ -1,0 +1,120 @@
+{
+  "tests": 7,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T16:11:44Z",
+  "time": "0.147s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableBTreePageCodecTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:11:44Z",
+      "time": "0.009s",
+      "testsuite": [
+        {
+          "name": "FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1014,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0.009s",
+          "classname": "RelocatableBTreePageCodecTest"
+        },
+        {
+          "name": "FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/index\/test_BTreePage.cpp",
+          "line": 1036,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0s",
+          "classname": "RelocatableBTreePageCodecTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatablePropertyCollectionRootTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:11:44Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 534,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        },
+        {
+          "name": "BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertyCollectionRoot.cpp",
+          "line": 559,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0s",
+          "classname": "RelocatablePropertyCollectionRootTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockDirectoryTest",
+      "tests": 3,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T16:11:44Z",
+      "time": "0.134s",
+      "testsuite": [
+        {
+          "name": "FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 393,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0.015s",
+          "classname": "PropertySubblockDirectoryTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"relocatable initial B+Tree plan exceeds its bounded transaction-local input\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 447,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0.002s",
+          "classname": "PropertySubblockDirectoryTest"
+        },
+        {
+          "name": "FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockDirectories.cpp",
+          "line": 473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T16:11:44Z",
+          "time": "0.116s",
+          "classname": "PropertySubblockDirectoryTest"
+        }
+      ]
+    }
+  ]
+}

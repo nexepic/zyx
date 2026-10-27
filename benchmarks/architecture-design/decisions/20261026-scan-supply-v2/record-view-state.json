@@ -1,0 +1,38 @@
+{
+  "progress_percent": 45,
+  "status": "413 selected tests and 720 formal primary oracles passed; performance rejected: geomean 1.6625x, medium all-node 1.717x, Kuzu target failed; guards not run",
+  "preliminary_tests": "7/7 passed before final checkpoint-exception hardening; one new checkpoint regression added",
+  "builds": {
+    "scan": 83461,
+    "hybrid": "completed",
+    "row": "completed"
+  },
+  "must_recompile_after_builds": [],
+  "reason": "Implementation edits overlapped ongoing compilation; remove only these generated .o files in each profile and rerun core target to guarantee final source identity",
+  "final_validation_required": [
+    "fresh selected module objects, including inline cold-inspection consumers",
+    "integrated O3 module tests in matching profile",
+    "generic lifecycle unchanged timeout",
+    "untimed medium allocation target <=36000",
+    "performance only after source/module freeze; preserve rejected windows"
+  ],
+  "selected_scan_tests": 91,
+  "selected_index_codec_tests": 110,
+  "allocation_count": 30859,
+  "allocation_target_passed": true,
+  "generality_passed": true,
+  "source_identity_note": "SCAN1 explicitly rebuilt three edited objects after implementation stabilized. HYBRID BTreeIndex compile started safely after last edit, confirmed from Ninja job timing. Inspect remaining edited objects and ROW timing after those builds finish; rebuild only uncertain objects.",
+  "selected_hybrid_tests": 102,
+  "selected_row_tests": 110,
+  "formal_primary": "final-primary-record-views",
+  "active_candidate": "A2 batch handoff: all three profiles 67 query tests each passed; public/lifecycle/work passed; 25581 allocations",
+  "residual_sampler": "80 full oracles passed; sampled/control median ratio 0.93163, quality false; do not use CPU shares for layout selection",
+  "boundary_attribution": {
+    "quality_passed": true,
+    "sampled_control_ratio": 1.00615,
+    "source_exclusive_elapsed_share": 0.63972,
+    "exact_cpu_share": false,
+    "evidence": "boundary-observer-tsc/receipt.json"
+  },
+  "next": "Within-source attribution to group lookup, field frame acquisition, record decoding, column binding and typed assembly; no full matrix rerun yet"
+}

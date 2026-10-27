@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-probes/allocation",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/results/20261024-work-scan/medium.scan-corrected-v1.zyx",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-work/allocation.db",
+    "all_nodes_property_filter",
+    "2",
+    "1"
+  ],
+  "complete_oracle": "passed",
+  "latency_usable": false,
+  "last_window": "# window 2 allocations 25581 requested_bytes 14700578 frees 25579 failed 0 sample_interval 256",
+  "heap_allocations": 25581,
+  "target": 36000,
+  "work_gate_passed": true,
+  "source_sha256": "1ceac273c0f2b508c95c58f25fe861c4eabcdd6b6cbdc024add62592b34420af",
+  "binary_sha256": "3cce9c199efe18e3bfd4dd791dabe33950bb54e5a530b132e21623e1851e4258"
+}

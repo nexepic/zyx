@@ -1,0 +1,244 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 110 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 21 tests from RelocatableBTreeIndexTest
+[ RUN      ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf
+[       OK ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf (4 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree
+[       OK ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults
+[       OK ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks (4 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound
+[       OK ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound (3 ms)
+[ RUN      ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors
+[       OK ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors (3 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree
+[       OK ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree (9 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex (0 ms)
+[ RUN      ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges
+[       OK ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges (5 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink
+[       OK ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence
+[       OK ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence (3 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains (2 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange
+[       OK ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange (3 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator
+[       OK ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator (5 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange
+[       OK ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange (2 ms)
+[----------] 21 tests from RelocatableBTreeIndexTest (69 ms total)
+
+[----------] 16 tests from BTreeIndexScanCacheTest
+[ RUN      ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently
+[       OK ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently (5 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot (6 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves
+[       OK ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage
+[       OK ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage (5 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease
+[       OK ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease (5 ms)
+[ RUN      ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees
+[       OK ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees (8 ms)
+[ RUN      ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries
+[       OK ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries (6 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys (5 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt
+[       OK ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves
+[       OK ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves (5 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo
+[       OK ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo (4 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies
+[       OK ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies (5 ms)
+[----------] 16 tests from BTreeIndexScanCacheTest (86 ms total)
+
+[----------] 31 tests from RelocatableBTreePageCodecTest
+[ RUN      ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata
+[       OK ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation (1663 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads (24 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes
+[       OK ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams
+[       OK ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues
+[       OK ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata
+[       OK ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage
+[       OK ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants
+[       OK ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode
+[       OK ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount
+[       OK ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount (1 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode
+[       OK ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints (928 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads
+[       OK ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads (6 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership
+[       OK ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction
+[       OK ] RelocatableBTreePageCodecTest.AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.MetadataBuffersUseNativeCreditAndEscapedEntriesKeepTheirSourceAuthority
+[       OK ] RelocatableBTreePageCodecTest.MetadataBuffersUseNativeCreditAndEscapedEntriesKeepTheirSourceAuthority (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.LegacyIndexReadDoesNotBorrowPropertyOutputAdmission
+[       OK ] RelocatableBTreePageCodecTest.LegacyIndexReadDoesNotBorrowPropertyOutputAdmission (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeMatchesCanonicalLeafAcrossRestartGroups (1 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation
+[       OK ] RelocatableBTreePageCodecTest.FixedKeyDecodeRetainsWholeLeafOrderingRestartAndStreamValidation (0 ms)
+[----------] 31 tests from RelocatableBTreePageCodecTest (2634 ms total)
+
+[----------] 18 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections (1 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues
+[       OK ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode
+[       OK ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode (1 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence
+[       OK ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads (8 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes
+[       OK ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation (8 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry
+[       OK ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission
+[       OK ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryMatchesOwnedTokensAndExactEncodedValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation
+[       OK ] RelocatablePropertyCollectionRootTest.BorrowedTokenDirectoryRejectsCompleteDirectoryCorruptionAndCancellation (0 ms)
+[----------] 18 tests from RelocatablePropertyCollectionRootTest (21 ms total)
+
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingMatchesExistingWireForNestedKindsAndEmptyPayload (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingRejectsUnorderedTokensBeforeOutputAdmission (0 ms)
+[ RUN      ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes
+[       OK ] EntityPropertyLargeValuePayloadCodecTest.PmrEncodingQuotaAndMidOutputCancellationRefundAllBytes (0 ms)
+[----------] 3 tests from EntityPropertyLargeValuePayloadCodecTest (0 ms total)
+
+[----------] 21 tests from PropertySubblockDirectoryTest
+[ RUN      ] PropertySubblockDirectoryTest.CodecKeepsOrderedBigEndianPrefixAndLittleEndianLocatorSuffix
+[       OK ] PropertySubblockDirectoryTest.CodecKeepsOrderedBigEndianPrefixAndLittleEndianLocatorSuffix (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.NativeCompoundReplacementRetainsOldPinAndReopensExactLocator
+[       OK ] PropertySubblockDirectoryTest.NativeCompoundReplacementRetainsOldPinAndReopensExactLocator (20 ms)
+[ RUN      ] PropertySubblockDirectoryTest.PrefixDuplicationIsCorruptionEvenWhenNativeKeysAreUnique
+[       OK ] PropertySubblockDirectoryTest.PrefixDuplicationIsCorruptionEvenWhenNativeKeysAreUnique (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.ExplicitLeafLayoutCannotChangeWithinOneTransaction
+[       OK ] PropertySubblockDirectoryTest.ExplicitLeafLayoutCannotChangeWithinOneTransaction (2 ms)
+[ RUN      ] PropertySubblockDirectoryTest.SplitSharedTreeUsesTypedLayoutAndBoundedPointLookups
+[       OK ] PropertySubblockDirectoryTest.SplitSharedTreeUsesTypedLayoutAndBoundedPointLookups (37 ms)
+[ RUN      ] PropertySubblockDirectoryTest.AdmissionFailurePreventsEmissionAndAllowsCleanRetry
+[       OK ] PropertySubblockDirectoryTest.AdmissionFailurePreventsEmissionAndAllowsCleanRetry (25 ms)
+[ RUN      ] PropertySubblockDirectoryTest.ExhaustedPinnedPoolRebuildPreservesKeyOnlyLayoutAndAllOldGenerations
+[       OK ] PropertySubblockDirectoryTest.ExhaustedPinnedPoolRebuildPreservesKeyOnlyLayoutAndAllOldGenerations (359 ms)
+[ RUN      ] PropertySubblockDirectoryTest.WholeMapRetirementRemovesCurrentRootButRetainsPinnedRead
+[       OK ] PropertySubblockDirectoryTest.WholeMapRetirementRemovesCurrentRootButRetainsPinnedRead (6 ms)
+[ RUN      ] PropertySubblockDirectoryTest.EveryBootstrapInterruptionRecoversExactlyOneCompletePrefixValue
+[       OK ] PropertySubblockDirectoryTest.EveryBootstrapInterruptionRecoversExactlyOneCompletePrefixValue (13 ms)
+[ RUN      ] PropertySubblockDirectoryTest.ExistingU64TreeCannotBeReinterpretedAsAKeyOnlyMap
+[       OK ] PropertySubblockDirectoryTest.ExistingU64TreeCannotBeReinterpretedAsAKeyOnlyMap (2 ms)
+[ RUN      ] PropertySubblockDirectoryTest.OwnerPrefixEnumerationIsBoundedAndDoesNotVisitAnotherOwner
+[       OK ] PropertySubblockDirectoryTest.OwnerPrefixEnumerationIsBoundedAndDoesNotVisitAnotherOwner (15 ms)
+[ RUN      ] PropertySubblockDirectoryTest.PrefixEnumerationRejectsDuplicateOwnershipAcrossLeavesBeforeDelivery
+[       OK ] PropertySubblockDirectoryTest.PrefixEnumerationRejectsDuplicateOwnershipAcrossLeavesBeforeDelivery (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.TypedOwnerEnumerationValidatesSourcesAndKeepsTokenOrder
+[       OK ] PropertySubblockDirectoryTest.TypedOwnerEnumerationValidatesSourcesAndKeepsTokenOrder (5 ms)
+[ RUN      ] PropertySubblockDirectoryTest.MalformedOwnerMembershipCannotReachTypedVisitor
+[       OK ] PropertySubblockDirectoryTest.MalformedOwnerMembershipCannotReachTypedVisitor (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.BoundDirectoryRejectsAnotherSnapshotDespiteStableLogicalRootAndEpoch
+[       OK ] PropertySubblockDirectoryTest.BoundDirectoryRejectsAnotherSnapshotDespiteStableLogicalRootAndEpoch (3 ms)
+[ RUN      ] PropertySubblockDirectoryTest.BoundDirectoryRejectsForeignDatabaseRootPageEpochAndAbsentTree
+[       OK ] PropertySubblockDirectoryTest.BoundDirectoryRejectsForeignDatabaseRootPageEpochAndAbsentTree (74 ms)
+[ RUN      ] PropertySubblockDirectoryTest.WholeMapIntegrityCursorKeepsBoundsOrderAndAdmissionAcrossLeaves
+[       OK ] PropertySubblockDirectoryTest.WholeMapIntegrityCursorKeepsBoundsOrderAndAdmissionAcrossLeaves (406 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission
+[       OK ] PropertySubblockDirectoryTest.FixedKeyStreamMatchesGenericAcrossLeavesAndRetriesBeforeEmission (61 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor
+[       OK ] PropertySubblockDirectoryTest.FixedKeyOptionalConversionDeclinesWithoutRejectingReadableCursor (6 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves
+[       OK ] PropertySubblockDirectoryTest.FixedKeyWholeMapRejectsDuplicateLogicalOwnershipAfterSeveralLeaves (67 ms)
+[ RUN      ] PropertySubblockDirectoryTest.FixedKeyPreparationPropagatesOwnerCheckpointExceptions
+[       OK ] PropertySubblockDirectoryTest.FixedKeyPreparationPropagatesOwnerCheckpointExceptions (1 ms)
+[----------] 21 tests from PropertySubblockDirectoryTest (1136 ms total)
+
+[----------] Global test environment tear-down
+[==========] 110 tests from 6 test suites ran. (3949 ms total)
+[  PASSED  ] 110 tests.

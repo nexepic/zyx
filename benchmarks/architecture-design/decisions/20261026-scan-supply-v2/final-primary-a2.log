@@ -1,0 +1,12 @@
+START 0 medium control
+PASS 0 medium control
+START 0 medium candidate
+PASS 0 medium candidate
+START 0 medium kuzu
+PASS 0 medium kuzu
+START 0 holdout control
+Traceback (most recent call last):
+  File "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/final-primary-a2.py", line 48, in <module>
+    events=[json.loads(l) for l in stem.with_suffix('.jsonl').read_text().splitlines() if l.startswith('{')];assert resources['returncode']==0 and len(events)==40,(resources,len(events))
+                                                                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ({'returncode': -15, 'resources_unavailable': True, 'timed_out': False, 'launcher_returncode': -15, 'scope': 'whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O'}, 38)

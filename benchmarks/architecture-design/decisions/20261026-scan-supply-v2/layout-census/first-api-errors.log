@@ -1,0 +1,10 @@
+/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/layout-census/main.cpp:42:21: error: 'visitColumnOwnersSorted' is a private member of 'graph::storage::HybridPropertyReadContext'
+   42 |       (void)context.visitColumnOwnersSorted(std::span(keys).first(end-first),token,
+      |                     ^
+/workspace/zyx/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp:586:24: note: declared private here
+  586 |     [[nodiscard]] bool visitColumnOwnersSorted(std::span<const EntityPropertyKey> owners,uint32_t token,
+      |                        ^
+/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/layout-census/main.cpp:60:120: error: no member named 'peak' in 'graph::query::execution::MaterializedByteBudget'
+   60 |    <<",\"score_page_payload_coverage_bytes\":"<<columnPages.size()*RSS_PAGE_SIZE<<",\"source_account_peak\":"<<memory->peak()<<"}\n";
+      |                                                                                                                ~~~~~~~~^
+2 errors generated.

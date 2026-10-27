@@ -1,0 +1,2 @@
+/usr/bin/ld: cannot open dependency file /workspace/zyx/benchmarks/architecture-design/results/20261026-scan-supply-v2/cpu-a2-link.d: No such file or directory
+clang++-19: error: linker command failed with exit code 1 (use -v to see invocation)

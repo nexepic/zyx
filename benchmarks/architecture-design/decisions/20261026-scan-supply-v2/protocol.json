@@ -1,0 +1,11 @@
+{
+  "question": "A failed 2x gates: locate residual public-query CPU cost before layout choice",
+  "scope": [
+    "all_nodes_property_filter",
+    "label_scan_filter"
+  ],
+  "sampler": "unchanged V0 50ms leaf observer; same-process sampled/control quality check",
+  "probe_object": "reused V0 public-ABI observer object; production archive relinked from accepted A",
+  "not_formal_performance": true,
+  "no_concurrent_benchmark_build_or_tests": true
+}

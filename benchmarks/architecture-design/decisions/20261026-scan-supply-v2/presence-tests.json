@@ -1,0 +1,42 @@
+{
+  "tests": 2,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-26T14:30:40Z",
+  "time": "1.286s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ScanReadProofTest",
+      "tests": 2,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-26T14:30:40Z",
+      "time": "1.285s",
+      "testsuite": [
+        {
+          "name": "PublicPropertyTypeChangesAndLargeValuesPreservePinnedAndReopenedReads",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 247,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T14:30:40Z",
+          "time": "0.768s",
+          "classname": "ScanReadProofTest"
+        },
+        {
+          "name": "PresenceProbesReuseSnapshotContextAndDropItAfterEpochChange",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_ScanReadProof.cpp",
+          "line": 1605,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-26T14:30:40Z",
+          "time": "0.517s",
+          "classname": "ScanReadProofTest"
+        }
+      ]
+    }
+  ]
+}

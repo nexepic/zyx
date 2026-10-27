@@ -1,0 +1,28 @@
+{
+  "purpose": "Correct offline-only watchdog shorter than known construction duration; preserve existing work and original resource receipts",
+  "old_offline_timeout_seconds": 7200,
+  "new_offline_timeout_seconds": 21600,
+  "query_benchmark_process_timeout_seconds": 1200,
+  "default_query_timeout_ms": 30000,
+  "candidate_workers_unchanged": true,
+  "resource_launchers_unchanged": true,
+  "reference": "20261025-real-scan-admission/medium-resources.json:12413.1919 seconds",
+  "workers": {
+    "medium": {
+      "controller_pid": 50248,
+      "launcher_pid": 50249,
+      "worker_pid": 50250,
+      "elapsed_at_transfer_seconds": 3331,
+      "deadline_monotonic": 84102.8718285,
+      "status": "launcher_completed_original_controller_resumed"
+    },
+    "holdout": {
+      "controller_pid": 50490,
+      "launcher_pid": 50491,
+      "worker_pid": 50492,
+      "elapsed_at_transfer_seconds": 2012,
+      "deadline_monotonic": 85421.8718285,
+      "status": "launcher_completed_original_controller_resumed"
+    }
+  }
+}

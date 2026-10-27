@@ -1,0 +1,11 @@
+{
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "binaries": {
+    "public": "77f9c8a5cd1e7e46a7d6d384234679608374fcf677aaa85bc3246b780e71b58a",
+    "values": "322b93b35964aa623b13310f0a29c1daa2a0fb920f0cf3d6bb75ef6a96d5f0d5",
+    "allocation": "b76cca48f53c345606279f287b1f269b5f1e31047ce343c4c07ae6bffaa52d4b",
+    "generality": "04c8f6d5cddd1cb72b5d44a7d9172247500782d17425099616a58c3ee2526112",
+    "census": "2115ff68ecbd05f446f93548b8fb70845cfa1b2a5a15c617e4d8309d29f1715f"
+  },
+  "wrapper_sources": "same public-ABI, value-counter and lifecycle sources as previous candidate; same read-context census source"
+}

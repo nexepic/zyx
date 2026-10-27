@@ -1,0 +1,97 @@
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:112:107: error: no member named 'reset' in 'graph::utils::OwnedHeapReservation'
+  112 |     EXPECT_EQ(io->stats().write_calls,0U);EXPECT_EQ(source->used(),injection.held.bytes());injection.held.reset();EXPECT_EQ(source->used(),0U);
+      |                                                                                            ~~~~~~~~~~~~~~ ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:56: error: redefinition of label 'gtest_label_testthrow_132'
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |                                                        ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1390:5: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1390 |     GTEST_CONCAT_TOKEN_(gtest_label_testthrow_, __LINE__)                   \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:63:1: note: expanded from here
+   63 | gtest_label_testthrow_132
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:5: note: previous definition is here
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1390:5: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1390 |     GTEST_CONCAT_TOKEN_(gtest_label_testthrow_, __LINE__)                   \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:82:39: note: expanded from macro 'GTEST_CONCAT_TOKEN_'
+   82 | #define GTEST_CONCAT_TOKEN_(foo, bar) GTEST_CONCAT_TOKEN_IMPL_(foo, bar)
+      |                                       ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:83:44: note: expanded from macro 'GTEST_CONCAT_TOKEN_IMPL_'
+   83 | #define GTEST_CONCAT_TOKEN_IMPL_(foo, bar) foo##bar
+      |                                            ^
+<scratch space>:47:1: note: expanded from here
+   47 | gtest_label_testthrow_132
+      | ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:56: error: cannot jump from this goto statement to its label
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |                                                        ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1387:7: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1387 |       goto GTEST_CONCAT_TOKEN_(gtest_label_testthrow_, __LINE__);           \
+      |       ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:5: note: jump bypasses variable initialization
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1369:43: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1369 |   if (::testing::internal::TrueWithString gtest_msg{}) {                    \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:56: error: cannot jump from this goto statement to its label
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |                                                        ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1381:7: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1381 |       goto GTEST_CONCAT_TOKEN_(gtest_label_testthrow_, __LINE__);           \
+      |       ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:5: note: jump bypasses variable initialization
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1369:43: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1369 |   if (::testing::internal::TrueWithString gtest_msg{}) {                    \
+      |                                           ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:56: error: cannot jump from this goto statement to its label
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |                                                        ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1376:5: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1376 |     GTEST_TEST_THROW_CATCH_STD_EXCEPTION_(statement, expected_exception)    \
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1358:5: note: expanded from macro 'GTEST_TEST_THROW_CATCH_STD_EXCEPTION_'
+ 1358 |     goto GTEST_CONCAT_TOKEN_(gtest_label_testthrow_, __LINE__);                \
+      |     ^
+/workspace/zyx/tests/src/storage/relocatable/entity/test_BuildingScanFieldCohorts.cpp:132:5: note: jump bypasses variable initialization
+  132 |     EXPECT_THROW((void)build(0),std::invalid_argument);EXPECT_THROW((void)build(9),std::invalid_argument);
+      |     ^
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:3: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ^
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1369:43: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1369 |   if (::testing::internal::TrueWithString gtest_msg{}) {                    \
+      |                                           ^
+5 errors generated.

@@ -1,0 +1,4 @@
+/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/supply-phases/wrap.cpp:2:10: fatal error: 'observer.hpp' file not found
+    2 | #include "observer.hpp"
+      |          ^~~~~~~~~~~~~~
+1 error generated.

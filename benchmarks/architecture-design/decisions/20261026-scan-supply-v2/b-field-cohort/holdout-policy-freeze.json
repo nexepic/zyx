@@ -1,0 +1,8 @@
+{
+  "before_holdout_conversion": true,
+  "selection": "frozen B source and cohort=8 maximum; no holdout tuning",
+  "rationale": "94 matching-profile module cases and full synthetic B lifecycle passed; convert held-out data in parallel to avoid serialized offline preparation. Medium page-work gate still pending and cannot be waived.",
+  "source_freeze": "source-freeze.json",
+  "performance": "No held-out performance diagnostics or parameter selection; held-out query measurements only in final registered window",
+  "failure_policy": "Preserve failures; reproduce on synthetic/medium before any generic repair and version new source/input artifacts"
+}

@@ -1,0 +1,19 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "-O3",
+  "-DNDEBUG",
+  "-Xlinker",
+  "--dependency-file=/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-probes/values-link.d",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/values-b.o",
+  "-o",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/record-view-probes/values",
+  "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libz.so",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/liblz4.so.1.10.0",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libxxhash.so.0.8.3",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libzstd.a",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.83.0",
+  "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_atomic.so.1.83.0",
+  "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+  "/workspace/zyx/build-scan-candidate/libzyx_inputxx.a"
+]

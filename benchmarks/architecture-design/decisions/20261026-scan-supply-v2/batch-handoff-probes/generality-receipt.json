@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-probes/generality",
+    "verify",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/batch-handoff-probes/generality-private.zyx"
+  ],
+  "returncode": 0,
+  "source_sha256_before": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "source_sha256_after": "150ae1938505e31d692a5d71596d194b1f9f8baebeaf55ade1e92562f0f01b43",
+  "binary_sha256": "0caa20d886015c3e19e73340705c80380560a29d0c169ed29fa440d3055b0107",
+  "library_sha256": "41b311ec6be1479fce8bd20ee5820c16a98895da70aca43265bdf87ba3d80b35",
+  "default_query_timeout_ms": 30000,
+  "owners": 16384,
+  "mixed_mutation_batches": 512,
+  "wall_seconds": 202.23693714900583,
+  "target_bytes": 128712704,
+  "timing_benchmark": false
+}

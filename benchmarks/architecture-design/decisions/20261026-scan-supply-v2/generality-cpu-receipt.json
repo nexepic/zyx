@@ -1,0 +1,6 @@
+{
+  "returncode": 1,
+  "wall_seconds": 36.1465623710028,
+  "formal_performance": false,
+  "sampling_quality": "diagnostic only, no overhead validation; no speedup inference"
+}

@@ -1,0 +1,22 @@
+{
+  "measurement_script_sha256": "42de19df12704639b5b23fa1dd46a3a88fe30e50faf760580b25f69929a06403",
+  "primary_freeze_sha256": "54d13b2f9e96ece0561fbc5d132a3653c05555f07f5ddeaf10bdfb11b7d416ba",
+  "processes": 3,
+  "warmups": 3,
+  "iterations": 10,
+  "read_guards": [
+    "point_lookup_indexed",
+    "graph_full_point",
+    "one_hop_fetch_neighbor_records"
+  ],
+  "write_guards": [
+    "property_set",
+    "property_noop",
+    "edge_batch_1000"
+  ],
+  "open_observation_samples_per_engine_dataset": 3,
+  "query_benchmark": true,
+  "cpu_affinity": [
+    0
+  ]
+}

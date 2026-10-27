@@ -1,0 +1,20 @@
+{
+  "small_parent": {
+    "returncode": 0,
+    "process_peak_rss_kib": 384,
+    "process_user_cpu_seconds": 0.001703,
+    "process_system_cpu_seconds": 0.0,
+    "process_input_blocks": 0,
+    "process_output_blocks": 0
+  },
+  "large_parent": {
+    "returncode": 0,
+    "process_peak_rss_kib": 384,
+    "process_user_cpu_seconds": 0.0,
+    "process_system_cpu_seconds": 0.009284,
+    "process_input_blocks": 0,
+    "process_output_blocks": 0
+  },
+  "parent_allocation_bytes": 167772160,
+  "inference": "fresh exec then fork isolates worker ru_maxrss from controller allocation; worker includes launcher child setup floor, below actual engine RSS"
+}

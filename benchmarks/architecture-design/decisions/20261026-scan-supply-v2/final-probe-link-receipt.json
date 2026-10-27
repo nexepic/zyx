@@ -1,0 +1,50 @@
+[
+  {
+    "name": "public",
+    "binary_sha256": "e214bb737ed7cd05b222bdd84f5b0c11f670e182251e91700748a24b07246e4e",
+    "library_sha256": "1604abb172a964de930b6acf5c47372bedcf00fbb9e9f3bb4362698052a80aff",
+    "link_recipe": [
+      "/workspace/zyx-sysroot/usr/bin/clang++-19",
+      "-O3",
+      "-DNDEBUG",
+      "-Xlinker",
+      "--dependency-file=/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/public-a2-final-link.d",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/public-b.o",
+      "-o",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/public-a2-final",
+      "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libz.so",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/liblz4.so.1.10.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libxxhash.so.0.8.3",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libzstd.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.83.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_atomic.so.1.83.0",
+      "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+      "/workspace/zyx/build-scan-candidate/libzyx_inputxx.a"
+    ]
+  },
+  {
+    "name": "values",
+    "binary_sha256": "1bf0eab9a8a5fb89f4ec08d4bf334feeefb960b9817da6e8cf52dbd0d77b8182",
+    "library_sha256": "1604abb172a964de930b6acf5c47372bedcf00fbb9e9f3bb4362698052a80aff",
+    "link_recipe": [
+      "/workspace/zyx-sysroot/usr/bin/clang++-19",
+      "-O3",
+      "-DNDEBUG",
+      "-Xlinker",
+      "--dependency-file=/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/values-a2-final-link.d",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v1/values-b.o",
+      "-o",
+      "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/values-a2-final",
+      "/workspace/zyx/build-scan-candidate/libzyx_core.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libz.so",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/liblz4.so.1.10.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libxxhash.so.0.8.3",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libzstd.a",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.83.0",
+      "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_atomic.so.1.83.0",
+      "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+      "/workspace/zyx/build-scan-candidate/libzyx_inputxx.a"
+    ]
+  }
+]

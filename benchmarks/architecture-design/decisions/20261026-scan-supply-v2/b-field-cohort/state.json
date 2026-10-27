@@ -1,0 +1,118 @@
+{
+  "progress_percent": 100,
+  "candidate": "B field-major private cohorts, existing 64-entity wire format",
+  "status": "V0\u2013V4 accepted with explicit experimental read-heavy/long-lived-handle restrictions. Reproducible write regressions retained; Kuzu target failed.",
+  "module_tests": {
+    "scan": 62,
+    "hybrid": 32,
+    "row": 3,
+    "total": 97
+  },
+  "new_regressions": 10,
+  "conversion_session": 15500,
+  "conversion_worker_pid": 50250,
+  "input_freeze": "source-freeze.json",
+  "next": [],
+  "unchanged_gates": {
+    "primary_geomean": 2,
+    "allnode_each_dataset": 2,
+    "Kuzu": "separate every-primary target"
+  },
+  "commit_policy": "work commit/push only after actual milestone acceptance",
+  "generic_lifecycle": "generality-lifecycle-receipt.json",
+  "source_size_check": {
+    "code_files": 2634,
+    "over_3000": 0
+  },
+  "supplementary_module_receipt": "../b-whole-group-deletion-native/receipt.json",
+  "offline_supervision": "offline-supervision-adjustment.json",
+  "medium_field_counts": {
+    "examined_groups": 16954,
+    "converted_groups": 3516,
+    "row_fallback_groups": 13438,
+    "source": "medium-conversion.stderr",
+    "final_acceptance": false
+  },
+  "current_cohort_module_receipt": "../b-cohort-strengthened/receipt.json",
+  "module_aggregation": "initial SCAN59 - old cohort7 + current10 =62; HYBRID32 + ROW3 =97",
+  "holdout_field_counts": {
+    "examined_groups": 14610,
+    "converted_groups": 2547,
+    "row_fallback_groups": 12063,
+    "source": "holdout-conversion.stderr",
+    "final_acceptance": false
+  },
+  "last_checkpoint_utc": "2026-10-27T01:07:02.757591+00:00",
+  "pipeline_session": 17631,
+  "pipeline_log": "/tmp/zyx-b-final-pipeline-v2.log",
+  "supervision_session": 10007,
+  "supervision_log": "/tmp/zyx-b-conversion-supervision.log",
+  "critical_process_note": "Historical conversion controllers and supervisor have completed. Do not signal historical PIDs.",
+  "retired_wait_sessions": [
+    91599,
+    59367
+  ],
+  "remote_work_alignment": "git fetch origin work:refs/remotes/origin/work succeeded; HEAD...origin/work 0/0 at e5e48d50",
+  "current_docs": "Both optimization documents updated to100% scoped round completion with explicit restrictions and Kuzu failure.",
+  "live_workers": {},
+  "working_tree_engine_source_unchanged_since_freeze": true,
+  "source_archive": "frozen-source.tar.gz",
+  "source_archive_receipt": "frozen-source-receipt.json",
+  "conversion_observations": {
+    "medium": {
+      "complete_receipt_exists": true,
+      "ready": true,
+      "receipt": "medium-conversion-receipt.json"
+    },
+    "holdout": {
+      "complete_receipt_exists": true,
+      "ready": true,
+      "receipt": "holdout-conversion-receipt.json"
+    }
+  },
+  "holdout_conversion_receipt": "holdout-conversion-receipt.json",
+  "holdout_ready_target_bytes": 224002048,
+  "holdout_conversion_wall_seconds": 10051.107729762,
+  "primary_geomean_speedup": 2.002188734454638,
+  "primary_numerical_gain_gate_passed": true,
+  "kuzu_p50_target_passed": false,
+  "medium_ready_target_bytes": 259391488,
+  "score_pages_before_after": [
+    3437,
+    859
+  ],
+  "union_pages_before_after": [
+    3443,
+    1718
+  ],
+  "primary_receipts": "final-primary/",
+  "active_task": "Registered optimization round complete; accepted evidence and delivery are recorded in work branch Git history.",
+  "primary_complete_oracles": 720,
+  "primary_allnode_speedups": {
+    "medium": 2.231828980346363,
+    "holdout": 2.4701556104892037
+  },
+  "kuzu_candidate_ratio_range": [
+    9.307190626925738,
+    88.96642653652528
+  ],
+  "primary_resources": "primary-resource-review.json",
+  "guard_passed_worker_receipts": 60,
+  "guard_total_workers": 60,
+  "pipeline_pid": 51300,
+  "post_window_test_session": 64159,
+  "post_window_test_log": "/tmp/zyx-b-post-window-reuse.log",
+  "post_window_test_driver": "../run-b-post-window-reuse.py",
+  "post_window_test_status": "Initial single-case run failed because score fixture never formed native column; corrected nullable DOUBLE and nonvacuous assertions, all10 affected cases now pass. Original failure retained.",
+  "source_archive_note": "Measured source archive is immutable and contains previous nine-case fixture. Corrected current ten-case test source separately archived in b-cohort-strengthened; engine unchanged.",
+  "guard_complete_oracles": 720,
+  "write_cost_oracles": 12,
+  "focused_review": {
+    "workers": 28,
+    "guard_oracles": 360,
+    "open_oracles": 8,
+    "receipt": "guard-review-1/summary-recovery.json"
+  },
+  "adoption_acceptance": "../acceptance.json",
+  "delivery_branch": "work"
+}
