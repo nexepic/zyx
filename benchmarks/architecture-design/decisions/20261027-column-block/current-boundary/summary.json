@@ -1,0 +1,50 @@
+[
+  {
+    "case": "all_nodes_property_filter",
+    "oracles": 80,
+    "sampled_control_median_ratio": 1.0075446425992007,
+    "cpu_wall_ratio": 1.0000387600692302,
+    "tsc_calibration_ratio": 1.000131464015,
+    "quality_passed": true,
+    "control_p50_ms": 108.4303185,
+    "observed_p50_ms": 109.2483865,
+    "source_inclusive_ms": 65.009725,
+    "callbacks_ms": 3.180177,
+    "exclusive_source_elapsed_share": 0.5716683143030502,
+    "source_calls": 440.0,
+    "callbacks": 11938.0,
+    "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+  },
+  {
+    "case": "label_scan_filter",
+    "oracles": 80,
+    "sampled_control_median_ratio": 1.0002207054161039,
+    "cpu_wall_ratio": 1.0000636092371034,
+    "tsc_calibration_ratio": 1.000007658385,
+    "quality_passed": true,
+    "control_p50_ms": 55.63298,
+    "observed_p50_ms": 55.6452585,
+    "source_inclusive_ms": 29.4086165,
+    "callbacks_ms": 3.796047,
+    "exclusive_source_elapsed_share": 0.46548399587557804,
+    "source_calls": 196.0,
+    "callbacks": 3188.0,
+    "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+  },
+  {
+    "case": "multi_key_group",
+    "oracles": 80,
+    "sampled_control_median_ratio": 0.9982163274108383,
+    "cpu_wall_ratio": 1.0000521682549546,
+    "tsc_calibration_ratio": 1.000001654689,
+    "quality_passed": true,
+    "control_p50_ms": 101.977516,
+    "observed_p50_ms": 101.7956215,
+    "source_inclusive_ms": 39.1520975,
+    "callbacks_ms": 4.7986055,
+    "exclusive_source_elapsed_share": 0.34089506563521654,
+    "source_calls": 196.0,
+    "callbacks": 6376.0,
+    "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+  }
+]

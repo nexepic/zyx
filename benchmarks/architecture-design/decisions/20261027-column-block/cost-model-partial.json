@@ -1,0 +1,41 @@
+{
+  "status": "partial; R0 exit not met",
+  "model": "Speedup = 1 / (1 - f + f / s), assuming only the observed exclusive supply boundary changes and other work is unchanged. This is a sensitivity calculation, not a prediction.",
+  "cases": [
+    {
+      "case": "all_nodes_property_filter",
+      "exclusive_elapsed_share": 0.5716683143030502,
+      "observed_quality_passed": true,
+      "conditional_speedup_if_supply_2x": 1.4002349874525863,
+      "conditional_upper_bound_if_supply_eliminated": 2.334639330669347
+    },
+    {
+      "case": "label_scan_filter",
+      "exclusive_elapsed_share": 0.46548399587557804,
+      "observed_quality_passed": true,
+      "conditional_speedup_if_supply_2x": 1.303342548806572,
+      "conditional_upper_bound_if_supply_eliminated": 1.8708513726133915
+    },
+    {
+      "case": "multi_key_group",
+      "exclusive_elapsed_share": 0.34089506563521654,
+      "observed_quality_passed": true,
+      "conditional_speedup_if_supply_2x": 1.2054692615122227,
+      "conditional_upper_bound_if_supply_eliminated": 1.5172090935167346
+    }
+  ],
+  "remaining": [
+    "Quantify which supply work a candidate can actually remove.",
+    "Attribute outside-supply cost and multi-key allocations.",
+    "Explain reproducible P95 tails and preregister thresholds before R1."
+  ],
+  "pruning_counterfactual": {
+    "formal_current_zyx_p50_ms": 128.25,
+    "formal_kuzu_p50_ms": 1.286,
+    "diagnostic_zyx_candidates": 225000,
+    "diagnostic_kuzu_scan_output_tuples": 105000,
+    "candidate_ratio": 2.142857142857143,
+    "conditional_normalized_time_gap": 46.53965785381027,
+    "interpretation": "Hypothetical linear-scaling thought experiment only: if all ZYX time scaled strictly with candidate count and ZYX reached the observed Kuzu row count, the formal P50 gap would still be about 46.5x. Kuzu scan outputs and ZYX candidate counts are not identical work units, and counts and formal times are from different diagnostic windows; this is not a measured per-row cost or prediction."
+  }
+}

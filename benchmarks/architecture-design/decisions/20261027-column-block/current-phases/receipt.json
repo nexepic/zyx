@@ -1,0 +1,64 @@
+{
+  "oracles": 192,
+  "quality_passed": false,
+  "enabled_disabled_ratio": 1.0088807834619948,
+  "disabled_unmodified_ratio": 0.9307497561815469,
+  "cpu_wall_ratio": 1.000043483085289,
+  "calibration_ratio": 1.000022785491,
+  "source_exclusive_elapsed_share": 0.5762536643417447,
+  "phase_sampled_ns": [
+    4574312,
+    4246750,
+    669911,
+    26648102,
+    15487732,
+    5853786,
+    6485852,
+    3712457
+  ],
+  "phase_counts": [
+    440,
+    6953,
+    3437,
+    10469,
+    10469,
+    10390,
+    3437,
+    11938
+  ],
+  "phase_estimates": [
+    {
+      "phase": "source remainder",
+      "estimated_query_elapsed_share": 0.04120854382078627
+    },
+    {
+      "phase": "group lookup/fence",
+      "estimated_query_elapsed_share": 0.038257640377596484
+    },
+    {
+      "phase": "column binding",
+      "estimated_query_elapsed_share": 0.006035018337080364
+    },
+    {
+      "phase": "field frame acquisition/cache",
+      "estimated_query_elapsed_share": 0.2400644029108164
+    },
+    {
+      "phase": "record decode/validation",
+      "estimated_query_elapsed_share": 0.13952412577161197
+    },
+    {
+      "phase": "membership cache/validation",
+      "estimated_query_elapsed_share": 0.052734924268065926
+    },
+    {
+      "phase": "typed group preparation",
+      "estimated_query_elapsed_share": 0.05842900885578734
+    },
+    {
+      "phase": "consumer/admission callbacks",
+      "estimated_query_elapsed_share": 0.02918569677517633
+    }
+  ],
+  "interpretation": "Estimates eligible only if all quality checks pass. Nested phases exclusive; outside-source costs are not assigned. Not exact CPU shares."
+}

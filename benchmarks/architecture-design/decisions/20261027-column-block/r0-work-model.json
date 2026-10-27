@@ -1,0 +1,21 @@
+{
+  "input": "benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium-validation/work.stderr",
+  "source_sha256": "2c08e6f61d33563c5a17108e2250aab32242ace13e160a383c21c694d18d57b8",
+  "case": "all_nodes_property_filter",
+  "scope": "Untimed existing deterministic work counters, one query, current frozen engine. Physical read bytes are BufferPool accounting, not proof of device I/O.",
+  "counters": {
+    "logical_plan.direct_property.rows": 225000,
+    "native_graph.hybrid.grouped_column_batches": 3437,
+    "storage.buffer_pool.misses": 1,
+    "storage.buffer_pool.physical_read_bytes": 151552,
+    "storage.buffer_pool.hits": 4307,
+    "storage.checksum.bytes": 10678373,
+    "native_graph.hybrid.typed_run_admissions": 3437,
+    "storage_io.file_size_calls": 4380,
+    "native_graph.hybrid.group_decodes": 3516,
+    "native_graph.hybrid.column_membership_decodes": 3516,
+    "native_graph.hybrid.column_decodes": 3437
+  },
+  "interpretation": "Block scan must demonstrably reduce per-group metadata work and input rows; counters alone do not establish time shares. Cache misses and physical read bytes are different counters and cannot be inferred from each other.",
+  "status": "partial; R0 pending detailed costs and tail attribution"
+}

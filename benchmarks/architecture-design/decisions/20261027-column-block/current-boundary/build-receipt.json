@@ -1,0 +1,11 @@
+{
+  "head": "582c2b1e9786ac5f3d454042651493ef439f3486",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "probe_sha256": "74f839fc18a306e113528a933b15bc437a88ec484c13099d623d21f1231c7e50",
+  "source_hashes": {
+    "probe.cpp": "1da6b4bc3d2ae6b027d4b26725eedeab871d8aed80c031a171dfd5e78b29f680",
+    "wrap.cpp": "9548f51d4deb2951445e49cb4f560adc8699b8645aff948663d396256c7cf025",
+    "observer.hpp": "ae43efd220b3a0b912ac5d6203ea354b2a01c75bd93cafeb18dd9498b6582b68"
+  },
+  "engine_source_matches_frozen_candidate": true
+}

@@ -1,0 +1,1 @@
+Harness rejects more than100 iterations before opening input or executing queries. No performance samples collected. Correct invocation to100 iterations (50 observed/50 control) before measurement; no engine/observer change.

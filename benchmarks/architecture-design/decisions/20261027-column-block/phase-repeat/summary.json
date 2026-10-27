@@ -1,0 +1,113 @@
+{
+  "quality_passed": false,
+  "cycles": [
+    {
+      "cycle": 0,
+      "oracles": 192,
+      "quality_passed": true,
+      "enabled_disabled_ratio": 1.0183118997819174,
+      "disabled_unmodified_ratio": 1.016844754846017,
+      "cpu_wall_ratio": 1.00004043266325,
+      "calibration_ratio": 1.000024729735,
+      "exclusive_supply_share": 0.5742815508641457,
+      "phase_ns": [
+        5099900,
+        4034695,
+        1084771,
+        24040760,
+        16301997,
+        5995670,
+        8563311,
+        3738867
+      ],
+      "phase_estimates": [
+        {
+          "phase": "source remainder",
+          "elapsed_share": 0.04497433706363541
+        },
+        {
+          "phase": "group lookup/fence",
+          "elapsed_share": 0.0355806452830378
+        },
+        {
+          "phase": "column binding",
+          "elapsed_share": 0.009566237885224585
+        },
+        {
+          "phase": "field frame acquisition/cache",
+          "elapsed_share": 0.21200753809015152
+        },
+        {
+          "phase": "record decode/validation",
+          "elapsed_share": 0.1437619380553292
+        },
+        {
+          "phase": "membership cache/validation",
+          "elapsed_share": 0.05287383742864114
+        },
+        {
+          "phase": "typed group preparation",
+          "elapsed_share": 0.07551701705812601
+        },
+        {
+          "phase": "consumer/admission callbacks",
+          "elapsed_share": 0.029702881580580202
+        }
+      ]
+    },
+    {
+      "cycle": 1,
+      "oracles": 192,
+      "quality_passed": false,
+      "enabled_disabled_ratio": 0.9961517116033833,
+      "disabled_unmodified_ratio": 0.946403671433574,
+      "cpu_wall_ratio": 1.0000469491930448,
+      "calibration_ratio": 1.000118509374,
+      "exclusive_supply_share": 0.5724150398239644,
+      "phase_ns": [
+        4145633,
+        3083510,
+        844013,
+        19651138,
+        15046311,
+        5280347,
+        5659716,
+        3090684
+      ],
+      "phase_estimates": [
+        {
+          "phase": "source remainder",
+          "elapsed_share": 0.044181589377934025
+        },
+        {
+          "phase": "group lookup/fence",
+          "elapsed_share": 0.03286214015151687
+        },
+        {
+          "phase": "column binding",
+          "elapsed_share": 0.008994967908552982
+        },
+        {
+          "phase": "field frame acquisition/cache",
+          "elapsed_share": 0.20942966006038538
+        },
+        {
+          "phase": "record decode/validation",
+          "elapsed_share": 0.16035426538111114
+        },
+        {
+          "phase": "membership cache/validation",
+          "elapsed_share": 0.05627466853120037
+        },
+        {
+          "phase": "typed group preparation",
+          "elapsed_share": 0.0603177484132636
+        },
+        {
+          "phase": "consumer/admission callbacks",
+          "elapsed_share": 0.027766758544282618
+        }
+      ]
+    }
+  ]
+}

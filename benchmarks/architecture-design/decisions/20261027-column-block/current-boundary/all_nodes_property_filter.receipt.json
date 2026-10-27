@@ -1,0 +1,28 @@
+{
+  "case": "all_nodes_property_filter",
+  "oracles": 80,
+  "sampled_control_median_ratio": 1.0075446425992007,
+  "cpu_wall_ratio": 1.0000387600692302,
+  "tsc_calibration_ratio": 1.000131464015,
+  "quality_passed": true,
+  "control_p50_ms": 108.4303185,
+  "observed_p50_ms": 109.2483865,
+  "source_inclusive_ms": 65.009725,
+  "callbacks_ms": 3.180177,
+  "exclusive_source_elapsed_share": 0.5716683143030502,
+  "source_calls": 440.0,
+  "callbacks": 11938.0,
+  "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators.",
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/current-boundary/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium.zyx",
+    "/tmp/zyx-current-boundary-all_nodes_property_filter.db",
+    "all_nodes_property_filter",
+    "4",
+    "80"
+  ]
+}

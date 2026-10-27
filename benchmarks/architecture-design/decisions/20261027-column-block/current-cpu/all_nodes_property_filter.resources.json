@@ -1,0 +1,11 @@
+{
+  "returncode": 0,
+  "process_peak_rss_kib": 81764,
+  "process_user_cpu_seconds": 18.53701,
+  "process_system_cpu_seconds": 1.442842,
+  "process_input_blocks": 0,
+  "process_output_blocks": 144,
+  "timed_out": false,
+  "launcher_returncode": 0,
+  "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+}

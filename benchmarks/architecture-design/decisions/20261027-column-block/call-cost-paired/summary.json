@@ -1,0 +1,70 @@
+{
+  "quality_passed": false,
+  "oracles": 192,
+  "pairwise_ratios": [
+    {
+      "pair": 0,
+      "disabled_control_ratio": 1.1330049000203122,
+      "calibration_ratio": 1.000014219677
+    },
+    {
+      "pair": 1,
+      "disabled_control_ratio": 0.9973042814666307,
+      "calibration_ratio": 1.000117356833
+    },
+    {
+      "pair": 2,
+      "disabled_control_ratio": 0.9750041342537847,
+      "calibration_ratio": 1.000094867439
+    },
+    {
+      "pair": 3,
+      "disabled_control_ratio": 1.0535351758566216,
+      "calibration_ratio": 1.00005269737
+    },
+    {
+      "pair": 4,
+      "disabled_control_ratio": 0.9584996492694148,
+      "calibration_ratio": 0.999925920953
+    },
+    {
+      "pair": 5,
+      "disabled_control_ratio": 1.099258818701511,
+      "calibration_ratio": 1.000032919635
+    }
+  ],
+  "median_pair_ratio": 1.0254197286616262,
+  "pair_ratio_mad": 0.05866783690002647,
+  "onoff_ratio": 1.0180677285633923,
+  "cpu_wall_ratio": 1.0000422337043595,
+  "costs": [
+    {
+      "function": "fstat",
+      "samples": 6294,
+      "inside_samples": 5850,
+      "total_calls_per_query": 4199.0,
+      "inside_source_calls_per_query": 3906.0,
+      "median_query_elapsed_fraction": 0.010703207675750871,
+      "inside_source_elapsed_fraction": 0.009682196602697212
+    },
+    {
+      "function": "crc32",
+      "samples": 32364,
+      "inside_samples": 20580,
+      "total_calls_per_query": 21577.0,
+      "inside_source_calls_per_query": 13641.0,
+      "median_query_elapsed_fraction": 0.07293059273758462,
+      "inside_source_elapsed_fraction": 0.0547809366531551
+    },
+    {
+      "function": "query_guard_checkSlow_external_only",
+      "samples": 366,
+      "inside_samples": 0,
+      "total_calls_per_query": 239.0,
+      "inside_source_calls_per_query": 0.0,
+      "median_query_elapsed_fraction": 0.0001328671612130328,
+      "inside_source_elapsed_fraction": null
+    }
+  ],
+  "interpretation": "Estimates allowed only if the preregistered quality rule passes. Counts of guard calls are incomplete due to static same-object binding. No exact CPU shares; costs overlap."
+}

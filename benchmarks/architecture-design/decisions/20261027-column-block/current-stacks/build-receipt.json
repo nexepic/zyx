@@ -1,0 +1,11 @@
+{
+  "production_engine_modified": false,
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "probe_sha256": "e84bf4e051dfb06302e86d758655b2a2f94337a1f4f476f6172c4145da39e691",
+  "source_hashes": {
+    "probe.cpp": "1c5932ec7886ac48a65d4714d288e57c64da94df9a301a0317cc0a1f33164188",
+    "cpu-sampler.hpp": "369938723a5311c9496bd85a849c4c266800d36a6ad37025ab59c1a5ff09391f",
+    "cpu-phase.hpp": "680b9dd4a5a816ef40ba9e69079e092e7e19d900129c9452bd84c0f0c65116a9"
+  },
+  "validation": "200 complete query oracles passed; both observer quality gates passed; stack counts are inclusive and may truncate at 32 frames. Linux-only diagnostic, not production code."
+}

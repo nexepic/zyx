@@ -603,6 +603,8 @@
                                     }
                                 }
 								size_t filterRejected = 0U;
+								// Reuse charged lookup scratch within this batch. Only new groups own keys.
+								std::pmr::string lookupKey{&aggregateIndexMemory};
                                 for (const auto ordinal : ordinals) {
 									checkGuard(state);
 									if (ordinal >= columns.size()) throw std::logic_error("direct aggregate ordinal changed");
@@ -627,7 +629,8 @@
 									++inputRows; const auto row = columns.rowId(ordinal);
 									size_t groupIndex = 0;
 									if (!directGroups.empty()) {
-										std::pmr::string key{&aggregateIndexMemory};
+										auto &key = lookupKey;
+										key.clear();
 										for (const auto column : directGroups) appendCellKey(key, column, row);
 										const auto found = groupIndexes.find(key);
 										if (found != groupIndexes.end()) groupIndex = found->second;

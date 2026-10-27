@@ -1,0 +1,50 @@
+{
+  "scope": "Untimed original vs key-scratch experiment; no speedup claim; complete multi-key result compared to frozen oracle",
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "runtime_sha256": "b5baabef48811740f72cd5fc22d5050be864b2939cca4b42781fc787e1437c74",
+  "results": [
+    {
+      "name": "control",
+      "complete_oracle": "pass",
+      "allocations": 125998,
+      "requested_bytes": 17272639,
+      "frees": 125573,
+      "failed": 0,
+      "probe_sha256": "b76cca48f53c345606279f287b1f269b5f1e31047ce343c4c07ae6bffaa52d4b",
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 81180,
+        "process_user_cpu_seconds": 9.2639,
+        "process_system_cpu_seconds": 1.490708,
+        "process_input_blocks": 10560,
+        "process_output_blocks": 7888,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    },
+    {
+      "name": "candidate",
+      "complete_oracle": "pass",
+      "allocations": 26618,
+      "requested_bytes": 14191859,
+      "frees": 26193,
+      "failed": 0,
+      "probe_sha256": "5d7f10057d5dc6b47ac79077cc5bcaea61638da303f610eac543996e1811d65f",
+      "resources": {
+        "returncode": 0,
+        "process_peak_rss_kib": 82120,
+        "process_user_cpu_seconds": 9.461614,
+        "process_system_cpu_seconds": 0.965931,
+        "process_input_blocks": 0,
+        "process_output_blocks": 2136,
+        "timed_out": false,
+        "launcher_returncode": 0,
+        "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+      }
+    }
+  ],
+  "allocations_removed": 99380,
+  "requested_bytes_removed": 3080780
+}

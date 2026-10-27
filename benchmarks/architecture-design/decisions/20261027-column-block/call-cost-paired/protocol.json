@@ -1,0 +1,43 @@
+{
+  "pairs": 6,
+  "orders": [
+    [
+      "control",
+      "instrumented"
+    ],
+    [
+      "instrumented",
+      "control"
+    ],
+    [
+      "control",
+      "instrumented"
+    ],
+    [
+      "instrumented",
+      "control"
+    ],
+    [
+      "control",
+      "instrumented"
+    ],
+    [
+      "instrumented",
+      "control"
+    ]
+  ],
+  "case": "all_nodes_property_filter",
+  "iterations": 16,
+  "warmups": 4,
+  "limits": {
+    "address_space_bytes": 6442450944,
+    "file_bytes": 2147483648,
+    "process_timeout_seconds": 1200
+  },
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "probe_sha256": "bfef407e4a6d5884b9cc3642482b406f9fb6c386d317fe2a99de3bac6e30401d",
+  "control_sha256": "74f839fc18a306e113528a933b15bc437a88ec484c13099d623d21f1231c7e50",
+  "quality_rule": "Absolute deviation of median pairwise disabled/control ratio from 1 <= 5%; median absolute deviation of pairwise ratios <= 5 percentage points; absolute deviation of pooled enabled/disabled P50 from 1 <= 5%; CPU/wall <= 5%, TSC calibration <= 1%; at least 100 sampled calls per function. All 6 pairs are included; no outliers removed. These are preregistered robust pair statistics, not the failed two-process protocol.",
+  "scope": "Targeted R0 call attribution; not formal benchmark. QueryGuard checkSlow is only externally linked calls; same-object calls can bypass wrapper. Nested functions cannot be added."
+}

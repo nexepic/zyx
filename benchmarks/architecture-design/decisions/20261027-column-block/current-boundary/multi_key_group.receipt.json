@@ -1,0 +1,28 @@
+{
+  "case": "multi_key_group",
+  "oracles": 80,
+  "sampled_control_median_ratio": 0.9982163274108383,
+  "cpu_wall_ratio": 1.0000521682549546,
+  "tsc_calibration_ratio": 1.000001654689,
+  "quality_passed": true,
+  "control_p50_ms": 101.977516,
+  "observed_p50_ms": 101.7956215,
+  "source_inclusive_ms": 39.1520975,
+  "callbacks_ms": 4.7986055,
+  "exclusive_source_elapsed_share": 0.34089506563521654,
+  "source_calls": 196.0,
+  "callbacks": 6376.0,
+  "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators.",
+  "command": [
+    "/usr/bin/taskset",
+    "-c",
+    "0",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/current-boundary/probe",
+    "read",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium.zyx",
+    "/tmp/zyx-current-boundary-multi_key_group.db",
+    "multi_key_group",
+    "4",
+    "80"
+  ]
+}

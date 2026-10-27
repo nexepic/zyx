@@ -1,0 +1,18 @@
+{
+  "status": "bounded experiment validated; no speedup claim",
+  "tests": 37,
+  "failures": 0,
+  "errors": 0,
+  "source_sha256": {
+    "src/query/execution/read_runtime/AggregateOperator.inc": "2e653cb19e385ec45737e6e12406db92e9ae7dbbf02fc50486c3d7846a3517b9",
+    "tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp": "7116367e80cc1a8e1065b7be2137ee750f9d6d918acb2d44b5cfd14b2b2155cf"
+  },
+  "allocation_reduction": 99380,
+  "allocation_reduction_fraction": 0.7887426784552136,
+  "limitations": [
+    "Key serialization and hashing still occur per input row.",
+    "Scratch retains capacity until batch exit and remains budget-accounted; no general memory-regression claim.",
+    "No new timing or Kuzu comparison performed; not R1/R2 acceptance."
+  ],
+  "control_core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5"
+}

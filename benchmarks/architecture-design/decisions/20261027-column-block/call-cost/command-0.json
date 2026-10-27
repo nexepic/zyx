@@ -1,0 +1,12 @@
+[
+  "/workspace/zyx-sysroot/usr/bin/clang++-19",
+  "-O3",
+  "-DNDEBUG",
+  "-std=c++20",
+  "-I/workspace/zyx/include",
+  "-I/workspace/zyx-sysroot/usr/include",
+  "-c",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/call-cost/wrap.cpp",
+  "-o",
+  "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/call-cost/wrap.o"
+]

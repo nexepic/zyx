@@ -1,0 +1,13 @@
+*.o
+*.d
+*.db
+*.zyx
+current-boundary/probe
+current-cpu/probe
+current-phases/probe
+current-stacks/probe
+
+tail-work/probe
+call-cost/probe
+key-scratch/module
+key-scratch/allocation-probe

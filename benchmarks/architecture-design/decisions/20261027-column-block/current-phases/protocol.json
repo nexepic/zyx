@@ -1,0 +1,21 @@
+{
+  "scope": "Medium all-node only; 1/32 source batches with rotating offset,32 measured observed queries cover all32 offsets",
+  "phases": [
+    "source remainder",
+    "group lookup/fence",
+    "column binding",
+    "field frame acquisition/cache",
+    "record decode/validation",
+    "membership cache/validation",
+    "typed group preparation",
+    "consumer/admission callbacks"
+  ],
+  "iterations": 64,
+  "warmups": 4,
+  "quality_max_fraction": 0.05,
+  "extra_quality_check": "pooled unmodified production public controls before/after versus observer-disabled samples",
+  "input_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "runner_sha256": "b899b14f89714175351d46aaab994e61f7ff34e743d622467e1156ff604de241",
+  "phases_sha256": "9dbf870f3a31a47ae8c333f661f5ded6339cac7a04da8d960c84d09a4dbeccab"
+}

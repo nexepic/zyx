@@ -1,0 +1,15 @@
+{
+  "cases": [
+    "all_nodes_property_filter",
+    "label_scan_filter"
+  ],
+  "iterations": 100,
+  "warmups": 4,
+  "interval_ms": 10,
+  "quality_max_perturbation": 0.05,
+  "scope": "Diagnostic signal unwinding, 32-frame bounded stacks, no hardware counters; periodic sampling misses short initial work. The engine is unmodified. Observer memory is outside engine accounts. Reject attribution if paired perturbation exceeds 5%.",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "input_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "probe_sha256": "e84bf4e051dfb06302e86d758655b2a2f94337a1f4f476f6172c4145da39e691",
+  "minimum_independent_samples": 100
+}

@@ -1,0 +1,8 @@
+{
+  "freeze_path": "benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/final-primary/freeze.json",
+  "freeze_sha256": "54d13b2f9e96ece0561fbc5d132a3653c05555f07f5ddeaf10bdfb11b7d416ba",
+  "source_files": 726,
+  "mismatches": [],
+  "result": "pass",
+  "scope": "Exact SHA256 for listed src/include files; documentation and CI differences are outside this check."
+}

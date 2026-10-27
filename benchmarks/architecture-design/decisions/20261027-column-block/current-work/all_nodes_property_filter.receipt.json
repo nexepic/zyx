@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/probes/allocation",
+    "check-read",
+    "/workspace/zyx/benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium.zyx",
+    "/tmp/zyx-current-allocation-all_nodes_property_filter.db",
+    "all_nodes_property_filter",
+    "2",
+    "1"
+  ],
+  "resources": {
+    "returncode": 0,
+    "process_peak_rss_kib": 81148,
+    "process_user_cpu_seconds": 13.401376,
+    "process_system_cpu_seconds": 2.648087,
+    "process_input_blocks": 31520,
+    "process_output_blocks": 2344,
+    "timed_out": false,
+    "launcher_returncode": 0,
+    "scope": "whole worker including open/copy/queries/close; wait4 from fresh launcher, not oracle controller; OS blocks are not attributed query I/O"
+  },
+  "complete_oracle": "passed",
+  "timing_usable": false,
+  "allocation_windows": [
+    "# window 0 allocations 72654 requested_bytes 19968752 frees 61001 failed 0 sample_interval 256",
+    "# window 1 allocations 25642 requested_bytes 14748408 frees 25640 failed 0 sample_interval 256",
+    "# window 2 allocations 25642 requested_bytes 14748408 frees 25640 failed 0 sample_interval 256"
+  ],
+  "probe_sha256": "b76cca48f53c345606279f287b1f269b5f1e31047ce343c4c07ae6bffaa52d4b"
+}

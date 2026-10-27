@@ -1,0 +1,116 @@
+{
+  "selection_rule": "Describe all existing samples over 2x their own run median; this is retrospective diagnosis, not an acceptance filter. No samples removed.",
+  "runs": [
+    {
+      "source": "current-boundary/all_nodes_property_filter.jsonl",
+      "sha256": "a227bfcba8a059165a6b0cb69b5da69d7bde84ac0b5f3617679e28e9d19e3f04",
+      "samples": 80,
+      "p50_ms": 108.513966,
+      "max_ms": 152.714471,
+      "tails_over_2x_median": []
+    },
+    {
+      "source": "current-boundary/multi_key_group.jsonl",
+      "sha256": "cc250615df5539d00538f4b177110725ca089f363dac8645a0412b3207b243d0",
+      "samples": 80,
+      "p50_ms": 101.88235,
+      "max_ms": 127.059471,
+      "tails_over_2x_median": []
+    },
+    {
+      "source": "current-cpu/all_nodes_property_filter.jsonl",
+      "sha256": "5af9d5abec9b1f9c96aef47fb5455d3270c57fcc058c1201178ee2852288af26",
+      "samples": 100,
+      "p50_ms": 102.5960855,
+      "max_ms": 694.692275,
+      "tails_over_2x_median": [
+        {
+          "iteration": 93,
+          "latency_ms": 694.692275,
+          "sampled": false,
+          "user_ms": 656.1219999999998,
+          "system_ms": 38.268999999999885,
+          "major_faults": 0,
+          "involuntary_switches": 1,
+          "cpu_wall_ratio": 0.9995663187704221
+        }
+      ]
+    },
+    {
+      "source": "current-cpu/multi_key_group.jsonl",
+      "sha256": "5779627154eff8acd6c9ea7770957b8053154032ff3ace4edc287245e598032e",
+      "samples": 100,
+      "p50_ms": 108.894651,
+      "max_ms": 898.84045,
+      "tails_over_2x_median": [
+        {
+          "iteration": 0,
+          "latency_ms": 266.664495,
+          "sampled": false,
+          "user_ms": 258.58599999999933,
+          "system_ms": 8.079000000000057,
+          "major_faults": 0,
+          "involuntary_switches": 1,
+          "cpu_wall_ratio": 1.00000189376542
+        },
+        {
+          "iteration": 14,
+          "latency_ms": 226.495843,
+          "sampled": true,
+          "user_ms": 223.12399999999855,
+          "system_ms": 3.0609999999999804,
+          "major_faults": 0,
+          "involuntary_switches": 1,
+          "cpu_wall_ratio": 0.9986275995361139
+        },
+        {
+          "iteration": 19,
+          "latency_ms": 898.84045,
+          "sampled": true,
+          "user_ms": 843.9169999999993,
+          "system_ms": 54.643,
+          "major_faults": 0,
+          "involuntary_switches": 2,
+          "cpu_wall_ratio": 0.9996879868946701
+        },
+        {
+          "iteration": 21,
+          "latency_ms": 262.807755,
+          "sampled": true,
+          "user_ms": 245.0329999999994,
+          "system_ms": 17.681999999999974,
+          "major_faults": 0,
+          "involuntary_switches": 1,
+          "cpu_wall_ratio": 0.9996470614042549
+        },
+        {
+          "iteration": 60,
+          "latency_ms": 701.120337,
+          "sampled": false,
+          "user_ms": 678.1040000000012,
+          "system_ms": 22.559000000000108,
+          "major_faults": 0,
+          "involuntary_switches": 3,
+          "cpu_wall_ratio": 0.9993477054139442
+        },
+        {
+          "iteration": 77,
+          "latency_ms": 252.211895,
+          "sampled": true,
+          "user_ms": 245.26300000000134,
+          "system_ms": 6.9230000000000125,
+          "major_faults": 0,
+          "involuntary_switches": 2,
+          "cpu_wall_ratio": 0.9998973283952421
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Large tails recur in both targeted query classes.",
+    "The recorded tail CPU time is close to wall time, with zero major faults. Waiting off CPU or major page faults alone cannot explain these samples.",
+    "There are no per-tail retired-instruction/cycle counters or deterministic-work counts. Extra engine work versus changes in execution speed remain unresolved.",
+    "The original formal window lacks per-query CPU/fault/switch fields. Do not retroactively assign the same cause to its tails.",
+    "The multi-key CPU observer fails its perturbation gate; its sampled shares cannot support attribution. Its unobserved controls and raw timings are retained for diagnosis."
+  ]
+}

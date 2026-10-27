@@ -1,0 +1,16 @@
+{
+  "cases": [
+    "all_nodes_property_filter",
+    "label_scan_filter",
+    "multi_key_group"
+  ],
+  "iterations": 100,
+  "warmups": 4,
+  "interval_ms": 10,
+  "quality_max_perturbation": 0.05,
+  "scope": "Leaf samples only, no stacks or hardware counters; periodic sampling misses short initial work; percentages are sample shares, not exact CPU costs.",
+  "library_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "input_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "probe_sha256": "adf2fd3ebf914381e4cad05d8ba3737d613117119ade468e6d917485e1476e7a",
+  "minimum_independent_samples": 100
+}

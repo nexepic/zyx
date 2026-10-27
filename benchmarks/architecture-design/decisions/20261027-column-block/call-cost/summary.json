@@ -1,0 +1,81 @@
+{
+  "quality_passed": false,
+  "cycles": [
+    {
+      "cycle": 0,
+      "oracles": 200,
+      "quality_passed": true,
+      "onoff_ratio": 1.0448777755070866,
+      "linked_control_ratio": 1.045364312158845,
+      "cpu_wall_ratio": 1.000040658006634,
+      "calibration_ratio": 1.000043528074,
+      "costs": [
+        {
+          "function": "fstat",
+          "total_calls_per_query": 4199.0,
+          "inside_source_calls_per_query": 3906.0,
+          "samples": 6560,
+          "inside_samples": 6101,
+          "estimated_total_query_fraction": 0.017598244322924155,
+          "estimated_inside_query_fraction": 0.01553476883672539
+        },
+        {
+          "function": "crc32",
+          "total_calls_per_query": 21577.0,
+          "inside_source_calls_per_query": 13641.0,
+          "samples": 33714,
+          "inside_samples": 21349,
+          "estimated_total_query_fraction": 0.07029016315570971,
+          "estimated_inside_query_fraction": 0.056417252662114586
+        },
+        {
+          "function": "query_guard_checkSlow",
+          "total_calls_per_query": 239.0,
+          "inside_source_calls_per_query": 0.0,
+          "samples": 373,
+          "inside_samples": 0,
+          "estimated_total_query_fraction": 0.00014072738515867267,
+          "estimated_inside_query_fraction": null
+        }
+      ]
+    },
+    {
+      "cycle": 1,
+      "oracles": 200,
+      "quality_passed": false,
+      "onoff_ratio": 1.0100815415245066,
+      "linked_control_ratio": 0.8128112296779098,
+      "cpu_wall_ratio": 1.0000413735467508,
+      "calibration_ratio": 0.999966135883,
+      "costs": [
+        {
+          "function": "fstat",
+          "total_calls_per_query": 4199.0,
+          "inside_source_calls_per_query": 3906.0,
+          "samples": 6560,
+          "inside_samples": 6101,
+          "estimated_total_query_fraction": 0.016537911854529193,
+          "estimated_inside_query_fraction": 0.015101070958894026
+        },
+        {
+          "function": "crc32",
+          "total_calls_per_query": 21577.0,
+          "inside_source_calls_per_query": 13641.0,
+          "samples": 33714,
+          "inside_samples": 21349,
+          "estimated_total_query_fraction": 0.07479694154048996,
+          "estimated_inside_query_fraction": 0.05993815104663375
+        },
+        {
+          "function": "query_guard_checkSlow",
+          "total_calls_per_query": 239.0,
+          "inside_source_calls_per_query": 0.0,
+          "samples": 373,
+          "inside_samples": 0,
+          "estimated_total_query_fraction": 0.00014184138423023335,
+          "estimated_inside_query_fraction": null
+        }
+      ]
+    }
+  ]
+}

@@ -610,6 +610,29 @@ TEST(LogicalPlanDirectColumnAggregateTest, CompleteTupleGroupingDistinctAndNumer
     }
 }
 
+TEST(LogicalPlanDirectColumnAggregateTest, RepeatedCompositeKeysPreserveOwnedGroupsAcrossScratchReuse) {
+    std::vector<std::vector<PropertyValue>> expected;
+    for (const bool direct : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
+        const std::string longKey(128, 'x');
+        const std::string embedded("a\0b", 3);
+        for (uint64_t id = 1; id <= 96; ++id) {
+            const auto text = id % 3 == 0 ? longKey : id % 3 == 1 ? embedded : std::string("short");
+            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {
+                {"country", PropertyValue(text)}, {"rank", PropertyValue(int64_t(id % 2))}}});
+        }
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("country"), directField("rank")}, {{"count", nullptr, "rows"}}, {"country", "rank"});
+        auto bounds = directBounds(); bounds.maximum_node_records = 128; bounds.maximum_rows = 128;
+        const auto result = runtime.executeToQueryResult(aggregate, bounds);
+        ASSERT_EQ(result.rowCount(), 6U);
+        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(16));
+        if (!direct) expected = observedCells(result);
+        else { EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U); }
+    }
+}
+
 TEST(LogicalPlanDirectColumnAggregateTest, StringAndNumericPredicatesFeedGroupedCountsWithoutRows) {
     for (const bool direct : {false, true}) {
         auto graph = groupingGraph(); graph.enable_direct_property_cells = direct;

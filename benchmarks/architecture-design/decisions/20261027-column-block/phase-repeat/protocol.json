@@ -1,0 +1,19 @@
+{
+  "cycles": 2,
+  "order": [
+    "control-before",
+    "phases",
+    "control-after"
+  ],
+  "warmups": 4,
+  "iterations": 64,
+  "scope": "Targeted medium all-node diagnostic, not an acceptance benchmark. Both independent cycles must pass all pre-existing quality gates; failures remain excluded.",
+  "quality_max_fraction": 0.05,
+  "cpu_wall_max_fraction": 0.05,
+  "calibration_max_fraction": 0.01,
+  "max_phase_fraction_difference": 0.1,
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "phase_probe_sha256": "5f61e92491683e6c4d3adc243a6fab40e2b320e4d2ad6b599021137ba163dd57",
+  "control_probe_sha256": "77f9c8a5cd1e7e46a7d6d384234679608374fcf677aaa85bc3246b780e71b58a"
+}

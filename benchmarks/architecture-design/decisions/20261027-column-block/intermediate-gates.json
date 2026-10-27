@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "status": "preregistered before implementation; not a forecast",
+  "control": "frozen current B engine, same-machine same-window as candidate",
+  "formal_window": "R4 protocol in optimization.mdx; no replacement of the fixed Kuzu goal",
+  "intermediate_significant_gain": {
+    "geometric_mean_minimum_speedup": 1.5,
+    "each_dataset_all_node_minimum_speedup": 1.5,
+    "stability": "pooled P50 and median of three independent-process P50s must meet each threshold; report all processes and P95, no outlier removal",
+    "baseline": "new candidate vs concurrent frozen B, eight primary queries"
+  },
+  "rationale": "Qualified medium all-node exclusive supply is 57.17%; even 2x supply gives only 1.40x end-to-end. A 1.5x all-node target thus requires more than merely halving this boundary, or additional work reductions outside it. Overall 1.5x prevents isolated-query wins being marketed as substantial. Holdout is an independent requirement, not predicted by the medium model.",
+  "stop_conditions": [
+    "No callback or value replay after partial delivery; no relaxed authentication, snapshot, cancellation or budgets.",
+    "If deterministic counts show work moved rather than eliminated, retain failure and redesign before stage acceptance.",
+    "R4 misses any of the eight Kuzu P50 targets or has unresolved reproducible material P95 regression: no 100%.",
+    "If material performance, write, memory or space regressions are reproducible, fix them or apply only the adoption restrictions frozen before implementation; no post-hoc scope narrowing."
+  ],
+  "limitations": "Thresholds are objectives, not statistical proof or guaranteed achievable outcomes. Percentile instability requires review under the existing protocol; tail cause and internal supply breakdown remain unresolved."
+}

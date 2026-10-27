@@ -1,0 +1,161 @@
+{
+  "status": "R0 accepted on qualified coarse attribution and causal work-count validation; fine-grained timing remains unresolved",
+  "frozen_source": {
+    "freeze_path": "benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/final-primary/freeze.json",
+    "freeze_sha256": "54d13b2f9e96ece0561fbc5d132a3653c05555f07f5ddeaf10bdfb11b7d416ba",
+    "source_files": 726,
+    "mismatches": [],
+    "result": "pass",
+    "scope": "Exact SHA256 for listed src/include files; documentation and CI differences are outside this check."
+  },
+  "qualified_boundaries": [
+    {
+      "case": "all_nodes_property_filter",
+      "oracles": 80,
+      "sampled_control_median_ratio": 1.0075446425992007,
+      "cpu_wall_ratio": 1.0000387600692302,
+      "tsc_calibration_ratio": 1.000131464015,
+      "quality_passed": true,
+      "control_p50_ms": 108.4303185,
+      "observed_p50_ms": 109.2483865,
+      "source_inclusive_ms": 65.009725,
+      "callbacks_ms": 3.180177,
+      "exclusive_source_elapsed_share": 0.5716683143030502,
+      "source_calls": 440.0,
+      "callbacks": 11938.0,
+      "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+    },
+    {
+      "case": "label_scan_filter",
+      "oracles": 80,
+      "sampled_control_median_ratio": 1.0002207054161039,
+      "cpu_wall_ratio": 1.0000636092371034,
+      "tsc_calibration_ratio": 1.000007658385,
+      "quality_passed": true,
+      "control_p50_ms": 55.63298,
+      "observed_p50_ms": 55.6452585,
+      "source_inclusive_ms": 29.4086165,
+      "callbacks_ms": 3.796047,
+      "exclusive_source_elapsed_share": 0.46548399587557804,
+      "source_calls": 196.0,
+      "callbacks": 3188.0,
+      "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+    },
+    {
+      "case": "multi_key_group",
+      "oracles": 80,
+      "sampled_control_median_ratio": 0.9982163274108383,
+      "cpu_wall_ratio": 1.0000521682549546,
+      "tsc_calibration_ratio": 1.000001654689,
+      "quality_passed": true,
+      "control_p50_ms": 101.977516,
+      "observed_p50_ms": 101.7956215,
+      "source_inclusive_ms": 39.1520975,
+      "callbacks_ms": 4.7986055,
+      "exclusive_source_elapsed_share": 0.34089506563521654,
+      "source_calls": 196.0,
+      "callbacks": 6376.0,
+      "interpretation": "Only qualified boundary elapsed share; not exact CPU percentages. Outside-boundary work includes membership supply, higher adapters and operators."
+    }
+  ],
+  "current_work": {
+    "input": "benchmarks/architecture-design/decisions/20261026-scan-supply-v2/b-field-cohort/medium-validation/work.stderr",
+    "source_sha256": "2c08e6f61d33563c5a17108e2250aab32242ace13e160a383c21c694d18d57b8",
+    "case": "all_nodes_property_filter",
+    "scope": "Untimed existing deterministic work counters, one query, current frozen engine. Physical read bytes are BufferPool accounting, not proof of device I/O.",
+    "counters": {
+      "logical_plan.direct_property.rows": 225000,
+      "native_graph.hybrid.grouped_column_batches": 3437,
+      "storage.buffer_pool.misses": 1,
+      "storage.buffer_pool.physical_read_bytes": 151552,
+      "storage.buffer_pool.hits": 4307,
+      "storage.checksum.bytes": 10678373,
+      "native_graph.hybrid.typed_run_admissions": 3437,
+      "storage_io.file_size_calls": 4380,
+      "native_graph.hybrid.group_decodes": 3516,
+      "native_graph.hybrid.column_membership_decodes": 3516,
+      "native_graph.hybrid.column_decodes": 3437
+    },
+    "interpretation": "Block scan must demonstrably reduce per-group metadata work and input rows; counters alone do not establish time shares. Cache misses and physical read bytes are different counters and cannot be inferred from each other.",
+    "status": "partial; R0 pending detailed costs and tail attribution"
+  },
+  "registered_intermediate_gates": {
+    "version": 1,
+    "status": "preregistered before implementation; not a forecast",
+    "control": "frozen current B engine, same-machine same-window as candidate",
+    "formal_window": "R4 protocol in optimization.mdx; no replacement of the fixed Kuzu goal",
+    "intermediate_significant_gain": {
+      "geometric_mean_minimum_speedup": 1.5,
+      "each_dataset_all_node_minimum_speedup": 1.5,
+      "stability": "pooled P50 and median of three independent-process P50s must meet each threshold; report all processes and P95, no outlier removal",
+      "baseline": "new candidate vs concurrent frozen B, eight primary queries"
+    },
+    "rationale": "Qualified medium all-node exclusive supply is 57.17%; even 2x supply gives only 1.40x end-to-end. A 1.5x all-node target thus requires more than merely halving this boundary, or additional work reductions outside it. Overall 1.5x prevents isolated-query wins being marketed as substantial. Holdout is an independent requirement, not predicted by the medium model.",
+    "stop_conditions": [
+      "No callback or value replay after partial delivery; no relaxed authentication, snapshot, cancellation or budgets.",
+      "If deterministic counts show work moved rather than eliminated, retain failure and redesign before stage acceptance.",
+      "R4 misses any of the eight Kuzu P50 targets or has unresolved reproducible material P95 regression: no 100%.",
+      "If material performance, write, memory or space regressions are reproducible, fix them or apply only the adoption restrictions frozen before implementation; no post-hoc scope narrowing."
+    ],
+    "limitations": "Thresholds are objectives, not statistical proof or guaranteed achievable outcomes. Percentile instability requires review under the existing protocol; tail cause and internal supply breakdown remain unresolved."
+  },
+  "slow_query_selected_work": {
+    "qualifying_samples": 3,
+    "source_calls": 440,
+    "callbacks": 11938,
+    "fstat": 4199,
+    "crc32": 21577,
+    "major_faults": 0,
+    "limitations": "Selected counts do not cover all work or CPU instructions; observer failed timing-quality gate, and sample timing cannot be used to estimate component shares."
+  },
+  "rejected_timing_evidence": [
+    "phase-repeat/summary.json",
+    "call-cost/summary.json",
+    "call-cost-paired/summary.json",
+    "current-phases/receipt.json"
+  ],
+  "kuzu_profile": {
+    "zyx_candidates": 225000,
+    "kuzu_scan_output_tuples": 105000,
+    "input_ratio": 2.142857142857143,
+    "note": "Post-only profile outputs zero for the same predicate. Row reduction is observed; pruning implementation is unknown. Profile timings are not formal benchmark timings."
+  },
+  "model": {
+    "formula": "1 / (1-f+f/s), when only the measured exclusive supply boundary is changed",
+    "all_node_supply_f": 0.5716683143030502,
+    "all_node_if_supply_2x": 1.4002349874525863,
+    "all_node_if_supply_removed": 2.334639330669347,
+    "interpretation": "Measured supply is the largest qualified boundary, not a demonstrated removable amount. Callback-only elimination is too small to reach the 1.5x intermediate gate. A qualifying candidate must reduce additional source and/or outside-source work."
+  },
+  "candidate_hypotheses": [
+    "Use snapshot-valid predicate pruning to skip provably nonmatching blocks and preserve exact fallback semantics.",
+    "Fuse scan, block authentication, typed columns and filtering to reduce repeated group/page work and per-cell materialization; verify actual work reductions, do not assume them.",
+    "For multi-key grouping, validate per-row PMR string-key allocations, then evaluate typed composite-key lookup with safe semantics and budgets."
+  ],
+  "carried_risks": [
+    "A credible breakdown of the largest removable cost inside and outside the source boundary remains missing; both repeat observers failed preregistered gates.",
+    "The three slow queries repeat selected work counts, but uncounted instructions versus execution-speed changes are unresolved.",
+    "The allocation experiment validates real persisted read data only; updated-data lifecycle and complete block-path proof remain R1/R3 obligations."
+  ],
+  "scope": "R0 attribution plus bounded key-scratch experiment. R1 block architecture has not started. No performance acceptance claim.",
+  "causal_work_experiment": {
+    "status": "bounded experiment validated; no speedup claim",
+    "tests": 37,
+    "failures": 0,
+    "errors": 0,
+    "source_sha256": {
+      "src/query/execution/read_runtime/AggregateOperator.inc": "2e653cb19e385ec45737e6e12406db92e9ae7dbbf02fc50486c3d7846a3517b9",
+      "tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp": "7116367e80cc1a8e1065b7be2137ee750f9d6d918acb2d44b5cfd14b2b2155cf"
+    },
+    "allocation_reduction": 99380,
+    "allocation_reduction_fraction": 0.7887426784552136,
+    "limitations": [
+      "Key serialization and hashing still occur per input row.",
+      "Scratch retains capacity until batch exit and remains budget-accounted; no general memory-regression claim.",
+      "No new timing or Kuzu comparison performed; not R1/R2 acceptance."
+    ],
+    "control_core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5"
+  },
+  "accepted_progress_percent": 10,
+  "acceptance_basis": "Freeze, qualified source boundary, deterministic work, Kuzu input comparison, tail investigation, explicit rejected evidence, preregistered gates and a causal allocation-elimination experiment are complete. Fine-grained timing is a carried uncertainty, not fabricated or waived from final acceptance."
+}

@@ -1,0 +1,30 @@
+{
+  "oracles": 720,
+  "all_passed": true,
+  "hashes_verified_before_after": true,
+  "primary_geomean_speedup": 1.9128565072362393,
+  "candidate_over_kuzu_range": [
+    8.824723822212851,
+    99.69602066533895
+  ],
+  "allnode_each": [
+    2.2924072547369705,
+    2.6321069940297015
+  ],
+  "kuzu_target_passed": false,
+  "finish_utc": "2026-10-27T02:21:16.902875+00:00",
+  "gain_gate_passed": false,
+  "p95_regression_flags": [
+    {
+      "scale": "medium",
+      "case": "all_nodes_property_filter",
+      "candidate_over_control_p95": 1.3844506605244524
+    },
+    {
+      "scale": "medium",
+      "case": "multi_key_group",
+      "candidate_over_control_p95": 2.510955205003445
+    }
+  ],
+  "interpretation": "Fresh window does not reproduce registered2x geometric-mean gate. Previous2.0022x was a borderline numerical pass, not robust evidence of stable2x speedup. Two medium primary tails regressed; cause unassigned, no causal claim from timing alone."
+}

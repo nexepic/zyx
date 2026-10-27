@@ -1,0 +1,9 @@
+{
+  "purpose": "Test availability of per-thread retired instruction counter for tail attribution; no engine changes",
+  "event": "PERF_COUNT_HW_INSTRUCTIONS",
+  "exclude_kernel": true,
+  "exclude_hv": true,
+  "fd_available": false,
+  "errno": 2,
+  "error": "No such file or directory"
+}

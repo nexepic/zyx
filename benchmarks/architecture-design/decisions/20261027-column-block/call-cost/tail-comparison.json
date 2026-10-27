@@ -1,0 +1,175 @@
+{
+  "selection_rule": "Latencies above twice own process median; fixed work counts are not timing estimates. Linked-observer quality failed; no function elapsed percentages used.",
+  "runs": [
+    {
+      "source": "call-cost/0-control.jsonl",
+      "p50_ms": 95.11094299999999,
+      "tails": [
+        {
+          "iteration": 47,
+          "latency_ms": 470.56016,
+          "cpu_ms": 469.3119999999995,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 5
+        },
+        {
+          "iteration": 48,
+          "latency_ms": 259.510021,
+          "cpu_ms": 259.5050000000003,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 1,
+          "source_calls": 440,
+          "callback_calls": 11938
+        },
+        {
+          "iteration": 49,
+          "latency_ms": 501.085889,
+          "cpu_ms": 500.5570000000006,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        },
+        {
+          "iteration": 76,
+          "latency_ms": 207.335254,
+          "cpu_ms": 207.3380000000007,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 1
+        }
+      ]
+    },
+    {
+      "source": "call-cost/0-instrumented.jsonl",
+      "p50_ms": 102.2660405,
+      "tails": [
+        {
+          "iteration": 3,
+          "latency_ms": 728.276164,
+          "cpu_ms": 728.2270000000016,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 2,
+          "source_calls": 440,
+          "callback_calls": 11938,
+          "observed_call_counts": {
+            "fstat": 4199,
+            "crc32": 21577,
+            "externally_linked_guard": 239
+          }
+        },
+        {
+          "iteration": 4,
+          "latency_ms": 250.926034,
+          "cpu_ms": 250.93499999999923,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 0
+        },
+        {
+          "iteration": 10,
+          "latency_ms": 733.130142,
+          "cpu_ms": 661.0969999999993,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 10,
+          "source_calls": 440,
+          "callback_calls": 11938,
+          "observed_call_counts": {
+            "fstat": 4199,
+            "crc32": 21577,
+            "externally_linked_guard": 239
+          }
+        },
+        {
+          "iteration": 17,
+          "latency_ms": 615.866407,
+          "cpu_ms": 615.8190000000001,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        },
+        {
+          "iteration": 35,
+          "latency_ms": 634.814997,
+          "cpu_ms": 574.9199999999987,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 4,
+          "source_calls": 440,
+          "callback_calls": 11938,
+          "observed_call_counts": {
+            "fstat": 4199,
+            "crc32": 21577,
+            "externally_linked_guard": 239
+          }
+        }
+      ]
+    },
+    {
+      "source": "call-cost/1-control.jsonl",
+      "p50_ms": 115.34964149999999,
+      "tails": [
+        {
+          "iteration": 28,
+          "latency_ms": 1756.304184,
+          "cpu_ms": 1620.8709999999999,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 8,
+          "source_calls": 440,
+          "callback_calls": 11938
+        },
+        {
+          "iteration": 33,
+          "latency_ms": 640.804561,
+          "cpu_ms": 640.6310000000002,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        },
+        {
+          "iteration": 38,
+          "latency_ms": 490.616952,
+          "cpu_ms": 490.53400000000113,
+          "sampled": true,
+          "major_faults": 0,
+          "switches": 1,
+          "source_calls": 440,
+          "callback_calls": 11938
+        },
+        {
+          "iteration": 53,
+          "latency_ms": 237.179465,
+          "cpu_ms": 236.89000000000073,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        },
+        {
+          "iteration": 89,
+          "latency_ms": 684.993797,
+          "cpu_ms": 684.5649999999983,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        },
+        {
+          "iteration": 94,
+          "latency_ms": 643.492863,
+          "cpu_ms": 642.7930000000013,
+          "sampled": false,
+          "major_faults": 0,
+          "switches": 2
+        }
+      ]
+    },
+    {
+      "source": "call-cost/1-instrumented.jsonl",
+      "p50_ms": 94.927032,
+      "tails": []
+    }
+  ]
+}

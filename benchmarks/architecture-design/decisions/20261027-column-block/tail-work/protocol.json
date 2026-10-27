@@ -1,0 +1,23 @@
+{
+  "cases": [
+    "all_nodes_property_filter",
+    "multi_key_group"
+  ],
+  "iterations": 40,
+  "warmups": 4,
+  "source_sha256": "059a1ea1e3c376aee3d77c073c66de86a39ca71aaee67f6ca882a1d906923458",
+  "core_sha256": "fa911d0823a9efd4a6437e7624b3a3f4f27c9fc469f817736f49810a1429cae5",
+  "probe_sha256": "e685c1f4b46edbc26182394ef6544dcc667603b1276018dc00b902a462046d16",
+  "keys": [
+    "direct_rows",
+    "group_decodes",
+    "membership_decodes",
+    "column_decodes",
+    "file_size_calls",
+    "buffer_hits",
+    "buffer_misses",
+    "checksum_bytes",
+    "aggregate_input_rows"
+  ],
+  "scope": "Selected synchronous work counters and per-query CPU/wall. No acceptance timing; observer is active on every query, no isolated perturbation gate; correlations cannot infer causes for old formal window. No hardware counters."
+}

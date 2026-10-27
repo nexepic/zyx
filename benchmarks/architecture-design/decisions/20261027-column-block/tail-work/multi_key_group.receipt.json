@@ -1,0 +1,83 @@
+{
+  "case": "multi_key_group",
+  "oracles": 40,
+  "p50_ms": 100.0139975,
+  "slow_count_over_2x_p50": 0,
+  "slow_samples": [],
+  "normal_counter_ranges": {
+    "direct_rows": [
+      100000,
+      100000
+    ],
+    "group_decodes": [
+      1563,
+      1563
+    ],
+    "membership_decodes": [
+      1563,
+      1563
+    ],
+    "column_decodes": [
+      3124,
+      3124
+    ],
+    "file_size_calls": [
+      2735,
+      2735
+    ],
+    "buffer_hits": [
+      2683,
+      2683
+    ],
+    "buffer_misses": [
+      0,
+      0
+    ],
+    "checksum_bytes": [
+      6329373,
+      6329373
+    ],
+    "aggregate_input_rows": [
+      100000,
+      100000
+    ]
+  },
+  "all_counter_ranges": {
+    "direct_rows": [
+      100000,
+      100000
+    ],
+    "group_decodes": [
+      1563,
+      1563
+    ],
+    "membership_decodes": [
+      1563,
+      1563
+    ],
+    "column_decodes": [
+      3124,
+      3124
+    ],
+    "file_size_calls": [
+      2735,
+      2735
+    ],
+    "buffer_hits": [
+      2683,
+      2683
+    ],
+    "buffer_misses": [
+      0,
+      0
+    ],
+    "checksum_bytes": [
+      6329373,
+      6329373
+    ],
+    "aggregate_input_rows": [
+      100000,
+      100000
+    ]
+  }
+}
