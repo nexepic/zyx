@@ -42,12 +42,13 @@ jobs:
             node: '20'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
+          package-manager-cache: false
 
       - name: Install build tools
         run: pip install conan
@@ -133,12 +134,13 @@ jobs:
             platform-pkg: win32-x64-msvc
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
+          package-manager-cache: false
 
       - name: Install build tools
         run: pip install conan
@@ -209,7 +211,7 @@ jobs:
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prebuilt-${{ matrix.platform-pkg }}
           path: bindings/nodejs/npm/${{ matrix.platform-pkg }}/zyxdb.node
@@ -225,15 +227,16 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
+          package-manager-cache: false
 
       - name: Download all prebuilt artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: prebuilt-*
           path: bindings/nodejs/npm/
