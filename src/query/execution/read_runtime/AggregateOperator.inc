@@ -83,8 +83,15 @@
 					MaterializedByteReservation aggregateStateBytes(&state.shared.materialized_budget);
 					MaterializedByteReservation groupStorageBytes(&state.shared.materialized_budget);
 					detail::BudgetMemoryResource aggregateIndexMemory(state.shared.materialized_budget);
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+					detail::BudgetMemoryResource borrowedIndexMemory(state.shared.materialized_budget);
+#endif
 					std::vector<AggregateGroup> groups;
 					std::pmr::unordered_map<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+					using BorrowedIndex = std::pmr::unordered_multimap<uint64_t, std::pair<const std::pmr::string *, size_t>>;
+					std::optional<BorrowedIndex> borrowedIndexes;
+#endif
 					size_t aggregateMemoryBytes = 0U;
 					const auto chargeAggregateBytes = [&](const size_t bytes) {
 						if (bytes > state.shared.bounds.maximum_materialized_bytes -
@@ -404,6 +411,10 @@
 					std::pmr::vector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
 					struct DirectFilterTerm { size_t column; const expressions::LiteralExpression *literal; detail::ColumnPredicateOp operation; };
 					std::pmr::vector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
+#if ZYX_BUILD_STREAMING_COUNT_PATH
+                    std::pmr::vector<PropertyValue> countConstants(&aggregateIndexMemory);
+                    std::pmr::vector<detail::ColumnPredicate> countPredicates(&aggregateIndexMemory);
+#endif
 					const auto *directFilter = dynamic_cast<const logical::LogicalFilter *>(&aggregateChild);
 					const auto *directInput = directFilter ? &requireOnlyChild(*directFilter) : &aggregateChild;
 					bool directBound = false;
@@ -486,6 +497,9 @@
 						std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
 					}
 					if (directEligible) {
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+						if (borrowedGroupKeyEnabled() && directGroups.size() > 1U) borrowedIndexes.emplace(&borrowedIndexMemory);
+#endif
 						aggregateColumnReceiver.emplace(NodeColumnReceiver{directKeys, {},
 							[&](std::span<const std::string> keys, const detail::DirectPropertyColumns &columns,
 								const SelectionVector &selection, std::span<const size_t> ordinals) {
@@ -515,7 +529,11 @@
                                 // Partial COUNT over a bounded short-text column. Ordinary
                                 // filters and low-cardinality groups merge per distinct value,
                                 // rather than serializing keys/updating virtual accumulators per row.
-                                bool batchCountEligible = directGroups.size() <= 1U &&
+                                bool batchCountEligible =
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+                                    !borrowedIndexes &&
+#endif
+                                    directGroups.size() <= 1U &&
                                     std::ranges::all_of(functions, [](auto function) { return function == AggregateFunctionType::AGG_COUNT; });
                                 for (size_t i = 0; i < aggregations.size(); ++i)
                                     batchCountEligible = batchCountEligible && !aggregations[i].distinct && directArguments[i] == rowCountBinding;
@@ -630,11 +648,59 @@
 									size_t groupIndex = 0;
 									if (!directGroups.empty()) {
 										auto &key = lookupKey;
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+										const auto guard = [&] { checkGuardNow(state); };
+										detail::BorrowedGroupKey view(columns, directGroups, row);
+										const bool borrow = borrowedIndexes && view.supported(guard);
+										std::optional<uint64_t> borrowedHash;
+										std::optional<size_t> borrowedMatch;
+										if (borrow) {
+											borrowedHash = view.hash(guard);
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+											if (test_force_borrowed_group_collision) borrowedHash = 0;
+#endif
+											const auto range = borrowedIndexes->equal_range(*borrowedHash);
+											for (auto it = range.first; it != range.second; ++it) {
+												guard();
+												if (view.equals(*it->second.first, guard)) { borrowedMatch = it->second.second; break; }
+											}
+										}
+										if (borrowedMatch) {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                                            debug::PerfTrace::addValue("test.group_key.borrowed_hits", 1);
+#endif
+											groupIndex = *borrowedMatch;
+										}
+										else {
+#endif
 										key.clear();
 										for (const auto column : directGroups) appendCellKey(key, column, row);
 										const auto found = groupIndexes.find(key);
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                                        debug::PerfTrace::addValue("test.group_key.serialized_rows", 1);
+                                        debug::PerfTrace::addValue("test.group_key.serialized_bytes", static_cast<int64_t>(key.size()));
+                                        debug::PerfTrace::addValue(found == groupIndexes.end() ? "test.group_key.misses" : "test.group_key.hits", 1);
+#endif
 										if (found != groupIndexes.end()) groupIndex = found->second;
 										else {
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+											std::optional<BorrowedIndex::iterator> reservedIndex;
+											if (borrowedHash) {
+												try {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                                                    if (test_reject_borrowed_group_index) throw MaterializedByteLimitExceeded();
+#endif
+													reservedIndex = borrowedIndexes->emplace(*borrowedHash, std::make_pair(nullptr, size_t{0}));
+											} catch (const MaterializedByteLimitExceeded &) {
+													// No group effects yet. Discard the optional index and
+											// continue with the established encoded-key path.
+												borrowedIndexes.reset(); borrowedHash.reset();
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                                                    debug::PerfTrace::addValue("test.group_key.budget_fallback", 1);
+#endif
+											}
+											}
+#endif
 											MaterializedByteReservation copies(&state.shared.materialized_budget);
 											copies.set(checkedSizeMul(directGroups.size(), sizeof(PropertyValue), "direct group slots overflowed"));
 											std::vector<PropertyValue> values; values.reserve(directGroups.size());
@@ -648,8 +714,21 @@
 												values.push_back(std::move(value));
 											}
 											groupIndex = createGroup(std::move(values), &copies);
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+											auto inserted = groupIndexes.emplace(std::move(key), groupIndex);
+											if (reservedIndex) {
+												(*reservedIndex)->second = std::make_pair(&inserted.first->first, groupIndex);
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                                                debug::PerfTrace::addValue("test.group_key.index_bytes", static_cast<int64_t>(borrowedIndexMemory.used()));
+#endif
+											}
+#else
 											groupIndexes.emplace(std::move(key), groupIndex);
+#endif
 										}
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+										}
+#endif
 									}
 									auto &group = groups.at(groupIndex);
 									for (size_t index = 0; index < aggregations.size(); ++index) {
@@ -677,6 +756,43 @@
                                 return true;
 							}});
 						aggregateColumnReceiver->filterOwner = directFilter;
+#if ZYX_BUILD_STREAMING_COUNT_PATH
+                        bool streamingCountEligible = streamingCountEnabled() && countOnlyAggregate && directKeys.size() <= 1U &&
+                            std::ranges::all_of(directArguments, [&](size_t column) { return column == rowCountBinding; }) &&
+                            std::ranges::all_of(directTerms, [](const auto &term) {
+                                return term.literal->isInteger() || term.literal->isDouble() || term.literal->isBoolean();
+                            });
+                        if (streamingCountEligible) {
+                            try {
+                                countConstants.reserve(directTerms.size()); countPredicates.reserve(directTerms.size());
+                                for (const auto &term : directTerms) {
+                                    const auto &literal = *term.literal;
+                                    if (literal.isInteger()) countConstants.emplace_back(literal.getIntegerValue());
+                                    else if (literal.isDouble()) countConstants.emplace_back(literal.getDoubleValue());
+                                    else countConstants.emplace_back(literal.getBooleanValue());
+                                    countPredicates.push_back({0U, term.operation, &countConstants.back()});
+                                }
+                            } catch (const MaterializedByteLimitExceeded &) {
+                                streamingCountEligible = false;
+                                std::pmr::vector<detail::ColumnPredicate>(&aggregateIndexMemory).swap(countPredicates);
+                                std::pmr::vector<PropertyValue>(&aggregateIndexMemory).swap(countConstants);
+                            }
+                        }
+                        if (streamingCountEligible) {
+                            aggregateColumnReceiver->countPredicates = countPredicates;
+                            aggregateColumnReceiver->consumeCount = [&](size_t accepted) {
+                                checkGuardNow(state);
+                                if (accepted > state.shared.bounds.maximum_rows - inputRows)
+                                    throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+                                inputRows += accepted;
+                                for (auto &accumulator : groups.front().accumulators)
+                                    static_cast<CountAccumulator &>(*accumulator).addRows(accepted);
+                                debug::PerfTrace::addValue("logical_plan.aggregate.streaming_count_batches", 1);
+                                debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
+                                return true;
+                            };
+                        }
+#endif
 					}
 					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
 														 MaterializedByteReservation inputRowBytes) {

@@ -1,0 +1,2042 @@
+--- a/.github/workflows/python-bindings.yml
++++ b/.github/workflows/python-bindings.yml
+@@ -88,6 +88,7 @@
+           $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
+           $env:CC = "clang-cl"
+           $env:CXX = "clang-cl"
++          $env:CMAKE_GENERATOR = "Ninja"
+           $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
+           pip install "bindings/python[test]"
+         shell: pwsh
+@@ -140,7 +141,7 @@
+             pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
+-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
++          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+ 
+       - name: Upload wheels
+         uses: actions/upload-artifact@v7
+--- a/include/graph/query/execution/MaterializedByteBudget.hpp
++++ b/include/graph/query/execution/MaterializedByteBudget.hpp
+@@ -39,6 +39,12 @@
+ 			if (!upstream) throw std::invalid_argument("materialized allocator requires an upstream resource");
+ 			parent_.emplace(std::move(account));
+ 			upstream_ = upstream;
++		}
++		// Used when an enclosing execution state may have no shared account.
++		struct OptionalAccountTag {};
++		MaterializedByteBudget(size_t maximumBytes, std::shared_ptr<detail::ResourceAccount> account, OptionalAccountTag)
++			: MaterializedByteBudget(maximumBytes) {
++			if (account) parent_.emplace(std::move(account));
+ 		}
+ 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
+ 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
+--- a/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
+@@ -134,6 +134,7 @@
+ 										 const std::function<bool(const Superblock &)> &predicate) const;
+ 
+ 		[[nodiscard]] uint64_t activeSnapshotCount() const;
++        [[nodiscard]] uint64_t localSnapshotCount() const;
+ 		// One registry-lock sample, optionally excluding the observer's own pin.
+ 		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
+ 
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -999,6 +999,8 @@
+ 		NativeGraphIndexTreeMutation mutation;
+ 		IndexTreeMultiPoolMutationPreparer preparer;
+         std::shared_ptr<NativeGraphDeferredIndexImages> images;
++        // Internal streamed Edge summary plan, bound to the same writer-fenced generation.
++        std::optional<NativeGraphEntityFreeSummaryFence> entity_free_summary_fence;
+ 	};
+ 	struct NativeGraphDeferredIndexPlans {
+ 		std::vector<NativeGraphDeferredIndexPlan> plans;
+@@ -1897,6 +1899,7 @@
+ 		[[nodiscard]] Superblock migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
+ 																 const MetadataPublishOptions &options = {});
+ 		[[nodiscard]] uint64_t activeSnapshotCount() const;
++        [[nodiscard]] uint64_t localSnapshotCount() const;
+ 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
+ 
+ 	private:
+--- a/include/graph/utils/OwnedSharedStringMap.hpp
++++ b/include/graph/utils/OwnedSharedStringMap.hpp
+@@ -61,9 +61,9 @@
+     static size_t emptyBytes() {
+ #if defined(_MSVC_STL_VERSION)
+         using namespace utils::detail;
+-        constexpr auto node = sizeof(Map::value_type) + 2U*sizeof(void *) + alignof(Map::value_type) - 1U;
++        constexpr auto node = sizeof(typename Map::value_type) + 2U*sizeof(void *) + alignof(typename Map::value_type) - 1U;
+         return addStandardHeapBytes(2U*standardContainerProxyBytes(),
+-            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Map::value_type)),
++            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(typename Map::value_type)),
+                 standardAllocatorRequestBytes(16U*sizeof(void *), alignof(void *))));
+ #else
+         return 0U;
+--- a/scripts/run_test_process.py
++++ b/scripts/run_test_process.py
+@@ -153,6 +153,38 @@
+         process.stdin.close()
+ 
+ 
++def _linux_group_has_live_members(process_group_id: int) -> bool:
++    """Return false only when every visible group member is a Linux zombie.
++
++    Unknown or inaccessible state stays active. Zombies cannot execute or keep
++    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
++    """
++    try:
++        entries = list(Path('/proc').iterdir())
++    except OSError:
++        return True
++    found = False
++    for entry in entries:
++        if not entry.name.isdecimal():
++            continue
++        try:
++            stat = (entry / 'stat').read_text()
++        except FileNotFoundError:
++            continue
++        except OSError:
++            return True
++        try:
++            fields = stat[stat.rindex(')') + 2:].split()
++            state, group = fields[0], int(fields[2])
++        except (ValueError, IndexError):
++            return True
++        if group == process_group_id:
++            found = True
++            if state not in ('Z', 'X'):
++                return True
++    return not found
++
++
+ def _process_group_is_active(process_group_id: int) -> bool:
+     """Return whether a POSIX process group still has a member."""
+     try:
+@@ -162,7 +194,7 @@
+     except PermissionError:
+         # The group still exists even if a sandbox prevents signalling it.
+         return True
+-    return True
++    return _linux_group_has_live_members(process_group_id) if sys.platform.startswith('linux') else True
+ 
+ 
+ def _terminate_process_tree(
+--- a/scripts/run_test_shards.py
++++ b/scripts/run_test_shards.py
+@@ -19,6 +19,38 @@
+ PROCESS_REAP_TIMEOUT_SECONDS = 5.0
+ 
+ 
++def _linux_group_has_live_members(process_group_id: int) -> bool:
++    """Return false only when every visible group member is a Linux zombie.
++
++    Unknown or inaccessible state stays active. Zombies cannot execute or keep
++    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
++    """
++    try:
++        entries = list(Path('/proc').iterdir())
++    except OSError:
++        return True
++    found = False
++    for entry in entries:
++        if not entry.name.isdecimal():
++            continue
++        try:
++            stat = (entry / 'stat').read_text()
++        except FileNotFoundError:
++            continue
++        except OSError:
++            return True
++        try:
++            fields = stat[stat.rindex(')') + 2:].split()
++            state, group = fields[0], int(fields[2])
++        except (ValueError, IndexError):
++            return True
++        if group == process_group_id:
++            found = True
++            if state not in ('Z', 'X'):
++                return True
++    return not found
++
++
+ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
+     """Return whether a shard root or one of its POSIX group members remains."""
+     if os.name == "nt":
+@@ -31,7 +63,7 @@
+         return False
+     except PermissionError:
+         return True
+-    return True
++    return _linux_group_has_live_members(process.pid) if sys.platform.startswith('linux') else True
+ 
+ 
+ def terminate_process_tree(process: subprocess.Popen[bytes], *, force: bool) -> None:
+@@ -148,6 +180,9 @@
+             environment = os.environ.copy()
+             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
+             environment["GTEST_SHARD_INDEX"] = str(index)
++            xml_directory = environment.get("ZYX_TEST_XML_DIR")
++            if xml_directory:
++                environment["GTEST_OUTPUT"] = f"xml:{Path(xml_directory) / f'shard-{index}.xml'}"
+             # Fixtures use the platform temporary-directory API for databases and
+             # test artifacts. A private directory prevents independently
+             # sharded processes from deleting or reopening each other's artifacts.
+--- a/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
++++ b/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
+@@ -43,6 +43,13 @@
+ 			std::vector<std::vector<PropertyValue>> columns;
+ 		};
+ 
++
++		// Kept outside the traversal lambda so the callback has a stable type on
++		// compilers that cannot capture a function over a local class correctly.
++		struct VariableTraversalAdjacentEdge {
++			storage::LogicalGraphEdgeTopology topology;
++			std::optional<storage::EntityRef> reference;
++		};
+ 
+ 		// Query owners outlive every task and all borrowed batch views.
+ 		// Shared caches and budgets are currently confined to one execution thread.
+@@ -58,9 +65,8 @@
+ 			// path row that the caller did not request.
+ 			bool allow_cross_row_entity_batches = false;
+ 			size_t resident_output_batch_bytes = 0U;
+-			MaterializedByteBudget materialized_budget = context && context->resource_account
+-				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
+-				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
++			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes,
++				context ? context->resource_account : nullptr, MaterializedByteBudget::OptionalAccountTag{}};
+ 			detail::ProcedureBudgetHandoff procedure_handoff{materialized_budget};
+ 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
+ 			MaterializedByteReservation final_result_reservation{&materialized_budget};
+--- a/src/query/execution/read_runtime/PathOperators.inc
++++ b/src/query/execution/read_runtime/PathOperators.inc
+@@ -816,13 +816,8 @@
+ 						std::vector<storage::LogicalGraphEdge> pathEdgeRecords;
+ 						std::vector<storage::EntityRef> pathEdgeRefs;
+ 						size_t edgeVisits = 0U;
+-						struct AdjacentEdge {
+-							storage::LogicalGraphEdgeTopology topology;
+-							std::optional<storage::EntityRef> reference;
+-						};
+-
+ 						const auto visitAdjacent = [&](uint64_t nodeId,
+-													   const std::function<bool(const AdjacentEdge &,
++																			   const std::function<bool(const VariableTraversalAdjacentEdge &,
+ 																				const storage::LogicalGraphNode &)>
+ 															   &onEdge) {
+ 							std::optional<uint64_t> relationshipTypeToken;
+@@ -985,7 +980,7 @@
+ 																							 reference.source_node_id,
+ 																							 reference.target_node_id,
+ 																							 {}};
+-											if (!onEdge({topology, reference}, target)) {
++												if (!onEdge(VariableTraversalAdjacentEdge{topology, reference}, target)) {
+ 												return false;
+ 											}
+ 										}
+@@ -1128,7 +1123,7 @@
+ 												: batchPredicateTargets ? predicateTarget(targetId)
+ 																		: localTarget.emplace(readPredicateNode(
+ 																				  targetId, localTargetBytes));
+-										if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id,
++												if (!onEdge(VariableTraversalAdjacentEdge{{edge.edge_id, edge.source_node_id, edge.target_node_id,
+ 													  edge.type},
+ 													 std::nullopt},
+ 													target)) {
+@@ -1202,7 +1197,7 @@
+ 							if (depth == maximumHops) {
+ 								return true;
+ 							}
+-							return visitAdjacent(node.node_id, [&](const AdjacentEdge &edge,
++									return visitAdjacent(node.node_id, [&](const VariableTraversalAdjacentEdge &edge,
+ 																   const storage::LogicalGraphNode &target) {
+ 								if (reversePruningEnabled) {
+ 									const auto reachable = reverseDistance.find(target.node_id);
+--- a/src/query/execution/read_runtime/RowAndWindowOperators.inc
++++ b/src/query/execution/read_runtime/RowAndWindowOperators.inc
+@@ -632,6 +632,8 @@
+ 						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
+ 												   std::min(rows.bytes(), state.shared.bounds.maximum_materialized_bytes) ||
+ 							keySlotBytes > state.shared.materialized_budget.available()) {
++							// Diagnostics must not change the budget rejection if tracing fails.
++							try { debug::PerfTrace::addValue("query.sort.key_slot_admission_rejected", 1); } catch (...) {}
+ 							throw MaterializedByteLimitExceeded();
+ 						}
+ 						keySlots.set(keySlotBytes);
+--- a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
++++ b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+@@ -420,7 +420,8 @@
+ 												  "relocatable shared page batch append has inconsistent frame or payload metadata");
+ 			}
+ 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(*frame) * RSS_PAGE_SIZE;
+-			writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
++            const auto ownedPage = makeOwnedPage(pages[index].owner, pages[index].payload);
++            io.writePagesThrough({pageOffset, pool.generation.value()}, ownedPage.data(), ownedPage.size());
+ 			// Persist the owner frame before switching the inactive control record so
+ 			// a failed write leaves only unreachable state for reconciliation.
+ 			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
+@@ -1925,7 +1926,8 @@
+ 		}
+ 		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
+ 		const uint64_t pageOffset = offset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
+-		writeTypedPage(*io_, pageOffset, entry.generation, makeOwnedPage(owner, payload));
++        const auto ownedPage = makeOwnedPage(owner, payload);
++        io_->writePagesThrough({pageOffset, entry.generation.value()}, ownedPage.data(), ownedPage.size());
+ 		// The candidate must be complete before its allocation bit becomes durable.
+ 		// Otherwise a failed page write leaves recovery unable to distinguish a torn
+ 		// unpublished owner from corruption in a previously allocated frame.
+@@ -1954,7 +1956,8 @@
+ 		const uint64_t poolOffset =
+ 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
+ 		const uint64_t newPageOffset = poolOffset + static_cast<uint64_t>(newFrame) * RSS_PAGE_SIZE;
+-		writeTypedPage(*io_, newPageOffset, entry.generation, makeOwnedPage(newOwner, payload));
++        const auto ownedPage = makeOwnedPage(newOwner, payload);
++        io_->writePagesThrough({newPageOffset, entry.generation.value()}, ownedPage.data(), ownedPage.size());
+ 		static_cast<void>(oldOwner);
+ 		static_cast<void>(oldFrame);
+ 		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, poolHeader,
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -128,15 +128,34 @@
+ #endif
+ 		}
+ 
++        struct MetadataCoordinationRegistry {
++            std::mutex mutex;
++            std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
++        };
++        MetadataCoordinationRegistry &metadataCoordinationRegistry() {
++            // Backends may be destroyed during static teardown after their first
++            // open. Keep this process-wide synchronization object alive then.
++            static auto *registry = new MetadataCoordinationRegistry;
++            return *registry;
++        }
++        void pruneMetadataCoordinationRegistry() noexcept {
++            try {
++                auto &registry = metadataCoordinationRegistry();
++                std::lock_guard lock(registry.mutex);
++                for (auto it = registry.domains.begin(); it != registry.domains.end();)
++                    if (it->second.expired()) it = registry.domains.erase(it); else ++it;
++            } catch (...) {
++                // Releasing a backend must remain noexcept.
++            }
++        }
+         [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
+             const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner) {
+-            static std::mutex mutex;
+-            static std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
+-            std::lock_guard lock(mutex);
+-            for (auto it = domains.begin(); it != domains.end();)
+-                if (it->second.expired()) it = domains.erase(it); else ++it;
+-            if (auto existing = domains[key].lock()) return existing;
+-            auto created = makeMetadataSnapshotCoordination(owner); domains[key] = created; return created;
++            auto &registry = metadataCoordinationRegistry();
++            std::lock_guard lock(registry.mutex);
++            for (auto it = registry.domains.begin(); it != registry.domains.end();)
++                if (it->second.expired()) it = registry.domains.erase(it); else ++it;
++            if (auto existing = registry.domains[key].lock()) return existing;
++            auto created = makeMetadataSnapshotCoordination(owner); registry.domains[key] = created; return created;
+         }
+ 
+ 		[[nodiscard]] std::shared_ptr<std::mutex>
+@@ -1576,7 +1595,7 @@
+ 				}
+ 			}
+ 		}
+-		if (metadata_->activeSnapshotCount() != 0U) {
++		if (metadata_->localSnapshotCount() != 0U) {
+ 			if (maintenancePausedForClose) {
+ 				maintenance_->resume();
+ 			}
+@@ -2321,8 +2340,9 @@
+ 		const size_t MAX_CONFLICT_RETRIES = rebaseValidation ? 3U : 4U;
+ 		for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
+ 			MetadataSnapshotPin beforeExecution = metadata_->openSnapshot();
++            const Superblock superblockBeforeExecution = beforeExecution.superblock();
+ 			const LogicalGraphMutationFence graphFenceBeforeExecution =
+-					makeLogicalGraphMutationFence(beforeExecution.superblock());
++					makeLogicalGraphMutationFence(superblockBeforeExecution);
+ 			if (rebaseValidation) {
+ 				rebaseValidation(beforeExecution);
+ 				fenceValidator = [graphFenceBeforeExecution](const Superblock &base) {
+@@ -2337,24 +2357,12 @@
+ 					: native_graph_mutation_executor_->executeWithPropertyPatches(
+ 						batch, patches, maximumPropertyEntries, fenceValidator, control);
+ 			} catch (...) {
+-				// A failed final durability fence can leave a complete inactive
+-				// Superblock selected even though the caller received an error. Compare
+-				// graph-state roots while this publication gate is held: metadata-only
+-				// ID leases may advance a Superblock generation before the Graph batch
+-				// starts, but only changed Graph roots make this batch indeterminate.
+-				try {
+-					MetadataSnapshotPin afterFailure = metadata_->openSnapshot();
+-					const bool graphStateChanged =
+-							makeLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
+-					afterFailure.release();
+-					if (graphStateChanged) {
+-						requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+-					}
+-				} catch (...) {
+-					// If recovery inspection itself fails, continuing on this handle
+-					// would risk writing over an unknown durable generation.
+-					requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+-				}
++                // A published COW page can change while its logical graph roots stay
++                // stable. Any publication observed after this attempt began makes an
++                // exceptional outcome uncertain, even if the graph fence is unchanged.
++                // Metadata-only publication may conservatively require reopen here;
++                // this does not change the transaction conflict predicate.
++                markReopenRequiredIfPublicationAdvanced(superblockBeforeExecution);
+ 				throw;
+ 			}
+ 			if (execution.committed()) {
+--- a/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc
++++ b/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc
+@@ -989,7 +989,11 @@
+ 			if (bytes > maximumCandidateBytes - retainedBoundary) {
+ 				throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+ 			}
+-			admitBoundaryKey(retainedBoundary + bytes);
++            try { admitBoundaryKey(retainedBoundary + bytes); }
++            catch (const FormatException &) {
++                try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
++                throw;
++            }
+ 			boundaryKeyBytes = retainedBoundary;
+ 		});
+ 		size_t totalCandidates = 0U;
+@@ -1510,7 +1514,11 @@
+ 				if (bytes > maximumCandidateBytes - retainedBoundary) {
+ 					throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+ 				}
+-				admitBoundaryKey(retainedBoundary + bytes);
++                try { admitBoundaryKey(retainedBoundary + bytes); }
++                catch (const FormatException &) {
++                    try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
++                    throw;
++                }
+ 				boundaryKeyBytes = retainedBoundary;
+ 			});
+ 			size_t totalCandidates = 0U;
+--- a/src/storage/relocatable/backend/backend_runtime/SchemaAndAdministration.inc
++++ b/src/storage/relocatable/backend/backend_runtime/SchemaAndAdministration.inc
+@@ -1820,6 +1820,9 @@
+ 		vector_codebooks_.reset();
+ 		physical_.reset();
+ 		metadata_.reset();
++        // Expired weak coordination control blocks retain their prepaid owner
++        // until removed; live aliases and pins remain in the registry.
++        pruneMetadataCoordinationRegistry();
+ 		data_file_.reset();
+         database_file_limit_.reset();
+         native_cache_memory_.reset();
+--- a/src/storage/relocatable/cache/BufferPool.cpp
++++ b/src/storage/relocatable/cache/BufferPool.cpp
+@@ -210,11 +210,20 @@
+ 			entry = found->second.get();
+ 		} else {
+ 			++misses_;
+-			ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+-			auto fresh = allocateEntryLocked();
+-			Entry &stored = *fresh;
+-			static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+-			entry = &stored;
++            try {
++                ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
++                auto fresh = allocateEntryLocked();
++                Entry &stored = *fresh;
++                static_cast<void>(storeEntryLocked(key, std::move(fresh)));
++                entry = &stored;
++            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
++                // No resident entry exists for this key; stale generations have
++                // already been checked and invalidated under the cache lock.
++                try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
++                io_.writeAtUncached(key.page_offset, input.data(), input.size());
++                disk_write_bytes_ += input.size();
++                return;
++            }
+ 		}
+ 
+ 		std::copy(input.begin(), input.end(), entry->bytes.begin());
+@@ -334,11 +343,21 @@
+ 				entry = found->second.get();
+ 			} else {
+ 				++misses_;
+-				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+-				auto fresh = allocateEntryLocked();
+-				Entry &stored = *fresh;
+-				static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+-				entry = &stored;
++                try {
++                    ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
++                    auto fresh = allocateEntryLocked();
++                    Entry &stored = *fresh;
++                    static_cast<void>(storeEntryLocked(key, std::move(fresh)));
++                    entry = &stored;
++                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
++                    // Whole-range pin checks and stale-generation invalidation
++                    // have completed before writing any page in this batch.
++                    try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
++                    io_.writeAtUncached(key.page_offset,
++                        input.data() + page * RSS_BUFFER_POOL_PAGE_BYTES, RSS_BUFFER_POOL_PAGE_BYTES);
++                    disk_write_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
++                    continue;
++                }
+ 			}
+ 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
+ 						RSS_BUFFER_POOL_PAGE_BYTES, entry->bytes.begin());
+--- a/src/storage/relocatable/metadata/CatalogTree.cpp
++++ b/src/storage/relocatable/metadata/CatalogTree.cpp
+@@ -781,6 +781,9 @@
+ 									  "relocatable streamed Catalog append assigned one radix child twice");
+ 			}
+ 			page.children[childIndex] = child;
++			if (page.logical_children_enabled) {
++				page.logical_children[childIndex] = readChildPageId(pages, child, level != 0U);
++			}
+ 			pending[level]->assigned_children.set(childIndex);
+ 		}
+ 
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -23,6 +23,7 @@
+ #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
+ #include "graph/utils/OwnedPmrObject.hpp"
++#include "graph/utils/OwnedStdVector.hpp"
+ #include <memory_resource>
+ #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+@@ -453,7 +454,7 @@
+ 						}
+ 						++count;
+ 					}
+-					std::vector<std::byte> buffer(count * RSS_PAGE_SIZE);
++					utils::OwnedStdVector<std::byte> buffer(count * RSS_PAGE_SIZE);
+ 					for (size_t index = 0U; index < count; ++index) {
+ 						std::memcpy(buffer.data() + index * RSS_PAGE_SIZE, pending_pages_[offset + index].bytes.data(), RSS_PAGE_SIZE);
+ 					}
+@@ -472,7 +473,7 @@
+ 
+ 			MetadataPageFile &pageFile_;
+ 			MetadataWriteBatch &batch_;
+-			std::vector<PendingPage> pending_pages_;
++			utils::OwnedStdVector<PendingPage> pending_pages_;
+ 		};
+ 
+ 		[[nodiscard]] size_t writePageCount(const MutableNode &node) {
+@@ -1563,6 +1564,10 @@
+ 											"relocatable streamed location append assigned one radix child twice");
+ 			}
+ 			page.children[childIndex] = child;
++			// Logical radix pages discard physical children on write. Preserve the
++			// newly appended child's logical route as well as its physical reference.
++			if (page.logical_children_enabled)
++				page.logical_children[childIndex] = readLocationChildPageId(pages, child, level != 0U);
+ 			pending[level]->assigned_children.set(childIndex);
+ 		}
+ 
+--- a/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
++++ b/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
+@@ -37,6 +37,7 @@
+ 	struct MetadataSnapshotRegistryState {
+         std::shared_ptr<MetadataSnapshotCoordination> coordination;
+ 		SuperblockFile *bootstrap = nullptr;
++        uint64_t local_snapshot_count = 0;
+ 		MetadataSnapshotRegistryLimits limits;
+ 		std::shared_ptr<std::pmr::memory_resource> memory_owner;
+         std::shared_ptr<std::pmr::memory_resource> control_owner;
+@@ -55,6 +56,7 @@
+ 							 const Superblock &superblock) {
+ 			std::lock_guard lock(state->coordination->snapshots_mutex);
+ 			auto &snapshot = state->coordination->snapshots.at(superblock.generation.value());
++            --state->local_snapshot_count;
+ 			if (--snapshot.second == 0U) {
+ 				state->coordination->snapshots.erase(superblock.generation.value());
+ 			}
+@@ -166,6 +168,7 @@
+ 										   "relocatable metadata snapshot reference count overflows");
+ 			}
+ 			++position->second.second;
++            ++state_->local_snapshot_count;
+ 		}
+ 		return MetadataSnapshotPin(state_, snapshot, std::move(readContext));
+ 	}
+@@ -208,6 +211,7 @@
+ 										   "relocatable metadata snapshot reference count overflows");
+ 			}
+ 			++position->second.second;
++            ++state_->local_snapshot_count;
+ 		}
+ 		return MetadataSnapshotPin(state_, current, std::move(readContext));
+ 	}
+@@ -242,6 +246,11 @@
+ 		}
+ 		return false;
+ 	}
++
++    uint64_t MetadataSnapshotRegistry::localSnapshotCount() const {
++        std::lock_guard lock(state_->coordination->snapshots_mutex);
++        return state_->local_snapshot_count;
++    }
+ 
+ 	uint64_t MetadataSnapshotRegistry::activeSnapshotCount() const {
+         return snapshotPressure().active_snapshot_count;
+--- a/src/storage/relocatable/metadata/MetadataStoreLookup.cpp
++++ b/src/storage/relocatable/metadata/MetadataStoreLookup.cpp
+@@ -967,6 +967,7 @@
+ 	}
+ 
+ 	uint64_t RelocatableMetadataStore::activeSnapshotCount() const { return snapshots_.activeSnapshotCount(); }
++    uint64_t RelocatableMetadataStore::localSnapshotCount() const { return snapshots_.localSnapshotCount(); }
+ 
+ 
+ } // namespace graph::storage
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -1303,6 +1303,7 @@
+ 		// durable. Keep the ordinary caller-owned mutations immutable and extend a
+ 		// coordinator-owned copy only through the typed deferred protocol below.
+ 		std::vector<NativeGraphIndexTreeMutation> effectiveIndexMutations = derivedState.index_tree_mutations;
++        std::vector<NativeGraphEntityFreeSummaryFence> effectiveSummaryFences = derivedState.entity_free_summary_fences;
+ 		std::vector<std::vector<IndexTreeMutationPoolBatch>> derivedIndexBatches;
+ 		derivedIndexBatches.reserve(derivedState.index_tree_mutations.size() + (deferredIndexPlanner ? 1U : 0U));
+ 		for (const NativeGraphIndexTreeMutation &mutation: derivedState.index_tree_mutations) {
+@@ -2181,6 +2182,19 @@
+ 		}
+ 		validateStreamedEdgeLeaseRanges(request.edge_id_reservation, plan.first_edge_id, plan.last_edge_id);
+ 
++        // EntityPageStore attaches through openSnapshot and must be constructed
++        // before the metadata writer is held. Only a stale existing summary
++        // needs an authoritative-page rebuild.
++        std::unique_ptr<EntityPageStore> staleSummaryPages;
++        {
++            auto before = openSnapshot();
++            const auto proof = EntityFreeSpaceIndex::readProof(
++                *this, adjacencyPages, before, EntityPageRecordKind::EPRK_EDGE);
++            if (proof && !proof->fresh) {
++                before.release();
++                staleSummaryPages = std::make_unique<EntityPageStore>(io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
++            }
++        }
+ 		NativeGraphDerivedStateMutation derivedState;
+ 		derivedState.private_segment_plan = privatePlan;
+ 		derivedState.external_private_tail_reservation = request.private_source_tail;
+@@ -2217,7 +2231,7 @@
+ 				};
+ 
+ 		const NativeGraphEarlyPublicationPlanner earlyPlanner =
+-				[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn](
++				[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn](
+ 						const NativeGraphEarlyPublicationPlanningContext &context) {
+ 					const NativeBulkEdgeRecordSource source = request.durable_source.open(context.current_snapshot);
+ 					NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+@@ -2225,7 +2239,7 @@
+ 							request.candidate_layout, context.private_segments, catalog, context.current_snapshot,
+ 							request.preparation, context.private_segment_reader, context.private_segment_writer,
+ 							context.private_segment_fence,
+-							[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn, &context](
++							[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn, &context](
+ 									const NativeStreamedGraphPrivatePreparation &prepared,
+ 									const NativeStreamedGraphDeferredPublication &publication) {
+ 								if (!prepared.publication_shape.has_value() || // preparation and publication shape are generated atomically from one authenticated plan.
+@@ -2768,6 +2782,103 @@
+ 									NativeGraphDeferredIndexPlans indexPlans = NativeStreamedGraphPublicationIndexPlanner::plan(
+ 											catalog, adjacencyPages, largeValueStore, *this, prepared, request.index_planning,
+ 											{context.private_segments, context.private_segment_reader, context.current_snapshot}, checkpointLsn, &publication);
++                                // Streamed pages are full except the final page. Keep an
++                                // existing edge free-space tree consistent with this same
++                                // writer-fenced publication; a missing legacy tree remains absent.
++                                const auto summary = EntityFreeSpaceIndex::readProof(
++                                        *this, adjacencyPages, context.current_snapshot,
++                                        EntityPageRecordKind::EPRK_EDGE);
++                                if (summary) {
++                                    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
++                                    const size_t used = request.publication_plan.record_count % capacity;
++                                    uint64_t freePages = summary->free_pages;
++                                    std::vector<BTreeScalarIndexOperation> operations;
++                                    utils::OwnedHeapReservation operationCredit(utils::OwnedAllocationScope::owner(), 0U);
++                                    const auto append = [&operations, &operationCredit](BTreeScalarIndexOperationKind kind,
++                                                                                       const auto &key, uint64_t value) {
++                                        if (operationCredit.bytes() > std::numeric_limits<size_t>::max() - 256U)
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge summary workspace overflowed");
++                                        operationCredit.set(operationCredit.bytes() + 256U);
++                                        operations.push_back({kind, {key.begin(), key.end()}, value});
++                                    };
++                                    const auto add = [&append](const auto &key, uint64_t value) {
++                                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, key, value);
++                                    };
++                                    if (!summary->fresh) {
++                                        if (!staleSummaryPages || summary->free_pages > std::numeric_limits<size_t>::max() - 3U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary rebuild has no bounded page reader");
++                                        BTreeIndex oldSummary(RSS_EDGE_FREE_SPACE_INDEX_ID, adjacencyPages, *this);
++                                        auto cursor = oldSummary.openRangeCursor(context.current_snapshot, std::nullopt,
++                                            size_t(summary->free_pages) + 3U, BufferPoolReadHint::BPRH_NORMAL);
++                                        size_t visited = 0U;
++                                        while (const auto entry = cursor.next()) {
++                                            append(BTreeScalarIndexOperationKind::BSIOP_ERASE, entry->key, 0U);
++                                            ++visited;
++                                        }
++                                        if (visited != summary->free_pages + 2U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary has inconsistent entries");
++                                        std::set<uint64_t, std::less<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> pagesSeen;
++                                        freePages = 0U;
++                                        visitEdgePageLocations(context.current_snapshot, [&](const EntityPageLocation &location) {
++                                            if (!pagesSeen.insert(location.page_id.value()).second) return;
++                                            const uint16_t remaining = staleSummaryPages->freeSlotCount(
++                                                context.current_snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
++                                            if (remaining) {
++                                                add(EntityFreeSpaceIndex::entryKey(location.page_id, remaining,
++                                                                                   EntityPageRecordKind::EPRK_EDGE), 1U);
++                                                ++freePages;
++                                            }
++                                        });
++                                    }
++                                    if (used != 0U) {
++                                        if (freePages == std::numeric_limits<uint64_t>::max())
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge free-page count overflowed");
++                                        const PageId lastPage(pages.first_entity_page.value() + shape.entity_page_count - 1U);
++                                        add(EntityFreeSpaceIndex::entryKey(lastPage, uint16_t(capacity - used),
++                                                                           EntityPageRecordKind::EPRK_EDGE), 1U);
++                                        ++freePages;
++                                    }
++                                    const uint64_t generation = context.current_superblock.generation.value();
++                                    if (generation >= std::numeric_limits<uint64_t>::max() - 1U ||
++                                        freePages == std::numeric_limits<uint64_t>::max())
++                                        throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                              "streamed Edge summary marker overflowed");
++                                    add(EntityFreeSpaceIndex::generationKey(), generation + 2U);
++                                    add(EntityFreeSpaceIndex::countKey(), freePages + 1U);
++                                    auto plan = adjacencyPages.planScalarIndexTransactionMutation(
++                                            context.current_snapshot, RSS_EDGE_FREE_SPACE_INDEX_ID,
++                                            operations, true, true);
++                                    NativeGraphDeferredIndexPlan deferred;
++                                    deferred.mutation.index_id = RSS_EDGE_FREE_SPACE_INDEX_ID;
++                                    deferred.mutation.expected_root = plan.expected_root;
++                                    deferred.mutation.pool_requests = plan.pool_requests;
++                                    const auto addPool = [&](const BTreeNewIndexTreePoolMutation &pool) {
++                                        deferred.mutation.new_pool_requests.push_back({
++                                            request.index_planning.adjacency.first_slot,
++                                            request.index_planning.adjacency.last_slot,
++                                            pool.owner_id, pool.appended_page_count});
++                                    };
++                                    if (plan.new_pool_mutation) addPool(*plan.new_pool_mutation);
++                                    for (const auto &pool : plan.additional_new_pool_mutations) addPool(pool);
++                                    if (!plan.replacement_root ||
++                                        plan.replacement_root->pool_ordinal < plan.pool_requests.size())
++                                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                            "streamed Edge summary requires a fresh replacement root");
++                                    deferred.mutation.replacement_root = NativeGraphIndexTreeAppendedPageReference{
++                                        plan.replacement_root->pool_ordinal - plan.pool_requests.size(),
++                                        plan.replacement_root->appended_page_ordinal, true};
++                                    deferred.preparer = [preparer = std::move(plan.preparer), checkpointLsn](auto &batches) {
++                                        preparer(batches, checkpointLsn);
++                                    };
++                                    deferred.entity_free_summary_fence = NativeGraphEntityFreeSummaryFence{
++                                        RSS_EDGE_FREE_SPACE_INDEX_ID, context.current_superblock.edge_entity_directory_root,
++                                        Generation(generation + 1U), freePages};
++                                    indexPlans.plans.push_back(std::move(deferred));
++                                }
+ 								for (NativeGraphDeferredIndexPlan &indexPlan: indexPlans.plans) {
+ 									context.deferred_index_plan_sink(std::move(indexPlan));
+ 								}
+--- a/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
+@@ -89,9 +89,25 @@
+ 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
+ 				const bool replacesRoot = mutation.replacement_root.has_value();
+ 				const bool retiresRoot = mutation.retire_root;
++                if (plan.entity_free_summary_fence) {
++                    const auto &fence = *plan.entity_free_summary_fence;
++                    if (!earlyPublicationPlanner || fence.index_id != RSS_EDGE_FREE_SPACE_INDEX_ID ||
++                        mutation.index_id != fence.index_id ||
++                        fence.expected_entity_root != current.edge_entity_directory_root ||
++                        !fence.target_directory_generation.isValid() ||
++                        std::ranges::any_of(effectiveSummaryFences, [&fence](const auto &existing) {
++                            return existing.index_id == fence.index_id;
++                        })) {
++                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                              "invalid streamed Edge free-space summary fence");
++                    }
++                    effectiveSummaryFences.push_back(fence);
++                }
+ 				bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+ 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
+-											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
++											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
++                                            (mutation.index_id == RSS_EDGE_FREE_SPACE_INDEX_ID &&
++                                             plan.entity_free_summary_fence.has_value());
+ 				if (!allowedIndexId && isSystemCatalogIndexDefinitionId(mutation.index_id) &&
+ 						replacesRoot && mutation.expected_root.has_value()) {
+ 					// Logical members are admitted only by their authenticated published
+--- a/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
+@@ -939,7 +939,7 @@
+         // A record kind has one published directory root per database generation.
+         // Verify that the marker's semantic generation names the actual result,
+         // rather than guessing a future physical root address in the planner.
+-        for (const auto &fence : derivedState.entity_free_summary_fences) {
++        for (const auto &fence : effectiveSummaryFences) {
+             const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
+                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
+             if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {
+--- a/tests/include/query/api/LogicalProcedureTestFixture.hpp
++++ b/tests/include/query/api/LogicalProcedureTestFixture.hpp
+@@ -31,6 +31,7 @@
+ 			size_t training_cancellation_checks_before_throw = 0U;
+ 			mutable size_t training_cancellation_checks = 0U;
+ 			std::chrono::milliseconds training_prepare_delay{0};
++			std::function<void()> training_prepare_hook;
+ 			std::chrono::milliseconds training_preview_delay{0};
+ 			std::chrono::milliseconds training_commit_delay{0};
+ 			std::chrono::milliseconds projection_scan_delay{0};
+@@ -414,6 +415,7 @@
+ 			prepareTraining(const storage::LogicalGraphVectorTrainingRequest &request) {
+ 				++training_preparations;
+ 				last_training_request = request;
++				if (state->training_prepare_hook) state->training_prepare_hook();
+ 				if (state->training_prepare_delay.count() > 0) {
+ 					std::this_thread::sleep_for(state->training_prepare_delay);
+ 				}
+--- a/tests/integration/test_VectorizedNodeScan.cpp
++++ b/tests/integration/test_VectorizedNodeScan.cpp
+@@ -240,13 +240,35 @@
+ 	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person) RETURN n"), 4U));
+ }
+ 
++TEST_F(VectorizedNodeScanIntegrationTest, TopKMatchesCompleteSortForNullMissingAndTies) {
++    (void)execute("CREATE (:Person {name: 'Tie', score: 20})");
++    (void)execute("CREATE (:Person {name: 'NullScore', score: null})");
++    const auto names = [](const query::QueryResult &result) {
++        std::vector<std::string> out;
++        for (const auto &row : result.getRows()) out.push_back(row.at("name").asPrimitive().toString());
++        return out;
++    };
++    for (const std::string direction : {"ASC", "DESC"}) {
++        const std::string query = "MATCH (u:Person) RETURN u.name AS name ORDER BY u.score " + direction;
++        const auto full = names(execute(query));
++        const auto top = names(execute(query + " LIMIT 4"));
++        ASSERT_EQ(full.size(), 6U); ASSERT_EQ(top.size(), 4U);
++        EXPECT_EQ(top, (std::vector<std::string>(full.begin(), full.begin() + 4)));
++        const auto missing = std::find(full.begin(), full.end(), "MissingAge");
++        const auto explicitNull = std::find(full.begin(), full.end(), "NullScore");
++        ASSERT_NE(missing, full.end()); ASSERT_NE(explicitNull, full.end());
++        if (direction == "ASC") { EXPECT_GE(missing - full.begin(), 4); EXPECT_GE(explicitNull - full.begin(), 4); }
++        else { EXPECT_LT(missing - full.begin(), 2); EXPECT_LT(explicitNull - full.begin(), 2); }
++    }
++}
++
+ TEST_F(VectorizedNodeScanIntegrationTest, TopKPropertySortUsesLogicalProfileSummary) {
+ 	auto result = execute("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2");
+ 	ASSERT_EQ(result.rowCount(), 2U);
+ 	ASSERT_TRUE(result.getRows()[0].contains("name"));
+ 	ASSERT_TRUE(result.getRows()[1].contains("name"));
+-	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "Bob");
+-	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Alice");
++	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "MissingAge");
++	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Bob");
+ 	EXPECT_TRUE(hasLogicalProfileSummary(
+ 			executeProfiled("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2"), 2U));
+ }
+--- a/tests/src/query/api/test_QueryEngineLogicalBackend.cpp
++++ b/tests/src/query/api/test_QueryEngineLogicalBackend.cpp
+@@ -1127,11 +1127,15 @@
+ 
+ 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingPropagatesCancellationIntoMaintenanceWork) {
+ 		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+-		backend->state->training_prepare_delay = std::chrono::milliseconds(2);
+ 		backend->state->training_cancellation_checks_before_throw = 1024U;
+ 		QueryEngine engine(backend);
+ 
+-		QueryGuard guard(1, 0);
++		QueryGuard guard(0, 0);
++		// Start the deadline only once maintenance preparation has begun.
++		backend->state->training_prepare_hook = [&] {
++			guard = QueryGuard(1, 0);
++			std::this_thread::sleep_for(std::chrono::milliseconds(2));
++		};
+ 		QueryContext context;
+ 		context.guard = &guard;
+ 		EXPECT_THROW(static_cast<void>(engine.execute("CALL db.index.vector.train('memory_embedding')", context)),
+@@ -1139,7 +1143,7 @@
+ 		EXPECT_EQ(backend->training_calls, 0U);
+ 		// The deadline crosses during preparation, and the maintenance checkpoint
+ 		// itself observes it on the first periodic sampling boundary.
+-		EXPECT_EQ(backend->state->training_cancellation_checks, 1023U);
++		EXPECT_EQ(backend->state->training_cancellation_checks, 1024U);
+ 		EXPECT_EQ(backend->training_preparations, 1U);
+ 	}
+ 
+--- a/tests/src/query/execution/test_BoundedBatch.cpp
++++ b/tests/src/query/execution/test_BoundedBatch.cpp
+@@ -160,8 +160,16 @@
+ 	source.append("abcd");
+ 	destination.append("xy");
+ 	auto moved = source.popBackCharged();
++    EXPECT_TRUE(source.empty());
++    EXPECT_EQ(source.bytes(), 0U);
++    EXPECT_EQ(moved.reservation.bytes(), 4U);
+ 	EXPECT_EQ(budget.used(), 6U);
++    // Retaining the original charge and charging the same row a second time
++    // must be rejected at this exact full-budget handoff boundary.
++    EXPECT_THROW(destination.append(moved.value), std::runtime_error);
++    EXPECT_EQ(budget.used(), 6U);
+ 	destination.appendCharged(std::move(moved.value), std::move(moved.reservation));
++    EXPECT_EQ(moved.reservation.bytes(), 0U);
+ 	EXPECT_EQ(destination.bytes(), 6U);
+ 	EXPECT_EQ(budget.used(), 6U);
+ 	destination.clear();
+--- a/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
++++ b/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
+@@ -134,6 +134,19 @@
+ TEST(CoordinatedMaterializedBudgetTest, NullParentAndUpstreamAreRejectedBeforeUse) {
+ 	EXPECT_THROW((MaterializedByteBudget(100U, std::shared_ptr<ResourceAccount>{})), std::invalid_argument);
+ 	EXPECT_THROW((MaterializedByteBudget(100U, accountWithLimit(100U), nullptr)), std::invalid_argument);
++}
++
++TEST(CoordinatedMaterializedBudgetTest, ExplicitOptionalParentPreservesLocalAndSharedAccounting) {
++	MaterializedByteBudget local(100U, nullptr, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation localOwner(&local);
++	localOwner.set(40U); EXPECT_EQ(local.used(), 40U);
++	EXPECT_THROW(localOwner.set(101U), MaterializedByteLimitExceeded);
++	auto account = accountWithLimit(50U);
++	MaterializedByteBudget shared(100U, account, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation sharedOwner(&shared);
++	sharedOwner.set(50U); EXPECT_EQ(account->used(), 50U);
++	EXPECT_THROW(sharedOwner.set(51U), ResourceAdmissionDenied);
++	sharedOwner.reset(); EXPECT_EQ(account->used(), 0U);
+ }
+ 
+ TEST(CoordinatedMaterializedBudgetTest, DetachedOutputRetainsGlobalChargeAfterLocalBudgetDestruction) {
+--- a/tests/src/query/execution/test_LogicalGraphReadExecutor.cpp
++++ b/tests/src/query/execution/test_LogicalGraphReadExecutor.cpp
+@@ -1,3 +1,4 @@
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+ /**
+  * @file test_LogicalGraphReadExecutor.cpp
+  * @brief Core unit tests for the bounded format-independent logical graph executor.
+@@ -1536,12 +1537,9 @@
+ 					std::make_shared<expressions::LiteralExpression>(int64_t{1}), wideAlias}}), 0);
+ 	LogicalPlanReadRuntimeBounds bounded = runtimeBounds();
+ 	bounded.maximum_materialized_bytes = 1024U;
+-	try {
+-		static_cast<void>(runtime.executeToQueryResult(root, bounded));
+-		FAIL() << "output column storage must be bounded even when the plan emits no rows";
+-	} catch (const std::runtime_error &error) {
+-		EXPECT_STREQ(error.what(), "logical-plan result columns exceeded their materialized byte bound");
+-	}
++    // LIMIT 0 performs no row delivery. The wide output alias must be admitted
++    // while building result-column metadata and must fail at that budget.
++    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(root, bounded)), graph::query::execution::MaterializedByteLimitExceeded);
+ 
+ 	bounded.maximum_materialized_bytes = 16U * 1024U;
+ 	const graph::query::QueryResult result = runtime.executeToQueryResult(root, bounded);
+--- a/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp
+@@ -1207,6 +1207,41 @@
+ 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
+ 		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[2].at("n").asNode().getId(), 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
++        for (const auto &keys : graph.node_property_column_batch_keys)
++            EXPECT_EQ(keys, (std::vector<std::string>{"priority"}));
++		EXPECT_EQ(graph.node_property_point_reads, 0U);
++	}
++
++	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedSortPrefetchCombinesRowsWhenBudgetAllows) {
++		DirectEdgeGraph graph = directGraph();
++		graph.enable_property_tokens = true;
++		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
++		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
++		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
++		DirectEdgeBackend backend(graph);
++		LogicalPlanReadRuntime runtime(backend);
++		std::vector<logical::LogicalSortItem> innerKeys;
++		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
++		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
++															std::move(innerKeys));
++		std::vector<logical::LogicalSortItem> outerKeys;
++		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
++		logical::LogicalSort outer(std::move(inner), std::move(outerKeys));
++		auto constrained = directBounds();
++		// Include buffered/source/output row frames and key/Property slots.
++		constrained.maximum_materialized_bytes =
++				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
++        constrained.maximum_materialized_bytes += 8U * 3U * sizeof(LogicalPlanReadRow);
++		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
++		ASSERT_EQ(result.rowCount(), 3U);
++		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
++		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 3U);
++		EXPECT_EQ(result.getRows()[2].at("n").asNode().getId(), 1U);
+ 		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+ 		EXPECT_EQ(graph.node_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"priority"}}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+@@ -1238,7 +1273,11 @@
+ 		ASSERT_EQ(result.rowCount(), 2U);
+ 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 1U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 
+@@ -1269,7 +1308,11 @@
+ 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);
+ 		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[2].at("m").asNode().getId(), 1U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 
+@@ -1325,7 +1368,11 @@
+ 		ASSERT_EQ(result.rowCount(), 2U);
+ 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 1U);
+ 		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 
+--- a/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp
++++ b/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp
+@@ -187,6 +187,7 @@
+ 		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Universe"}),
+ 			"a", "e", "b", "KNOWS", direction, std::vector<std::string>{"Rare"},
+ 			std::vector<std::pair<std::string, PropertyValue>>{}, std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}});
++        auto reversible = traversal->clone();
+ 		std::vector<logical::LogicalProjectItem> items;
+ 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("a", "rank"), "source");
+ 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b", "rank"), "target");
+@@ -194,7 +195,29 @@
+ 		logical::LogicalProject original(std::move(traversal), std::move(items));
+ 		optimization::LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+ 		auto result = optimization::LogicalPlanOptimizer(options).optimize(original.clone(), &statistics);
+-		ASSERT_EQ(result.rewrite_count, 1U);
++        // Property projections are an order-sensitive boundary and must not
++        // permit traversal reversal through this envelope.
++        ASSERT_EQ(result.rewrite_count, 0U);
++        std::vector<logical::LogicalProjectItem> transparentItems;
++        for (const std::string variable : {"a", "e", "b"})
++            transparentItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>(variable), variable);
++        logical::LogicalProject transparent(std::move(reversible), std::move(transparentItems));
++        auto reversed = optimization::LogicalPlanOptimizer(options).optimize(transparent.clone(), &statistics);
++        ASSERT_EQ(reversed.rewrite_count, 1U);
++        const auto entityBag = [&](const logical::LogicalOperator &plan) {
++            std::map<std::tuple<uint64_t, uint64_t, uint64_t>, size_t> bag;
++            static_cast<void>(runtime.execute(plan, directBounds(), [&](const LogicalPlanReadRow &row) {
++                const auto identity = [](const LogicalPlanReadValue &value) -> uint64_t {
++                    if (const auto *ref = std::get_if<storage::EntityRef>(&value)) return ref->entity_id;
++                    if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) return node->node_id;
++                    return std::get<storage::LogicalGraphEdge>(value).edge_id;
++                };
++                ++bag[{identity(row.values.at("a")), identity(row.values.at("e")), identity(row.values.at("b"))}];
++                return true;
++            }));
++            return bag;
++        };
++        EXPECT_EQ(entityBag(transparent), entityBag(*reversed.root));
+ 		using Bag = std::map<std::tuple<int64_t, int64_t, int64_t>, size_t>;
+ 		const auto execute = [&](const logical::LogicalOperator &plan, bool earlyStop) {
+ 			Bag bag; static_cast<void>(runtime.execute(plan, directBounds(), [&](const LogicalPlanReadRow &row) {
+--- a/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
+@@ -119,7 +119,7 @@
+ 	auto projectedSource = std::make_unique<logical::LogicalProject>(std::move(source), std::move(items));
+ 	logical::LogicalTraversal traversal(
+ 			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
+-			{{"weight", PropertyValue(int64_t{7})}});
++			OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(int64_t{7})}}));
+ 	std::vector<uint64_t> edgeIds;
+ 	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
+ 	traversalBounds.maximum_adjacency_page_records = 2U;
+--- a/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
++++ b/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
+@@ -10,7 +10,7 @@
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	for (const std::string type: {std::string("KNOWS"), std::string{}}) {
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", type, "out", {"Person"}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", type, "out", {"Person"}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	for (int retry = 0; retry < 2; ++retry) {
+ 		size_t rows = 0U;
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+@@ -31,7 +31,7 @@
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -52,7 +52,7 @@
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -73,7 +73,7 @@
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+--- a/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
+@@ -6,6 +6,8 @@
+  * @license Apache-2.0
+  **/
+ 
++#include "graph/debug/PerfTrace.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+ #include "graph/query/execution/RetainedPropertyBytes.hpp"
+ #include <functional>
+ #include <memory>
+@@ -302,7 +304,11 @@
+ 		2U * rowBytes + 2U * sizeof(PropertyValue) - 1U;
+ 	size_t delivered = 0U;
+ 	bool keySlotsRejected = false;
+-	for (size_t budget = minimumBudget; budget < minimumBudget + 4096U; ++budget) {
++	debug::PerfTrace::ScopedObserver observer(&keySlotsRejected,
++		[](void *owner, std::string_view key, int64_t, bool) noexcept {
++			if (key == "query.sort.key_slot_admission_rejected") *static_cast<bool *>(owner) = true;
++		});
++	for (size_t budget = 1U; budget < minimumBudget + 4096U; ++budget) {
+ 		constrained.maximum_materialized_bytes = budget;
+ 		delivered = 0U;
+ 		try {
+@@ -311,12 +317,18 @@
+ 				return true;
+ 			}));
+ 			break;
+-		} catch (const std::runtime_error &error) {
+-			if (std::string_view(error.what()).find("Sort key slots") != std::string::npos) {
+-				keySlotsRejected = true;
++		} catch (const MaterializedByteLimitExceeded &) {
++			if (keySlotsRejected) break;
++			// Earlier shared-account admissions are expected at smaller budgets.
++		} catch (const std::invalid_argument &error) {
++			if (std::string_view(error.what()) != "logical-plan output batch storage exhausts its materialized byte bound") {
++				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
+ 				break;
+ 			}
+-			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound") {
++		} catch (const std::runtime_error &error) {
++			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" &&
++                std::string_view(error.what()) != "logical-plan Sort keys exceeded the shared materialized byte bound" &&
++				std::string_view(error.what()) != "logical-plan output materialization exceeds its row or byte bound") {
+ 				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
+ 				break;
+ 			}
+@@ -324,7 +336,7 @@
+ 	}
+ 	EXPECT_TRUE(keySlotsRejected) << "could not reach Sort key-slot admission after row-slot reservations";
+ 	EXPECT_EQ(delivered, 0U);
+-	constrained.maximum_materialized_bytes *= 4U;
++	constrained.maximum_materialized_bytes = bounds().maximum_materialized_bytes;
+ 	std::vector<PropertyValue> output;
+ 	static_cast<void>(runtime.execute(sort, constrained, [&](const LogicalPlanReadRow &row) {
+ 		output.push_back(std::get<PropertyValue>(row.values.at("value")));
+@@ -1360,7 +1372,7 @@
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "", "target", "KNOWS", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto permitted = directBounds();
+ 	permitted.maximum_materialized_bytes = 8192U;
+ 	size_t delivered = 0U;
+@@ -1430,7 +1442,7 @@
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "r", "target", "", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto bounds = directBounds();
+ 	bounds.maximum_materialized_bytes = 6000U;
+ 	size_t delivered = 0U;
+--- a/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
+@@ -169,3 +169,28 @@
+     EXPECT_NO_THROW((void)backend.verifyIntegrity());
+     EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNode(nodes.front()).node_id, nodes.front());
+ }
++
++TEST_F(RelocatableStorageBackendTest, ColdInsertionSmallDirectoryUsesBoundedSummary) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
++    for (const size_t pages : {2U, 3U}) {
++        std::vector<uint64_t> ids;
++        {
++            RelocatableStorageBackend populate(options); populate.open();
++            ids = populate.createLogicalNodes(std::vector<LogicalGraphNodeCreateRequest>(pages * capacity, {{"Import"}, {}}));
++            ASSERT_EQ(ids.size(), pages * capacity);
++            populate.deleteLogicalNodes({{ids.front()}});
++            populate.close();
++        }
++        RelocatableStorageBackend cold(options); cold.open();
++        ImportTrace trace;
++        ASSERT_EQ(cold.createLogicalNodes({{{"Import"}, {}}}).size(), 1U);
++        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++        EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
++        ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++        EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
++        EXPECT_NO_THROW((void)cold.verifyIntegrity());
++        RecordProperty("largest_added_page_count", static_cast<int>(pages));
++        cold.close();
++    }
++}
+--- a/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
+@@ -144,7 +144,7 @@
+ 	backend.open();
+ 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
+ 	auto physical = backend.openSnapshot();
+-	const auto oldRoot = physical.superblock().entity_property_directory_root;
++	const auto oldGeneration = physical.superblock().generation;
+ 	physical.release();
+ 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
+ 	{
+@@ -156,7 +156,10 @@
+ 				if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+ 					try {
+ 						const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+-						if (candidate.entity_property_directory_root != oldRoot) publicationWritten.store(true);
++						// This transaction stages only replacement of an existing node: it
++                        // does not lease IDs. A newer superblock is its publication;
++                        // the logical property root may be stable after page relocation.
++                        if (candidate.generation > oldGeneration) publicationWritten.store(true);
+ 					} catch (const std::exception &) {
+ 						// Other control frames are outside this graph publication.
+ 					}
+@@ -175,6 +178,7 @@
+ 			return portable_fsync(fd);
+ 		});
+ 		EXPECT_THROW(static_cast<void>(transaction->commit()), std::runtime_error);
++        EXPECT_TRUE(publicationWritten.load());
+ 		EXPECT_TRUE(failedFinalSync.load());
+ 		EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_INDETERMINATE);
+ 	}
+@@ -195,6 +199,7 @@
+ 	EXPECT_TRUE(rank->value == PropertyValue(1) || rank->value == PropertyValue(2));
+ 	snapshot.reset();
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++    EXPECT_EQ(reopened.createLogicalNodes({{{"WritableAfterReopen"}, {}}}).size(), 1U);
+ 	reopened.close();
+ }
+ 
+--- a/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
+@@ -1398,6 +1398,8 @@
+     const auto kind = static_cast<size_t>(ResourceClass::RCK_WRITE);
+     const auto baseline = domain->usage().classes[kind];
+     auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, domain->classMaximum(ResourceClass::RCK_WRITE));
++    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
++    PrepaidMemoryResource::ExternalReservation cachePressure(cache, cache->capacity() - cache->used());
+     ResourceLease pressure(account); pressure.set(account->available());
+     const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+     EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}})), ResourceAdmissionDenied);
+@@ -1405,6 +1407,7 @@
+     EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+     EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+     pressure.reset();
++    cachePressure.set(0U);
+     const auto created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
+     EXPECT_EQ(created.size(), 1U); EXPECT_EQ(domain->usage().classes[kind], baseline);
+     backend.close();
+@@ -1439,6 +1442,48 @@
+     EXPECT_EQ(edge.source_node_id, nodes[0]); EXPECT_EQ(edge.target_node_id, nodes[1]);
+     EXPECT_EQ(edge.properties.front().value, PropertyValue(7));
+     snapshot.reset(); backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, CacheWriteFallbackPreservesForeignPinnedSnapshotAcrossReopen) {
++    using namespace execution::detail;
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend writer(options); writer.open();
++    const auto nodes = writer.createLogicalNodes({{{"Fallback"}, {}}, {{"Fallback"}, {}}});
++    RelocatableStorageBackend reader(options); reader.open();
++    auto old = reader.openLogicalGraphReadSnapshot();
++    const auto outgoing = [&](auto &snapshot) {
++        return snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 8U).edges;
++    };
++    EXPECT_TRUE(outgoing(old).empty());
++    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(writer.queryResourceDomain());
++    std::vector<uint64_t> edges;
++    auto transaction = writer.beginLogicalGraphTransaction(false);
++    LogicalGraphTransactionOverlay overlay(*transaction);
++    const bool oldTrace = debug::PerfTrace::areValuesEnabled();
++    debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true);
++    {
++        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
++        edges = overlay.createLogicalEdges({{nodes[0], nodes[1], "FallbackType", {}}});
++        EXPECT_EQ(transaction->commit().created_edge_ids, edges);
++    }
++    transaction.reset();
++    const auto trace = debug::PerfTrace::snapshotAndReset(); debug::PerfTrace::setValueCollectionEnabled(oldTrace);
++    ASSERT_TRUE(trace.contains("storage.buffer_pool.write_admission_fallback"));
++    EXPECT_GT(trace.at("storage.buffer_pool.write_admission_fallback").totalValue, 0);
++    ASSERT_EQ(edges.size(), 1U);
++    EXPECT_TRUE(outgoing(old).empty());
++    auto current = writer.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(outgoing(current).size(), 1U);
++    EXPECT_EQ(outgoing(current).front().edge_id, edges.front());
++    current.reset(); writer.close();
++    EXPECT_TRUE(outgoing(old).empty());
++    old.reset(); reader.close();
++    RelocatableStorageBackend reopened(options); reopened.open();
++    auto fresh = reopened.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(outgoing(fresh).size(), 1U);
++    EXPECT_EQ(outgoing(fresh).front().edge_id, edges.front());
++    fresh.reset(); reopened.close();
+ }
+ 
+ TEST_F(RelocatableStorageBackendTest, NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit) {
+@@ -1743,3 +1788,40 @@
+     ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
+     reader.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceSmallFixture) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    options.adaptive_property_row_chunks = false;
++    ASSERT_EQ(options.maximum_integrity_workspace_bytes, 8U * 1024U * 1024U);
++    RelocatableStorageBackend backend(options); backend.open();
++    // Exercise integrity and reopen on a small large-value fixture.
++    for (int64_t begin = 0; begin < 12; begin += 12) {
++        std::vector<LogicalGraphNodeCreateRequest> requests;
++        for (int64_t id = begin; id < begin + 12; ++id) {
++            requests.push_back({{"User"}, {{"id", PropertyValue(id)},
++                {"country", PropertyValue("country-" + std::to_string(id % 8))},
++                {"score", PropertyValue(id % 7)}, {"age", PropertyValue(18 + id % 53)}}});
++        }
++        (void)backend.createLogicalNodes(requests);
++    }
++    (void)backend.createLogicalNodeIndex({"contract_base_user_id", "User", {"id"}});
++    for (int id = 0; id < 3; ++id) {
++        (void)backend.createLogicalNodes({{{"Wide"}, {{"id", PropertyValue(id)},
++            {"body", PropertyValue(std::string(16U * 1024U, 'b'))}}}});
++    }
++    backend.close(); backend.open();
++    const auto generation = backend.currentNativeMetadataGeneration();
++    backend.resetIoStats();
++    RelocatableIntegrityReport report;
++    ASSERT_NO_THROW(report = backend.verifyIntegrity());
++    EXPECT_GE(report.large_value_manifest_routes, 3U);
++    EXPECT_GT(report.large_value_data_pages, 0U);
++    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
++    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
++    backend.close();
++    RelocatableStorageBackend reader(backendOptions()); reader.open();
++    ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
++    reader.close();
++}
+--- a/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
+@@ -930,10 +930,18 @@
+ 	};
+ 	for (bool composite: {false, true}) {
+ 		for (size_t retry = 0U; retry < 2U; ++retry) {
++            const bool traceWasEnabled = graph::debug::PerfTrace::areValuesEnabled();
++            graph::debug::PerfTrace::reset();
++            graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ 			size_t delivered = 0U;
+-			EXPECT_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return true;
+ 			})), FormatException);
++            const auto trace = graph::debug::PerfTrace::snapshotAndReset();
++            graph::debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
++            const auto rejection = trace.find("native_graph.read.range_dedup_shared_admission_rejected");
++            ASSERT_NE(rejection, trace.end());
++            EXPECT_EQ(rejection->second.totalValue, 1);
+ 			EXPECT_GT(delivered, 0U);
+ 			EXPECT_LT(delivered, nodes.size());
+ 			std::vector<uint64_t> actual;
+@@ -943,7 +951,7 @@
+ 			})));
+ 			EXPECT_EQ(actual, nodes);
+ 			delivered = 0U;
+-			EXPECT_NO_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_NO_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return false;
+ 			})));
+ 			EXPECT_GT(delivered, 0U);
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DirectReadContracts.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DirectReadContracts.cpp
+@@ -7,6 +7,8 @@
+  **/
+ 
+ #include <array>
++#include <barrier>
++#include <future>
+ #include <chrono>
+ #include <filesystem>
+ #include <limits>
+@@ -396,6 +398,39 @@
+ 	EXPECT_EQ(backend.readNode(snapshot, fixture.person_node_id).node_id, fixture.person_node_id);
+ 	snapshot.release();
+ 	backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, ConcurrentForeignClosePreservesPinnedOwner) {
++    const NativeGraphFixture fixture = materializeNativeGraphFixture();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend owner(options); owner.open();
++    RelocatableStorageBackend other(options); other.open();
++    auto pin = owner.openSnapshot();
++    std::barrier gate(2);
++    auto closed = std::async(std::launch::async, [&] { gate.arrive_and_wait(); other.close(); });
++    gate.arrive_and_wait();
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    EXPECT_NO_THROW(closed.get());
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    EXPECT_THROW(owner.close(), std::logic_error);
++    pin.release(); owner.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, ClosingAnotherHandlePreservesOwningSnapshotAndReopen) {
++    const NativeGraphFixture fixture = materializeNativeGraphFixture();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend owner(options); owner.open();
++    RelocatableStorageBackend other(options); other.open();
++    auto pin = owner.openSnapshot();
++    EXPECT_THROW(owner.close(), std::logic_error);
++    EXPECT_NO_THROW(other.close());
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    other.open();
++    auto otherPin = other.openSnapshot();
++    EXPECT_EQ(other.readNode(otherPin, fixture.person_node_id).node_id, fixture.person_node_id);
++    otherPin.release(); other.close();
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    pin.release(); owner.close();
+ }
+ 
+ TEST_F(RelocatableStorageBackendTest, CloseRejectsPinnedSnapshotUntilItIsReleased) {
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+@@ -10,6 +10,9 @@
+ 
+ #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
+ #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
++#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
++#include "graph/storage/relocatable/index/BTreePageStore.hpp"
+ #include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
+ #include "graph/storage/relocatable/format/Format.hpp"
+ #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+@@ -250,6 +253,9 @@
+ 	snapshot = reopened.openLogicalGraphReadSnapshot();
+ 	EXPECT_EQ(snapshot->readEdge(existing.front()), LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	snapshot.reset();
++	// Pin the pre-retry generation across the streamed publication and verify
++	// the new edge and its derived metadata never leak into the old snapshot.
++	auto preRetrySnapshot = reopened.openLogicalGraphReadSnapshot();
+ 	std::unique_ptr<LogicalGraphTransaction> retry = reopened.beginLogicalGraphTransaction(false);
+ 	auto *const retryBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(retry.get());
+ 	ASSERT_NE(retryBulk, nullptr);
+@@ -263,7 +269,11 @@
+ 			  LogicalGraphEdge(committed.front(), nodes[0], nodes[1], "BULK_PROPERTY_SHORT_WRITE_RETRY",
+ 						   {{"payload", PropertyValue("property-short-write")}}));
+ 	snapshot.reset();
++	EXPECT_THROW(static_cast<void>(preRetrySnapshot->readEdge(committed.front())), FormatException);
++	EXPECT_EQ(preRetrySnapshot->readEdge(existing.front()),
++	          LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++	preRetrySnapshot.reset();
+ 	reopened.close();
+ }
+ 
+@@ -1862,3 +1872,123 @@
+ 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+ 	backend.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebuildsStaleFreeSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    uint64_t expectedFreePages = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    // Preserve the existing entries but make their source-directory marker
++    // stale, as happens after directory relocation. Reopen exercises the real
++    // metadata writer and its budget rather than a mock summary provider.
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        ASSERT_TRUE(stream->is_open());
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        ASSERT_TRUE(proof->fresh);
++        expectedFreePages = proof->free_pages + 1U;
++        const auto checkpoint = LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1U);
++        pin.release();
++        static_cast<void>(trees.upsert(RSS_EDGE_FREE_SPACE_INDEX_ID, EntityFreeSpaceIndex::generationKey(), 1U, checkpoint));
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        EXPECT_TRUE(proof->fresh);
++        EXPECT_EQ(proof->free_pages, expectedFreePages);
++    }
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRetainsFreshSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto reopenedSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_EQ(reopenedSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    EXPECT_EQ(reopenedSnapshot->readEdge(added.front()).target_node_id, nodes[1]);
++    reopenedSnapshot.reset();
++    backend.close();
++}
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp
+@@ -1,6 +1,9 @@
+ #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
+ #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
+ #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
++#include "graph/storage/relocatable/index/BTreePage.hpp"
++#include "graph/storage/relocatable/index/BTreePageStore.hpp"
++#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+ #include "graph/debug/PerfTrace.hpp"
+ #include <atomic>
+ #include <cerrno>
+@@ -46,6 +49,7 @@
+     DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
+     const auto initial = append(backend, sources, targets); ASSERT_EQ(initial.size(), 8192U);
+     EXPECT_EQ(work.full, 1); auto old = backend.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 9000).edges.size(), 8192U);
+     work = {};
+     const std::array<uint64_t, 3> nextSources{nodes[0], nodes[0], nodes[1]}, nextTargets{nodes[1], nodes[0], nodes[0]};
+     const auto added = append(backend, nextSources, nextTargets); ASSERT_EQ(added.size(), 3U);
+@@ -63,6 +67,44 @@
+     old.reset(); now.reset(); backend.close(); backend.open();
+     now = backend.openLogicalGraphReadSnapshot(); EXPECT_EQ(now->readEdge(added[0]).target_node_id, nodes[1]);
+     now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
++}
++TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallCrossPagePreservesOldPins) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}}); ASSERT_EQ(nodes.size(), 2U);
++    std::vector<uint64_t> sources(1024, nodes[0]), targets(1024, nodes[1]);
++    DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
++    const auto initial = append(backend, sources, targets); ASSERT_EQ(initial.size(), 1024U);
++    EXPECT_EQ(work.full, 1); auto old = backend.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100).edges.size(), 1024U);
++    work = {};
++    const std::array<uint64_t, 3> nextSources{nodes[0], nodes[0], nodes[1]}, nextTargets{nodes[1], nodes[0], nodes[0]};
++    const auto added = append(backend, nextSources, nextTargets); ASSERT_EQ(added.size(), 3U);
++    EXPECT_EQ(work.incremental, 1);
++    EXPECT_EQ(work.full, 0); EXPECT_GT(work.frames, 0); EXPECT_LE(work.frames, 8);
++    EXPECT_EQ(work.member_incremental, 1); EXPECT_EQ(work.member_full, 0);
++    EXPECT_GT(work.member_frames, 0); EXPECT_LE(work.member_frames, 8);
++    EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100).edges.size(), 1024U);
++    EXPECT_TRUE(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_INCOMING, {}, 1100).edges.empty());
++    auto now = backend.openLogicalGraphReadSnapshot();
++    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100).edges.size(), 1026U);
++    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_INCOMING, {}, 1100).edges.size(), 2U);
++    EXPECT_EQ(now->readEdge(added[1]).source_node_id, now->readEdge(added[1]).target_node_id);
++    const auto statistics = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(statistics); EXPECT_EQ(statistics->edge_count, 1027U);
++    old.reset(); now.reset(); backend.close(); backend.open();
++    now = backend.openLogicalGraphReadSnapshot(); EXPECT_EQ(now->readEdge(added[0]).target_node_id, nodes[1]);
++    now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
++    auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
++    auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE, StorageIOAccessMode::SIOAM_READ_ONLY);
++    auto metadata = RelocatableMetadataStore::openReadOnly(io); auto pin = metadata->openSnapshot();
++    SlottedPagePool pool(io, *metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
++    BTreePageStore tree(pool, *metadata);
++    const auto root = metadata->findIndexRoot(pin, RSS_GLOBAL_ADJACENCY_INDEX_ID);
++    const auto page = tree.read(pin, root.root_page_id);
++    EXPECT_EQ(page.header().kind, BTreeNodeKind::BPN_INTERNAL);
++    EXPECT_GT(page.header().level, 0U);
++    pin.release();
++
+ }
+ TEST_F(RelocatableStorageBackendTest, StreamedAdjacencyShapeRejectsStaleHintsAndResumesAfterConfirmedRebuild) {
+     materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+@@ -202,6 +244,57 @@
+     now.reset(); old.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+ }
+ 
++TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallBoundRejectsBeforePublication) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    options.maximum_bulk_edge_index_entries = 520U;
++    options.maximum_bulk_edge_transaction_records = 256U;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++    std::vector<uint64_t> sources(256, nodes[0]), targets(256, nodes[1]);
++    const auto initial = append(backend, sources, targets); auto old = backend.openLogicalGraphReadSnapshot();
++    sources.resize(10); targets.resize(10);
++    DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
++    EXPECT_THROW((void)append(backend, sources, targets), FormatException);
++    EXPECT_EQ(work.refused, 1); EXPECT_EQ(work.full, 0); EXPECT_EQ(work.frames, 0);
++    const auto statistics = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(statistics);
++    EXPECT_EQ(statistics->edge_count, initial.size());
++    auto now = backend.openLogicalGraphReadSnapshot(); EXPECT_EQ(now->readEdge(initial.back()), old->readEdge(initial.back()));
++    now.reset(); old.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallExactEntryBoundariesSurviveReopen) {
++    const auto basePath = data_path_;
++    for (const uint64_t limit : {517U, 518U, 519U}) {
++        data_path_ = basePath.string() + "." + std::to_string(limit);
++        materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++        options.maximum_bulk_edge_index_entries = limit;
++        options.maximum_bulk_edge_transaction_records = 256U;
++        RelocatableStorageBackend backend(options); backend.open();
++        const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        std::vector<uint64_t> sources(256, nodes[0]), targets(256, nodes[1]);
++        const auto initial = append(backend, sources, targets); auto old = backend.openLogicalGraphReadSnapshot();
++        sources.resize(3); targets.resize(3); DeltaWork work;
++        graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
++        if (limit == 517U) {
++            EXPECT_THROW((void)append(backend, sources, targets), FormatException);
++            EXPECT_EQ(work.refused, 1); EXPECT_EQ(work.frames, 0);
++        } else {
++            EXPECT_EQ(append(backend, sources, targets).size(), 3U);
++            EXPECT_EQ(work.incremental, 1); EXPECT_EQ(work.full, 0); EXPECT_GT(work.frames, 0);
++        }
++        EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), 256U);
++        auto now = backend.openLogicalGraphReadSnapshot();
++        const size_t expected = limit == 517U ? 256U : 259U;
++        EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), expected);
++        old.reset(); now.reset(); backend.close(); backend.open();
++        now = backend.openLogicalGraphReadSnapshot();
++        EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), expected);
++        now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
++        std::error_code error; std::filesystem::remove(data_path_, error);
++    }
++    data_path_ = basePath;
++}
++
+ TEST_F(RelocatableStorageBackendTest, StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts) {
+     materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+     RelocatableStorageBackend backend(options); backend.open();
+--- a/tests/src/storage/relocatable/cache/test_BufferPool.cpp
++++ b/tests/src/storage/relocatable/cache/test_BufferPool.cpp
+@@ -753,6 +753,67 @@
+ 	EXPECT_THROW((void)pool_->pin({0U, 1U}), ResourceAdmissionDenied);
+ 	EXPECT_EQ(pool_->stats().resident_bytes, 0U); EXPECT_EQ(memory->used(), 0U);
+ 	pool_.reset(); EXPECT_EQ(memory->used(), 0U);
++}
++
++TEST_F(BufferPoolTest, ExhaustedCacheCreditWritesTypedPagesWithoutAdmission) {
++    open(2U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> one{}; one.fill(std::byte{42});
++    pool_->writePage({0U, 1U}, one);
++    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> both{}; both.fill(std::byte{73});
++    pool_->writePages({0U, 2U}, both);
++    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> actual{};
++    EXPECT_EQ(pool_->readPages({0U, 2U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
++    EXPECT_EQ(actual, both);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++}
++
++#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
++TEST_F(BufferPoolTest, ExhaustedCacheCreditPropagatesShortWriteAndAllowsExactRetry) {
++    open(1U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x5a});
++    bool faulted = false;
++    {
++        StorageIO::ScopedNativeWriteHookForTesting shortWrite([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
++            faulted = true;
++            return portable_pwrite(fd, bytes, count / 2U, offset);
++        });
++        EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::system_error);
++    }
++    EXPECT_TRUE(faulted);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++    EXPECT_NO_THROW(pool_->writePage({0U, 1U}, page));
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> actual{};
++    EXPECT_EQ(pool_->readPage({0U, 1U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
++    EXPECT_EQ(actual, page);
++}
++#endif
++
++TEST_F(BufferPoolTest, CacheWriteAdmissionFallbackDoesNotHideAllocatorFailure) {
++    open(1U);
++    auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
++    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    memory->fail_at = 1U;
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x52});
++    EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::bad_alloc);
++    EXPECT_EQ(diskByte(0U), std::byte{1});
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++    EXPECT_EQ(memory->grant->used(), 0U);
++}
++
++TEST_F(BufferPoolTest, CachePressureNeverBypassesPinnedGeneration) {
++    open(2U); auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    auto pin = pool_->pin({0U, 1U});
++    graph::query::execution::detail::PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - memory->used());
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x77});
++    EXPECT_THROW(pool_->writePage({0U, 2U}, page), std::logic_error);
++    EXPECT_THROW(pool_->writePages({0U, 2U}, page), std::logic_error);
++    EXPECT_EQ(pin.bytes()[0], std::byte{1});
++    EXPECT_EQ(diskByte(0U), std::byte{1});
+ }
+ 
+ TEST_F(BufferPoolTest, EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache) {
+@@ -979,7 +1040,8 @@
+             catch (const std::runtime_error &) { otherThreadDenied = true; }
+         });
+         other.join(); EXPECT_TRUE(otherThreadDenied);
+-        EXPECT_THROW(static_cast<void>(io_->pinTypedPage(missing)), std::runtime_error);
++        EXPECT_FALSE(io_->pinTypedPage(missing).has_value());
++        EXPECT_EQ(io_->bufferPoolStats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+     }
+     EXPECT_FALSE(StorageIO::SequentialReadScope::activeFor(*io_));
+     EXPECT_THROW(static_cast<void>(io_->readAt(missing, image.data(), image.size())), std::runtime_error);
+--- a/tests/src/storage/relocatable/entity/test_EntityPageStoreScanCache.cpp
++++ b/tests/src/storage/relocatable/entity/test_EntityPageStoreScanCache.cpp
+@@ -149,10 +149,10 @@
+ 	EXPECT_EQ(secondIds, firstIds);
+ 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
+ 	// Typed scans visit only the Node Entity directory and its Node page. The
+-	// second scan may re-admit the directory and data page, but never an Edge
+-	// page or the generic Page Directory stream.
+-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
++	// warm scan re-reads the sequential Entity data page; typed metadata
++	// remains resident and an Edge page is never needed.
++	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 1U);
+ 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
+ 
+ 	std::vector<uint64_t> resumedIds;
+@@ -166,8 +166,8 @@
+ 	const BufferPoolStats afterResumed = io_->bufferPoolStats();
+ 	// Ordered resume uses the same typed Entity directory contract and does not
+ 	// fall back to the generic Page Directory traversal.
+-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 2U);
++	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 1U);
+ 	EXPECT_EQ(afterResumed.resident_bytes, afterSecond.resident_bytes);
+ }
+ 
+@@ -188,15 +188,15 @@
+ 	}));
+ 	EXPECT_EQ(secondIds, firstIds);
+ 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
+-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
++	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 1U);
+ 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
+ 
+ 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
+ 	const BufferPoolStats afterFirstPoint = io_->bufferPoolStats();
+-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 2U);
+-	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + 2U * RSS_PAGE_SIZE);
++	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 1U);
++	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + RSS_PAGE_SIZE);
+ 
+ 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
+ 	const BufferPoolStats afterSecondPoint = io_->bufferPoolStats();
+--- a/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp
++++ b/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp
+@@ -1427,6 +1427,25 @@
+     }
+ };
+ 
++TEST_F(CatalogSelectedLookupTest, StreamedAppendUpdatesLogicalChildWithoutChangingOldRoot) {
++    CatalogTree tree(*pages, allocator);
++    MetadataWriteBatch batch(allocator, current, LogSequenceNumber(3U));
++    const uint64_t added = 1U + 64U * RSS_CATALOG_PAGE_MAX_ENTRIES;
++    auto session = tree.beginAppend(batch, SegmentId(added), SegmentId(added), 1U);
++    session.append(entry(added, 999U, 1U, 3U));
++    session.finish();
++    const auto root = pages->readMetadataRadixUnresolvedView(batch.candidate().catalog_root);
++    ASSERT_TRUE(root->logical_children_enabled);
++    const auto routes = batch.metadataPageRoutes();
++    const auto found = std::ranges::find(routes, root->logical_children[64], &MetadataPageRoute::page_id);
++    ASSERT_NE(found, routes.end());
++    const auto leaf = pages->readCatalogLeaf(found->physical_reference);
++    EXPECT_EQ(leaf.entries.size(), 1U);
++    EXPECT_EQ(leaf.entries.back().segment_id, SegmentId(added));
++    EXPECT_EQ(tree.find(current, SegmentId(1U)).physical_slot, PhysicalSlotId(500U));
++    EXPECT_FALSE(tree.findOptional(current, SegmentId(added)).has_value());
++}
++
+ TEST_F(CatalogSelectedLookupTest, PointReadsResolveOnlyTheRequestedCatalogRoute) {
+     CatalogTree tree(*pages, allocator);
+     graph::debug::PerfTrace::setValueCollectionEnabled(true);
+--- a/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp
++++ b/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp
+@@ -2053,3 +2053,42 @@
+ 			},
+ 			FormatError::FERR_INVALID_HEADER);
+ }
++
++TEST_F(RelocatableLocationDirectoryTest, StreamedLogicalRoutesPreserveExistingAndNewChildrenAcrossRootGrowth) {
++    const Superblock initial = superblock();
++    SuperblockFile bootstrap(dataIo);
++    bootstrap.initializeNew(initial);
++    MetadataPageFile pages(dataIo, initial);
++    MetadataPagePoolAllocator allocator(dataIo, initial);
++    LocationDirectory directory(pages, allocator);
++    const EntityPageLocation existing{1U, PageId(11U), 0U, 1U};
++    MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
++    directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
++    seed.publish(bootstrap);
++    MetadataWriteBatch migration(allocator, seed.candidate(), LogSequenceNumber(3U));
++    static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
++    migration.publish(bootstrap);
++    const Superblock before = migration.candidate();
++    ASSERT_TRUE(before.usesPageDirectoryBootstrap());
++    const uint64_t leaf = RSS_LOCATION_LEAF_MAX_ENTRIES;
++    const std::array<EntityPageLocation, 3> additions{{
++        {2U, PageId(12U), 0U, 1U},
++        {leaf + 1U, PageId(13U), 0U, 1U},
++        {leaf * RSS_CATALOG_RADIX_FANOUT + 1U, PageId(14U), 0U, 1U}}};
++    MetadataWriteBatch append(allocator, before, LogSequenceNumber(4U));
++    auto session = directory.beginAppendEdgePageLocations(append, additions.front().entity_id,
++                                                           additions.back().entity_id, additions.size());
++    for (const auto &entry : additions) session.append(entry);
++    session.finish();
++    MetadataPageRouteDirectory routes(pages);
++    append.reserveMetadataFrames(routes.nextBootstrapFrameCount(append));
++    static_cast<void>(routes.publishNextBootstrap(append));
++    append.publish(bootstrap);
++    const Superblock after = append.candidate();
++    EXPECT_EQ(directory.findEdgePageLocation(before, existing.entity_id), existing);
++    for (const auto &entry : additions) {
++        EXPECT_FALSE(directory.findEdgePageLocationOptional(before, entry.entity_id).has_value());
++        EXPECT_EQ(directory.findEdgePageLocation(after, entry.entity_id), entry);
++    }
++    EXPECT_EQ(directory.findEdgePageLocation(after, existing.entity_id), existing);
++}
+--- a/tests/src/storage/relocatable/metadata/test_MetadataPublicationReclaimBatch.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataPublicationReclaimBatch.cpp
+@@ -22,20 +22,29 @@
+     e.committed_lsn = LogSequenceNumber(generation); return e;
+ }
+ }
+-TEST_F(RelocatableMetadataPagePoolTest, DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold) {
++TEST_F(RelocatableMetadataPagePoolTest, UnprovenAllocationReconcilesWithoutWaitingForBatchThreshold) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+-    MetadataPagePoolAllocator allocator(io, s); prepareHeadroom(allocator, s);
+-    for (uint32_t i = 0; i < MetadataPagePoolAllocator::PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES; ++i) {
+-        (void)allocator.allocatePage(Generation(1));
+-        allocator.reclaimUnreachable(s, {}, false);
+-        EXPECT_EQ(allocator.stats().allocated_pages,
+-                  i + 1U == MetadataPagePoolAllocator::PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES ? 0U : i + 1U);
+-    }
++    MetadataPagePoolAllocator allocator(io, s);
+     (void)allocator.allocatePage(Generation(1));
++    ASSERT_EQ(allocator.stats().allocated_pages, 1U);
++    // An allocation outside a publication batch invalidates the retirement
++    // proof. The conservative path can reclaim it immediately.
+     allocator.reclaimUnreachable(s, {}, false);
+-    EXPECT_EQ(allocator.stats().allocated_pages, 1U);
+-    allocator.reclaimUnreachable(s, {});
+     EXPECT_EQ(allocator.stats().allocated_pages, 0U);
++}
++TEST_F(RelocatableMetadataPagePoolTest, UnprovenReconciliationPreservesCurrentAndPinnedRoots) {
++    const auto initial = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(initial);
++    MetadataPageFile pages(io, initial); MetadataPagePoolAllocator allocator(io, initial); CatalogTree tree(pages, allocator);
++    const auto old = tree.upsertAndPublish(bootstrap, initial, std::vector{poolEntry(100, 2)}, LogSequenceNumber(2));
++    const auto current = tree.upsertAndPublish(bootstrap, old, std::vector{poolEntry(101, 3)}, LogSequenceNumber(3));
++    (void)allocator.allocatePage(Generation(3));
++    allocator.reclaimUnreachable(current, std::array{old}, false);
++    EXPECT_EQ(tree.find(old, SegmentId(1)).physical_slot, PhysicalSlotId(100));
++    EXPECT_EQ(tree.find(current, SegmentId(1)).physical_slot, PhysicalSlotId(101));
++    const auto pinned = allocator.stats().allocated_pages;
++    allocator.reclaimUnreachable(current, {}, true);
++    EXPECT_LT(allocator.stats().allocated_pages, pinned);
++    EXPECT_EQ(tree.find(current, SegmentId(1)).physical_slot, PhysicalSlotId(101));
+ }
+ TEST_F(RelocatableMetadataPagePoolTest, BatchedAllocationsAlsoTriggerPublicationReclamation) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+@@ -65,8 +74,8 @@
+ }
+ TEST_F(RelocatableMetadataPagePoolTest, RecoveryReclaimsDeferredUnpublishedFrames) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+-    { MetadataPagePoolAllocator allocator(io, s); prepareHeadroom(allocator, s); (void)allocator.allocatePage(Generation(1));
+-      allocator.reclaimUnreachable(s, {}, false); EXPECT_EQ(allocator.stats().allocated_pages, 1U); }
++    { MetadataPagePoolAllocator allocator(io, s); (void)allocator.allocatePage(Generation(1));
++      ASSERT_EQ(allocator.stats().allocated_pages, 1U); }
+     MetadataPagePoolAllocator reopened(io, s);
+     EXPECT_EQ(reopened.stats().allocated_pages, 0U);
+ }
+--- a/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
+@@ -442,6 +442,26 @@
+     context.reset(); EXPECT_EQ(registry.activeSnapshotCount(), 1U); pin.release(); EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+ }
+ 
++TEST_F(RelocatableMetadataSnapshotRegistryTest, ForeignPinBlocksReclaimUntilOwnerReleases) {
++    const Superblock initial = superblock(1, 1);
++    SuperblockFile bootstrap(io); bootstrap.initializeNew(initial);
++    MetadataPageFile pages(io, initial); MetadataPagePoolAllocator allocator(io, initial);
++    CatalogTree tree(pages, allocator); auto domain = makeMetadataSnapshotCoordination();
++    MetadataSnapshotRegistry owner(bootstrap, {}, {}, {}, domain), writerRegistry(bootstrap, {}, {}, {}, domain);
++    { auto writer = writerRegistry.beginWrite();
++      tree.upsertAndPublish(bootstrap, bootstrap.recover(), std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)); }
++    auto pin = owner.openSnapshot();
++    EXPECT_EQ(owner.localSnapshotCount(), 1U); EXPECT_EQ(writerRegistry.localSnapshotCount(), 0U);
++    { auto writer = writerRegistry.beginWrite();
++      auto next = tree.upsertAndPublish(bootstrap, bootstrap.recover(), std::vector{entry(101, 3, 3)}, LogSequenceNumber(3));
++      writerRegistry.reclaimAfterPublication(writer, allocator, next); }
++    EXPECT_EQ(allocator.stats().allocated_pages, 4U);
++    EXPECT_EQ(tree.find(pin.superblock(), SegmentId(1)).physical_slot, PhysicalSlotId(100));
++    pin.release();
++    { auto writer = writerRegistry.beginWrite(); writerRegistry.reclaimAfterPublication(writer, allocator, bootstrap.recover()); }
++    EXPECT_EQ(allocator.stats().allocated_pages, 2U);
++}
++
+ TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainCountsForeignPinsButKeepsGuardOwnershipLocal) {
+     SuperblockFile firstBootstrap(io); firstBootstrap.initializeNew(superblock(1, 1));
+     SuperblockFile secondBootstrap(io); auto domain = makeMetadataSnapshotCoordination();
+--- a/tests/src/storage/relocatable/property/test_HybridPropertyColdRowInspection.cpp
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyColdRowInspection.cpp
+@@ -78,7 +78,23 @@
+     EXPECT_THROW(Inspection(pin, {0, 2, false, root}, {NODE, 1}, pin.superblock().generation, {}, memory), FormatException);
+     EXPECT_THROW(Inspection(pin, row, {EntityPropertyOwnerKind::EPOK_EDGE, 1}, pin.superblock().generation, {}, memory), FormatException);
+     auto tiny = std::make_shared<MaterializedByteBudget>(1);
+-    EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny), MaterializedByteLimitExceeded);
++    // Inline inspection borrows the token directory. Debug STL proxy storage,
++    // when present, remains subject to the same account.
++    if (7U * graph::utils::detail::standardContainerProxyBytes() > 1U) {
++        EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny), MaterializedByteLimitExceeded);
++    } else {
++        Inspection borrowed(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny);
++        EXPECT_EQ(borrowed.count(), 1U);
++        EXPECT_EQ(tiny->used(), 0U);
++    }
++    {
++        Inspection source(pin, row, {NODE, 1}, pin.superblock().generation, {}, memory);
++        const std::array<uint32_t, 1> selected{2};
++        size_t delivered = 0U;
++        const SelectedPropertyReadAdmission admission = [&](size_t bytes) { tiny->reserveUnmanaged(bytes); };
++        EXPECT_THROW(source.visitSelected(selected, [&](size_t, auto) { ++delivered; }, &admission), MaterializedByteLimitExceeded);
++        EXPECT_EQ(delivered, 0U);
++    }
+     EXPECT_EQ(tiny->used(), 0U); EXPECT_EQ(memory->used(), 0U);
+     Stop stop;
+     EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, memory, nullptr, &stop), std::runtime_error);

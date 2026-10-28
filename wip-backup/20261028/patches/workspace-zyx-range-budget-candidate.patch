@@ -1,0 +1,20 @@
+--- a/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
+@@ -931,7 +931,7 @@
+ 	for (bool composite: {false, true}) {
+ 		for (size_t retry = 0U; retry < 2U; ++retry) {
+ 			size_t delivered = 0U;
+-			EXPECT_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return true;
+ 			})), FormatException);
+ 			EXPECT_GT(delivered, 0U);
+@@ -943,7 +943,7 @@
+ 			})));
+ 			EXPECT_EQ(actual, nodes);
+ 			delivered = 0U;
+-			EXPECT_NO_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_NO_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return false;
+ 			})));
+ 			EXPECT_GT(delivered, 0U);

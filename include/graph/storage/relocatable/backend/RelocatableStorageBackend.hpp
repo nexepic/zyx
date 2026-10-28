@@ -563,6 +563,7 @@ namespace graph::storage {
 
 	private:
 		friend class RelocatableLogicalGraphReadSnapshot;
+		[[nodiscard]] LogicalGraphMutationFence resolvedLogicalGraphMutationFence(const Superblock &superblock) const;
 		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeMutationBatch(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 			const LogicalGraphMutationReadControl &control,

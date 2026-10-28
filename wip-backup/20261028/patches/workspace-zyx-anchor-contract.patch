@@ -1,0 +1,41 @@
+--- a/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp
++++ b/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp
+@@ -187,6 +187,7 @@
+ 		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Universe"}),
+ 			"a", "e", "b", "KNOWS", direction, std::vector<std::string>{"Rare"},
+ 			std::vector<std::pair<std::string, PropertyValue>>{}, std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}});
++        auto reversible = traversal->clone();
+ 		std::vector<logical::LogicalProjectItem> items;
+ 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("a", "rank"), "source");
+ 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b", "rank"), "target");
+@@ -194,7 +195,29 @@
+ 		logical::LogicalProject original(std::move(traversal), std::move(items));
+ 		optimization::LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+ 		auto result = optimization::LogicalPlanOptimizer(options).optimize(original.clone(), &statistics);
+-		ASSERT_EQ(result.rewrite_count, 1U);
++        // Property projections are an order-sensitive boundary and must not
++        // permit traversal reversal through this envelope.
++        ASSERT_EQ(result.rewrite_count, 0U);
++        std::vector<logical::LogicalProjectItem> transparentItems;
++        for (const std::string variable : {"a", "e", "b"})
++            transparentItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>(variable), variable);
++        logical::LogicalProject transparent(std::move(reversible), std::move(transparentItems));
++        auto reversed = optimization::LogicalPlanOptimizer(options).optimize(transparent.clone(), &statistics);
++        ASSERT_EQ(reversed.rewrite_count, 1U);
++        const auto entityBag = [&](const logical::LogicalOperator &plan) {
++            std::map<std::tuple<uint64_t, uint64_t, uint64_t>, size_t> bag;
++            static_cast<void>(runtime.execute(plan, directBounds(), [&](const LogicalPlanReadRow &row) {
++                const auto identity = [](const LogicalPlanReadValue &value) -> uint64_t {
++                    if (const auto *ref = std::get_if<storage::EntityRef>(&value)) return ref->entity_id;
++                    if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) return node->node_id;
++                    return std::get<storage::LogicalGraphEdge>(value).edge_id;
++                };
++                ++bag[{identity(row.values.at("a")), identity(row.values.at("e")), identity(row.values.at("b"))}];
++                return true;
++            }));
++            return bag;
++        };
++        EXPECT_EQ(entityBag(transparent), entityBag(*reversed.root));
+ 		using Bag = std::map<std::tuple<int64_t, int64_t, int64_t>, size_t>;
+ 		const auto execute = [&](const logical::LogicalOperator &plan, bool earlyStop) {
+ 			Bag bag; static_cast<void>(runtime.execute(plan, directBounds(), [&](const LogicalPlanReadRow &row) {

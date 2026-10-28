@@ -96,6 +96,9 @@
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
 #include "graph/storage/relocatable/vector/VectorMappingIds.hpp"
 #include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
+#ifdef _WIN32
+#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
+#endif
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
@@ -128,15 +131,34 @@ namespace graph::storage {
 #endif
 		}
 
+        struct MetadataCoordinationRegistry {
+            std::mutex mutex;
+            std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
+        };
+        MetadataCoordinationRegistry &metadataCoordinationRegistry() {
+            // Backends may be destroyed during static teardown after their first
+            // open. Keep this process-wide synchronization object alive then.
+            static auto *registry = new MetadataCoordinationRegistry;
+            return *registry;
+        }
+        void pruneMetadataCoordinationRegistry() noexcept {
+            try {
+                auto &registry = metadataCoordinationRegistry();
+                std::lock_guard lock(registry.mutex);
+                for (auto it = registry.domains.begin(); it != registry.domains.end();)
+                    if (it->second.expired()) it = registry.domains.erase(it); else ++it;
+            } catch (...) {
+                // Releasing a backend must remain noexcept.
+            }
+        }
         [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
             const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner) {
-            static std::mutex mutex;
-            static std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
-            std::lock_guard lock(mutex);
-            for (auto it = domains.begin(); it != domains.end();)
-                if (it->second.expired()) it = domains.erase(it); else ++it;
-            if (auto existing = domains[key].lock()) return existing;
-            auto created = makeMetadataSnapshotCoordination(owner); domains[key] = created; return created;
+            auto &registry = metadataCoordinationRegistry();
+            std::lock_guard lock(registry.mutex);
+            for (auto it = registry.domains.begin(); it != registry.domains.end();)
+                if (it->second.expired()) it = registry.domains.erase(it); else ++it;
+            if (auto existing = registry.domains[key].lock()) return existing;
+            auto created = makeMetadataSnapshotCoordination(owner); registry.domains[key] = created; return created;
         }
 
 		[[nodiscard]] std::shared_ptr<std::mutex>
@@ -161,29 +183,20 @@ namespace graph::storage {
 			return created;
 		}
 
-		[[nodiscard]] bool tryLockNativeBulkSessionFile(file_handle_t handle) {
+		[[nodiscard]] file_handle_t tryLockNativeBulkSessionFile(file_handle_t handle) {
 			if (handle == INVALID_FILE_HANDLE) { // the native session lease is created only from the validated writable backend handle.
 				throw std::logic_error("relocatable bulk session requires a native writable file handle");
 			}
 #ifdef _WIN32
-			OVERLAPPED overlapped = {};
-			if (::LockFileEx(reinterpret_cast<HANDLE>(handle),
-							 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlapped)) {
-				return true;
-			}
-			if (::GetLastError() == ERROR_LOCK_VIOLATION) {
-				return false;
-			}
-			throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
-								"relocatable bulk session could not lock the database");
+			return detail::WindowsLeaseReadBridge::tryLock(handle);
 #else
 			// Unlike process-scoped fcntl record locks, flock stays attached to this
 			// open handle when another backend in the same process closes its own FD.
 			if (::flock(handle, LOCK_EX | LOCK_NB) == 0) {
-				return true;
+				return handle;
 			}
 			if (errno == EACCES || errno == EAGAIN) {
-				return false;
+				return INVALID_FILE_HANDLE;
 			}
 			throw std::system_error(errno, std::generic_category(),
 								"relocatable bulk session could not lock the database");
@@ -195,8 +208,7 @@ namespace graph::storage {
 				return;
 			}
 #ifdef _WIN32
-			OVERLAPPED overlapped = {};
-			static_cast<void>(::UnlockFileEx(reinterpret_cast<HANDLE>(handle), 0U, 1U, 0U, &overlapped));
+			detail::WindowsLeaseReadBridge::unlock(handle);
 #else
 			static_cast<void>(::flock(handle, LOCK_UN));
 #endif
@@ -211,9 +223,7 @@ namespace graph::storage {
 			if (!process_lock_.owns_lock()) {
 				return;
 			}
-			if (tryLockNativeBulkSessionFile(handle)) {
-				handle_ = handle;
-			}
+			handle_ = tryLockNativeBulkSessionFile(handle);
 		}
 
 		~NativeBulkSessionLease() { unlockNativeBulkSessionFile(handle_); }
@@ -1622,6 +1632,20 @@ namespace graph::storage {
 		return fence;
 	}
 
+	LogicalGraphMutationFence RelocatableStorageBackend::resolvedLogicalGraphMutationFence(const Superblock &superblock) const {
+		auto fence = makeLogicalGraphMutationFence(superblock);
+		PhysicalPageRef dataRoot = superblock.page_directory_root;
+		if (superblock.usesPageDirectoryBootstrap() && dataRoot.isValid()) {
+			MetadataPageFile pages(data_file_->io(), superblock);
+			const auto header = pages.readPageDirectoryBootstrap(dataRoot);
+			if (header.generation > superblock.generation || header.committed_lsn > superblock.checkpoint_lsn)
+				throw FormatException(FormatError::FERR_INVALID_STATE, "Page Directory bootstrap is newer than its Superblock");
+			dataRoot = header.data_page_directory_root;
+		}
+		fence.data_page_root_tokens = {dataRoot.physical_slot.value(), dataRoot.frame_index, dataRoot.generation.value()};
+		return fence;
+	}
+
 	LogicalGraphSchemaIdentity RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(const Superblock &superblock) {
 		const auto fence = makeLogicalGraphMutationFence(superblock);
 		const auto &catalog = superblock.index_root_directory_root;
@@ -1706,7 +1730,7 @@ namespace graph::storage {
 		for (size_t attempt = 0U; attempt < MAX_SNAPSHOT_RETRIES; ++attempt) {
 			RelocatableReadSnapshot rawSnapshot = openSnapshot();
 			const Superblock &superblock = rawSnapshot.superblock();
-			const LogicalGraphMutationFence expectedFence = makeLogicalGraphMutationFence(superblock);
+			const LogicalGraphMutationFence expectedFence = resolvedLogicalGraphMutationFence(superblock);
 			const Generation baseMetadataGeneration = superblock.generation;
 			std::unique_ptr<LogicalGraphVectorSearchSnapshot> logicalSnapshot = openLogicalGraphVectorSearchSnapshot();
 			if (logicalSnapshot == nullptr) {
@@ -1847,7 +1871,7 @@ namespace graph::storage {
 	LogicalGraphMutationFence RelocatableStorageBackend::currentNativeLogicalGraphMutationFence() const {
 		requireOpen();
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-		const LogicalGraphMutationFence fence = makeLogicalGraphMutationFence(snapshot.superblock());
+		const LogicalGraphMutationFence fence = resolvedLogicalGraphMutationFence(snapshot.superblock());
 		snapshot.release();
 		return fence;
 	}
@@ -1979,7 +2003,7 @@ namespace graph::storage {
 		auto publicationFence = acquireNativePublicationGate();
 		MetadataSnapshotPin current = metadata_->openSnapshot();
 		NativeStreamedGraphPublicationPlan publicationPlan = plan;
-		if (makeLogicalGraphMutationFence(current.superblock()) != expectedFence) {
+		if (resolvedLogicalGraphMutationFence(current.superblock()) != expectedFence) {
 			// The sealed source owns no mutable graph state. Revalidate its endpoint
 			// dependency under the publication gate, then rebuild all COW shapes from
 			// the current roots so an independent adjacency publication is retained.
@@ -2252,7 +2276,7 @@ namespace graph::storage {
 		const LogicalGraphMutationBatch &batch, const RelocatableReadSnapshot &source,
 		const LogicalGraphMutationFence &expected) {
 		requireOwnedSnapshot(source);
-		if (makeLogicalGraphMutationFence(source.superblock()) != expected ||
+		if (resolvedLogicalGraphMutationFence(source.superblock()) != expected ||
 			batch.property_replacements.empty() || batch.property_replacements.size() > 64U ||
 			!batch.node_creates.empty() || !batch.edge_creates.empty() || !batch.node_deletes.empty() ||
 			!batch.edge_deletes.empty() || !batch.node_label_replacements.empty() || batch.creation_identity_plan)
@@ -2313,8 +2337,8 @@ namespace graph::storage {
 		NativeGraphMutationFenceValidator fenceValidator;
 		if (expectedFence.has_value()) {
 			const LogicalGraphMutationFence expected = *expectedFence;
-			fenceValidator = [expected](const Superblock &base) {
-				return RelocatableStorageBackend::makeLogicalGraphMutationFence(base) == expected;
+			fenceValidator = [this, expected](const Superblock &base) {
+				return resolvedLogicalGraphMutationFence(base) == expected;
 			};
 		}
 
@@ -2322,11 +2346,11 @@ namespace graph::storage {
 		for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
 			MetadataSnapshotPin beforeExecution = metadata_->openSnapshot();
 			const LogicalGraphMutationFence graphFenceBeforeExecution =
-					makeLogicalGraphMutationFence(beforeExecution.superblock());
+					resolvedLogicalGraphMutationFence(beforeExecution.superblock());
 			if (rebaseValidation) {
 				rebaseValidation(beforeExecution);
-				fenceValidator = [graphFenceBeforeExecution](const Superblock &base) {
-					return makeLogicalGraphMutationFence(base) == graphFenceBeforeExecution;
+				fenceValidator = [this, graphFenceBeforeExecution](const Superblock &base) {
+					return resolvedLogicalGraphMutationFence(base) == graphFenceBeforeExecution;
 				};
 			}
 			beforeExecution.release();
@@ -2345,7 +2369,7 @@ namespace graph::storage {
 				try {
 					MetadataSnapshotPin afterFailure = metadata_->openSnapshot();
 					const bool graphStateChanged =
-							makeLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
+							resolvedLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
 					afterFailure.release();
 					if (graphStateChanged) {
 						requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);

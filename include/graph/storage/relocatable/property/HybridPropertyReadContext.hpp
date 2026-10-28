@@ -1,3 +1,4 @@
+#include "graph/debug/PropertyReadDiagnostic.hpp"
 /**
  * @file HybridPropertyReadContext.hpp
  * @brief Pinned descriptor, directory and field access for the hybrid candidate.
@@ -780,6 +781,9 @@ private:
         else metadata_.findEdgePageLocationsSorted(snapshot_, std::span(ids).first(owners.size()),
             std::span(entities).first(owners.size()), cancellation_);
         metadata_.findEntityPropertyLocationsSorted(snapshot_, owners, std::span(rows).first(owners.size()), cancellation_);
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+        for (const auto owner : owners) debug::recordPropertyOwnerAuthentication(owner.entity_id);
+#endif
         for (size_t i = 0; i < owners.size(); ++i) {
             check(); require(bool(entities[i]) == isLive(owners[i], group) && !rows[i],
                 "hybrid grouped owner has invalid Entity Map or competing ROW routing");
@@ -918,6 +922,9 @@ private:
                 debug::PerfTrace::addValue("native_graph.hybrid.certified_owner_route_checks_saved", 1);
                 // Visitor authority must not escape into the ordinary read cache.
             } else {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::recordPropertyOwnerAuthentication(owner.entity_id);
+#endif
                 const auto entity = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ?
                     metadata_.findNodePageLocationOptional(snapshot_, owner.entity_id) :
                     metadata_.findEdgePageLocationOptional(snapshot_, owner.entity_id);

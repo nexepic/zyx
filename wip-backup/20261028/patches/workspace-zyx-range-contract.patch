@@ -1,0 +1,59 @@
+--- a/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc
++++ b/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc
+@@ -989,7 +989,11 @@
+ 			if (bytes > maximumCandidateBytes - retainedBoundary) {
+ 				throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+ 			}
+-			admitBoundaryKey(retainedBoundary + bytes);
++            try { admitBoundaryKey(retainedBoundary + bytes); }
++            catch (const FormatException &) {
++                try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
++                throw;
++            }
+ 			boundaryKeyBytes = retainedBoundary;
+ 		});
+ 		size_t totalCandidates = 0U;
+@@ -1510,7 +1514,11 @@
+ 				if (bytes > maximumCandidateBytes - retainedBoundary) {
+ 					throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+ 				}
+-				admitBoundaryKey(retainedBoundary + bytes);
++                try { admitBoundaryKey(retainedBoundary + bytes); }
++                catch (const FormatException &) {
++                    try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
++                    throw;
++                }
+ 				boundaryKeyBytes = retainedBoundary;
+ 			});
+ 			size_t totalCandidates = 0U;
+--- a/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp
+@@ -930,10 +930,18 @@
+ 	};
+ 	for (bool composite: {false, true}) {
+ 		for (size_t retry = 0U; retry < 2U; ++retry) {
++            const bool traceWasEnabled = graph::debug::PerfTrace::areValuesEnabled();
++            graph::debug::PerfTrace::reset();
++            graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ 			size_t delivered = 0U;
+-			EXPECT_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return true;
+ 			})), FormatException);
++            const auto trace = graph::debug::PerfTrace::snapshotAndReset();
++            graph::debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
++            const auto rejection = trace.find("native_graph.read.range_dedup_shared_admission_rejected");
++            ASSERT_NE(rejection, trace.end());
++            EXPECT_EQ(rejection->second.totalValue, 1);
+ 			EXPECT_GT(delivered, 0U);
+ 			EXPECT_LT(delivered, nodes.size());
+ 			std::vector<uint64_t> actual;
+@@ -943,7 +951,7 @@
+ 			})));
+ 			EXPECT_EQ(actual, nodes);
+ 			delivered = 0U;
+-			EXPECT_NO_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
++			EXPECT_NO_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
+ 				delivered += batch.candidates.size(); return false;
+ 			})));
+ 			EXPECT_GT(delivered, 0U);

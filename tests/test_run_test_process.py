@@ -31,6 +31,15 @@ def _gate_path():
 
 
 def _pid_is_active(pid: int) -> bool:
+    if sys.platform.startswith("linux"):
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+            if stat[stat.rindex(")") + 2:].split()[0] in ("Z", "X"):
+                return False
+        except FileNotFoundError:
+            return False
+        except (OSError, ValueError, IndexError):
+            pass
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -139,7 +148,9 @@ def test_runner_reaps_child_that_outlives_successful_test_root(tmp_path):
         "    time.sleep(0.01)\n"
     )
 
-    assert runner.run([sys.executable, "-c", parent_program], 5.0) == 0
+    # The child has its own five-second startup deadline; allow the parent
+    # additional time to exit on a loaded CI worker before the supervisor timeout.
+    assert runner.run([sys.executable, "-c", parent_program], 15.0) == 0
     assert child_pid_path.exists()
     child_pid = int(child_pid_path.read_text())
 
@@ -214,7 +225,7 @@ def test_shard_runner_reaps_children_that_outlive_successful_shard_roots(tmp_pat
         "    time.sleep(0.01)\n"
     )
 
-    assert shard_runner.run_shards([sys.executable, "-c", parent_program], 2, 5.0, None) == 0
+    assert shard_runner.run_shards([sys.executable, "-c", parent_program], 2, 15.0, None) == 0
     child_pids = [int(path.read_text()) for path in marker_directory.glob("*.pid")]
     assert len(child_pids) == 2
 
@@ -230,3 +241,19 @@ def test_shard_runner_fails_when_final_cleanup_reports_an_unreapable_process(mon
     monkeypatch.setattr(shard_runner, "terminate_and_reap_processes", lambda *args, **kwargs: [(0, 12345)])
 
     assert shard_runner.run_shards([sys.executable, "-c", "pass"], 2, 5.0, None) == 125
+
+
+@pytest.mark.parametrize('script_name', ['run_test_process.py', 'run_test_shards.py'])
+def test_linux_group_detection_never_treats_live_member_as_zombie(tmp_path, monkeypatch, script_name):
+    module = _load_script(script_name)
+    for pid, state in [(101, 'Z'), (102, 'S')]:
+        directory = tmp_path / str(pid)
+        directory.mkdir()
+        (directory / 'stat').write_text(f'{pid} (test) {state} 1 77 77 0')
+    monkeypatch.setattr(module, 'Path', lambda path: tmp_path if path == '/proc' else Path(path))
+    assert module._linux_group_has_live_members(77)
+    (tmp_path / '102' / 'stat').write_text('102 (test) Z 1 77 77 0')
+    assert not module._linux_group_has_live_members(77)
+    (tmp_path / '102' / 'stat').write_text('invalid')
+    assert module._linux_group_has_live_members(77)
+    assert module._linux_group_has_live_members(999)

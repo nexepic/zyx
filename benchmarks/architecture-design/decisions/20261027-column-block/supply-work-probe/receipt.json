@@ -1,0 +1,14 @@
+{
+  "protocol_sha256": "2d233bc4adb66ca4b4cf5cd73b07fd2962d02d31857a2876727e4ea4f6d95fc3",
+  "diagnostic_binary_sha256": "bafd2af0fce84735a150f657b092dfec2f8b6187db78a1c5a42aed4515c866ac",
+  "build": "SCAN/HYBRID test build with coverage, untimed scoped counters",
+  "oracle": "sum 18528 passed",
+  "candidates": 192,
+  "direct_rows": 192,
+  "grouped_column_batches": 3,
+  "typed_run_admissions": 3,
+  "group_directory_cursor_restarts": 1,
+  "certified_owner_route_checks_saved": 192,
+  "observation": "Three batches match three logical groups; one cursor restart and saved owner route checks do not establish avoidable repetition in this case. Counters cannot attribute CPU or wall-clock costs.",
+  "decision": "Do not add a location/authentication shortcut on this evidence; retain conservative checks. Broader current-workload attribution remains required."
+}

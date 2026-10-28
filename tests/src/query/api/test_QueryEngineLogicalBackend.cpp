@@ -1127,11 +1127,15 @@ namespace graph::query {
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingPropagatesCancellationIntoMaintenanceWork) {
 		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
-		backend->state->training_prepare_delay = std::chrono::milliseconds(2);
 		backend->state->training_cancellation_checks_before_throw = 1024U;
 		QueryEngine engine(backend);
 
-		QueryGuard guard(1, 0);
+		QueryGuard guard(0, 0);
+		// Start the deadline only once maintenance preparation has begun.
+		backend->state->training_prepare_hook = [&] {
+			guard = QueryGuard(1, 0);
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		};
 		QueryContext context;
 		context.guard = &guard;
 		EXPECT_THROW(static_cast<void>(engine.execute("CALL db.index.vector.train('memory_embedding')", context)),
@@ -1139,7 +1143,7 @@ namespace graph::query {
 		EXPECT_EQ(backend->training_calls, 0U);
 		// The deadline crosses during preparation, and the maintenance checkpoint
 		// itself observes it on the first periodic sampling boundary.
-		EXPECT_EQ(backend->state->training_cancellation_checks, 1023U);
+		EXPECT_EQ(backend->state->training_cancellation_checks, 1024U);
 		EXPECT_EQ(backend->training_preparations, 1U);
 	}
 

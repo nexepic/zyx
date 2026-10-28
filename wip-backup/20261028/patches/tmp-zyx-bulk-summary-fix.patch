@@ -1,0 +1,367 @@
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index 60906a39..7f18df9b 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -999,6 +999,8 @@ namespace graph::storage {
+ 		NativeGraphIndexTreeMutation mutation;
+ 		IndexTreeMultiPoolMutationPreparer preparer;
+         std::shared_ptr<NativeGraphDeferredIndexImages> images;
++        // Internal streamed Edge summary plan, bound to the same writer-fenced generation.
++        std::optional<NativeGraphEntityFreeSummaryFence> entity_free_summary_fence;
+ 	};
+ 	struct NativeGraphDeferredIndexPlans {
+ 		std::vector<NativeGraphDeferredIndexPlan> plans;
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+index 6e111c75..ebda9239 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -1303,6 +1303,7 @@ namespace graph::storage {
+ 		// durable. Keep the ordinary caller-owned mutations immutable and extend a
+ 		// coordinator-owned copy only through the typed deferred protocol below.
+ 		std::vector<NativeGraphIndexTreeMutation> effectiveIndexMutations = derivedState.index_tree_mutations;
++        std::vector<NativeGraphEntityFreeSummaryFence> effectiveSummaryFences = derivedState.entity_free_summary_fences;
+ 		std::vector<std::vector<IndexTreeMutationPoolBatch>> derivedIndexBatches;
+ 		derivedIndexBatches.reserve(derivedState.index_tree_mutations.size() + (deferredIndexPlanner ? 1U : 0U));
+ 		for (const NativeGraphIndexTreeMutation &mutation: derivedState.index_tree_mutations) {
+@@ -2181,6 +2182,19 @@ namespace graph::storage {
+ 		}
+ 		validateStreamedEdgeLeaseRanges(request.edge_id_reservation, plan.first_edge_id, plan.last_edge_id);
+ 
++        // EntityPageStore attaches through openSnapshot and must be constructed
++        // before the metadata writer is held. Only a stale existing summary
++        // needs an authoritative-page rebuild.
++        std::unique_ptr<EntityPageStore> staleSummaryPages;
++        {
++            auto before = openSnapshot();
++            const auto proof = EntityFreeSpaceIndex::readProof(
++                *this, adjacencyPages, before, EntityPageRecordKind::EPRK_EDGE);
++            if (proof && !proof->fresh) {
++                before.release();
++                staleSummaryPages = std::make_unique<EntityPageStore>(io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
++            }
++        }
+ 		NativeGraphDerivedStateMutation derivedState;
+ 		derivedState.private_segment_plan = privatePlan;
+ 		derivedState.external_private_tail_reservation = request.private_source_tail;
+@@ -2217,7 +2231,7 @@ namespace graph::storage {
+ 				};
+ 
+ 		const NativeGraphEarlyPublicationPlanner earlyPlanner =
+-				[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn](
++				[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn](
+ 						const NativeGraphEarlyPublicationPlanningContext &context) {
+ 					const NativeBulkEdgeRecordSource source = request.durable_source.open(context.current_snapshot);
+ 					NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+@@ -2225,7 +2239,7 @@ namespace graph::storage {
+ 							request.candidate_layout, context.private_segments, catalog, context.current_snapshot,
+ 							request.preparation, context.private_segment_reader, context.private_segment_writer,
+ 							context.private_segment_fence,
+-							[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn, &context](
++							[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn, &context](
+ 									const NativeStreamedGraphPrivatePreparation &prepared,
+ 									const NativeStreamedGraphDeferredPublication &publication) {
+ 								if (!prepared.publication_shape.has_value() || // preparation and publication shape are generated atomically from one authenticated plan.
+@@ -2768,6 +2782,103 @@ namespace graph::storage {
+ 									NativeGraphDeferredIndexPlans indexPlans = NativeStreamedGraphPublicationIndexPlanner::plan(
+ 											catalog, adjacencyPages, largeValueStore, *this, prepared, request.index_planning,
+ 											{context.private_segments, context.private_segment_reader, context.current_snapshot}, checkpointLsn, &publication);
++                                // Streamed pages are full except the final page. Keep an
++                                // existing edge free-space tree consistent with this same
++                                // writer-fenced publication; a missing legacy tree remains absent.
++                                const auto summary = EntityFreeSpaceIndex::readProof(
++                                        *this, adjacencyPages, context.current_snapshot,
++                                        EntityPageRecordKind::EPRK_EDGE);
++                                if (summary) {
++                                    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
++                                    const size_t used = request.publication_plan.record_count % capacity;
++                                    uint64_t freePages = summary->free_pages;
++                                    std::vector<BTreeScalarIndexOperation> operations;
++                                    utils::OwnedHeapReservation operationCredit(utils::OwnedAllocationScope::owner(), 0U);
++                                    const auto append = [&operations, &operationCredit](BTreeScalarIndexOperationKind kind,
++                                                                                       const auto &key, uint64_t value) {
++                                        if (operationCredit.bytes() > std::numeric_limits<size_t>::max() - 256U)
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge summary workspace overflowed");
++                                        operationCredit.set(operationCredit.bytes() + 256U);
++                                        operations.push_back({kind, {key.begin(), key.end()}, value});
++                                    };
++                                    const auto add = [&append](const auto &key, uint64_t value) {
++                                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, key, value);
++                                    };
++                                    if (!summary->fresh) {
++                                        if (!staleSummaryPages || summary->free_pages > std::numeric_limits<size_t>::max() - 3U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary rebuild has no bounded page reader");
++                                        BTreeIndex oldSummary(RSS_EDGE_FREE_SPACE_INDEX_ID, adjacencyPages, *this);
++                                        auto cursor = oldSummary.openRangeCursor(context.current_snapshot, std::nullopt,
++                                            size_t(summary->free_pages) + 3U, BufferPoolReadHint::BPRH_NORMAL);
++                                        size_t visited = 0U;
++                                        while (const auto entry = cursor.next()) {
++                                            append(BTreeScalarIndexOperationKind::BSIOP_ERASE, entry->key, 0U);
++                                            ++visited;
++                                        }
++                                        if (visited != summary->free_pages + 2U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary has inconsistent entries");
++                                        std::set<uint64_t, std::less<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> pagesSeen;
++                                        freePages = 0U;
++                                        visitEdgePageLocations(context.current_snapshot, [&](const EntityPageLocation &location) {
++                                            if (!pagesSeen.insert(location.page_id.value()).second) return;
++                                            const uint16_t remaining = staleSummaryPages->freeSlotCount(
++                                                context.current_snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
++                                            if (remaining) {
++                                                add(EntityFreeSpaceIndex::entryKey(location.page_id, remaining,
++                                                                                   EntityPageRecordKind::EPRK_EDGE), 1U);
++                                                ++freePages;
++                                            }
++                                        });
++                                    }
++                                    if (used != 0U) {
++                                        if (freePages == std::numeric_limits<uint64_t>::max())
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge free-page count overflowed");
++                                        const PageId lastPage(pages.first_entity_page.value() + shape.entity_page_count - 1U);
++                                        add(EntityFreeSpaceIndex::entryKey(lastPage, uint16_t(capacity - used),
++                                                                           EntityPageRecordKind::EPRK_EDGE), 1U);
++                                        ++freePages;
++                                    }
++                                    const uint64_t generation = context.current_superblock.generation.value();
++                                    if (generation >= std::numeric_limits<uint64_t>::max() - 1U ||
++                                        freePages == std::numeric_limits<uint64_t>::max())
++                                        throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                              "streamed Edge summary marker overflowed");
++                                    add(EntityFreeSpaceIndex::generationKey(), generation + 2U);
++                                    add(EntityFreeSpaceIndex::countKey(), freePages + 1U);
++                                    auto plan = adjacencyPages.planScalarIndexTransactionMutation(
++                                            context.current_snapshot, RSS_EDGE_FREE_SPACE_INDEX_ID,
++                                            operations, true, true);
++                                    NativeGraphDeferredIndexPlan deferred;
++                                    deferred.mutation.index_id = RSS_EDGE_FREE_SPACE_INDEX_ID;
++                                    deferred.mutation.expected_root = plan.expected_root;
++                                    deferred.mutation.pool_requests = plan.pool_requests;
++                                    const auto addPool = [&](const BTreeNewIndexTreePoolMutation &pool) {
++                                        deferred.mutation.new_pool_requests.push_back({
++                                            request.index_planning.adjacency.first_slot,
++                                            request.index_planning.adjacency.last_slot,
++                                            pool.owner_id, pool.appended_page_count});
++                                    };
++                                    if (plan.new_pool_mutation) addPool(*plan.new_pool_mutation);
++                                    for (const auto &pool : plan.additional_new_pool_mutations) addPool(pool);
++                                    if (!plan.replacement_root ||
++                                        plan.replacement_root->pool_ordinal < plan.pool_requests.size())
++                                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                            "streamed Edge summary requires a fresh replacement root");
++                                    deferred.mutation.replacement_root = NativeGraphIndexTreeAppendedPageReference{
++                                        plan.replacement_root->pool_ordinal - plan.pool_requests.size(),
++                                        plan.replacement_root->appended_page_ordinal, true};
++                                    deferred.preparer = [preparer = std::move(plan.preparer), checkpointLsn](auto &batches) {
++                                        preparer(batches, checkpointLsn);
++                                    };
++                                    deferred.entity_free_summary_fence = NativeGraphEntityFreeSummaryFence{
++                                        RSS_EDGE_FREE_SPACE_INDEX_ID, context.current_superblock.edge_entity_directory_root,
++                                        Generation(generation + 1U), freePages};
++                                    indexPlans.plans.push_back(std::move(deferred));
++                                }
+ 								for (NativeGraphDeferredIndexPlan &indexPlan: indexPlans.plans) {
+ 									context.deferred_index_plan_sink(std::move(indexPlan));
+ 								}
+diff --git a/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc b/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
+index c8437fab..3ccb5c35 100644
+--- a/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
+@@ -89,9 +89,25 @@
+ 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
+ 				const bool replacesRoot = mutation.replacement_root.has_value();
+ 				const bool retiresRoot = mutation.retire_root;
++                if (plan.entity_free_summary_fence) {
++                    const auto &fence = *plan.entity_free_summary_fence;
++                    if (!earlyPublicationPlanner || fence.index_id != RSS_EDGE_FREE_SPACE_INDEX_ID ||
++                        mutation.index_id != fence.index_id ||
++                        fence.expected_entity_root != current.edge_entity_directory_root ||
++                        !fence.target_directory_generation.isValid() ||
++                        std::ranges::any_of(effectiveSummaryFences, [&fence](const auto &existing) {
++                            return existing.index_id == fence.index_id;
++                        })) {
++                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                              "invalid streamed Edge free-space summary fence");
++                    }
++                    effectiveSummaryFences.push_back(fence);
++                }
+ 				bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+ 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
+-											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
++											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
++                                            (mutation.index_id == RSS_EDGE_FREE_SPACE_INDEX_ID &&
++                                             plan.entity_free_summary_fence.has_value());
+ 				if (!allowedIndexId && isSystemCatalogIndexDefinitionId(mutation.index_id) &&
+ 						replacesRoot && mutation.expected_root.has_value()) {
+ 					// Logical members are admitted only by their authenticated published
+diff --git a/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc b/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
+index 3d841930..abfcceac 100644
+--- a/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
+@@ -939,7 +939,7 @@
+         // A record kind has one published directory root per database generation.
+         // Verify that the marker's semantic generation names the actual result,
+         // rather than guessing a future physical root address in the planner.
+-        for (const auto &fence : derivedState.entity_free_summary_fences) {
++        for (const auto &fence : effectiveSummaryFences) {
+             const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
+                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
+             if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+index 4da37a9c..06eff789 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+@@ -10,6 +10,9 @@
+ 
+ #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
+ #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
++#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
++#include "graph/storage/relocatable/index/BTreePageStore.hpp"
+ #include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
+ #include "graph/storage/relocatable/format/Format.hpp"
+ #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+@@ -250,6 +253,9 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 	snapshot = reopened.openLogicalGraphReadSnapshot();
+ 	EXPECT_EQ(snapshot->readEdge(existing.front()), LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	snapshot.reset();
++	// Pin the pre-retry generation across the streamed publication and verify
++	// the new edge and its derived metadata never leak into the old snapshot.
++	auto preRetrySnapshot = reopened.openLogicalGraphReadSnapshot();
+ 	std::unique_ptr<LogicalGraphTransaction> retry = reopened.beginLogicalGraphTransaction(false);
+ 	auto *const retryBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(retry.get());
+ 	ASSERT_NE(retryBulk, nullptr);
+@@ -263,7 +269,11 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 			  LogicalGraphEdge(committed.front(), nodes[0], nodes[1], "BULK_PROPERTY_SHORT_WRITE_RETRY",
+ 						   {{"payload", PropertyValue("property-short-write")}}));
+ 	snapshot.reset();
++	EXPECT_THROW(static_cast<void>(preRetrySnapshot->readEdge(committed.front())), FormatException);
++	EXPECT_EQ(preRetrySnapshot->readEdge(existing.front()),
++	          LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++	preRetrySnapshot.reset();
+ 	reopened.close();
+ }
+ 
+@@ -1862,3 +1872,119 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePrivateScratchSyncFailureR
+ 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+ 	backend.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebuildsStaleFreeSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    uint64_t expectedFreePages = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    // Preserve the existing entries but make their source-directory marker
++    // stale, as happens after directory relocation. Reopen exercises the real
++    // metadata writer and its budget rather than a mock summary provider.
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        ASSERT_TRUE(stream->is_open());
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        ASSERT_TRUE(proof->fresh);
++        expectedFreePages = proof->free_pages + 1U;
++        const auto checkpoint = LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1U);
++        pin.release();
++        static_cast<void>(trees.upsert(RSS_EDGE_FREE_SPACE_INDEX_ID, EntityFreeSpaceIndex::generationKey(), 1U, checkpoint));
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        EXPECT_TRUE(proof->fresh);
++        EXPECT_EQ(proof->free_pages, expectedFreePages);
++    }
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRetainsFreshSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    backend.close();
++}

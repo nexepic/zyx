@@ -1,0 +1,67 @@
+diff --git a/src/storage/relocatable/metadata/LocationDirectory.cpp b/src/storage/relocatable/metadata/LocationDirectory.cpp
+index 056b2819..99de57cc 100644
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -1563,6 +1563,10 @@ namespace graph::storage {
+ 											"relocatable streamed location append assigned one radix child twice");
+ 			}
+ 			page.children[childIndex] = child;
++			// Logical radix pages discard physical children on write. Preserve the
++			// newly appended child's logical route as well as its physical reference.
++			if (page.logical_children_enabled)
++				page.logical_children[childIndex] = readLocationChildPageId(pages, child, level != 0U);
+ 			pending[level]->assigned_children.set(childIndex);
+ 		}
+ 
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+@@ -1862,3 +1862,49 @@
+ 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+ 	backend.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRetainsFreshSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto reopenedSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_EQ(reopenedSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    EXPECT_EQ(reopenedSnapshot->readEdge(added.front()).target_node_id, nodes[1]);
++    reopenedSnapshot.reset();
++    backend.close();
++}

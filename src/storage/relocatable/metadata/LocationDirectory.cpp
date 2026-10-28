@@ -1563,6 +1563,10 @@ namespace graph::storage {
 											"relocatable streamed location append assigned one radix child twice");
 			}
 			page.children[childIndex] = child;
+			// Logical radix pages discard physical children on write. Preserve the
+			// newly appended child's logical route as well as its physical reference.
+			if (page.logical_children_enabled)
+				page.logical_children[childIndex] = readLocationChildPageId(pages, child, level != 0U);
 			pending[level]->assigned_children.set(childIndex);
 		}
 

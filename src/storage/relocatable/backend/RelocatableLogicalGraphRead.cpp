@@ -1,4 +1,7 @@
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
+#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
+#include "graph/core/PropertyDecodeAllocationScope.hpp"
 /**
  * @file RelocatableLogicalGraphRead.cpp
  * @brief relocatable implementation of the format-independent logical graph reader.
@@ -23,6 +26,7 @@
 #include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/debug/PropertyReadDiagnostic.hpp"
 
 namespace graph::storage {
 
@@ -41,7 +45,11 @@ namespace graph::storage {
 		}
 	} // namespace
 
-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider, public utils::OwnedPmrObject {
+	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider,
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
+            public LogicalGraphBudgetedNonNullProvider,
+#endif
+            public utils::OwnedPmrObject {
 	public:
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
@@ -101,31 +109,65 @@ namespace graph::storage {
 				return native_reads_.readEdgesShapedSorted(snapshot_.metadataSnapshot(), edgeIds, shape, &read_session_, &admission);
 			}
 			[[nodiscard]] PropertyValue readNodeProperty(uint64_t nodeId, const std::string_view key) const override {
-				return native_reads_.readNodeProperty(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
+				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
+                return native_reads_.readNodeProperty(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
 			}
 			[[nodiscard]] std::optional<bool> nodePropertyExists(uint64_t nodeId, const std::string_view key) const override {
 				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
 			}
 			[[nodiscard]] bool supportsPropertyNonNullProbes() const override { return true; }
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
+			[[nodiscard]] bool nodePropertyIsNonNullWithOwner(uint64_t nodeId, std::string_view key,
+					std::shared_ptr<std::pmr::memory_resource> owner) const override {
+				if (!owner || !dynamic_cast<utils::UnmanagedAllocationResource *>(owner.get()))
+					throw std::invalid_argument("presence probe requires an accounting owner");
+				utils::OwnedHeapReservation standardBuffers(owner);
+				utils::OwnedAllocationScope scope(std::move(owner));
+				property_decode::AllocationScope standardScope(&standardBuffers, [](void *context, size_t bytes) {
+					auto &credit = *static_cast<utils::OwnedHeapReservation *>(context);
+					if (bytes > (std::numeric_limits<size_t>::max)() - credit.bytes())
+						throw std::overflow_error("presence probe allocation accounting overflow");
+					credit.set(credit.bytes() + bytes);
+				});
+				BudgetedPresenceScope budgetedPresence;
+				// A local session prevents query-owned cache allocations from escaping
+				// into the snapshot's longer-lived shared session.
+				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, nullptr, true);
+			}
+#endif
 			[[nodiscard]] std::optional<bool> nodePropertyIsNonNull(uint64_t nodeId, const std::string_view key) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_NONNULL);
+#endif
 				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_, true);
 			}
 
 
 			[[nodiscard]] std::vector<PropertyValue>
 			readNodePropertiesSorted(const std::span<const uint64_t> nodeIds, const std::string_view key) const override {
-				return native_reads_.readNodePropertiesSorted(snapshot_.metadataSnapshot(), nodeIds, key, &read_session_);
+				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
+                return native_reads_.readNodePropertiesSorted(snapshot_.metadataSnapshot(), nodeIds, key, &read_session_);
 			}
 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
 			readNodePropertyColumnsSorted(const std::span<const uint64_t> nodeIds,
 																  const std::span<const std::string_view> keys) const override {
-				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
+				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
+                return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
 			}
 			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return true; }
 			[[nodiscard]] bool supportsNodePropertyCellBatches() const override { return true; }
 			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
 				std::span<const std::string_view> keys, const PropertyCellSink &sink,
 				const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
 				if (!admission) throw std::invalid_argument("direct Property cells require admission");
 				native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
 					sink, &read_session_, &admission);
@@ -133,6 +175,9 @@ namespace graph::storage {
             void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
                 std::span<const std::string_view> keys, const PropertyCellSink &sink,
                 const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
                 if (!sink || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
                     sink, &read_session_, &admission, &scalars);
@@ -141,6 +186,9 @@ namespace graph::storage {
                 std::span<const std::string_view> keys, const PropertyCellSink &sink,
                 const PropertyScalarReadSink &scalars, const PropertyTextReadSink &texts,
                 const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
                 if (!sink || !scalars || !texts || !admission)
                     throw std::invalid_argument("typed Property cells require sinks and admission");
                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
@@ -149,6 +197,9 @@ namespace graph::storage {
             bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
                 std::span<const std::string_view> keys, const PropertyCellSink &values,
                 const PropertyColumnBatchReadSinks &batches, const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
                 if (!values || !batches.scalars || !batches.texts || !admission)
                     throw std::invalid_argument("Property runs require sinks and admission");
                 // These singleton fallbacks remain synchronous for complex,
@@ -166,6 +217,9 @@ namespace graph::storage {
 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
 			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
 					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
 				if (!admission) throw std::invalid_argument("Property admission callback must not be empty");
 				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys,
 						&read_session_, &admission);
@@ -683,7 +737,7 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "relocatable logical snapshot has no valid optimistic mutation fence");
 				}
-				return RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock);
+				return backend_.resolvedLogicalGraphMutationFence(superblock);
 			}
 
 			[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {

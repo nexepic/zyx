@@ -1,0 +1,10 @@
+{
+  "protocol_sha256": "6c46512426b6b521c89e94985f3c9e41fc7818e87248b7c1742e0ea78859218d",
+  "source_sha256": "81b9ebbe4a50ce64642eee48c91d22fd91cb7b08679800d2734547372d4e4530",
+  "tests": "19 related tests passed in coverage-instrumented SCAN/HYBRID test build",
+  "work": "New independent sparse mixed fixture evaluates five non-null owning values: the loop no longer calls generic comparison for their five NON_NULL terms; exact count follows code structure, not runtime instrumentation.",
+  "decision": "experimental path remains default off; no end-to-end gain or adoption claimed",
+  "unresolved": "whole-query resource costs, affected write workload, performance attribution and statistical stability",
+  "release_tests": "19 affected tests passed; Release -O3 -DNDEBUG, no LLVM coverage",
+  "release_binary_sha256": "a211eb890aa3c464b4cdbe03408634fa0e61e43cbc405479116b8640bb80947c"
+}

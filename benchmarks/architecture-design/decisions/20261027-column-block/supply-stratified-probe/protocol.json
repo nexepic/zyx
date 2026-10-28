@@ -1,0 +1,17 @@
+{
+ "version": 1,
+ "purpose": "Untimed bounded diagnostic; no performance claim or path selection by dataset",
+ "fixture": "existing persisted SCAN image generator; deterministic IDs 1..N; number equals ID and text equals short; default experimental COUNT off",
+ "sizes": [128, 192, 512],
+ "scenarios": [
+  "public labeled multi-attribute filter plus SUM and COUNT, reopen before query",
+  "sorted dense gather of 32 IDs, two columns, 1 group",
+  "sorted sparse gather of 3 IDs in distinct groups, two columns",
+  "unsorted repeated gather spanning at least two groups, two columns with restored order and multiplicity",
+  "old and new snapshots around one property update, querying both and verifying changed and unchanged values"
+ ],
+ "metrics": "non-timed scoped existing PerfTrace events: group directory window refills/hits/restarts; group/column/membership/cold decodes; grouped columns; performed/saved owner-route checks; typed run admissions; certified IDs, direct rows; absent event means not recorded, not proven zero",
+ "oracle": "complete ordered gather values and multiplicity, complete aggregate result and old/new properties; per scenario independently checked",
+ "analysis": "compare counts per selected owner and distinct group without treating unlike paths as equal; do not add times or infer CPU share; no optimized shortcut without evidence of repeated avoidable work and intact auth/snapshot/budget/cancel/reentry contracts",
+ "constraints": "bounded 512 nodes, 7 MiB fixture work account, relevant tests only, no external fetch, no change to on-disk format"
+}

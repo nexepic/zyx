@@ -451,6 +451,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveColumnFilter.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeColumnPredicates.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_DirectPrimitiveColumnFilter.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_StreamingPredicateCount.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveNumericColumns.cpp"

@@ -1,0 +1,227 @@
+diff --git a/.github/workflows/python-bindings.yml b/.github/workflows/python-bindings.yml
+index a7611502..deb26f35 100644
+--- a/.github/workflows/python-bindings.yml
++++ b/.github/workflows/python-bindings.yml
+@@ -88,6 +88,7 @@ jobs:
+           $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
+           $env:CC = "clang-cl"
+           $env:CXX = "clang-cl"
++          $env:CMAKE_GENERATOR = "Ninja"
+           $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
+           pip install "bindings/python[test]"
+         shell: pwsh
+@@ -140,7 +141,7 @@ jobs:
+             pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
+-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
++          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+ 
+       - name: Upload wheels
+         uses: actions/upload-artifact@v7
+diff --git a/include/graph/query/execution/MaterializedByteBudget.hpp b/include/graph/query/execution/MaterializedByteBudget.hpp
+index 3dbb9124..b57cd598 100644
+--- a/include/graph/query/execution/MaterializedByteBudget.hpp
++++ b/include/graph/query/execution/MaterializedByteBudget.hpp
+@@ -40,6 +40,12 @@ namespace graph::query::execution {
+ 			parent_.emplace(std::move(account));
+ 			upstream_ = upstream;
+ 		}
++		// Used when an enclosing execution state may have no shared account.
++		struct OptionalAccountTag {};
++		MaterializedByteBudget(size_t maximumBytes, std::shared_ptr<detail::ResourceAccount> account, OptionalAccountTag)
++			: MaterializedByteBudget(maximumBytes) {
++			if (account) parent_.emplace(std::move(account));
++		}
+ 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
+ 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
+ 		[[nodiscard]] size_t available() const noexcept { return maximum_bytes_ - used_bytes_; }
+diff --git a/include/graph/utils/OwnedSharedStringMap.hpp b/include/graph/utils/OwnedSharedStringMap.hpp
+index 63389897..9e16f9f1 100644
+--- a/include/graph/utils/OwnedSharedStringMap.hpp
++++ b/include/graph/utils/OwnedSharedStringMap.hpp
+@@ -61,9 +61,9 @@ private:
+     static size_t emptyBytes() {
+ #if defined(_MSVC_STL_VERSION)
+         using namespace utils::detail;
+-        constexpr auto node = sizeof(Map::value_type) + 2U*sizeof(void *) + alignof(Map::value_type) - 1U;
++        constexpr auto node = sizeof(typename Map::value_type) + 2U*sizeof(void *) + alignof(typename Map::value_type) - 1U;
+         return addStandardHeapBytes(2U*standardContainerProxyBytes(),
+-            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Map::value_type)),
++            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(typename Map::value_type)),
+                 standardAllocatorRequestBytes(16U*sizeof(void *), alignof(void *))));
+ #else
+         return 0U;
+diff --git a/src/query/execution/read_runtime/PathOperators.inc b/src/query/execution/read_runtime/PathOperators.inc
+index b55409c3..5203501e 100644
+--- a/src/query/execution/read_runtime/PathOperators.inc
++++ b/src/query/execution/read_runtime/PathOperators.inc
+@@ -816,13 +816,8 @@
+ 						std::vector<storage::LogicalGraphEdge> pathEdgeRecords;
+ 						std::vector<storage::EntityRef> pathEdgeRefs;
+ 						size_t edgeVisits = 0U;
+-						struct AdjacentEdge {
+-							storage::LogicalGraphEdgeTopology topology;
+-							std::optional<storage::EntityRef> reference;
+-						};
+-
+ 						const auto visitAdjacent = [&](uint64_t nodeId,
+-													   const std::function<bool(const AdjacentEdge &,
++																			   const std::function<bool(const VariableTraversalAdjacentEdge &,
+ 																				const storage::LogicalGraphNode &)>
+ 															   &onEdge) {
+ 							std::optional<uint64_t> relationshipTypeToken;
+@@ -985,7 +980,7 @@
+ 																							 reference.source_node_id,
+ 																							 reference.target_node_id,
+ 																							 {}};
+-											if (!onEdge({topology, reference}, target)) {
++												if (!onEdge(VariableTraversalAdjacentEdge{topology, reference}, target)) {
+ 												return false;
+ 											}
+ 										}
+@@ -1128,7 +1123,7 @@
+ 												: batchPredicateTargets ? predicateTarget(targetId)
+ 																		: localTarget.emplace(readPredicateNode(
+ 																				  targetId, localTargetBytes));
+-										if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id,
++												if (!onEdge(VariableTraversalAdjacentEdge{{edge.edge_id, edge.source_node_id, edge.target_node_id,
+ 													  edge.type},
+ 													 std::nullopt},
+ 													target)) {
+@@ -1202,7 +1197,7 @@
+ 							if (depth == maximumHops) {
+ 								return true;
+ 							}
+-							return visitAdjacent(node.node_id, [&](const AdjacentEdge &edge,
++									return visitAdjacent(node.node_id, [&](const VariableTraversalAdjacentEdge &edge,
+ 																   const storage::LogicalGraphNode &target) {
+ 								if (reversePruningEnabled) {
+ 									const auto reachable = reverseDistance.find(target.node_id);
+diff --git a/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp b/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
+index a9a1724f..631e5dd1 100644
+--- a/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
++++ b/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
+@@ -136,6 +136,19 @@ TEST(CoordinatedMaterializedBudgetTest, NullParentAndUpstreamAreRejectedBeforeUs
+ 	EXPECT_THROW((MaterializedByteBudget(100U, accountWithLimit(100U), nullptr)), std::invalid_argument);
+ }
+ 
++TEST(CoordinatedMaterializedBudgetTest, ExplicitOptionalParentPreservesLocalAndSharedAccounting) {
++	MaterializedByteBudget local(100U, nullptr, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation localOwner(&local);
++	localOwner.set(40U); EXPECT_EQ(local.used(), 40U);
++	EXPECT_THROW(localOwner.set(101U), MaterializedByteLimitExceeded);
++	auto account = accountWithLimit(50U);
++	MaterializedByteBudget shared(100U, account, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation sharedOwner(&shared);
++	sharedOwner.set(50U); EXPECT_EQ(account->used(), 50U);
++	EXPECT_THROW(sharedOwner.set(51U), ResourceAdmissionDenied);
++	sharedOwner.reset(); EXPECT_EQ(account->used(), 0U);
++}
++
+ TEST(CoordinatedMaterializedBudgetTest, DetachedOutputRetainsGlobalChargeAfterLocalBudgetDestruction) {
+ 	auto account = accountWithLimit(100U);
+ 	std::optional<ResourceLease> output;
+diff --git a/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp b/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
+index 647c9a0c..11a4de81 100644
+--- a/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
+@@ -119,7 +119,7 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
+ 	auto projectedSource = std::make_unique<logical::LogicalProject>(std::move(source), std::move(items));
+ 	logical::LogicalTraversal traversal(
+ 			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
+-			{{"weight", PropertyValue(int64_t{7})}});
++			OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(int64_t{7})}}));
+ 	std::vector<uint64_t> edgeIds;
+ 	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
+ 	traversalBounds.maximum_adjacency_page_records = 2U;
+diff --git a/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp b/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
+index 46bfbbcd..abf9d77f 100644
+--- a/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
++++ b/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
+@@ -10,7 +10,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsTargetLabelsBeforeMaterializingTyp
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	for (const std::string type: {std::string("KNOWS"), std::string{}}) {
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", type, "out", {"Person"}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", type, "out", {"Person"}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	for (int retry = 0; retry < 2; ++retry) {
+ 		size_t rows = 0U;
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+@@ -31,7 +31,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsMissingTypedTopologyEndpointBefore
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -52,7 +52,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsDuplicateTopologyBeforeReadingEdge
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -73,7 +73,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, ReferenceTraversalRejectsMissingEndpointB
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+diff --git a/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp b/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
+index 2f9cc52d..15e03930 100644
+--- a/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
+@@ -1360,7 +1360,7 @@ TEST(LogicalPlanUnionRuntimeTest, AnonymousTraversalDoesNotCopyUnboundEdgePayloa
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "", "target", "KNOWS", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto permitted = directBounds();
+ 	permitted.maximum_materialized_bytes = 8192U;
+ 	size_t delivered = 0U;
+@@ -1430,7 +1430,7 @@ TEST(LogicalPlanUnionRuntimeTest, CompleteAdjacencyAdmissionCombinesPayloadAndBu
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "r", "target", "", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto bounds = directBounds();
+ 	bounds.maximum_materialized_bytes = 6000U;
+ 	size_t delivered = 0U;
+--- a/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
++++ b/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
+@@ -44,6 +44,13 @@
+ 		};
+ 
+ 
++		// Kept outside the traversal lambda so the callback has a stable type on
++		// compilers that cannot capture a function over a local class correctly.
++		struct VariableTraversalAdjacentEdge {
++			storage::LogicalGraphEdgeTopology topology;
++			std::optional<storage::EntityRef> reference;
++		};
++
+ 		// Query owners outlive every task and all borrowed batch views.
+ 		// Shared caches and budgets are currently confined to one execution thread.
+ 		struct ExecutionSharedState {
+@@ -58,9 +65,8 @@
+ 			// path row that the caller did not request.
+ 			bool allow_cross_row_entity_batches = false;
+ 			size_t resident_output_batch_bytes = 0U;
+-			MaterializedByteBudget materialized_budget = context && context->resource_account
+-				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
+-				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
++			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes,
++				context ? context->resource_account : nullptr, MaterializedByteBudget::OptionalAccountTag{}};
+ 			detail::ProcedureBudgetHandoff procedure_handoff{materialized_budget};
+ 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
+ 			MaterializedByteReservation final_result_reservation{&materialized_budget};

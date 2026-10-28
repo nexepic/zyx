@@ -816,13 +816,8 @@
 						std::vector<storage::LogicalGraphEdge> pathEdgeRecords;
 						std::vector<storage::EntityRef> pathEdgeRefs;
 						size_t edgeVisits = 0U;
-						struct AdjacentEdge {
-							storage::LogicalGraphEdgeTopology topology;
-							std::optional<storage::EntityRef> reference;
-						};
-
 						const auto visitAdjacent = [&](uint64_t nodeId,
-													   const std::function<bool(const AdjacentEdge &,
+																			   const std::function<bool(const VariableTraversalAdjacentEdge &,
 																				const storage::LogicalGraphNode &)>
 															   &onEdge) {
 							std::optional<uint64_t> relationshipTypeToken;
@@ -985,7 +980,7 @@
 																							 reference.source_node_id,
 																							 reference.target_node_id,
 																							 {}};
-											if (!onEdge({topology, reference}, target)) {
+												if (!onEdge(VariableTraversalAdjacentEdge{topology, reference}, target)) {
 												return false;
 											}
 										}
@@ -1128,7 +1123,7 @@
 												: batchPredicateTargets ? predicateTarget(targetId)
 																		: localTarget.emplace(readPredicateNode(
 																				  targetId, localTargetBytes));
-										if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id,
+												if (!onEdge(VariableTraversalAdjacentEdge{{edge.edge_id, edge.source_node_id, edge.target_node_id,
 													  edge.type},
 													 std::nullopt},
 													target)) {
@@ -1202,7 +1197,7 @@
 							if (depth == maximumHops) {
 								return true;
 							}
-							return visitAdjacent(node.node_id, [&](const AdjacentEdge &edge,
+									return visitAdjacent(node.node_id, [&](const VariableTraversalAdjacentEdge &edge,
 																   const storage::LogicalGraphNode &target) {
 								if (reversePruningEnabled) {
 									const auto reachable = reverseDistance.find(target.node_id);

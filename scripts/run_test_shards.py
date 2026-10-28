@@ -19,6 +19,38 @@ from typing import Sequence
 PROCESS_REAP_TIMEOUT_SECONDS = 5.0
 
 
+def _linux_group_has_live_members(process_group_id: int) -> bool:
+    """Return false only when every visible group member is a Linux zombie.
+
+    Unknown or inaccessible state stays active. Zombies cannot execute or keep
+    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
+    """
+    try:
+        entries = list(Path('/proc').iterdir())
+    except OSError:
+        return True
+    found = False
+    for entry in entries:
+        if not entry.name.isdecimal():
+            continue
+        try:
+            stat = (entry / 'stat').read_text()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+        try:
+            fields = stat[stat.rindex(')') + 2:].split()
+            state, group = fields[0], int(fields[2])
+        except (ValueError, IndexError):
+            return True
+        if group == process_group_id:
+            found = True
+            if state not in ('Z', 'X'):
+                return True
+    return not found
+
+
 def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
     """Return whether a shard root or one of its POSIX group members remains."""
     if os.name == "nt":
@@ -31,7 +63,7 @@ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
         return False
     except PermissionError:
         return True
-    return True
+    return _linux_group_has_live_members(process.pid) if sys.platform.startswith('linux') else True
 
 
 def terminate_process_tree(process: subprocess.Popen[bytes], *, force: bool) -> None:
@@ -148,6 +180,9 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
             environment = os.environ.copy()
             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
             environment["GTEST_SHARD_INDEX"] = str(index)
+            xml_directory = environment.get("ZYX_TEST_XML_DIR")
+            if xml_directory:
+                environment["GTEST_OUTPUT"] = f"xml:{Path(xml_directory) / f'shard-{index}.xml'}"
             # Fixtures use the platform temporary-directory API for databases and
             # test artifacts. A private directory prevents independently
             # sharded processes from deleting or reopening each other's artifacts.

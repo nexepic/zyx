@@ -1,0 +1,53 @@
+--- a/tests/src/storage/relocatable/metadata/test_MetadataPublicationReclaimBatch.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataPublicationReclaimBatch.cpp
+@@ -22,20 +22,29 @@
+     e.committed_lsn = LogSequenceNumber(generation); return e;
+ }
+ }
+-TEST_F(RelocatableMetadataPagePoolTest, DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold) {
++TEST_F(RelocatableMetadataPagePoolTest, UnprovenAllocationReconcilesWithoutWaitingForBatchThreshold) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+-    MetadataPagePoolAllocator allocator(io, s); prepareHeadroom(allocator, s);
+-    for (uint32_t i = 0; i < MetadataPagePoolAllocator::PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES; ++i) {
+-        (void)allocator.allocatePage(Generation(1));
+-        allocator.reclaimUnreachable(s, {}, false);
+-        EXPECT_EQ(allocator.stats().allocated_pages,
+-                  i + 1U == MetadataPagePoolAllocator::PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES ? 0U : i + 1U);
+-    }
++    MetadataPagePoolAllocator allocator(io, s);
+     (void)allocator.allocatePage(Generation(1));
++    ASSERT_EQ(allocator.stats().allocated_pages, 1U);
++    // An allocation outside a publication batch invalidates the retirement
++    // proof. The conservative path can reclaim it immediately.
+     allocator.reclaimUnreachable(s, {}, false);
+-    EXPECT_EQ(allocator.stats().allocated_pages, 1U);
+-    allocator.reclaimUnreachable(s, {});
+     EXPECT_EQ(allocator.stats().allocated_pages, 0U);
++}
++TEST_F(RelocatableMetadataPagePoolTest, UnprovenReconciliationPreservesCurrentAndPinnedRoots) {
++    const auto initial = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(initial);
++    MetadataPageFile pages(io, initial); MetadataPagePoolAllocator allocator(io, initial); CatalogTree tree(pages, allocator);
++    const auto old = tree.upsertAndPublish(bootstrap, initial, std::vector{poolEntry(100, 2)}, LogSequenceNumber(2));
++    const auto current = tree.upsertAndPublish(bootstrap, old, std::vector{poolEntry(101, 3)}, LogSequenceNumber(3));
++    (void)allocator.allocatePage(Generation(3));
++    allocator.reclaimUnreachable(current, std::array{old}, false);
++    EXPECT_EQ(tree.find(old, SegmentId(1)).physical_slot, PhysicalSlotId(100));
++    EXPECT_EQ(tree.find(current, SegmentId(1)).physical_slot, PhysicalSlotId(101));
++    const auto pinned = allocator.stats().allocated_pages;
++    allocator.reclaimUnreachable(current, {}, true);
++    EXPECT_LT(allocator.stats().allocated_pages, pinned);
++    EXPECT_EQ(tree.find(current, SegmentId(1)).physical_slot, PhysicalSlotId(101));
+ }
+ TEST_F(RelocatableMetadataPagePoolTest, BatchedAllocationsAlsoTriggerPublicationReclamation) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+@@ -65,8 +74,8 @@
+ }
+ TEST_F(RelocatableMetadataPagePoolTest, RecoveryReclaimsDeferredUnpublishedFrames) {
+     const auto s = initialBlock(); SuperblockFile bootstrap(io); bootstrap.initializeNew(s);
+-    { MetadataPagePoolAllocator allocator(io, s); prepareHeadroom(allocator, s); (void)allocator.allocatePage(Generation(1));
+-      allocator.reclaimUnreachable(s, {}, false); EXPECT_EQ(allocator.stats().allocated_pages, 1U); }
++    { MetadataPagePoolAllocator allocator(io, s); (void)allocator.allocatePage(Generation(1));
++      ASSERT_EQ(allocator.stats().allocated_pages, 1U); }
+     MetadataPagePoolAllocator reopened(io, s);
+     EXPECT_EQ(reopened.stats().allocated_pages, 0U);
+ }

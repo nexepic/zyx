@@ -1,4 +1,20 @@
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#ifndef ZYX_EXPERIMENTAL_STREAMING_COUNT
+#define ZYX_EXPERIMENTAL_STREAMING_COUNT 0
+#endif
+#ifndef ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY
+#define ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY 0
+#endif
+#if ZYX_EXPERIMENTAL_STREAMING_COUNT || defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+#define ZYX_BUILD_STREAMING_COUNT_PATH 1
+#else
+#define ZYX_BUILD_STREAMING_COUNT_PATH 0
+#endif
+#if ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY || defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+#define ZYX_BUILD_BORROWED_GROUP_KEY_PATH 1
+#else
+#define ZYX_BUILD_BORROWED_GROUP_KEY_PATH 0
+#endif
 #include "query/execution/OrderByComparison.hpp"
 #include "query/execution/DeferredReferenceRowVisitor.hpp"
 #include "query/execution/ProcedurePayloadAdmission.hpp"
@@ -20,6 +36,8 @@
 #include "query/execution/BoundNodeScanBatch.hpp"
 #include "query/execution/BoundColumnLayout.hpp"
 #include "query/execution/BoundNodeColumnPredicates.hpp"
+#include "query/execution/StreamingPredicateCount.hpp"
+#include "query/execution/BorrowedGroupKey.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "query/execution/ExternalQuerySort.hpp"
 #include "query/execution/ExternalQueryKeySet.hpp"
@@ -94,6 +112,13 @@
 #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
 
 namespace graph::query::execution {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+    thread_local bool test_disable_streaming_count = false;
+    thread_local bool test_enable_streaming_count = false;
+    thread_local bool test_enable_borrowed_group_key = false;
+    thread_local bool test_force_borrowed_group_collision = false;
+    thread_local bool test_reject_borrowed_group_index = false;
+#endif
 
 	namespace {
 

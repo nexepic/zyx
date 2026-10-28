@@ -10,6 +10,8 @@
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyValueReader.hpp"
+#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
+#include "graph/storage/LogicalGraphRead.hpp"
 
 #include <algorithm>
 #include <array>
@@ -402,6 +404,9 @@ namespace graph::storage {
                     return *result;
             }
         }
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
+		if (BudgetedPresenceScope::active()) throw LogicalGraphBufferPressure();
+#endif
 		const std::optional<EntityPropertyLocation> location =
 			metadata_.findEntityPropertyLocationOptional(snapshot, key);
 		if (!location.has_value()) {
@@ -1521,6 +1526,9 @@ namespace graph::storage {
                 return pointRead();
             }
         }
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
+		if (BudgetedPresenceScope::active()) throw LogicalGraphBufferPressure();
+#endif
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		if (!location.has_value()) {
 			return false;

@@ -1,0 +1,36 @@
+{
+  "initial_protocol_sha256": "b5065f7c4d3596a01c63be68f1d23fec7f96a61f61f8a142c6ebdd01799893f4",
+  "refinement_protocol_sha256": "1a94f60b85a0ae7f77c6bc6ffa6bb8fead775cb9cd14be0d275864f4a973c62b",
+  "plan": [
+    "Aggregate",
+    "Filter(n.number >= 2)",
+    "NodeScan(n:Nodes)"
+  ],
+  "optimizer": "default logical optimizer with no statistics provider; not guaranteed identical to public QueryEngine plan",
+  "observations": {
+    "old": {
+      "selected_checks": 192,
+      "nonnull_checks": 191,
+      "cross_stage_repeated_owners": 191,
+      "other": 0,
+      "sum": 18527,
+      "count": 191
+    },
+    "new": {
+      "selected_checks": 192,
+      "nonnull_checks": 192,
+      "cross_stage_repeated_owners": 192,
+      "other": 0,
+      "sum": 19526,
+      "count": 192
+    }
+  },
+  "test_build": "coverage-instrumented SCAN/HYBRID test build; instrumentation compiled only with ZYX_ENABLE_STORAGE_TEST_HOOKS",
+  "contracts": "11 existing related tests passed; identity diagnostic and phase refinement passed with complete old/new oracle",
+  "decision": "same-owner same-snapshot duplicate established; no production reuse implementation or net-benefit claim; bounded combined presence/value capability remains a proposed design",
+  "limitations": [
+    "single optimized logical plan, deterministic 192-node image",
+    "event counts not elapsed or CPU times",
+    "no microbenchmark comparison until a safe candidate and same-path control exist"
+  ]
+}

@@ -142,6 +142,51 @@
                             }
                             nodeIds = ownedNodeIds;
                         }
+
+#if ZYX_BUILD_STREAMING_COUNT_PATH
+                        if (streamingCountEnabled() && certifiedSource && columnReceiver && columnReceiver->consumeCount && keyViews.size() == 1U) {
+                            std::optional<size_t> accepted;
+                            bool guardFailed = false;
+                            const auto guard = [&] {
+                                try { checkGuardNow(state); } catch (...) { guardFailed = true; throw; }
+                            };
+                            try {
+                                detail::BoundNodeColumnPredicates predicates(scan, parameterPredicates, propertyKeys,
+                                    state.shared.materialized_budget);
+                                predicates.appendSingleColumnPredicates(columnReceiver->countPredicates);
+                                if (!predicates.predicates().empty()) {
+                                    detail::StreamingPredicateCount count(state.shared.snapshot, nodeIds.size(),
+                                        predicates.predicates(), state.shared.materialized_budget);
+                                    MaterializedByteReservation scratch(&state.shared.materialized_budget);
+                                    const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                                        count.value(row, column, value, guard);
+                                    };
+                                    storage::PropertyColumnBatchReadSinks runs;
+                                    runs.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
+                                        std::span<const uint64_t> words) { count.scalars(rows, column, type, words, guard); };
+                                    runs.texts = [&](std::span<const size_t> rows, size_t column,
+                                        std::span<const std::string_view> values) { count.texts(rows, column, values, guard); };
+                                    (*certifiedSource)(nodeIds, owning, runs, [&](size_t bytes) {
+                                        guard(); scratch.set(checkedSizeAdd(scratch.bytes(), bytes, "streaming count source overflowed"));
+                                    });
+                                    accepted = count.finish(guard);
+                                }
+                            } catch (const MaterializedByteLimitExceeded &) {
+                                if (guardFailed) throw;
+                                throw NodeColumnBytePressure{};
+                            } catch (const storage::LogicalGraphBufferPressure &) {
+                                if (guardFailed) throw;
+                                if (nodeIds.size() > 1U) throw NodeColumnBytePressure{};
+                                // An indivisible source retains the established owning fallback.
+                            }
+                            if (accepted) {
+                                debug::PerfTrace::addValue("logical_plan.streaming_count.source_rows", static_cast<int64_t>(nodeIds.size()));
+                                debug::PerfTrace::addValue("logical_plan.streaming_count.state_bytes", static_cast<int64_t>(nodeIds.size()));
+                                // Consumer exceptions escape without replay of an already delivered reduction.
+                                return columnReceiver->consumeCount(*accepted);
+                            }
+                        }
+#endif
 						if (columnReceiver && columnReceiver->consumeDirect &&
 							state.shared.snapshot.supportsNodePropertyCellBatches()) {
 							std::optional<detail::DirectPropertyColumns> direct;

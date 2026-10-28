@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "status": "frozen before timing; execution not yet performed",
+  "objective": "Same-path control/candidate comparison for the experimental borrowed multi-key lookup; not the historical formal window or an adoption decision",
+  "build": "Release -O3 -DNDEBUG, coverage off, no test-hook instrumentation in timed query runtime; two binaries differ only in ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY=0/1, streaming COUNT off, identical SCAN/HYBRID format flags",
+  "fixture": "Separate deterministic persisted SCAN image with 512 and 1536 nodes, reopened before measurement; no input from the 240-row correctness fixture. Two grouping properties and count, no benchmark-name or size-based dispatch.",
+  "scenarios": ["six repeating primitive tuples with short text", "all distinct primitive tuples with short text", "six repeating tuples with 1024-byte text", "all distinct tuples with 1024-byte text", "mixed primitive, missing, NULL and list fallback"],
+  "oracle": "independently compute every tuple/count from fixture generation; compare complete result on every run, not aggregate row count only",
+  "sampling": "3 independent processes per case; 3 warmups per arm and 8 measured samples per arm; alternate arm order; same machine, binary flags except experiment, reopened identical fixture, 64 MiB query materialization budget, no parallel load",
+  "resources": "Capture process peak RSS for each arm separately and document process-level scope; report index-request bytes and serialized bytes only in a separate untimed instrumented run; query allocation bytes if independently available, otherwise explicitly unavailable",
+  "costs": "Record fixture generation/reopen and same-image query resources separately; no claim about write cost, cold cache, concurrency, P95, Kuzu or R1/R2 completion",
+  "stopping": "Abort on oracle mismatch, unbounded resource use, budget mismatch, unsupported fixture, compiler instrumentation uncertainty, or unavailable complete inputs. Preserve raw samples and failure results; do not select thresholds from results."
+}

@@ -1,0 +1,56 @@
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -128,15 +128,34 @@
+ #endif
+ 		}
+ 
++        struct MetadataCoordinationRegistry {
++            std::mutex mutex;
++            std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
++        };
++        MetadataCoordinationRegistry &metadataCoordinationRegistry() {
++            // Backends may be destroyed during static teardown after their first
++            // open. Keep this process-wide synchronization object alive then.
++            static auto *registry = new MetadataCoordinationRegistry;
++            return *registry;
++        }
++        void pruneMetadataCoordinationRegistry() noexcept {
++            try {
++                auto &registry = metadataCoordinationRegistry();
++                std::lock_guard lock(registry.mutex);
++                for (auto it = registry.domains.begin(); it != registry.domains.end();)
++                    if (it->second.expired()) it = registry.domains.erase(it); else ++it;
++            } catch (...) {
++                // Releasing a backend must remain noexcept.
++            }
++        }
+         [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
+             const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner) {
+-            static std::mutex mutex;
+-            static std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
+-            std::lock_guard lock(mutex);
+-            for (auto it = domains.begin(); it != domains.end();)
+-                if (it->second.expired()) it = domains.erase(it); else ++it;
+-            if (auto existing = domains[key].lock()) return existing;
+-            auto created = makeMetadataSnapshotCoordination(owner); domains[key] = created; return created;
++            auto &registry = metadataCoordinationRegistry();
++            std::lock_guard lock(registry.mutex);
++            for (auto it = registry.domains.begin(); it != registry.domains.end();)
++                if (it->second.expired()) it = registry.domains.erase(it); else ++it;
++            if (auto existing = registry.domains[key].lock()) return existing;
++            auto created = makeMetadataSnapshotCoordination(owner); registry.domains[key] = created; return created;
+         }
+ 
+ 		[[nodiscard]] std::shared_ptr<std::mutex>
+--- a/src/storage/relocatable/backend/backend_runtime/SchemaAndAdministration.inc
++++ b/src/storage/relocatable/backend/backend_runtime/SchemaAndAdministration.inc
+@@ -1820,6 +1820,9 @@
+ 		vector_codebooks_.reset();
+ 		physical_.reset();
+ 		metadata_.reset();
++        // Expired weak coordination control blocks retain their prepaid owner
++        // until removed; live aliases and pins remain in the registry.
++        pruneMetadataCoordinationRegistry();
+ 		data_file_.reset();
+         database_file_limit_.reset();
+         native_cache_memory_.reset();

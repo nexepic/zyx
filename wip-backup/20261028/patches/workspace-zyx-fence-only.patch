@@ -1,0 +1,179 @@
+--- a/include/graph/storage/LogicalGraphRead.hpp
++++ b/include/graph/storage/LogicalGraphRead.hpp
+@@ -349,6 +349,9 @@
+ 		// derived in-memory views detect those staged graph changes without
+ 		// exposing or fabricating physical page locations.
+ 		uint64_t logical_revision = 0U;
++		// A published data Page Directory root changes for graph-page COW even
++		// when typed Entity and Property directory roots remain unchanged.
++		std::array<uint64_t, GRAPH_STATE_TOKENS_PER_ROOT> data_page_root_tokens{};
+ 
+ 		[[nodiscard]] constexpr bool isValid() const { return backend_token != 0U && format_token != 0U; }
+ 		constexpr bool operator==(const LogicalGraphMutationFence &) const = default;
+--- a/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
++++ b/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp
+@@ -563,6 +563,7 @@
+ 
+ 	private:
+ 		friend class RelocatableLogicalGraphReadSnapshot;
++		[[nodiscard]] LogicalGraphMutationFence resolvedLogicalGraphMutationFence(const Superblock &superblock) const;
+ 		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeMutationBatch(
+ 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+ 			const LogicalGraphMutationReadControl &control,
+--- a/src/query/gds/LogicalProjectionCatalog.cpp
++++ b/src/query/gds/LogicalProjectionCatalog.cpp
+@@ -65,6 +65,7 @@
+ 		for (const uint64_t token: fence.graph_state_tokens) {
+ 			combine(token);
+ 		}
++		for (const uint64_t token: fence.data_page_root_tokens) combine(token);
+ 		combine(fence.logical_revision);
+ 		return value;
+ 	}
+--- a/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
++++ b/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
+@@ -683,7 +683,7 @@
+ 					throw FormatException(FormatError::FERR_INVALID_STATE,
+ 										  "relocatable logical snapshot has no valid optimistic mutation fence");
+ 				}
+-				return RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock);
++				return backend_.resolvedLogicalGraphMutationFence(superblock);
+ 			}
+ 
+ 			[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -1622,6 +1622,20 @@
+ 		return fence;
+ 	}
+ 
++	LogicalGraphMutationFence RelocatableStorageBackend::resolvedLogicalGraphMutationFence(const Superblock &superblock) const {
++		auto fence = makeLogicalGraphMutationFence(superblock);
++		PhysicalPageRef dataRoot = superblock.page_directory_root;
++		if (superblock.usesPageDirectoryBootstrap() && dataRoot.isValid()) {
++			MetadataPageFile pages(data_file_->io(), superblock);
++			const auto header = pages.readPageDirectoryBootstrap(dataRoot);
++			if (header.generation > superblock.generation || header.committed_lsn > superblock.checkpoint_lsn)
++				throw FormatException(FormatError::FERR_INVALID_STATE, "Page Directory bootstrap is newer than its Superblock");
++			dataRoot = header.data_page_directory_root;
++		}
++		fence.data_page_root_tokens = {dataRoot.physical_slot.value(), dataRoot.frame_index, dataRoot.generation.value()};
++		return fence;
++	}
++
+ 	LogicalGraphSchemaIdentity RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(const Superblock &superblock) {
+ 		const auto fence = makeLogicalGraphMutationFence(superblock);
+ 		const auto &catalog = superblock.index_root_directory_root;
+@@ -1706,7 +1720,7 @@
+ 		for (size_t attempt = 0U; attempt < MAX_SNAPSHOT_RETRIES; ++attempt) {
+ 			RelocatableReadSnapshot rawSnapshot = openSnapshot();
+ 			const Superblock &superblock = rawSnapshot.superblock();
+-			const LogicalGraphMutationFence expectedFence = makeLogicalGraphMutationFence(superblock);
++			const LogicalGraphMutationFence expectedFence = resolvedLogicalGraphMutationFence(superblock);
+ 			const Generation baseMetadataGeneration = superblock.generation;
+ 			std::unique_ptr<LogicalGraphVectorSearchSnapshot> logicalSnapshot = openLogicalGraphVectorSearchSnapshot();
+ 			if (logicalSnapshot == nullptr) {
+@@ -1847,7 +1861,7 @@
+ 	LogicalGraphMutationFence RelocatableStorageBackend::currentNativeLogicalGraphMutationFence() const {
+ 		requireOpen();
+ 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+-		const LogicalGraphMutationFence fence = makeLogicalGraphMutationFence(snapshot.superblock());
++		const LogicalGraphMutationFence fence = resolvedLogicalGraphMutationFence(snapshot.superblock());
+ 		snapshot.release();
+ 		return fence;
+ 	}
+@@ -1979,7 +1993,7 @@
+ 		auto publicationFence = acquireNativePublicationGate();
+ 		MetadataSnapshotPin current = metadata_->openSnapshot();
+ 		NativeStreamedGraphPublicationPlan publicationPlan = plan;
+-		if (makeLogicalGraphMutationFence(current.superblock()) != expectedFence) {
++		if (resolvedLogicalGraphMutationFence(current.superblock()) != expectedFence) {
+ 			// The sealed source owns no mutable graph state. Revalidate its endpoint
+ 			// dependency under the publication gate, then rebuild all COW shapes from
+ 			// the current roots so an independent adjacency publication is retained.
+@@ -2252,7 +2266,7 @@
+ 		const LogicalGraphMutationBatch &batch, const RelocatableReadSnapshot &source,
+ 		const LogicalGraphMutationFence &expected) {
+ 		requireOwnedSnapshot(source);
+-		if (makeLogicalGraphMutationFence(source.superblock()) != expected ||
++		if (resolvedLogicalGraphMutationFence(source.superblock()) != expected ||
+ 			batch.property_replacements.empty() || batch.property_replacements.size() > 64U ||
+ 			!batch.node_creates.empty() || !batch.edge_creates.empty() || !batch.node_deletes.empty() ||
+ 			!batch.edge_deletes.empty() || !batch.node_label_replacements.empty() || batch.creation_identity_plan)
+@@ -2313,8 +2327,8 @@
+ 		NativeGraphMutationFenceValidator fenceValidator;
+ 		if (expectedFence.has_value()) {
+ 			const LogicalGraphMutationFence expected = *expectedFence;
+-			fenceValidator = [expected](const Superblock &base) {
+-				return RelocatableStorageBackend::makeLogicalGraphMutationFence(base) == expected;
++			fenceValidator = [this, expected](const Superblock &base) {
++				return resolvedLogicalGraphMutationFence(base) == expected;
+ 			};
+ 		}
+ 
+@@ -2322,11 +2336,11 @@
+ 		for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
+ 			MetadataSnapshotPin beforeExecution = metadata_->openSnapshot();
+ 			const LogicalGraphMutationFence graphFenceBeforeExecution =
+-					makeLogicalGraphMutationFence(beforeExecution.superblock());
++					resolvedLogicalGraphMutationFence(beforeExecution.superblock());
+ 			if (rebaseValidation) {
+ 				rebaseValidation(beforeExecution);
+-				fenceValidator = [graphFenceBeforeExecution](const Superblock &base) {
+-					return makeLogicalGraphMutationFence(base) == graphFenceBeforeExecution;
++				fenceValidator = [this, graphFenceBeforeExecution](const Superblock &base) {
++					return resolvedLogicalGraphMutationFence(base) == graphFenceBeforeExecution;
+ 				};
+ 			}
+ 			beforeExecution.release();
+@@ -2345,7 +2359,7 @@
+ 				try {
+ 					MetadataSnapshotPin afterFailure = metadata_->openSnapshot();
+ 					const bool graphStateChanged =
+-							makeLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
++							resolvedLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
+ 					afterFailure.release();
+ 					if (graphStateChanged) {
+ 						requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendIsolation.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendIsolation.cpp
+@@ -28,7 +28,9 @@
+ 		for (auto id : ids) EXPECT_EQ(transaction->readSnapshot().readNodeProperty(id, "on_call"), PropertyValue(true));
+ 	(void) first->stageMutationBatch(isolationSet(ids[0], "on_call", PropertyValue(false)));
+ 	(void) second->stageMutationBatch(isolationSet(ids[1], "on_call", PropertyValue(false)));
++	const auto fenceBeforeFirstCommit = backend.currentNativeLogicalGraphMutationFence();
+ 	(void) first->commit();
++	EXPECT_NE(backend.currentNativeLogicalGraphMutationFence(), fenceBeforeFirstCommit);
+ 	EXPECT_THROW(static_cast<void>(second->commit()), LogicalGraphMutationConflict);
+ 	EXPECT_EQ(second->state(), LogicalGraphTransactionState::LGTTS_CONFLICTED);
+ 	for (auto id : ids) EXPECT_EQ(reader->readSnapshot().readNodeProperty(id, "on_call"), PropertyValue(true));
+@@ -38,6 +40,12 @@
+ 	EXPECT_EQ(fresh->readNodeProperty(ids[1], "on_call"), PropertyValue(true));
+ 	fresh.reset();
+ 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
++	backend.open();
++	auto reopened = backend.openLogicalGraphReadSnapshot();
++	EXPECT_EQ(reopened->readNodeProperty(ids[0], "on_call"), PropertyValue(false));
++	EXPECT_EQ(reopened->readNodeProperty(ids[1], "on_call"), PropertyValue(true));
++	reopened.reset();
++	backend.close();
+ }
+ 
+ TEST_F(RelocatableStorageBackendTest, IsolationRangeReadsRetainOldMembershipAndDerivedWriteConflictsOnPhantom) {
+@@ -162,3 +170,16 @@
+ 	auto fresh=backend.openLogicalGraphReadSnapshot();EXPECT_EQ(fresh->readNodeProperty(ids[0],"value"),PropertyValue(11));EXPECT_EQ(fresh->readNodeProperty(ids[1],"value"),PropertyValue(22));
+ 	fresh.reset();(void)reader->commit();EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, LogicalIdLeaseDoesNotChangeGraphFence) {
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto before = backend.currentNativeLogicalGraphMutationFence();
++    const auto generation = backend.currentNativeMetadataGeneration();
++    auto reservation = backend.reserveLogicalGraphCreationIds(1U, 0U);
++    EXPECT_GT(backend.currentNativeMetadataGeneration(), generation);
++    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), before);
++    backend.abandonLogicalGraphCreationIds(reservation);
++    backend.close();
++}

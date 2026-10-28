@@ -61,9 +61,9 @@ private:
     static size_t emptyBytes() {
 #if defined(_MSVC_STL_VERSION)
         using namespace utils::detail;
-        constexpr auto node = sizeof(Map::value_type) + 2U*sizeof(void *) + alignof(Map::value_type) - 1U;
+        constexpr auto node = sizeof(typename Map::value_type) + 2U*sizeof(void *) + alignof(typename Map::value_type) - 1U;
         return addStandardHeapBytes(2U*standardContainerProxyBytes(),
-            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Map::value_type)),
+            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(typename Map::value_type)),
                 standardAllocatorRequestBytes(16U*sizeof(void *), alignof(void *))));
 #else
         return 0U;

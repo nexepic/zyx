@@ -1,0 +1,94 @@
+{
+  "fixtures": [
+    {
+      "rows": 512,
+      "mode": 0,
+      "returncode": 0,
+      "log": "/tmp/zyx-borrowed-fixture3-run.log",
+      "path": "/tmp/zyx-borrowed-frozen-512-0.dat",
+      "bytes": 1441792,
+      "sha256": "b980a9889900e6c8c5bd22dfb74f4ef48bb46bd1e7ea0ec0374079962d089326"
+    },
+    {
+      "rows": 512,
+      "mode": 1,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-512-1.log",
+      "path": "/tmp/zyx-borrowed-frozen-512-1.dat",
+      "bytes": 1441792,
+      "sha256": "3472ce26a23c57ead4b8c68c340746137bd40e9b6fb24b281a27a7d62498d45b"
+    },
+    {
+      "rows": 512,
+      "mode": 2,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-512-2.log",
+      "path": "/tmp/zyx-borrowed-frozen-512-2.dat",
+      "bytes": 1572864,
+      "sha256": "228ad5d057fbd72b65a6cadea3279f8474a6394d06564a6e964da8bd3c2decb5"
+    },
+    {
+      "rows": 512,
+      "mode": 3,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-512-3.log",
+      "path": "/tmp/zyx-borrowed-frozen-512-3.dat",
+      "bytes": 1572864,
+      "sha256": "f3dd8a4b48824fe97a3aefbed342dd74902535f6ffd86ca25f6432254a0e8884"
+    },
+    {
+      "rows": 512,
+      "mode": 4,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-512-4.log",
+      "path": "/tmp/zyx-borrowed-frozen-512-4.dat",
+      "bytes": 1441792,
+      "sha256": "eaf6891f96d4ff58fa28b3d84dbef9390fdd450dbff72b1b69008ece0c59905b"
+    },
+    {
+      "rows": 1536,
+      "mode": 0,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-1536-0.log",
+      "path": "/tmp/zyx-borrowed-frozen-1536-0.dat",
+      "bytes": 1572864,
+      "sha256": "994e3321d63aacfb93924df57b6def61de1b2be8778f581fc61b66a398826e2f"
+    },
+    {
+      "rows": 1536,
+      "mode": 1,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-1536-1.log",
+      "path": "/tmp/zyx-borrowed-frozen-1536-1.dat",
+      "bytes": 1572864,
+      "sha256": "7e291ba22c6be1ac1d4574f7d5bf872f47fecb15cf8dd463215773a70ec59b1c"
+    },
+    {
+      "rows": 1536,
+      "mode": 2,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-1536-2.log",
+      "path": "/tmp/zyx-borrowed-frozen-1536-2.dat",
+      "bytes": 1966080,
+      "sha256": "1c0e9b376e869af5151b7b038ec834aa56ce30c258bbdeeada89f5386586eea4"
+    },
+    {
+      "rows": 1536,
+      "mode": 3,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-1536-3.log",
+      "path": "/tmp/zyx-borrowed-frozen-1536-3.dat",
+      "bytes": 1966080,
+      "sha256": "b3474215159569c8055b970025a3732f50366254211d4860c1e14a8ae56ec429"
+    },
+    {
+      "rows": 1536,
+      "mode": 4,
+      "returncode": 0,
+      "log": "/workspace/zyx/benchmarks/architecture-design/decisions/20261027-column-block/group-key-review/fixture-1536-4.log",
+      "path": "/tmp/zyx-borrowed-frozen-1536-4.dat",
+      "bytes": 1572864,
+      "sha256": "aa9c9e6ecf8dbc65ce64eb2ecb634121fd9fe263ad6e1f69bd7ea05576b9a99c"
+    }
+  ]
+}

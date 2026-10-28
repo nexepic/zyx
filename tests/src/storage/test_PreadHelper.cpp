@@ -12,6 +12,13 @@
 #include <chrono>
 #include <filesystem>
 #include "graph/storage/PreadHelper.hpp"
+#ifdef _WIN32
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
+#include <atomic>
+#include <thread>
+#endif
 
 using namespace graph::storage;
 
@@ -145,6 +152,119 @@ TEST_F(PreadHelperTest, ZeroCountReadReturnsError) {
 
 	portable_close(fd);
 }
+
+#ifdef _WIN32
+TEST_F(PreadHelperTest, ReadOnlyStorageBorrowsLeaseWithoutEscapingWriterHandle) {
+    struct Handles {
+        file_handle_t writer = INVALID_FILE_HANDLE;
+        file_handle_t reader = INVALID_FILE_HANDLE;
+        ~Handles() {
+            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
+            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
+        }
+    } handles;
+    // Open the read-only handle first, then independently open the writer.
+    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
+    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
+    handles.writer = portable_open_rw(testFile_.c_str());
+    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
+    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
+    char before = 0, during = 0, after = 0;
+    ASSERT_EQ(io.readAt(0U, &before, 1U), 1U);
+    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
+    ASSERT_NE(token, INVALID_FILE_HANDLE);
+    struct Lease {
+        file_handle_t handle;
+        bool held = true;
+        ~Lease() { if (held) detail::WindowsLeaseReadBridge::unlock(handle); }
+    } lease{token};
+    EXPECT_EQ(io.readAt(0U, &during, 1U), 1U);
+    EXPECT_EQ(before, during);
+    std::atomic<bool> failed{false};
+    std::thread reader([&] {
+        try {
+            for (size_t i = 0; i < 100U; ++i) {
+                char value = 0;
+                if (io.readAt(0U, &value, 1U) != 1U || value != before) failed = true;
+            }
+        } catch (...) { failed = true; }
+    });
+    const int closeResult = portable_close_rw(handles.writer);
+    EXPECT_EQ(closeResult, 0);
+    if (closeResult == 0) handles.writer = INVALID_FILE_HANDLE;
+    const file_handle_t contender = portable_open_rw(testFile_.c_str());
+    EXPECT_NE(contender, INVALID_FILE_HANDLE);
+    if (contender != INVALID_FILE_HANDLE) {
+        OVERLAPPED overlap = {};
+        const BOOL acquired = ::LockFileEx(reinterpret_cast<HANDLE>(contender),
+            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlap);
+        const DWORD error = acquired ? ERROR_SUCCESS : ::GetLastError();
+        EXPECT_FALSE(acquired);
+        if (!acquired) EXPECT_EQ(error, ERROR_LOCK_VIOLATION);
+        else ::UnlockFileEx(reinterpret_cast<HANDLE>(contender), 0U, 1U, 0U, &overlap);
+        portable_close_rw(contender);
+    }
+    detail::WindowsLeaseReadBridge::unlock(token);
+    lease.held = false;
+    reader.join();
+    EXPECT_FALSE(failed.load());
+    EXPECT_EQ(io.readAt(0U, &after, 1U), 1U);
+    EXPECT_EQ(before, after);
+}
+#endif
+
+#ifdef _WIN32
+TEST_F(PreadHelperTest, ReadOnlyLeaseBorrowResolvesHardLinkIdentity) {
+    const std::string alias = testFile_ + ".hardlink";
+    struct RemoveAlias { std::string path; ~RemoveAlias() { std::error_code ec; std::filesystem::remove(path, ec); } } cleanup{alias};
+    ASSERT_TRUE(::CreateHardLinkA(alias.c_str(), testFile_.c_str(), nullptr));
+    struct Handles {
+        file_handle_t writer = INVALID_FILE_HANDLE, reader = INVALID_FILE_HANDLE;
+        ~Handles() {
+            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
+            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
+        }
+    } handles;
+    handles.reader = portable_open(alias.c_str(), O_RDONLY);
+    handles.writer = portable_open_rw(testFile_.c_str());
+    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
+    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
+    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
+    ASSERT_NE(token, INVALID_FILE_HANDLE);
+    struct Lease { file_handle_t handle; ~Lease() { detail::WindowsLeaseReadBridge::unlock(handle); } } lease{token};
+    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
+    char value = 0;
+    EXPECT_EQ(io.readAt(0U, &value, 1U), 1U);
+}
+#endif
+
+#ifdef _WIN32
+TEST_F(PreadHelperTest, WindowsExclusiveByteLockUsesTheLockingHandle) {
+    struct Handles {
+        file_handle_t writer = INVALID_FILE_HANDLE;
+        file_handle_t reader = INVALID_FILE_HANDLE;
+        ~Handles() {
+            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
+            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
+        }
+    } handles;
+    handles.writer = portable_open_rw(testFile_.c_str());
+    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
+    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
+    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
+    const file_handle_t writer = handles.writer, reader = handles.reader;
+    OVERLAPPED lock = {};
+    ASSERT_TRUE(::LockFileEx(reinterpret_cast<HANDLE>(writer),
+                             LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                             0U, 1U, 0U, &lock));
+    char value = 0;
+    EXPECT_EQ(portable_pread(writer, &value, 1U, 0), 1);
+    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), -1);
+    EXPECT_EQ(::GetLastError(), ERROR_LOCK_VIOLATION);
+    EXPECT_TRUE(::UnlockFileEx(reinterpret_cast<HANDLE>(writer), 0U, 1U, 0U, &lock));
+    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), 1);
+}
+#endif
 
 #ifdef _WIN32
 TEST_F(PreadHelperTest, LargeOffsetOnWindows) {

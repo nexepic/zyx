@@ -1,0 +1,49 @@
+--- a/tests/src/storage/relocatable/entity/test_EntityPageStoreScanCache.cpp
++++ b/tests/src/storage/relocatable/entity/test_EntityPageStoreScanCache.cpp
+@@ -149,10 +149,10 @@
+ 	EXPECT_EQ(secondIds, firstIds);
+ 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
+ 	// Typed scans visit only the Node Entity directory and its Node page. The
+-	// second scan may re-admit the directory and data page, but never an Edge
+-	// page or the generic Page Directory stream.
+-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
++	// warm scan re-reads the sequential Entity data page; typed metadata
++	// remains resident and an Edge page is never needed.
++	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 1U);
+ 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
+ 
+ 	std::vector<uint64_t> resumedIds;
+@@ -166,8 +166,8 @@
+ 	const BufferPoolStats afterResumed = io_->bufferPoolStats();
+ 	// Ordered resume uses the same typed Entity directory contract and does not
+ 	// fall back to the generic Page Directory traversal.
+-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 2U);
++	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 1U);
+ 	EXPECT_EQ(afterResumed.resident_bytes, afterSecond.resident_bytes);
+ }
+ 
+@@ -188,15 +188,15 @@
+ 	}));
+ 	EXPECT_EQ(secondIds, firstIds);
+ 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
+-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
++	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 1U);
+ 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
+ 
+ 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
+ 	const BufferPoolStats afterFirstPoint = io_->bufferPoolStats();
+-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), 2U * RSS_PAGE_SIZE);
+-	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 2U);
+-	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + 2U * RSS_PAGE_SIZE);
++	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), RSS_PAGE_SIZE);
++	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 1U);
++	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + RSS_PAGE_SIZE);
+ 
+ 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
+ 	const BufferPoolStats afterSecondPoint = io_->bufferPoolStats();

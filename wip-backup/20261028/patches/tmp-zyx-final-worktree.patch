@@ -1,0 +1,3020 @@
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index 93dd678f..82d99467 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -257,9 +257,19 @@ jobs:
+         shell: bash
+ 
+       - name: Run Unit Tests
++        id: unit_tests
+         run: |
+           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
+-          ctest --test-dir buildDir --build-config Debug --output-on-failure
++          python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite
++        shell: bash
++
++      # Preserve the original large-scale correctness and recovery contracts as
++      # an explicit gate; a smaller unit case does not replace these checks.
++      - name: Run storage stress gates
++        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
++        run: |
++          export LLVM_PROFILE_FILE="$PWD/buildDir/stress-%p.profraw"
++          python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite
+         shell: bash
+ 
+       # Keep the storage-format cutover visible as an explicit cross-platform
+diff --git a/.github/workflows/python-bindings.yml b/.github/workflows/python-bindings.yml
+index a7611502..deb26f35 100644
+--- a/.github/workflows/python-bindings.yml
++++ b/.github/workflows/python-bindings.yml
+@@ -88,6 +88,7 @@ jobs:
+           $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
+           $env:CC = "clang-cl"
+           $env:CXX = "clang-cl"
++          $env:CMAKE_GENERATOR = "Ninja"
+           $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
+           pip install "bindings/python[test]"
+         shell: pwsh
+@@ -140,7 +141,7 @@ jobs:
+             pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
+-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
++          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+ 
+       - name: Upload wheels
+         uses: actions/upload-artifact@v7
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cb5006e0..f3d457bc 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -17,6 +17,14 @@ option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
+ option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
+ option(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT "Build isolated hybrid-property format prototype" OFF)
+ option(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT "Build isolated complete-scan format prototype" OFF)
++option(ZYX_EXPERIMENTAL_STREAMING_COUNT "Enable experimental streaming count fusion" OFF)
++option(ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY "Enable experimental borrowed group-key lookup" OFF)
++option(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE "Expose experimental budgeted non-null probes" OFF)
++set_source_files_properties("${PROJECT_SOURCE_DIR}/src/query/execution/LogicalPlanReadRuntime.cpp" PROPERTIES
++    COMPILE_DEFINITIONS "ZYX_EXPERIMENTAL_STREAMING_COUNT=$<BOOL:${ZYX_EXPERIMENTAL_STREAMING_COUNT}>;ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY=$<BOOL:${ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY}>")
++set_source_files_properties("${PROJECT_SOURCE_DIR}/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp"
++    "${PROJECT_SOURCE_DIR}/src/storage/relocatable/property/PropertyCollectionRootStore.cpp" PROPERTIES
++    COMPILE_DEFINITIONS "ZYX_EXPERIMENTAL_BUDGETED_PRESENCE=$<BOOL:${ZYX_EXPERIMENTAL_BUDGETED_PRESENCE}>")
+ if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT)
+     message(FATAL_ERROR "Scan-path format requires the hybrid-property format option")
+ endif()
+diff --git a/cmake/SourceSets.cmake b/cmake/SourceSets.cmake
+index d7f78a1b..4ffdbc7c 100644
+--- a/cmake/SourceSets.cmake
++++ b/cmake/SourceSets.cmake
+@@ -451,6 +451,7 @@ set(ZYX_NATIVE_TEST_SOURCES
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveColumnFilter.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeColumnPredicates.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_DirectPrimitiveColumnFilter.cpp"
++    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_StreamingPredicateCount.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp"
+     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveNumericColumns.cpp"
+diff --git a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+index 414116b8..b1c63691 100644
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+@@ -12,9 +12,9 @@ projectOrder: 1
+ 
+ # Column Block Supply and Execution Architecture Plan
+ 
+-Updated: 2026-10-27 (Asia/Shanghai). Plan ID: `column-block-20261027`. **R0 accepted; column-block architecture implementation not started; accepted progress 10%.** Writing the plan and organizing historical evidence earn no implementation credit.
++Updated: 2026-10-27 (Asia/Shanghai). Plan ID: `column-block-20261027`. **R0 accepted; R1 streaming count is experimental and has not met its exit conditions.** Writing the plan and organizing historical evidence earn no implementation credit.
+ 
+-This is the sole active roadmap. Both former `scan-supply-20261026` documents are preserved verbatim under `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/`. Former stages, 100% status and borderline acceptance do not govern this plan. Retain historical implementations and failures without presenting completed work as new tasks.
++This is the scan-analysis roadmap under the broader general-performance goal. The `general-adoption-20261027` revision below governs future adoption decisions for this work. The previously cited `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/` is absent from this checkout and visible branch history. The former `scan-supply-20261026` texts can be read at commit `b317283a66b70a51812fa04387fbe515b22f03c4` using the corresponding language path of this file. Do not infer why the directory is absent or restore files. Former stages, 100% status and borderline acceptance do not govern this plan. Retain historical implementations and failures without presenting completed work as new tasks.
+ 
+ ## 1. Current baseline: the problem remains
+ 
+@@ -74,11 +74,11 @@ Prioritize validating a combination of **scan input pruning, block-amortized loc
+ 
+ R0 completes the freeze, qualified coarse attribution, work counts, Kuzu input comparison, tail investigation and preregistered gates. A reversible experiment on real persisted data establishes causal work reduction: reusing budget-accounted temporary group keys within a batch reduces multi-key allocations from 125998 to 26618, removing 99380 allocations with identical complete results and 37 passing module tests. See `key-scratch/experiment-receipt.json`. Per-row serialization and hashing remain; this is neither a complete column-block architecture nor a proportional speedup claim.
+ 
+-R0 acceptance explicitly requires a qualified coarse cost model, demonstrated work elimination, carried uncertainties and preregistered gates; it no longer requires every microscopic time share to be measured first. Detailed timing and specific P95 causes remain unresolved for subsequent validation. Final Kuzu and tail acceptance conditions are unchanged. The 10% credits the attribution/validation stage, not 10% attainment of the performance goal.
++R0 acceptance explicitly requires a qualified coarse cost model, demonstrated work elimination, carried uncertainties and preregistered gates; it no longer requires every microscopic time share to be measured first. Detailed timing and specific P95 causes remain unresolved for subsequent validation. The original scan-project Kuzu and tail targets and historical decisions remain traceable; the new adoption criteria are below. The 10% credits the attribution/validation stage, not 10% attainment of the performance goal.
+ 
+ ## 3. Objectives, scope and priorities
+ 
+-The final goal is to match or exceed Kuzu on all eight primary comparisons under equivalent semantics, resources and result consumption, with lifecycle and adoption costs validated. Report architectural milestones separately from Kuzu attainment.
++The long-term goal is general performance across diverse real graph-database workloads, preserving semantics and maintainability. Matching or exceeding Kuzu on eight comparisons is a separate scan-project competitive objective, not the sole condition for general adoption. Report architectural evidence, adoption decisions and Kuzu gaps separately; changing criteria does not make an earlier experiment pass.
+ 
+ Prioritize an end-to-end storage/execution column-block contract; next, proven expensive scan location and column-block directories; then typed filter/count/group consumption. R0 attribution determines implementation order; do not unconditionally rewrite all three layers.
+ 
+@@ -95,17 +95,38 @@ Do not preselect larger logical groups, a new large-block format, replacement tr
+ 
+ 64 is a logical grouping granularity, not a requirement that all computation use that size. Decouple scan windows from logical groups before enlarging groups. Current evidence supports testing interface and access-pattern changes, not rebuilding the entire database.
+ 
++Streaming COUNT fusion is enabled only with the explicit build option `ZYX_EXPERIMENTAL_STREAMING_COUNT=ON`; it is off by default and remains an unaccepted experiment. The bounded 2026-10-27 persistent SCAN comparison covered 12 cases, three processes and complete result checks; small mixed-type cases regressed and process variability prevents a stable net-benefit claim. Evidence and negative results are in `benchmarks/architecture-design/decisions/20261027-column-block/general-count-persistent/`. Keep it off by default. Before continuing, examine actual authentication, dispatch and per-row state work; if general benefit cannot be demonstrated, stop this candidate and return to the established supply/location problem. Representative scale, cold cache, write/concurrency and per-query resource evidence remain missing; experimental statistics are not connected to pruning.
++
++The joint value/non-NULL window is deferred: public QueryEngine diagnostics observed repeated authentication across stages, but the joint provider and executor are not connected and no production work has been eliminated. An independent experimental budgeted probe and private receiver exist; default queries do not use them, and real ROW routes decline conservatively. The scan grant is active only inside the value source, whereas the aggregate's non-NULL check currently runs afterward. Synchronous cross-stage consumption and fallback before batch side effects require a separate architecture decision and validation; incomplete budget auditing alone does not prove the design infeasible. Shared buffer-pool pages remain under the existing resource contract. See `supply-owner-phase/design.md`; there is no evidence that the approach is impossible in principle.
++
++The multi-key borrowed lookup experiment `ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY` is off by default and is not adopted. An independent persistent SCAN comparison covered 512/1536 rows, repeated/unique keys, short/long strings and complex-value fallback; all complete-result oracles passed, but latency was variable and most scenarios did not show a net benefit. Unique keys added index memory without reducing key construction. The frozen protocol, all samples and untimed work counts are in `group-key-review/persistent-result.md`. Preserve the negative result, do not route using thresholds derived from this dataset, and do not count R1/R2 as complete.
++
++### General adoption rules `general-adoption-20261027`
++
++This new version governs future candidates in this project; it does not replace or alter the original `intermediate-gates.json`, frozen baseline, samples, failures or competitive objective. Original R0–R4 percentages describe only the original project exits, not overall graph-database performance. Never identify special cases by query text, fixed property names, datasets, row counts or distributions. Selection by general operator semantics, input capabilities and cost is allowed with equivalent fallback.
++
++| Risk tier | Required evidence |
++| --- | --- |
++| Every change | Relevant-module complete-result oracle; NULL/missing, mixed types, sparse and duplicate rows, budget refusal, cancellation, exceptions, reentry, snapshots and fallback; deterministic work, fast-path and fallback rates; same-machine same-window end-to-end comparison against ZYX control and stability |
++| Scan or operator | As relevant, selection rates, dense/sparse/skewed and high-cardinality data, complex values, single/multiple properties and groups; warm, cold and beyond-cache working sets; guard point reads, traversal and joins; report individual results, not just a geometric mean |
++| Persistence or statistics | Old/new snapshots, read-your-writes, updates/deletes/type changes, atomic publication, recovery, reopen, reclamation and physical reuse; record statistics construction/maintenance/invalidation, write amplification, file growth, conversion, RSS and accounts |
++| Before adoption | Risk-appropriate read-heavy, write-heavy and mixed workloads; freeze query templates, generation rules, seeds and an independent holdout before measurement; the observed holdout is not blind. Record distributions, environment and results per category |
++
++This is not a Cartesian product or a full benchmark on every iteration. Before each candidate preregister required cases, same-path disable switch or equivalent control, budgets, resource limits, fallback scope and material-regression review rules. Correctness and work counts can justify further stages; adoption requires demonstrated net benefit in representative cases and recorded maintenance/fallback costs. Fix reproducible material regressions or restrict use only within the scope frozen before implementation; report tradeoffs by workload rather than hiding them in an average. Retain samples and process statistics; when P95 samples are insufficient, perform focused follow-up and report uncertainty rather than attributing one outlier. Report Kuzu competitive gaps separately from ZYX adoption. Run relevant modules only; do not claim untested platforms pass.
++
++Before introducing block statistics, specify ownership and budget, authenticated provenance, snapshot/version/generation binding, maintenance or invalidation for updates/deletes/type changes and read-your-writes, atomic publication, recovery, old-pin reclamation and format compatibility. Fully read when coverage of visible values or impossibility of a match cannot be proved. Compare pruning enabled and disabled on the same path, recording candidates, skipped blocks, decoding and statistics build/maintenance costs. Proceed only when evidence shows benefit exceeds added work; do not assume a persistent-format change.
++
+ ## 4. Stages and exits
+ 
+ | Stage | Weight | Cumulative exit | Status |
+ | --- | ---: | ---: | --- |
+ | R0 Current attribution and freeze | 10% | 10% | Accepted; detailed timing and tail causes carried as risks |
+-| R1 Minimal complete block path | 25% | 35% | Not started |
++| R1 Minimal complete block path | 25% | 35% | Streaming count in experiment; pruning and exit conditions incomplete |
+ | R2 General scan/operator integration | 25% | 60% | Not started |
+ | R3 Lifecycle and adoption costs | 20% | 80% | Not started |
+ | R4 Formal comparison and target acceptance | 20% | 100% | Not started |
+ 
+-Credit stages only at their exits. Credible new R0 attribution earns stage credit; repeated observations, cleanup and prose do not. R1/R2 may exit on correctness and deterministic work evidence; speedup claims wait for R4. Commit/push work with evidence on substantive accepted stage growth, not cosmetic percentage changes. No automatic main merge.
++Credit stages only at their exits. Credible new R0 attribution earns stage credit; repeated observations, cleanup and prose do not. R1/R2 may exit on correctness and deterministic work evidence; speedup claims wait for R4. Do not credit documentation or local experiments as stage completion. Commits, pushes and merges follow the user’s authorization for the current work.
+ 
+ ### R0: identify current costs first
+ 
+@@ -120,7 +141,7 @@ A user-mode hardware instruction-counter attempt returned ENOENT from `perf_even
+ 
+ Exit evidence must identify the largest removable current cost, observation quality, work the candidate eliminates, and whether its conditional end-to-end upper bound justifies reconstruction. Build a supported cost model; a100x gap does not prove100x available speedup. If only a small cost is established, change direction before broad implementation.
+ 
+-Before R0 exits, reversible bounded implementation experiments may test established work-count hotspots using complete results, relevant module tests and deterministic counters. Experiments earn no stage credit and do not complete R1/R2. Precise time attribution and tail causes remain open; final Kuzu acceptance is unchanged.
++Before R0 exits, reversible bounded implementation experiments may test established work-count hotspots using complete results, relevant module tests and deterministic counters. Experiments earn no stage credit and do not complete R1/R2. Precise time attribution and tail causes remain open; the original scan-project Kuzu objective remains traceable.
+ 
+ ### R1: minimal complete vertical experiment
+ 
+@@ -156,7 +177,9 @@ Measure open/authentication, conversion, maintenance, peak RSS, resource account
+ 
+ No full unit suite. Code files must stay within3000 lines and pass the source-size check. Preserve Linux/macOS/Windows and WASM contracts; unexecuted platforms are not passing results.
+ 
+-### R4: one formal window with explicit success/failure
++### R4: original scan-project formal window (competitive objective retained)
++
++The original 1.5x and eight-query Kuzu gates in this section measure only the original scan-project competitive objective. General adoption is decided separately under `general-adoption-20261027`. Do not alter old samples, protocol, failures or preregistered thresholds, or retroactively mark them passed.
+ 
+ After source and necessary tests stabilize, run current frozen ZYX/new candidate/Kuzu on two datasets and four primary queries. Three independent processes, three warmups and ten measured samples each, rotating engine order. Fix one thread, CPU affinity,64 MiB BufferPool,64 MiB ZYX query materialization,6 GiB address space and2 GiB file limits; preserve default query timeout and semantics. Record Kuzu settings and result consumption explicitly.
+ 
+@@ -166,12 +189,12 @@ Before exiting R0 and implementing R1, preregister meaningful intermediate gain
+ 
+ The intermediate gain gate is preregistered in `benchmarks/architecture-design/decisions/20261027-column-block/intermediate-gates.json`: against the concurrent current control, require at least 1.5x geometric-mean speedup across eight primary P50s and at least 1.5x on each dataset’s all-node query; both pooled P50 and the median of three independent-process P50s must meet each gate. This is a target, not a prediction or a replacement for the eight-query Kuzu condition.
+ 
+-**The fixed final100% performance condition is candidate P50 no higher than Kuzu on all eight primaries. Candidate P95 over Kuzu by more than5% requires review; unresolved reproducible material tail regressions prevent acceptance.** Also review greater-than5% P50/P95, RSS or file-cost regressions against current ZYX for primaries, point/full-entity/adjacency reads, actual property updates, no-ops and edge batches. Fix reproducible material regressions or apply explicit restrictions within the adoption scope frozen before implementation; do not shrink scope after measurement to manufacture100%.
++**The original scan-project competitive performance condition is candidate P50 no higher than Kuzu on all eight primaries. Candidate P95 over Kuzu by more than5% requires review; unresolved reproducible material tail regressions prevent acceptance.** Also review greater-than5% P50/P95, RSS or file-cost regressions against current ZYX for primaries, point/full-entity/adjacency reads, actual property updates, no-ops and edge batches. Fix reproducible material regressions or apply explicit restrictions within the adoption scope frozen before implementation; do not shrink scope after measurement to manufacture100%.
+ 
+-If Kuzu conditions fail, report actual gains, remaining gaps and stage progress with R4 incomplete. Do not reuse the former convention of100% for a finished plan with an unmet performance target. Preserve failures and revise this roadmap from evidence before another registered candidate; no indefinite unregistered candidate sequence.
++If Kuzu conditions fail, report actual gains and remaining gaps, and keep the original competitive objective incomplete. Do not reuse the former convention of100% for a finished plan with an unmet performance target. Preserve failures and revise this roadmap from evidence before another registered candidate; no indefinite unregistered candidate sequence.
+ 
+ ## 5. Immediate deliverables and execution discipline
+ 
+ Proceed to the R1 minimal column-block experiment using the R0 work evidence; continue investigating detailed costs and tail risks alongside it before persistent-format edits. Keep the attribution summaries, formal baseline samples, observation-quality checks, deterministic work, Kuzu comparability, P95 findings, candidate cost model and preregistered entry/stop rules under `benchmarks/architecture-design/decisions/20261027-column-block/`.
+ 
+-Each round reports eliminated work, tests/evidence, accepted progress and remaining obstacles. Commit/push work after substantive stage growth. Necessary correctness fixes may proceed but are not architectural gains; documents, old tests and baseline substitutions cannot establish a breakthrough.
++Each round reports eliminated work, tests/evidence, accepted progress and remaining obstacles. Commit and push only when authorized for the current work. Necessary correctness fixes may proceed but are not architectural gains; documents, old tests and baseline substitutions cannot establish a breakthrough.
+diff --git a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+index 552d9bfa..5b80957e 100644
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+@@ -12,9 +12,9 @@ projectOrder: 1
+ 
+ # 列块供给与执行架构优化方案
+ 
+-更新：2026-10-27（北京时间）。计划标识：`column-block-20261027`。**状态：R0 已验收，列块架构实现未开始，累计验收进度 10%。** 文档编写、历史证据整理不计入实现进度。
++更新：2026-10-27（北京时间）。计划标识：`column-block-20261027`。**状态：R0 已验收；R1 的流式计数正在实验，未完成退出条件。** 文档编写、历史证据整理不计入实现进度。
+ 
+-本页是后续工作的唯一执行路线。旧 `scan-supply-20261026` 中英文正文已原样归档至 `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/`。旧阶段、100% 状态和临界通过结论不适用于本计划；历史实现和失败证据保留，不重新列为待办。
++本页是通用性能目标下的扫描分析专项路线；下方 `general-adoption-20261027` 修订本专项后续采用条件。此前文档所称的 `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/` 在当前检出和可见分支历史中不存在；旧 `scan-supply-20261026` 中英文正文可从提交 `b317283a66b70a51812fa04387fbe515b22f03c4` 的本文件对应语言路径读取。不要推测缺失原因或恢复文件。旧阶段、100% 状态和临界通过结论不适用于本计划；历史实现和失败证据保留，不重新列为待办。
+ 
+ ## 1. 当前基线：问题仍未解决
+ 
+@@ -74,11 +74,11 @@ projectOrder: 1
+ 
+ R0 已完成冻结、合格的粗粒度归因、工作量计数、Kuzu 输入核对、尾延迟复核及收益门槛登记，并通过真实持久数据上的可回退实验建立因果证据：批内复用预算内临时分组键，使多键查询分配次数从 125998 降到 26618，减少 99380 次；完整结果一致，37 项相关测试通过。证据见 `key-scratch/experiment-receipt.json`。它仍逐行序列化与哈希，不代表列块架构完成或等比例加速。
+ 
+-R0 的退出依据明确为合格的粗粒度成本模型、可验证的工作量消除、未解决风险和实施前门槛；不再要求所有微观耗时比例先精确测出。细项耗时和 P95 具体原因仍未解决，保留至后续验证，最终 Kuzu 与尾延迟验收条件不变。这里的 10% 表示归因与验证阶段完成，不表示性能目标完成 10%。
++R0 的退出依据明确为合格的粗粒度成本模型、可验证的工作量消除、未解决风险和实施前门槛；不再要求所有微观耗时比例先精确测出。细项耗时和 P95 具体原因仍未解决，保留至后续验证，原扫描专项 Kuzu 与尾延迟目标及其历史判定保持可追溯；新采用条件见下节。这里的 10% 表示归因与验证阶段完成，不表示性能目标完成 10%。
+ 
+ ## 3. 目标、范围与优先级
+ 
+-最终目标：在相同语义、资源和结果消费条件下，八项主查询均达到或超过 Kuzu；同时验证生命周期和采用代价。阶段性架构收益与 Kuzu 目标分别报告，禁止把阶段完成包装成追赶成功。
++长期目标是在真实、多样的图数据库工作负载中提升通用性能，同时保持语义和可维护性。八项主查询追平或超过 Kuzu 是独立的扫描专项竞争目标，不是通用优化采用的唯一条件。阶段性架构收益、采用决定和 Kuzu 差距分别报告；不得把条件变更写成旧实验已达标。
+ 
+ 第一优先级是存储—执行器之间的列块契约及其完整实现；第二是证实仍昂贵的扫描定位与列块目录；第三是类型化过滤、计数和分组直接消费。实现顺序由 R0 归因决定，不能无条件串行重写三层。
+ 
+@@ -95,17 +95,38 @@ R0 的退出依据明确为合格的粗粒度成本模型、可验证的工作
+ 
+ 64 是逻辑分组粒度，不是所有计算必须以 64 为单位。先把扫描窗口与逻辑组解耦；不把加大实体组当作默认方案。当前证据支持验证接口和访问方式的改造，尚不足以支持推倒整个数据库。
+ 
++当前流式 COUNT 融合仅通过构建选项 `ZYX_EXPERIMENTAL_STREAMING_COUNT=ON` 显式启用，默认关闭；它仍属未验收实验。 2026-10-27 的有界持久 SCAN 对照含 12 个场景、三进程和完整结果校验；混合类型小规模场景存在回退和进程间波动，不能证明稳定净收益。证据和负结果见 `benchmarks/architecture-design/decisions/20261027-column-block/general-count-persistent/`。保留默认关闭；继续前先核对认证、分派及逐行状态等真实工作量，若不能证明通用收益则停止该候选，转回已证实的供给定位问题。尚缺代表性规模、冷缓存、写入/并发及查询级资源证据；实验统计尚未接入裁剪。
++
++联合值/非 NULL 窗口暂不采用：公开 QueryEngine 诊断观察到跨阶段重复认证，但联合 provider 和执行器未接入，未减少生产工作量。已有独立实验性预算探测及私有接收器，默认查询不使用；真实 ROW 保守拒绝。现有扫描凭证只在值 source 调用内有效，而聚合的非 NULL 检查发生在该调用之后；跨阶段同步消费和批次副作用前回退需要单独架构决定和验证，不能仅扩大预算审计来宣称不可行。共享缓冲池继续按现有资源合同处理。记录见 `supply-owner-phase/design.md`；没有证据表明此方案原则上不可能。
++
++多键借用查找实验 `ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY` 默认关闭，暂不采用。独立持久 SCAN 对照覆盖 512/1536 行、重复/唯一键、短/长字符串和复杂值回退；完整结果均通过，但时延波动大，多数场景未见净收益，唯一键额外占用索引且不减少键构造。冻结协议、全部样本及非计时工作量见 `group-key-review/persistent-result.md`。保留负结果，不按本次数据阈值选择路径，不计 R1/R2 完成。
++
++### 通用采用规则 `general-adoption-20261027`
++
++这是面向本专项未来候选的新版本，不替换或改写原 `intermediate-gates.json`、冻结基线、原始样本、失败及竞争目标。原 R0–R4 百分比仅代表原专项退出状态，不等于通用数据库性能完成度。不得按查询文本、固定属性名、数据集、行数或分布识别特例；允许按通用算子语义、输入能力与成本选择优化，并提供等价回退。
++
++| 风险层次 | 必需证据 |
++| --- | --- |
++| 每个改动 | 相关模块的完整结果 oracle；NULL/缺失、混合类型、稀疏与重复行、预算拒绝、取消、异常、重入、快照和回退；确定性工作量、快路径命中及回退比例；同机同窗口候选与 ZYX 控制的端到端收益和稳定性 |
++| 扫描或算子 | 按相关性覆盖过滤选择率、稠密/稀疏/倾斜、高基数、复杂值、单/多属性与分组；热、冷和超缓存工作集；比较点查、遍历与连接等守护负载，报告逐项而非仅几何平均 |
++| 涉及持久化或统计 | 旧/新快照、读己之写、更新/删除/类型变化、原子发布、恢复、重开、回收和空间复用；记录统计构建/维护/失效、写放大、文件增长、转换、RSS 和资源账户 |
++| 采用前 | 选取与改动风险相称的读多写少、写多读少及混合负载；冻结查询模板、数据生成规则、种子与独立留出集后再测；已观察的 holdout 不称盲测。按类别分别记录分布、环境和结果 |
++
++这不是所有维度的笛卡尔积或每轮全量基准：实施前为每个候选登记必测场景、同路径禁用开关或等价控制、预算、资源限制、回退范围及显著退化复核规则。各阶段可先以正确性和工作量论证继续；采用需要在代表性场景证明净收益，记录维护及回退代价。可重复重大回退须修复，或仅在实施前冻结的适用范围内限制；不同工作负载的利弊单列，不用总体平均掩盖。保留样本和逐进程统计，P95 样本不足时定向复测并报告不确定性，不凭单次异常断言。Kuzu 对照单独报告竞争差距，不代替 ZYX 自身采用判定。只运行相关模块测试；未执行的平台不称通过。
++
++引入块统计前，必须明确统计所有者与预算、认证来源、快照/版本与代次绑定、更新/删除/类型变化和读己之写的维护或失效、原子发布、恢复、旧 pin 回收及格式兼容。无法证明统计覆盖当前可见值或无匹配时完整读取。先用同一路径开启/关闭裁剪核对结果，记录候选、跳块、解码、统计建立与维护成本；只在收益超过新增工作的证据成立后推进，不默认改变持久格式。
++
+ ## 4. 阶段及退出条件
+ 
+ | 阶段 | 权重 | 累计退出进度 | 当前状态 |
+ | --- | ---: | ---: | --- |
+ | R0 当前瓶颈归因与冻结 | 10% | 10% | 已验收，细项耗时与尾延迟原因作为后续风险保留 |
+-| R1 最小完整列块路径 | 25% | 35% | 未开始 |
++| R1 最小完整列块路径 | 25% | 35% | 流式计数实验中；块裁剪与退出条件未完成 |
+ | R2 通用扫描与算子贯通 | 25% | 60% | 未开始 |
+ | R3 生命周期及采用成本 | 20% | 80% | 未开始 |
+ | R4 正式对照与目标验收 | 20% | 100% | 未开始 |
+ 
+-阶段只按退出条件计分。R0 的可信新归因可计阶段进度，重复旧观测、清理文件和文档本身不计。R1/R2 可先凭正确性及确定性工作量退出，性能收益声明必须等待 R4。无实质阶段增长不提交推送；通过后附证据提交推送 work，不自动合并 main。
++阶段只按退出条件计分。R0 的可信新归因可计阶段进度，重复旧观测、清理文件和文档本身不计。R1/R2 可先凭正确性及确定性工作量退出，性能收益声明必须等待 R4。不因文档或局部试验计阶段完成；提交、推送和合并遵循本轮用户授权。
+ 
+ ### R0：先把当前成本定位清楚
+ 
+@@ -120,7 +141,7 @@ R0 的退出依据明确为合格的粗粒度成本模型、可验证的工作
+ 
+ 退出材料必须回答：当前最大的可消除成本是什么；证据质量如何；候选能消除哪些工作；预计端到端上限是否值得改造。用有依据的成本比例建立条件性模型，不能用“差距 100 倍”推导“优化空间 100 倍”。若只能证明局部小成本，应改变方向，不能进入大规模实现。
+ 
+-R0 未退出时，允许针对已确认的工作量热点开展可回退的小范围实现实验，以完整结果、相关模块测试和确定性工作计数验证假设；实验不计阶段进度，不视为 R1/R2 完成。精确耗时归因和尾延迟仍保留为未解决事项，最终 Kuzu 验收条件不变。
++R0 未退出时，允许针对已确认的工作量热点开展可回退的小范围实现实验，以完整结果、相关模块测试和确定性工作计数验证假设；实验不计阶段进度，不视为 R1/R2 完成。精确耗时归因和尾延迟仍保留为未解决事项，原扫描专项 Kuzu 竞争目标保持可追溯。
+ 
+ ### R1：最小完整垂直实验
+ 
+@@ -156,7 +177,9 @@ R0 未退出时，允许针对已确认的工作量热点开展可回退的小
+ 
+ 不跑全量单测。代码文件最多 3000 行，运行源码尺寸检查；保留 Linux/macOS/Windows 与 WASM 合同，未执行的平台不得写成通过。
+ 
+-### R4：一次正式窗口，清楚区分成功与失败
++### R4：原扫描专项正式窗口（保留竞争目标）
++
++本节的旧 1.5 倍和八项 Kuzu 门槛只衡量原扫描专项竞争目标；通用采用按 `general-adoption-20261027` 另行判定。旧样本、协议、失败结果及预登记门槛均不修改、不追认通过。
+ 
+ 源码与必要测试稳定后执行一次同机三方窗口：当前冻结 ZYX、新候选、Kuzu；两库四项主查询，三独立进程、每进程三预热十正式样本，轮换执行顺序。固定单线程、CPU亲和性、64 MiB BufferPool、ZYX 64 MiB 查询物化预算、6 GiB 地址空间、2 GiB 文件限制；保留默认查询超时及原有语义。Kuzu 参数、结果消费与线程设置单列。
+ 
+@@ -166,12 +189,12 @@ R0 未退出时，允许针对已确认的工作量热点开展可回退的小
+ 
+ R0 已预登记阶段性显著收益门槛，详见 `benchmarks/architecture-design/decisions/20261027-column-block/intermediate-gates.json`：新候选相对同窗口当前控制，八项查询 P50 的几何平均加速至少 1.5 倍，且两库全节点过滤各至少 1.5 倍；汇总 P50 与三个独立进程 P50 的中位数均须满足。该目标不是收益预测，也不替代八项超越 Kuzu 的最终条件。
+ 
+-**本计划最终 100% 的性能条件固定为：八项主查询候选 P50 均不高于 Kuzu；候选 P95 相对 Kuzu 超过 5% 必须复核，可重复重大尾退化未解决不得验收。** 同时相对当前 ZYX 控制，主查询/点查/完整实体/邻接/属性修改/空操作/批量建边的 P50/P95、RSS 或文件成本超过 5% 必须复核。可重复重大退化必须修复，或在实施前冻结的采用范围内明确限制；不能测后缩小范围制造100%。
++**原扫描专项竞争目标的性能条件为：八项主查询候选 P50 均不高于 Kuzu；候选 P95 相对 Kuzu 超过 5% 必须复核，可重复重大尾退化未解决不得验收。** 同时相对当前 ZYX 控制，主查询/点查/完整实体/邻接/属性修改/空操作/批量建边的 P50/P95、RSS 或文件成本超过 5% 必须复核。可重复重大退化必须修复，或在实施前冻结的采用范围内明确限制；不能测后缩小范围制造100%。
+ 
+-若未达到 Kuzu 条件，报告实际收益、剩余差距和阶段进度，保持 R4 未完成；旧的“方案完成但目标失败也记100%”不再使用。保留失败记录，按证据修订本页后再立项，不无限追加未经登记的候选。
++若未达到 Kuzu 条件，报告实际收益、剩余差距并保持原竞争目标未完成；旧的“方案完成但目标失败也记100%”不再使用。保留失败记录，按证据修订本页后再立项，不无限追加未经登记的候选。
+ 
+ ## 5. 首轮具体交付与执行纪律
+ 
+ 下一步执行 R1 最小列块实验，以 R0 的工作量证据确定消除对象；细项归因与尾延迟风险随实验继续验证，不先修改持久格式。保留当前版本的归因报告、正式基线样本、观测扰动验证、确定性工作量、Kuzu 可比性核对、P95 问题记录、候选成本模型，以及实现前冻结的准入/停止规则。证据统一放入 `benchmarks/architecture-design/decisions/20261027-column-block/`。
+ 
+-每轮说明消除了哪类工作、测试和证据、实际阶段进度与剩余阻碍；实质阶段增长后提交推送 work。小修补可以作为必要正确性工作完成，但不能包装成架构收益。禁止以文档交付、通过旧测试或另换基线宣布质变。
++每轮说明消除了哪类工作、测试和证据、实际阶段进度与剩余阻碍；是否提交或推送以用户本轮授权为准。小修补可以作为必要正确性工作完成，但不能包装成架构收益。禁止以文档交付、通过旧测试或另换基线宣布质变。
+diff --git a/include/graph/query/execution/MaterializedByteBudget.hpp b/include/graph/query/execution/MaterializedByteBudget.hpp
+index 3dbb9124..b57cd598 100644
+--- a/include/graph/query/execution/MaterializedByteBudget.hpp
++++ b/include/graph/query/execution/MaterializedByteBudget.hpp
+@@ -40,6 +40,12 @@ namespace graph::query::execution {
+ 			parent_.emplace(std::move(account));
+ 			upstream_ = upstream;
+ 		}
++		// Used when an enclosing execution state may have no shared account.
++		struct OptionalAccountTag {};
++		MaterializedByteBudget(size_t maximumBytes, std::shared_ptr<detail::ResourceAccount> account, OptionalAccountTag)
++			: MaterializedByteBudget(maximumBytes) {
++			if (account) parent_.emplace(std::move(account));
++		}
+ 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
+ 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
+ 		[[nodiscard]] size_t available() const noexcept { return maximum_bytes_ - used_bytes_; }
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index 60906a39..7f18df9b 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -999,6 +999,8 @@ namespace graph::storage {
+ 		NativeGraphIndexTreeMutation mutation;
+ 		IndexTreeMultiPoolMutationPreparer preparer;
+         std::shared_ptr<NativeGraphDeferredIndexImages> images;
++        // Internal streamed Edge summary plan, bound to the same writer-fenced generation.
++        std::optional<NativeGraphEntityFreeSummaryFence> entity_free_summary_fence;
+ 	};
+ 	struct NativeGraphDeferredIndexPlans {
+ 		std::vector<NativeGraphDeferredIndexPlan> plans;
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp b/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp
+index 4f77e839..708c884d 100644
+--- a/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp
++++ b/include/graph/storage/relocatable/property/HybridPropertyReadContext.hpp
+@@ -1,3 +1,4 @@
++#include "graph/debug/PropertyReadDiagnostic.hpp"
+ /**
+  * @file HybridPropertyReadContext.hpp
+  * @brief Pinned descriptor, directory and field access for the hybrid candidate.
+@@ -780,6 +781,9 @@ private:
+         else metadata_.findEdgePageLocationsSorted(snapshot_, std::span(ids).first(owners.size()),
+             std::span(entities).first(owners.size()), cancellation_);
+         metadata_.findEntityPropertyLocationsSorted(snapshot_, owners, std::span(rows).first(owners.size()), cancellation_);
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++        for (const auto owner : owners) debug::recordPropertyOwnerAuthentication(owner.entity_id);
++#endif
+         for (size_t i = 0; i < owners.size(); ++i) {
+             check(); require(bool(entities[i]) == isLive(owners[i], group) && !rows[i],
+                 "hybrid grouped owner has invalid Entity Map or competing ROW routing");
+@@ -918,6 +922,9 @@ private:
+                 debug::PerfTrace::addValue("native_graph.hybrid.certified_owner_route_checks_saved", 1);
+                 // Visitor authority must not escape into the ordinary read cache.
+             } else {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::recordPropertyOwnerAuthentication(owner.entity_id);
++#endif
+                 const auto entity = owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ?
+                     metadata_.findNodePageLocationOptional(snapshot_, owner.entity_id) :
+                     metadata_.findEdgePageLocationOptional(snapshot_, owner.entity_id);
+diff --git a/include/graph/utils/OwnedSharedStringMap.hpp b/include/graph/utils/OwnedSharedStringMap.hpp
+index 63389897..9e16f9f1 100644
+--- a/include/graph/utils/OwnedSharedStringMap.hpp
++++ b/include/graph/utils/OwnedSharedStringMap.hpp
+@@ -61,9 +61,9 @@ private:
+     static size_t emptyBytes() {
+ #if defined(_MSVC_STL_VERSION)
+         using namespace utils::detail;
+-        constexpr auto node = sizeof(Map::value_type) + 2U*sizeof(void *) + alignof(Map::value_type) - 1U;
++        constexpr auto node = sizeof(typename Map::value_type) + 2U*sizeof(void *) + alignof(typename Map::value_type) - 1U;
+         return addStandardHeapBytes(2U*standardContainerProxyBytes(),
+-            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Map::value_type)),
++            addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(typename Map::value_type)),
+                 standardAllocatorRequestBytes(16U*sizeof(void *), alignof(void *))));
+ #else
+         return 0U;
+diff --git a/scripts/run_test_process.py b/scripts/run_test_process.py
+index 11b6ef7b..65fd0b74 100644
+--- a/scripts/run_test_process.py
++++ b/scripts/run_test_process.py
+@@ -153,6 +153,38 @@ def _release_windows_gate(process: subprocess.Popen[bytes]) -> None:
+         process.stdin.close()
+ 
+ 
++def _linux_group_has_live_members(process_group_id: int) -> bool:
++    """Return false only when every visible group member is a Linux zombie.
++
++    Unknown or inaccessible state stays active. Zombies cannot execute or keep
++    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
++    """
++    try:
++        entries = list(Path('/proc').iterdir())
++    except OSError:
++        return True
++    found = False
++    for entry in entries:
++        if not entry.name.isdecimal():
++            continue
++        try:
++            stat = (entry / 'stat').read_text()
++        except FileNotFoundError:
++            continue
++        except OSError:
++            return True
++        try:
++            fields = stat[stat.rindex(')') + 2:].split()
++            state, group = fields[0], int(fields[2])
++        except (ValueError, IndexError):
++            return True
++        if group == process_group_id:
++            found = True
++            if state not in ('Z', 'X'):
++                return True
++    return not found
++
++
+ def _process_group_is_active(process_group_id: int) -> bool:
+     """Return whether a POSIX process group still has a member."""
+     try:
+@@ -162,7 +194,7 @@ def _process_group_is_active(process_group_id: int) -> bool:
+     except PermissionError:
+         # The group still exists even if a sandbox prevents signalling it.
+         return True
+-    return True
++    return _linux_group_has_live_members(process_group_id) if sys.platform.startswith('linux') else True
+ 
+ 
+ def _terminate_process_tree(
+diff --git a/scripts/run_test_shards.py b/scripts/run_test_shards.py
+index 691de5b2..4410a219 100644
+--- a/scripts/run_test_shards.py
++++ b/scripts/run_test_shards.py
+@@ -19,6 +19,38 @@ from typing import Sequence
+ PROCESS_REAP_TIMEOUT_SECONDS = 5.0
+ 
+ 
++def _linux_group_has_live_members(process_group_id: int) -> bool:
++    """Return false only when every visible group member is a Linux zombie.
++
++    Unknown or inaccessible state stays active. Zombies cannot execute or keep
++    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
++    """
++    try:
++        entries = list(Path('/proc').iterdir())
++    except OSError:
++        return True
++    found = False
++    for entry in entries:
++        if not entry.name.isdecimal():
++            continue
++        try:
++            stat = (entry / 'stat').read_text()
++        except FileNotFoundError:
++            continue
++        except OSError:
++            return True
++        try:
++            fields = stat[stat.rindex(')') + 2:].split()
++            state, group = fields[0], int(fields[2])
++        except (ValueError, IndexError):
++            return True
++        if group == process_group_id:
++            found = True
++            if state not in ('Z', 'X'):
++                return True
++    return not found
++
++
+ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
+     """Return whether a shard root or one of its POSIX group members remains."""
+     if os.name == "nt":
+@@ -31,7 +63,7 @@ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
+         return False
+     except PermissionError:
+         return True
+-    return True
++    return _linux_group_has_live_members(process.pid) if sys.platform.startswith('linux') else True
+ 
+ 
+ def terminate_process_tree(process: subprocess.Popen[bytes], *, force: bool) -> None:
+@@ -148,6 +180,9 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
+             environment = os.environ.copy()
+             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
+             environment["GTEST_SHARD_INDEX"] = str(index)
++            xml_directory = environment.get("ZYX_TEST_XML_DIR")
++            if xml_directory:
++                environment["GTEST_OUTPUT"] = f"xml:{Path(xml_directory) / f'shard-{index}.xml'}"
+             # Fixtures use the platform temporary-directory API for databases and
+             # test artifacts. A private directory prevents independently
+             # sharded processes from deleting or reopening each other's artifacts.
+diff --git a/src/query/execution/BoundNodeColumnPredicates.hpp b/src/query/execution/BoundNodeColumnPredicates.hpp
+index d8a962e9..5bf5e4d6 100644
+--- a/src/query/execution/BoundNodeColumnPredicates.hpp
++++ b/src/query/execution/BoundNodeColumnPredicates.hpp
+@@ -162,6 +162,16 @@ public:
+ 		return stats;
+ 	}
+ 
++	void appendSingleColumnPredicates(std::span<const ColumnPredicate> predicates) {
++        if (column_count_ != 1U) throw std::invalid_argument("streaming predicates require one column");
++        for (const auto &predicate : predicates) {
++            if (predicate.column != 0U) throw std::invalid_argument("streaming predicate ordinal changed");
++            predicates_.push_back(predicate);
++        }
++    }
++
++	[[nodiscard]] std::span<const ColumnPredicate> predicates() const noexcept { return predicates_; }
++
+ private:
+ 	size_t column_count_;
+ 	BudgetMemoryResource memory_;
+diff --git a/src/query/execution/LogicalPlanReadRuntime.cpp b/src/query/execution/LogicalPlanReadRuntime.cpp
+index 5fcc3986..8326273e 100644
+--- a/src/query/execution/LogicalPlanReadRuntime.cpp
++++ b/src/query/execution/LogicalPlanReadRuntime.cpp
+@@ -1,4 +1,20 @@
+ #include "graph/storage/LogicalGraphNodeScan.hpp"
++#ifndef ZYX_EXPERIMENTAL_STREAMING_COUNT
++#define ZYX_EXPERIMENTAL_STREAMING_COUNT 0
++#endif
++#ifndef ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY
++#define ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY 0
++#endif
++#if ZYX_EXPERIMENTAL_STREAMING_COUNT || defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++#define ZYX_BUILD_STREAMING_COUNT_PATH 1
++#else
++#define ZYX_BUILD_STREAMING_COUNT_PATH 0
++#endif
++#if ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY || defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++#define ZYX_BUILD_BORROWED_GROUP_KEY_PATH 1
++#else
++#define ZYX_BUILD_BORROWED_GROUP_KEY_PATH 0
++#endif
+ #include "query/execution/OrderByComparison.hpp"
+ #include "query/execution/DeferredReferenceRowVisitor.hpp"
+ #include "query/execution/ProcedurePayloadAdmission.hpp"
+@@ -20,6 +36,8 @@
+ #include "query/execution/BoundNodeScanBatch.hpp"
+ #include "query/execution/BoundColumnLayout.hpp"
+ #include "query/execution/BoundNodeColumnPredicates.hpp"
++#include "query/execution/StreamingPredicateCount.hpp"
++#include "query/execution/BorrowedGroupKey.hpp"
+ #include "query/execution/PrimitiveNumericColumns.hpp"
+ #include "query/execution/ExternalQuerySort.hpp"
+ #include "query/execution/ExternalQueryKeySet.hpp"
+@@ -94,6 +112,13 @@
+ #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
+ 
+ namespace graph::query::execution {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++    thread_local bool test_disable_streaming_count = false;
++    thread_local bool test_enable_streaming_count = false;
++    thread_local bool test_enable_borrowed_group_key = false;
++    thread_local bool test_force_borrowed_group_collision = false;
++    thread_local bool test_reject_borrowed_group_index = false;
++#endif
+ 
+ 	namespace {
+ 
+diff --git a/src/query/execution/read_runtime/AggregateOperator.inc b/src/query/execution/read_runtime/AggregateOperator.inc
+index b8b341fb..a94c68a9 100644
+--- a/src/query/execution/read_runtime/AggregateOperator.inc
++++ b/src/query/execution/read_runtime/AggregateOperator.inc
+@@ -83,8 +83,15 @@
+ 					MaterializedByteReservation aggregateStateBytes(&state.shared.materialized_budget);
+ 					MaterializedByteReservation groupStorageBytes(&state.shared.materialized_budget);
+ 					detail::BudgetMemoryResource aggregateIndexMemory(state.shared.materialized_budget);
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++					detail::BudgetMemoryResource borrowedIndexMemory(state.shared.materialized_budget);
++#endif
+ 					std::vector<AggregateGroup> groups;
+ 					std::pmr::unordered_map<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++					using BorrowedIndex = std::pmr::unordered_multimap<uint64_t, std::pair<const std::pmr::string *, size_t>>;
++					std::optional<BorrowedIndex> borrowedIndexes;
++#endif
+ 					size_t aggregateMemoryBytes = 0U;
+ 					const auto chargeAggregateBytes = [&](const size_t bytes) {
+ 						if (bytes > state.shared.bounds.maximum_materialized_bytes -
+@@ -404,6 +411,10 @@
+ 					std::pmr::vector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
+ 					struct DirectFilterTerm { size_t column; const expressions::LiteralExpression *literal; detail::ColumnPredicateOp operation; };
+ 					std::pmr::vector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
++#if ZYX_BUILD_STREAMING_COUNT_PATH
++                    std::pmr::vector<PropertyValue> countConstants(&aggregateIndexMemory);
++                    std::pmr::vector<detail::ColumnPredicate> countPredicates(&aggregateIndexMemory);
++#endif
+ 					const auto *directFilter = dynamic_cast<const logical::LogicalFilter *>(&aggregateChild);
+ 					const auto *directInput = directFilter ? &requireOnlyChild(*directFilter) : &aggregateChild;
+ 					bool directBound = false;
+@@ -486,6 +497,9 @@
+ 						std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
+ 					}
+ 					if (directEligible) {
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++						if (borrowedGroupKeyEnabled() && directGroups.size() > 1U) borrowedIndexes.emplace(&borrowedIndexMemory);
++#endif
+ 						aggregateColumnReceiver.emplace(NodeColumnReceiver{directKeys, {},
+ 							[&](std::span<const std::string> keys, const detail::DirectPropertyColumns &columns,
+ 								const SelectionVector &selection, std::span<const size_t> ordinals) {
+@@ -515,7 +529,11 @@
+                                 // Partial COUNT over a bounded short-text column. Ordinary
+                                 // filters and low-cardinality groups merge per distinct value,
+                                 // rather than serializing keys/updating virtual accumulators per row.
+-                                bool batchCountEligible = directGroups.size() <= 1U &&
++                                bool batchCountEligible =
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++                                    !borrowedIndexes &&
++#endif
++                                    directGroups.size() <= 1U &&
+                                     std::ranges::all_of(functions, [](auto function) { return function == AggregateFunctionType::AGG_COUNT; });
+                                 for (size_t i = 0; i < aggregations.size(); ++i)
+                                     batchCountEligible = batchCountEligible && !aggregations[i].distinct && directArguments[i] == rowCountBinding;
+@@ -630,11 +648,59 @@
+ 									size_t groupIndex = 0;
+ 									if (!directGroups.empty()) {
+ 										auto &key = lookupKey;
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++										const auto guard = [&] { checkGuardNow(state); };
++										detail::BorrowedGroupKey view(columns, directGroups, row);
++										const bool borrow = borrowedIndexes && view.supported(guard);
++										std::optional<uint64_t> borrowedHash;
++										std::optional<size_t> borrowedMatch;
++										if (borrow) {
++											borrowedHash = view.hash(guard);
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++											if (test_force_borrowed_group_collision) borrowedHash = 0;
++#endif
++											const auto range = borrowedIndexes->equal_range(*borrowedHash);
++											for (auto it = range.first; it != range.second; ++it) {
++												guard();
++												if (view.equals(*it->second.first, guard)) { borrowedMatch = it->second.second; break; }
++											}
++										}
++										if (borrowedMatch) {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                                            debug::PerfTrace::addValue("test.group_key.borrowed_hits", 1);
++#endif
++											groupIndex = *borrowedMatch;
++										}
++										else {
++#endif
+ 										key.clear();
+ 										for (const auto column : directGroups) appendCellKey(key, column, row);
+ 										const auto found = groupIndexes.find(key);
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                                        debug::PerfTrace::addValue("test.group_key.serialized_rows", 1);
++                                        debug::PerfTrace::addValue("test.group_key.serialized_bytes", static_cast<int64_t>(key.size()));
++                                        debug::PerfTrace::addValue(found == groupIndexes.end() ? "test.group_key.misses" : "test.group_key.hits", 1);
++#endif
+ 										if (found != groupIndexes.end()) groupIndex = found->second;
+ 										else {
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++											std::optional<BorrowedIndex::iterator> reservedIndex;
++											if (borrowedHash) {
++												try {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                                                    if (test_reject_borrowed_group_index) throw MaterializedByteLimitExceeded();
++#endif
++													reservedIndex = borrowedIndexes->emplace(*borrowedHash, std::make_pair(nullptr, size_t{0}));
++											} catch (const MaterializedByteLimitExceeded &) {
++													// No group effects yet. Discard the optional index and
++											// continue with the established encoded-key path.
++												borrowedIndexes.reset(); borrowedHash.reset();
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                                                    debug::PerfTrace::addValue("test.group_key.budget_fallback", 1);
++#endif
++											}
++											}
++#endif
+ 											MaterializedByteReservation copies(&state.shared.materialized_budget);
+ 											copies.set(checkedSizeMul(directGroups.size(), sizeof(PropertyValue), "direct group slots overflowed"));
+ 											std::vector<PropertyValue> values; values.reserve(directGroups.size());
+@@ -648,8 +714,21 @@
+ 												values.push_back(std::move(value));
+ 											}
+ 											groupIndex = createGroup(std::move(values), &copies);
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++											auto inserted = groupIndexes.emplace(std::move(key), groupIndex);
++											if (reservedIndex) {
++												(*reservedIndex)->second = std::make_pair(&inserted.first->first, groupIndex);
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                                                debug::PerfTrace::addValue("test.group_key.index_bytes", static_cast<int64_t>(borrowedIndexMemory.used()));
++#endif
++											}
++#else
+ 											groupIndexes.emplace(std::move(key), groupIndex);
++#endif
++										}
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+ 										}
++#endif
+ 									}
+ 									auto &group = groups.at(groupIndex);
+ 									for (size_t index = 0; index < aggregations.size(); ++index) {
+@@ -677,6 +756,43 @@
+                                 return true;
+ 							}});
+ 						aggregateColumnReceiver->filterOwner = directFilter;
++#if ZYX_BUILD_STREAMING_COUNT_PATH
++                        bool streamingCountEligible = streamingCountEnabled() && countOnlyAggregate && directKeys.size() <= 1U &&
++                            std::ranges::all_of(directArguments, [&](size_t column) { return column == rowCountBinding; }) &&
++                            std::ranges::all_of(directTerms, [](const auto &term) {
++                                return term.literal->isInteger() || term.literal->isDouble() || term.literal->isBoolean();
++                            });
++                        if (streamingCountEligible) {
++                            try {
++                                countConstants.reserve(directTerms.size()); countPredicates.reserve(directTerms.size());
++                                for (const auto &term : directTerms) {
++                                    const auto &literal = *term.literal;
++                                    if (literal.isInteger()) countConstants.emplace_back(literal.getIntegerValue());
++                                    else if (literal.isDouble()) countConstants.emplace_back(literal.getDoubleValue());
++                                    else countConstants.emplace_back(literal.getBooleanValue());
++                                    countPredicates.push_back({0U, term.operation, &countConstants.back()});
++                                }
++                            } catch (const MaterializedByteLimitExceeded &) {
++                                streamingCountEligible = false;
++                                std::pmr::vector<detail::ColumnPredicate>(&aggregateIndexMemory).swap(countPredicates);
++                                std::pmr::vector<PropertyValue>(&aggregateIndexMemory).swap(countConstants);
++                            }
++                        }
++                        if (streamingCountEligible) {
++                            aggregateColumnReceiver->countPredicates = countPredicates;
++                            aggregateColumnReceiver->consumeCount = [&](size_t accepted) {
++                                checkGuardNow(state);
++                                if (accepted > state.shared.bounds.maximum_rows - inputRows)
++                                    throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
++                                inputRows += accepted;
++                                for (auto &accumulator : groups.front().accumulators)
++                                    static_cast<CountAccumulator &>(*accumulator).addRows(accepted);
++                                debug::PerfTrace::addValue("logical_plan.aggregate.streaming_count_batches", 1);
++                                debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", static_cast<int64_t>(accepted));
++                                return true;
++                            };
++                        }
++#endif
+ 					}
+ 					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
+ 														 MaterializedByteReservation inputRowBytes) {
+diff --git a/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc b/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
+index e3c71738..9c7f99a5 100644
+--- a/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
++++ b/src/query/execution/read_runtime/ExecutionStateAndBudgets.inc
+@@ -1,3 +1,21 @@
++#if ZYX_BUILD_STREAMING_COUNT_PATH
++        [[nodiscard]] bool streamingCountEnabled() noexcept {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++            return (ZYX_EXPERIMENTAL_STREAMING_COUNT || test_enable_streaming_count) && !test_disable_streaming_count;
++#else
++            return ZYX_EXPERIMENTAL_STREAMING_COUNT;
++#endif
++        }
++#endif
++#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
++		[[nodiscard]] bool borrowedGroupKeyEnabled() noexcept {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++            return ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY || test_enable_borrowed_group_key;
++#else
++            return ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY;
++#endif
++        }
++#endif
+ 		struct NodeColumnReceiver {
+ 			std::span<const std::string_view> keys;
+ 			std::function<bool(std::span<const std::string>,
+@@ -6,6 +24,10 @@
+ 			std::function<bool(std::span<const std::string>, const detail::DirectPropertyColumns &,
+ 				const SelectionVector &, std::span<const size_t>)> consumeDirect{};
+ 			const logical::LogicalOperator *filterOwner = nullptr;
++#if ZYX_BUILD_STREAMING_COUNT_PATH
++            std::function<bool(size_t)> consumeCount{};
++            std::span<const detail::ColumnPredicate> countPredicates{};
++#endif
+ 		};
+ 		[[nodiscard]] constexpr bool supportsChargedRowHandoff(logical::LogicalOpType type) {
+ 			return type == logical::LogicalOpType::LOP_SORT || type == logical::LogicalOpType::LOP_FILTER ||
+@@ -44,6 +66,13 @@
+ 		};
+ 
+ 
++		// Kept outside the traversal lambda so the callback has a stable type on
++		// compilers that cannot capture a function over a local class correctly.
++		struct VariableTraversalAdjacentEdge {
++			storage::LogicalGraphEdgeTopology topology;
++			std::optional<storage::EntityRef> reference;
++		};
++
+ 		// Query owners outlive every task and all borrowed batch views.
+ 		// Shared caches and budgets are currently confined to one execution thread.
+ 		struct ExecutionSharedState {
+@@ -58,9 +87,8 @@
+ 			// path row that the caller did not request.
+ 			bool allow_cross_row_entity_batches = false;
+ 			size_t resident_output_batch_bytes = 0U;
+-			MaterializedByteBudget materialized_budget = context && context->resource_account
+-				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
+-				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
++			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes,
++				context ? context->resource_account : nullptr, MaterializedByteBudget::OptionalAccountTag{}};
+ 			detail::ProcedureBudgetHandoff procedure_handoff{materialized_budget};
+ 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
+ 			MaterializedByteReservation final_result_reservation{&materialized_budget};
+diff --git a/src/query/execution/read_runtime/NodeSupplyAndSorting.inc b/src/query/execution/read_runtime/NodeSupplyAndSorting.inc
+index f8c6f784..1b51de3b 100644
+--- a/src/query/execution/read_runtime/NodeSupplyAndSorting.inc
++++ b/src/query/execution/read_runtime/NodeSupplyAndSorting.inc
+@@ -142,6 +142,51 @@
+                             }
+                             nodeIds = ownedNodeIds;
+                         }
++
++#if ZYX_BUILD_STREAMING_COUNT_PATH
++                        if (streamingCountEnabled() && certifiedSource && columnReceiver && columnReceiver->consumeCount && keyViews.size() == 1U) {
++                            std::optional<size_t> accepted;
++                            bool guardFailed = false;
++                            const auto guard = [&] {
++                                try { checkGuardNow(state); } catch (...) { guardFailed = true; throw; }
++                            };
++                            try {
++                                detail::BoundNodeColumnPredicates predicates(scan, parameterPredicates, propertyKeys,
++                                    state.shared.materialized_budget);
++                                predicates.appendSingleColumnPredicates(columnReceiver->countPredicates);
++                                if (!predicates.predicates().empty()) {
++                                    detail::StreamingPredicateCount count(state.shared.snapshot, nodeIds.size(),
++                                        predicates.predicates(), state.shared.materialized_budget);
++                                    MaterializedByteReservation scratch(&state.shared.materialized_budget);
++                                    const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
++                                        count.value(row, column, value, guard);
++                                    };
++                                    storage::PropertyColumnBatchReadSinks runs;
++                                    runs.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
++                                        std::span<const uint64_t> words) { count.scalars(rows, column, type, words, guard); };
++                                    runs.texts = [&](std::span<const size_t> rows, size_t column,
++                                        std::span<const std::string_view> values) { count.texts(rows, column, values, guard); };
++                                    (*certifiedSource)(nodeIds, owning, runs, [&](size_t bytes) {
++                                        guard(); scratch.set(checkedSizeAdd(scratch.bytes(), bytes, "streaming count source overflowed"));
++                                    });
++                                    accepted = count.finish(guard);
++                                }
++                            } catch (const MaterializedByteLimitExceeded &) {
++                                if (guardFailed) throw;
++                                throw NodeColumnBytePressure{};
++                            } catch (const storage::LogicalGraphBufferPressure &) {
++                                if (guardFailed) throw;
++                                if (nodeIds.size() > 1U) throw NodeColumnBytePressure{};
++                                // An indivisible source retains the established owning fallback.
++                            }
++                            if (accepted) {
++                                debug::PerfTrace::addValue("logical_plan.streaming_count.source_rows", static_cast<int64_t>(nodeIds.size()));
++                                debug::PerfTrace::addValue("logical_plan.streaming_count.state_bytes", static_cast<int64_t>(nodeIds.size()));
++                                // Consumer exceptions escape without replay of an already delivered reduction.
++                                return columnReceiver->consumeCount(*accepted);
++                            }
++                        }
++#endif
+ 						if (columnReceiver && columnReceiver->consumeDirect &&
+ 							state.shared.snapshot.supportsNodePropertyCellBatches()) {
+ 							std::optional<detail::DirectPropertyColumns> direct;
+diff --git a/src/query/execution/read_runtime/PathOperators.inc b/src/query/execution/read_runtime/PathOperators.inc
+index b55409c3..5203501e 100644
+--- a/src/query/execution/read_runtime/PathOperators.inc
++++ b/src/query/execution/read_runtime/PathOperators.inc
+@@ -816,13 +816,8 @@
+ 						std::vector<storage::LogicalGraphEdge> pathEdgeRecords;
+ 						std::vector<storage::EntityRef> pathEdgeRefs;
+ 						size_t edgeVisits = 0U;
+-						struct AdjacentEdge {
+-							storage::LogicalGraphEdgeTopology topology;
+-							std::optional<storage::EntityRef> reference;
+-						};
+-
+ 						const auto visitAdjacent = [&](uint64_t nodeId,
+-													   const std::function<bool(const AdjacentEdge &,
++																			   const std::function<bool(const VariableTraversalAdjacentEdge &,
+ 																				const storage::LogicalGraphNode &)>
+ 															   &onEdge) {
+ 							std::optional<uint64_t> relationshipTypeToken;
+@@ -985,7 +980,7 @@
+ 																							 reference.source_node_id,
+ 																							 reference.target_node_id,
+ 																							 {}};
+-											if (!onEdge({topology, reference}, target)) {
++												if (!onEdge(VariableTraversalAdjacentEdge{topology, reference}, target)) {
+ 												return false;
+ 											}
+ 										}
+@@ -1128,7 +1123,7 @@
+ 												: batchPredicateTargets ? predicateTarget(targetId)
+ 																		: localTarget.emplace(readPredicateNode(
+ 																				  targetId, localTargetBytes));
+-										if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id,
++												if (!onEdge(VariableTraversalAdjacentEdge{{edge.edge_id, edge.source_node_id, edge.target_node_id,
+ 													  edge.type},
+ 													 std::nullopt},
+ 													target)) {
+@@ -1202,7 +1197,7 @@
+ 							if (depth == maximumHops) {
+ 								return true;
+ 							}
+-							return visitAdjacent(node.node_id, [&](const AdjacentEdge &edge,
++									return visitAdjacent(node.node_id, [&](const VariableTraversalAdjacentEdge &edge,
+ 																   const storage::LogicalGraphNode &target) {
+ 								if (reversePruningEnabled) {
+ 									const auto reachable = reverseDistance.find(target.node_id);
+diff --git a/src/query/execution/read_runtime/RowAndWindowOperators.inc b/src/query/execution/read_runtime/RowAndWindowOperators.inc
+index d04eeb1c..a0c94bdd 100644
+--- a/src/query/execution/read_runtime/RowAndWindowOperators.inc
++++ b/src/query/execution/read_runtime/RowAndWindowOperators.inc
+@@ -632,6 +632,8 @@
+ 						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
+ 												   std::min(rows.bytes(), state.shared.bounds.maximum_materialized_bytes) ||
+ 							keySlotBytes > state.shared.materialized_budget.available()) {
++							// Diagnostics must not change the budget rejection if tracing fails.
++							try { debug::PerfTrace::addValue("query.sort.key_slot_admission_rejected", 1); } catch (...) {}
+ 							throw MaterializedByteLimitExceeded();
+ 						}
+ 						keySlots.set(keySlotBytes);
+diff --git a/src/storage/StorageIO.cpp b/src/storage/StorageIO.cpp
+index a760fb17..0d9d372c 100644
+--- a/src/storage/StorageIO.cpp
++++ b/src/storage/StorageIO.cpp
+@@ -22,6 +22,10 @@
+ #include "graph/storage/PreadHelper.hpp"
+ #include "graph/storage/relocatable/cache/BufferPool.hpp"
+ 
++#ifdef _WIN32
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#endif
++
+ namespace graph::storage {
+ 
+ 	namespace {
+@@ -469,13 +473,26 @@ namespace graph::storage {
+ 		requireAddressableRange(offset, size, "readAt");
+ 
+ 		if (readFd_ != INVALID_FILE_HANDLE) {
+-			const pwrite_ssize_t bytesRead =
++			pwrite_ssize_t bytesRead =
+ #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+ 					nativeReadHookForTesting
+ 							? nativeReadHookForTesting(readFd_, buf, size, static_cast<pwrite_off_t>(offset))
+ 							: portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+ #else
+ 					portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
++#endif
++#ifdef _WIN32
++            // The old byte-zero lease denies a second handle, including an
++            // independently opened read-only backend in this process.
++            if (bytesRead < 0 && offset == 0U && ::GetLastError() == ERROR_LOCK_VIOLATION
++#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
++                && !nativeReadHookForTesting
++#endif
++            ) {
++                const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(readFd_, buf, size);
++                // A lease may have ended between the failed read and lookup.
++                bytesRead = borrowed ? *borrowed : portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
++            }
+ #endif
+ 			if (bytesRead < 0) {
+ 				throw std::runtime_error("StorageIO::readAt pread failed at offset " + std::to_string(offset));
+diff --git a/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp b/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
+index 171e5553..acc2ef54 100644
+--- a/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
++++ b/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp
+@@ -1,4 +1,7 @@
+ #include "graph/storage/LogicalGraphNodeScan.hpp"
++#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
++#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
++#include "graph/core/PropertyDecodeAllocationScope.hpp"
+ /**
+  * @file RelocatableLogicalGraphRead.cpp
+  * @brief relocatable implementation of the format-independent logical graph reader.
+@@ -23,6 +26,7 @@
+ #include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
+ #include "graph/utils/OwnedHeapReservation.hpp"
+ #include "graph/debug/PerfTrace.hpp"
++#include "graph/debug/PropertyReadDiagnostic.hpp"
+ 
+ namespace graph::storage {
+ 
+@@ -41,7 +45,11 @@ namespace graph::storage {
+ 		}
+ 	} // namespace
+ 
+-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider, public utils::OwnedPmrObject {
++	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider,
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
++            public LogicalGraphBudgetedNonNullProvider,
++#endif
++            public utils::OwnedPmrObject {
+ 	public:
+ 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
+ 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
+@@ -101,31 +109,65 @@ namespace graph::storage {
+ 				return native_reads_.readEdgesShapedSorted(snapshot_.metadataSnapshot(), edgeIds, shape, &read_session_, &admission);
+ 			}
+ 			[[nodiscard]] PropertyValue readNodeProperty(uint64_t nodeId, const std::string_view key) const override {
+-				return native_reads_.readNodeProperty(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
++				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
++                return native_reads_.readNodeProperty(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
+ 			}
+ 			[[nodiscard]] std::optional<bool> nodePropertyExists(uint64_t nodeId, const std::string_view key) const override {
+ 				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
+ 			}
+ 			[[nodiscard]] bool supportsPropertyNonNullProbes() const override { return true; }
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
++			[[nodiscard]] bool nodePropertyIsNonNullWithOwner(uint64_t nodeId, std::string_view key,
++					std::shared_ptr<std::pmr::memory_resource> owner) const override {
++				if (!owner || !dynamic_cast<utils::UnmanagedAllocationResource *>(owner.get()))
++					throw std::invalid_argument("presence probe requires an accounting owner");
++				utils::OwnedHeapReservation standardBuffers(owner);
++				utils::OwnedAllocationScope scope(std::move(owner));
++				property_decode::AllocationScope standardScope(&standardBuffers, [](void *context, size_t bytes) {
++					auto &credit = *static_cast<utils::OwnedHeapReservation *>(context);
++					if (bytes > (std::numeric_limits<size_t>::max)() - credit.bytes())
++						throw std::overflow_error("presence probe allocation accounting overflow");
++					credit.set(credit.bytes() + bytes);
++				});
++				BudgetedPresenceScope budgetedPresence;
++				// A local session prevents query-owned cache allocations from escaping
++				// into the snapshot's longer-lived shared session.
++				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, nullptr, true);
++			}
++#endif
+ 			[[nodiscard]] std::optional<bool> nodePropertyIsNonNull(uint64_t nodeId, const std::string_view key) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_NONNULL);
++#endif
+ 				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_, true);
+ 			}
+ 
+ 
+ 			[[nodiscard]] std::vector<PropertyValue>
+ 			readNodePropertiesSorted(const std::span<const uint64_t> nodeIds, const std::string_view key) const override {
+-				return native_reads_.readNodePropertiesSorted(snapshot_.metadataSnapshot(), nodeIds, key, &read_session_);
++				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
++                return native_reads_.readNodePropertiesSorted(snapshot_.metadataSnapshot(), nodeIds, key, &read_session_);
+ 			}
+ 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+ 			readNodePropertyColumnsSorted(const std::span<const uint64_t> nodeIds,
+ 																  const std::span<const std::string_view> keys) const override {
+-				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
++				#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
++                return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
+ 			}
+ 			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return true; }
+ 			[[nodiscard]] bool supportsNodePropertyCellBatches() const override { return true; }
+ 			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+ 				std::span<const std::string_view> keys, const PropertyCellSink &sink,
+ 				const std::function<void(size_t)> &admission) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
+ 				if (!admission) throw std::invalid_argument("direct Property cells require admission");
+ 				native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+ 					sink, &read_session_, &admission);
+@@ -133,6 +175,9 @@ namespace graph::storage {
+             void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
+                 std::span<const std::string_view> keys, const PropertyCellSink &sink,
+                 const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
+                 if (!sink || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
+                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                     sink, &read_session_, &admission, &scalars);
+@@ -141,6 +186,9 @@ namespace graph::storage {
+                 std::span<const std::string_view> keys, const PropertyCellSink &sink,
+                 const PropertyScalarReadSink &scalars, const PropertyTextReadSink &texts,
+                 const std::function<void(size_t)> &admission) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
+                 if (!sink || !scalars || !texts || !admission)
+                     throw std::invalid_argument("typed Property cells require sinks and admission");
+                 native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+@@ -149,6 +197,9 @@ namespace graph::storage {
+             bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
+                 std::span<const std::string_view> keys, const PropertyCellSink &values,
+                 const PropertyColumnBatchReadSinks &batches, const std::function<void(size_t)> &admission) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
+                 if (!values || !batches.scalars || !batches.texts || !admission)
+                     throw std::invalid_argument("Property runs require sinks and admission");
+                 // These singleton fallbacks remain synchronous for complex,
+@@ -166,6 +217,9 @@ namespace graph::storage {
+ 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+ 			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
+ 					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
++                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
++#endif
+ 				if (!admission) throw std::invalid_argument("Property admission callback must not be empty");
+ 				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys,
+ 						&read_session_, &admission);
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index b9b7d0a8..fb59d1f8 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -96,6 +96,9 @@
+ #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
+ #include "graph/storage/relocatable/vector/VectorMappingIds.hpp"
+ #include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
++#ifdef _WIN32
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#endif
+ #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
+ #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
+ #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
+@@ -161,29 +164,20 @@ namespace graph::storage {
+ 			return created;
+ 		}
+ 
+-		[[nodiscard]] bool tryLockNativeBulkSessionFile(file_handle_t handle) {
++		[[nodiscard]] file_handle_t tryLockNativeBulkSessionFile(file_handle_t handle) {
+ 			if (handle == INVALID_FILE_HANDLE) { // the native session lease is created only from the validated writable backend handle.
+ 				throw std::logic_error("relocatable bulk session requires a native writable file handle");
+ 			}
+ #ifdef _WIN32
+-			OVERLAPPED overlapped = {};
+-			if (::LockFileEx(reinterpret_cast<HANDLE>(handle),
+-							 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlapped)) {
+-				return true;
+-			}
+-			if (::GetLastError() == ERROR_LOCK_VIOLATION) {
+-				return false;
+-			}
+-			throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+-								"relocatable bulk session could not lock the database");
++			return detail::WindowsLeaseReadBridge::tryLock(handle);
+ #else
+ 			// Unlike process-scoped fcntl record locks, flock stays attached to this
+ 			// open handle when another backend in the same process closes its own FD.
+ 			if (::flock(handle, LOCK_EX | LOCK_NB) == 0) {
+-				return true;
++				return handle;
+ 			}
+ 			if (errno == EACCES || errno == EAGAIN) {
+-				return false;
++				return INVALID_FILE_HANDLE;
+ 			}
+ 			throw std::system_error(errno, std::generic_category(),
+ 								"relocatable bulk session could not lock the database");
+@@ -195,8 +189,7 @@ namespace graph::storage {
+ 				return;
+ 			}
+ #ifdef _WIN32
+-			OVERLAPPED overlapped = {};
+-			static_cast<void>(::UnlockFileEx(reinterpret_cast<HANDLE>(handle), 0U, 1U, 0U, &overlapped));
++			detail::WindowsLeaseReadBridge::unlock(handle);
+ #else
+ 			static_cast<void>(::flock(handle, LOCK_UN));
+ #endif
+@@ -211,9 +204,7 @@ namespace graph::storage {
+ 			if (!process_lock_.owns_lock()) {
+ 				return;
+ 			}
+-			if (tryLockNativeBulkSessionFile(handle)) {
+-				handle_ = handle;
+-			}
++			handle_ = tryLockNativeBulkSessionFile(handle);
+ 		}
+ 
+ 		~NativeBulkSessionLease() { unlockNativeBulkSessionFile(handle_); }
+diff --git a/src/storage/relocatable/metadata/LocationDirectory.cpp b/src/storage/relocatable/metadata/LocationDirectory.cpp
+index 056b2819..99de57cc 100644
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -1563,6 +1563,10 @@ namespace graph::storage {
+ 											"relocatable streamed location append assigned one radix child twice");
+ 			}
+ 			page.children[childIndex] = child;
++			// Logical radix pages discard physical children on write. Preserve the
++			// newly appended child's logical route as well as its physical reference.
++			if (page.logical_children_enabled)
++				page.logical_children[childIndex] = readLocationChildPageId(pages, child, level != 0U);
+ 			pending[level]->assigned_children.set(childIndex);
+ 		}
+ 
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+index 6e111c75..ebda9239 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp
+@@ -1303,6 +1303,7 @@ namespace graph::storage {
+ 		// durable. Keep the ordinary caller-owned mutations immutable and extend a
+ 		// coordinator-owned copy only through the typed deferred protocol below.
+ 		std::vector<NativeGraphIndexTreeMutation> effectiveIndexMutations = derivedState.index_tree_mutations;
++        std::vector<NativeGraphEntityFreeSummaryFence> effectiveSummaryFences = derivedState.entity_free_summary_fences;
+ 		std::vector<std::vector<IndexTreeMutationPoolBatch>> derivedIndexBatches;
+ 		derivedIndexBatches.reserve(derivedState.index_tree_mutations.size() + (deferredIndexPlanner ? 1U : 0U));
+ 		for (const NativeGraphIndexTreeMutation &mutation: derivedState.index_tree_mutations) {
+@@ -2181,6 +2182,19 @@ namespace graph::storage {
+ 		}
+ 		validateStreamedEdgeLeaseRanges(request.edge_id_reservation, plan.first_edge_id, plan.last_edge_id);
+ 
++        // EntityPageStore attaches through openSnapshot and must be constructed
++        // before the metadata writer is held. Only a stale existing summary
++        // needs an authoritative-page rebuild.
++        std::unique_ptr<EntityPageStore> staleSummaryPages;
++        {
++            auto before = openSnapshot();
++            const auto proof = EntityFreeSpaceIndex::readProof(
++                *this, adjacencyPages, before, EntityPageRecordKind::EPRK_EDGE);
++            if (proof && !proof->fresh) {
++                before.release();
++                staleSummaryPages = std::make_unique<EntityPageStore>(io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
++            }
++        }
+ 		NativeGraphDerivedStateMutation derivedState;
+ 		derivedState.private_segment_plan = privatePlan;
+ 		derivedState.external_private_tail_reservation = request.private_source_tail;
+@@ -2217,7 +2231,7 @@ namespace graph::storage {
+ 				};
+ 
+ 		const NativeGraphEarlyPublicationPlanner earlyPlanner =
+-				[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn](
++				[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn](
+ 						const NativeGraphEarlyPublicationPlanningContext &context) {
+ 					const NativeBulkEdgeRecordSource source = request.durable_source.open(context.current_snapshot);
+ 					NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+@@ -2225,7 +2239,7 @@ namespace graph::storage {
+ 							request.candidate_layout, context.private_segments, catalog, context.current_snapshot,
+ 							request.preparation, context.private_segment_reader, context.private_segment_writer,
+ 							context.private_segment_fence,
+-							[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn, &context](
++							[this, &request, &catalog, &adjacencyPages, &staleSummaryPages, largeValueStore, checkpointLsn, &context](
+ 									const NativeStreamedGraphPrivatePreparation &prepared,
+ 									const NativeStreamedGraphDeferredPublication &publication) {
+ 								if (!prepared.publication_shape.has_value() || // preparation and publication shape are generated atomically from one authenticated plan.
+@@ -2768,6 +2782,103 @@ namespace graph::storage {
+ 									NativeGraphDeferredIndexPlans indexPlans = NativeStreamedGraphPublicationIndexPlanner::plan(
+ 											catalog, adjacencyPages, largeValueStore, *this, prepared, request.index_planning,
+ 											{context.private_segments, context.private_segment_reader, context.current_snapshot}, checkpointLsn, &publication);
++                                // Streamed pages are full except the final page. Keep an
++                                // existing edge free-space tree consistent with this same
++                                // writer-fenced publication; a missing legacy tree remains absent.
++                                const auto summary = EntityFreeSpaceIndex::readProof(
++                                        *this, adjacencyPages, context.current_snapshot,
++                                        EntityPageRecordKind::EPRK_EDGE);
++                                if (summary) {
++                                    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
++                                    const size_t used = request.publication_plan.record_count % capacity;
++                                    uint64_t freePages = summary->free_pages;
++                                    std::vector<BTreeScalarIndexOperation> operations;
++                                    utils::OwnedHeapReservation operationCredit(utils::OwnedAllocationScope::owner(), 0U);
++                                    const auto append = [&operations, &operationCredit](BTreeScalarIndexOperationKind kind,
++                                                                                       const auto &key, uint64_t value) {
++                                        if (operationCredit.bytes() > std::numeric_limits<size_t>::max() - 256U)
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge summary workspace overflowed");
++                                        operationCredit.set(operationCredit.bytes() + 256U);
++                                        operations.push_back({kind, {key.begin(), key.end()}, value});
++                                    };
++                                    const auto add = [&append](const auto &key, uint64_t value) {
++                                        append(BTreeScalarIndexOperationKind::BSIOP_UPSERT, key, value);
++                                    };
++                                    if (!summary->fresh) {
++                                        if (!staleSummaryPages || summary->free_pages > std::numeric_limits<size_t>::max() - 3U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary rebuild has no bounded page reader");
++                                        BTreeIndex oldSummary(RSS_EDGE_FREE_SPACE_INDEX_ID, adjacencyPages, *this);
++                                        auto cursor = oldSummary.openRangeCursor(context.current_snapshot, std::nullopt,
++                                            size_t(summary->free_pages) + 3U, BufferPoolReadHint::BPRH_NORMAL);
++                                        size_t visited = 0U;
++                                        while (const auto entry = cursor.next()) {
++                                            append(BTreeScalarIndexOperationKind::BSIOP_ERASE, entry->key, 0U);
++                                            ++visited;
++                                        }
++                                        if (visited != summary->free_pages + 2U)
++                                            throw FormatException(FormatError::FERR_INVALID_STATE,
++                                                                  "stale Edge summary has inconsistent entries");
++                                        std::set<uint64_t, std::less<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> pagesSeen;
++                                        freePages = 0U;
++                                        visitEdgePageLocations(context.current_snapshot, [&](const EntityPageLocation &location) {
++                                            if (!pagesSeen.insert(location.page_id.value()).second) return;
++                                            const uint16_t remaining = staleSummaryPages->freeSlotCount(
++                                                context.current_snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
++                                            if (remaining) {
++                                                add(EntityFreeSpaceIndex::entryKey(location.page_id, remaining,
++                                                                                   EntityPageRecordKind::EPRK_EDGE), 1U);
++                                                ++freePages;
++                                            }
++                                        });
++                                    }
++                                    if (used != 0U) {
++                                        if (freePages == std::numeric_limits<uint64_t>::max())
++                                            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                                  "streamed Edge free-page count overflowed");
++                                        const PageId lastPage(pages.first_entity_page.value() + shape.entity_page_count - 1U);
++                                        add(EntityFreeSpaceIndex::entryKey(lastPage, uint16_t(capacity - used),
++                                                                           EntityPageRecordKind::EPRK_EDGE), 1U);
++                                        ++freePages;
++                                    }
++                                    const uint64_t generation = context.current_superblock.generation.value();
++                                    if (generation >= std::numeric_limits<uint64_t>::max() - 1U ||
++                                        freePages == std::numeric_limits<uint64_t>::max())
++                                        throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
++                                                              "streamed Edge summary marker overflowed");
++                                    add(EntityFreeSpaceIndex::generationKey(), generation + 2U);
++                                    add(EntityFreeSpaceIndex::countKey(), freePages + 1U);
++                                    auto plan = adjacencyPages.planScalarIndexTransactionMutation(
++                                            context.current_snapshot, RSS_EDGE_FREE_SPACE_INDEX_ID,
++                                            operations, true, true);
++                                    NativeGraphDeferredIndexPlan deferred;
++                                    deferred.mutation.index_id = RSS_EDGE_FREE_SPACE_INDEX_ID;
++                                    deferred.mutation.expected_root = plan.expected_root;
++                                    deferred.mutation.pool_requests = plan.pool_requests;
++                                    const auto addPool = [&](const BTreeNewIndexTreePoolMutation &pool) {
++                                        deferred.mutation.new_pool_requests.push_back({
++                                            request.index_planning.adjacency.first_slot,
++                                            request.index_planning.adjacency.last_slot,
++                                            pool.owner_id, pool.appended_page_count});
++                                    };
++                                    if (plan.new_pool_mutation) addPool(*plan.new_pool_mutation);
++                                    for (const auto &pool : plan.additional_new_pool_mutations) addPool(pool);
++                                    if (!plan.replacement_root ||
++                                        plan.replacement_root->pool_ordinal < plan.pool_requests.size())
++                                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                            "streamed Edge summary requires a fresh replacement root");
++                                    deferred.mutation.replacement_root = NativeGraphIndexTreeAppendedPageReference{
++                                        plan.replacement_root->pool_ordinal - plan.pool_requests.size(),
++                                        plan.replacement_root->appended_page_ordinal, true};
++                                    deferred.preparer = [preparer = std::move(plan.preparer), checkpointLsn](auto &batches) {
++                                        preparer(batches, checkpointLsn);
++                                    };
++                                    deferred.entity_free_summary_fence = NativeGraphEntityFreeSummaryFence{
++                                        RSS_EDGE_FREE_SPACE_INDEX_ID, context.current_superblock.edge_entity_directory_root,
++                                        Generation(generation + 1U), freePages};
++                                    indexPlans.plans.push_back(std::move(deferred));
++                                }
+ 								for (NativeGraphDeferredIndexPlan &indexPlan: indexPlans.plans) {
+ 									context.deferred_index_plan_sink(std::move(indexPlan));
+ 								}
+diff --git a/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc b/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
+index c8437fab..3ccb5c35 100644
+--- a/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/DerivedIndexMaterialization.inc
+@@ -89,9 +89,25 @@
+ 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
+ 				const bool replacesRoot = mutation.replacement_root.has_value();
+ 				const bool retiresRoot = mutation.retire_root;
++                if (plan.entity_free_summary_fence) {
++                    const auto &fence = *plan.entity_free_summary_fence;
++                    if (!earlyPublicationPlanner || fence.index_id != RSS_EDGE_FREE_SPACE_INDEX_ID ||
++                        mutation.index_id != fence.index_id ||
++                        fence.expected_entity_root != current.edge_entity_directory_root ||
++                        !fence.target_directory_generation.isValid() ||
++                        std::ranges::any_of(effectiveSummaryFences, [&fence](const auto &existing) {
++                            return existing.index_id == fence.index_id;
++                        })) {
++                        throw FormatException(FormatError::FERR_INVALID_STATE,
++                                              "invalid streamed Edge free-space summary fence");
++                    }
++                    effectiveSummaryFences.push_back(fence);
++                }
+ 				bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+ 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
+-											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
++											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
++                                            (mutation.index_id == RSS_EDGE_FREE_SPACE_INDEX_ID &&
++                                             plan.entity_free_summary_fence.has_value());
+ 				if (!allowedIndexId && isSystemCatalogIndexDefinitionId(mutation.index_id) &&
+ 						replacesRoot && mutation.expected_root.has_value()) {
+ 					// Logical members are admitted only by their authenticated published
+diff --git a/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc b/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
+index 3d841930..abfcceac 100644
+--- a/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
++++ b/src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc
+@@ -939,7 +939,7 @@
+         // A record kind has one published directory root per database generation.
+         // Verify that the marker's semantic generation names the actual result,
+         // rather than guessing a future physical root address in the planner.
+-        for (const auto &fence : derivedState.entity_free_summary_fences) {
++        for (const auto &fence : effectiveSummaryFences) {
+             const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
+                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
+             if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {
+diff --git a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+index be099645..f263e548 100644
+--- a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
++++ b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+@@ -10,6 +10,8 @@
+ #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+ #include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
+ #include "graph/storage/relocatable/property/HybridPropertyValueReader.hpp"
++#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
++#include "graph/storage/LogicalGraphRead.hpp"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -402,6 +404,9 @@ namespace graph::storage {
+                     return *result;
+             }
+         }
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
++		if (BudgetedPresenceScope::active()) throw LogicalGraphBufferPressure();
++#endif
+ 		const std::optional<EntityPropertyLocation> location =
+ 			metadata_.findEntityPropertyLocationOptional(snapshot, key);
+ 		if (!location.has_value()) {
+@@ -1521,6 +1526,9 @@ namespace graph::storage {
+                 return pointRead();
+             }
+         }
++#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
++		if (BudgetedPresenceScope::active()) throw LogicalGraphBufferPressure();
++#endif
+ 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
+ 		if (!location.has_value()) {
+ 			return false;
+diff --git a/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp b/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
+index a9a1724f..631e5dd1 100644
+--- a/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
++++ b/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp
+@@ -136,6 +136,19 @@ TEST(CoordinatedMaterializedBudgetTest, NullParentAndUpstreamAreRejectedBeforeUs
+ 	EXPECT_THROW((MaterializedByteBudget(100U, accountWithLimit(100U), nullptr)), std::invalid_argument);
+ }
+ 
++TEST(CoordinatedMaterializedBudgetTest, ExplicitOptionalParentPreservesLocalAndSharedAccounting) {
++	MaterializedByteBudget local(100U, nullptr, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation localOwner(&local);
++	localOwner.set(40U); EXPECT_EQ(local.used(), 40U);
++	EXPECT_THROW(localOwner.set(101U), MaterializedByteLimitExceeded);
++	auto account = accountWithLimit(50U);
++	MaterializedByteBudget shared(100U, account, MaterializedByteBudget::OptionalAccountTag{});
++	MaterializedByteReservation sharedOwner(&shared);
++	sharedOwner.set(50U); EXPECT_EQ(account->used(), 50U);
++	EXPECT_THROW(sharedOwner.set(51U), ResourceAdmissionDenied);
++	sharedOwner.reset(); EXPECT_EQ(account->used(), 0U);
++}
++
+ TEST(CoordinatedMaterializedBudgetTest, DetachedOutputRetainsGlobalChargeAfterLocalBudgetDestruction) {
+ 	auto account = accountWithLimit(100U);
+ 	std::optional<ResourceLease> output;
+diff --git a/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp b/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp
+index 0a438e0c..85e2abd1 100644
+--- a/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp
++++ b/tests/src/query/execution/test_LogicalPlanCertifiedBatchHandoff.cpp
+@@ -1,10 +1,15 @@
+ #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+ #include "graph/storage/LogicalGraphNodeScan.hpp"
+ #include "graph/query/QueryGuard.hpp"
++#include <chrono>
++#include <iostream>
+ 
+ namespace graph::query::execution {
++extern thread_local bool test_disable_streaming_count;
++extern thread_local bool test_enable_streaming_count;
+ namespace {
+ using namespace direct_edge_test;
++struct EnableStreaming { EnableStreaming() { test_enable_streaming_count = true; } ~EnableStreaming() { test_enable_streaming_count = false; } };
+ struct BatchState {
+     std::vector<uint64_t> ids;
+     size_t source_calls = 0, batches = 0;
+@@ -132,5 +137,163 @@ TEST(LogicalPlanCertifiedBatchHandoffTest, RecordBoundDoesNotFetchNextSourceBatc
+     EXPECT_EQ(state.batches, 1U); EXPECT_EQ(state.source_calls, 1U);
+ }
+ 
++TEST(LogicalPlanCertifiedBatchHandoffTest, FilterCountConsumesSourceWithoutIntermediateColumns) {
++    EnableStreaming enable;
++    for (bool enabled : {false, true}) {
++        auto graph = directGraph(); graph.enable_direct_property_cells = true;
++        graph.nodes.emplace(4, LogicalGraphNode{4, {}, {{"rank", PropertyValue()}}});
++        graph.nodes.emplace(5, LogicalGraphNode{5, {}, {}});
++        BatchState state{{3, 1, 2, 5, 4}}; state.enabled = enabled;
++        BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++        auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++        scan->setRangePredicates({{"rank", PropertyValue(1), PropertyValue(3), false, true}});
++        logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++        int64_t streaming = 0, materialized = 0;
++        struct Work { int64_t &streaming, &materialized; } work{streaming, materialized};
++        debug::PerfTrace::ScopedObserver observe(&work, [](void *ctx, std::string_view key, int64_t value, bool) noexcept {
++            auto &w = *static_cast<Work *>(ctx);
++            if (key == "logical_plan.streaming_count.source_rows") w.streaming += value;
++            if (key == "logical_plan.direct_property.rows") w.materialized += value;
++        });
++        const auto result = runtime.executeToQueryResult(aggregate, directBounds());
++        ASSERT_EQ(result.rowCount(), 1U);
++        EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(2));
++        EXPECT_EQ(streaming, enabled ? 5 : 0);
++        EXPECT_EQ(materialized, enabled ? 0 : 5);
++    }
++}
++
++TEST(LogicalPlanCertifiedBatchHandoffTest, StreamingCountGuardFailureIsNotRetried) {
++    EnableStreaming enable;
++    auto graph = directGraph(); graph.enable_direct_property_cells = true;
++    BatchState state{{3, 1, 2}}; BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++    auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++    scan->setRangePredicates({{"rank", PropertyValue(0), PropertyValue{}, false, true}});
++    logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++    bool fired = false;
++    QueryGuard guard(0, 1, [&] {
++        if (!fired && state.source_calls) { fired = true; throw MaterializedByteLimitExceeded(); }
++        return size_t{0};
++    });
++    QueryContext context; context.guard = &guard;
++    EXPECT_THROW((void)runtime.executeToQueryResult(aggregate, directBounds(), context), MaterializedByteLimitExceeded);
++    EXPECT_TRUE(fired); EXPECT_EQ(state.source_calls, 1U); EXPECT_EQ(state.batches, 1U);
++}
++TEST(LogicalPlanCertifiedBatchHandoffTest, StreamingCountPressureDiscardsPrivatePrefixBeforeSplit) {
++    EnableStreaming enable;
++    auto graph = directGraph(); graph.enable_direct_property_cells = true;
++    for (auto &[id, node] : graph.nodes) node.properties = {{"rank", PropertyValue(std::string(8000, 'x'))}};
++    BatchState state{{3, 1, 2}}; BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++    auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++    scan->setRangePredicates({{"rank", PropertyValue{}, PropertyValue{}, true, true}});
++    logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++    auto bounds = directBounds(); bounds.maximum_materialized_bytes = 24U * 1024U;
++    const auto result = runtime.executeToQueryResult(aggregate, bounds);
++    ASSERT_EQ(result.rowCount(), 1U);
++    EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(3));
++    EXPECT_GT(state.source_calls, 1U); EXPECT_EQ(state.batches, 1U);
++}
++
++TEST(LogicalPlanCertifiedBatchHandoffTest, StreamingCountMatchesFallbackAcrossSelectionRatesAndMixedValues) {
++    EnableStreaming enable;
++    for (int64_t minimum : {-10, 2, 10}) {
++        for (bool enabled : {false, true}) {
++            auto graph = directGraph(); graph.enable_direct_property_cells = true;
++            graph.nodes.emplace(4, LogicalGraphNode{4, {}, {{"rank", PropertyValue()}}});
++            graph.nodes.emplace(5, LogicalGraphNode{5, {}, {}});
++            graph.nodes.emplace(6, LogicalGraphNode{6, {}, {{"rank", PropertyValue(2.5)}}});
++            BatchState state{{6, 4, 3, 1, 5, 2}}; state.enabled = enabled;
++            BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++            auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++            scan->setRangePredicates({{"rank", PropertyValue(minimum), PropertyValue{}, true, true}});
++            logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++            size_t expected = 0;
++            for (const auto &[id, node] : graph.nodes) {
++                auto it = std::ranges::find(node.properties, "rank", &storage::LogicalGraphPropertyEntry::key);
++                if (it != node.properties.end() && it->value.getType() != PropertyType::NULL_TYPE &&
++                    it->value >= PropertyValue(minimum)) ++expected;
++            }
++            const auto result = runtime.executeToQueryResult(aggregate, directBounds());
++            ASSERT_EQ(result.rowCount(), 1U);
++            EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(static_cast<int64_t>(expected)));
++        }
++    }
++}
++
++TEST(LogicalPlanCertifiedBatchHandoffTest, DISABLED_BoundedSamePathCountFusionProbe) {
++    EnableStreaming enable;
++    struct Restore { ~Restore() { test_disable_streaming_count = false; } } restore;
++    constexpr size_t seed = 20261027;
++    for (size_t count : {size_t{96}, size_t{384}}) for (bool mixed : {false, true})
++    for (int64_t threshold : {int64_t{101}, int64_t{90}, int64_t{10}}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        BatchState state;
++        for (size_t i = 0; i < count; ++i) {
++            const int64_t value = static_cast<int64_t>((i * 37U + seed) % 100U);
++            std::vector<storage::LogicalGraphPropertyEntry> properties;
++            if (!mixed || i % 8U != 0U) {
++                if (mixed && i % 8U == 1U) properties.push_back({"rank", PropertyValue()});
++                else if (mixed && i % 8U == 2U) properties.push_back({"rank", PropertyValue(double(value))});
++                else properties.push_back({"rank", PropertyValue(value)});
++            }
++            const auto id = i + 1U;
++            graph.nodes.emplace(id, LogicalGraphNode{id, {}, std::move(properties)});
++            state.ids.push_back(id);
++        }
++        size_t expected = 0;
++        for (const auto &[id, node] : graph.nodes) for (const auto &property : node.properties)
++            if (property.key == "rank" && property.value.getType() != PropertyType::NULL_TYPE && property.value >= PropertyValue(threshold)) ++expected;
++        BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++        auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++        scan->setRangePredicates({{"rank", PropertyValue(threshold), PropertyValue{}, true, true}});
++        logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++        auto bounds = directBounds(); bounds.maximum_node_records = count + 1U; bounds.maximum_rows = count + 1U;
++        bounds.maximum_distinct_rows = count + 1U; bounds.maximum_materialized_bytes = 64U * 1024U * 1024U;
++        const auto execute = [&](bool disabled) {
++            test_disable_streaming_count = disabled;
++            auto result = runtime.executeToQueryResult(aggregate, bounds);
++            if (result.rowCount() != 1 || result.getRows()[0].at("rows").asPrimitive() != PropertyValue(static_cast<int64_t>(expected)))
++                throw std::runtime_error("count fusion probe oracle mismatch");
++        };
++        for (int iteration = 0; iteration < 9; ++iteration) for (int arm = 0; arm < 2; ++arm) {
++            bool disabled = ((arm + iteration + int(mixed) + int(threshold)) & 1) != 0;
++            const auto start = std::chrono::steady_clock::now(); execute(disabled);
++            const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
++            if (iteration >= 3) std::cout << "COUNT_PROBE rows=" << count << " mixed=" << mixed << " threshold=" << threshold
++                << " disabled=" << disabled << " expected=" << expected << " iteration=" << iteration - 3 << " ns=" << elapsed << '\n';
++        }
++        for (bool disabled : {false, true}) {
++            struct Counters { int64_t stream = 0, materialized = 0; } counters;
++            graph::debug::PerfTrace::ScopedObserver observer(&counters, [](void *ctx, std::string_view key, int64_t value, bool) noexcept {
++                auto &c = *static_cast<Counters *>(ctx);
++                if (key == "logical_plan.streaming_count.source_rows") c.stream += value;
++                if (key == "logical_plan.direct_property.rows") c.materialized += value;
++            });
++            execute(disabled);
++            std::cout << "COUNT_WORK rows=" << count << " mixed=" << mixed << " threshold=" << threshold << " disabled=" << disabled
++                << " stream_rows=" << counters.stream << " materialized_rows=" << counters.materialized << '\n';
++        }
++    }
++}
++
++TEST(LogicalPlanCertifiedBatchHandoffTest, StreamingCountIsDisabledByDefault) {
++    auto graph = directGraph(); graph.enable_direct_property_cells = true;
++    BatchState state{{1, 2, 3}}; BatchBackend backend(graph, state); LogicalPlanReadRuntime runtime(backend);
++    auto scan = std::make_unique<logical::LogicalNodeScan>("n");
++    scan->setRangePredicates({{"rank", PropertyValue(1), PropertyValue(3), false, true}});
++    logical::LogicalAggregate aggregate(std::move(scan), {}, {{"count", nullptr, "rows"}});
++    int64_t streaming = 0, direct = 0;
++    struct Counters { int64_t &streaming, &direct; } counters{streaming, direct};
++    debug::PerfTrace::ScopedObserver observe(&counters, [](void *ctx, std::string_view key, int64_t v, bool) noexcept {
++        auto &c = *static_cast<Counters *>(ctx);
++        if (key == "logical_plan.streaming_count.source_rows") c.streaming += v;
++        if (key == "logical_plan.direct_property.rows") c.direct += v;
++    });
++    const auto result = runtime.executeToQueryResult(aggregate, directBounds());
++    ASSERT_EQ(result.rowCount(), 1U);
++    EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(2));
++    EXPECT_EQ(streaming, 0); EXPECT_EQ(direct, 3);
++}
++
+ } // namespace
+ } // namespace graph::query::execution
+diff --git a/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp b/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
+index bdccf82e..2dce73e0 100644
+--- a/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
++++ b/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp
+@@ -1,9 +1,17 @@
+ #include <gtest/gtest.h>
++#include <atomic>
++#include <thread>
+ 
+ #include "graph/query/QueryGuard.hpp"
+ #include "graph/query/execution/LogicalAggregateAccumulator.hpp"
+ #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+ 
++namespace graph::query::execution {
++extern thread_local bool test_enable_borrowed_group_key;
++extern thread_local bool test_force_borrowed_group_collision;
++extern thread_local bool test_reject_borrowed_group_index;
++}
++
+ namespace graph::query::execution {
+ namespace {
+ using namespace direct_edge_test;
+@@ -611,6 +619,7 @@ TEST(LogicalPlanDirectColumnAggregateTest, CompleteTupleGroupingDistinctAndNumer
+ }
+ 
+ TEST(LogicalPlanDirectColumnAggregateTest, RepeatedCompositeKeysPreserveOwnedGroupsAcrossScratchReuse) {
++    ColumnAggregateTraceScope traceScope;
+     std::vector<std::vector<PropertyValue>> expected;
+     for (const bool direct : {false, true}) {
+         DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
+@@ -625,11 +634,239 @@ TEST(LogicalPlanDirectColumnAggregateTest, RepeatedCompositeKeysPreserveOwnedGro
+         logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+             {directField("country"), directField("rank")}, {{"count", nullptr, "rows"}}, {"country", "rank"});
+         auto bounds = directBounds(); bounds.maximum_node_records = 128; bounds.maximum_rows = 128;
++        debug::PerfTrace::reset();
+         const auto result = runtime.executeToQueryResult(aggregate, bounds);
+         ASSERT_EQ(result.rowCount(), 6U);
+         for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(16));
+         if (!direct) expected = observedCells(result);
+-        else { EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U); }
++        else {
++            EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U);
++            const auto trace = debug::PerfTrace::snapshotAndReset();
++            EXPECT_EQ(trace.at("test.group_key.serialized_rows").totalValue, 96);
++            EXPECT_EQ(trace.at("test.group_key.misses").totalValue, 6);
++            EXPECT_EQ(trace.at("test.group_key.hits").totalValue, 90);
++            std::cout << "GROUP_KEY_SERIALIZED_BYTES " << trace.at("test.group_key.serialized_bytes").totalValue << '\n';
++        }
++    }
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyIndependentUniqueRepeatedAndForcedCollisions) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_force_borrowed_group_collision = false; } } reset;
++    ColumnAggregateTraceScope traceScope;
++    for (bool unique : {false, true}) for (bool collision : {false, true}) {
++        std::vector<std::vector<PropertyValue>> expected;
++        for (bool enabled : {false, true}) {
++            DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++            for (uint64_t id = 1; id <= 240; ++id) {
++                const uint64_t value = unique ? id : (id * 37 + 19) % 6;
++                const std::string text = value % 2 ? std::string("a\0b", 3) : std::string(1024, 'z');
++                graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(text)}, {"b", PropertyValue(int64_t(value))}}});
++            }
++            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++            logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++                {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++            auto bounds = directBounds(); bounds.maximum_node_records = 256; bounds.maximum_rows = 256;
++            bounds.maximum_distinct_rows = 256;
++            test_enable_borrowed_group_key = enabled; test_force_borrowed_group_collision = collision;
++            int64_t indexPeak = 0;
++            graph::debug::PerfTrace::ScopedObserver observer(&indexPeak, [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
++                if (!duration && key == "test.group_key.index_bytes") *static_cast<int64_t *>(p) = std::max(*static_cast<int64_t *>(p), value);
++            });
++            debug::PerfTrace::reset(); const auto result = runtime.executeToQueryResult(aggregate, bounds);
++            EXPECT_EQ(result.rowCount(), unique ? 240U : 6U);
++            if (!enabled) expected = observedCells(result);
++            else {
++                EXPECT_EQ(observedCells(result), expected);
++                const auto trace = debug::PerfTrace::snapshotAndReset();
++                EXPECT_EQ(trace.at("test.group_key.serialized_rows").totalValue, unique ? 240 : 6);
++                if (!unique) EXPECT_EQ(trace.at("test.group_key.borrowed_hits").totalValue, 234);
++                EXPECT_GT(indexPeak, 0);
++                std::cout << "GROUP_INDEX_BYTES unique=" << unique << " collision=" << collision << " bytes=" << indexPeak << '\n';
++            }
++        }
++    }
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyMixedFallbackAndFloatingEncodingMatchesControl) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_force_borrowed_group_collision = false; } } reset;
++    std::vector<std::string> expected;
++    for (bool enabled : {false, true}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        const auto nan1 = std::bit_cast<double>(UINT64_C(0x7ff8000000000001));
++        const auto nan2 = std::bit_cast<double>(UINT64_C(0x7ff8000000000002));
++        const std::vector<PropertyValue> values{PropertyValue(), PropertyValue(true), PropertyValue(int64_t{0}),
++            PropertyValue(0.0), PropertyValue(-0.0), PropertyValue(nan1), PropertyValue(nan1), PropertyValue(nan2),
++            PropertyValue(std::string("a\0b", 3)), PropertyValue(std::vector<PropertyValue>{PropertyValue(1)})};
++        for (size_t i = 0; i < values.size(); ++i)
++            graph.nodes.emplace(i + 1, LogicalGraphNode{i + 1, {}, {{"a", values[i]}, {"b", PropertyValue(1)}}});
++        graph.nodes.emplace(11, LogicalGraphNode{11, {}, {{"b", PropertyValue(1)}}});
++        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++        test_enable_borrowed_group_key = enabled; test_force_borrowed_group_collision = true;
++        auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32; bounds.maximum_distinct_rows = 32;
++        const auto result = runtime.executeToQueryResult(aggregate, bounds);
++        std::vector<std::string> signatures;
++        int64_t total = 0;
++        for (const auto &row : result.getRows()) {
++            const auto &key = row.at("a").asPrimitive();
++            const auto count = std::get<int64_t>(row.at("rows").asPrimitive().getVariant()); total += count;
++            std::string data;
++            if (key.getType() == PropertyType::DOUBLE) {
++                double number = std::get<double>(key.getVariant()); if (number == 0.0) number = 0.0;
++                data = std::to_string(std::bit_cast<uint64_t>(number));
++            } else data = key.toString();
++            signatures.push_back(std::to_string(int(key.getType())) + ":" + data + ":" + std::to_string(count));
++        }
++        std::sort(signatures.begin(), signatures.end()); EXPECT_EQ(total, 11);
++        if (!enabled) expected = std::move(signatures); else EXPECT_EQ(signatures, expected);
++    }
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyGuardExceptionDoesNotReplayAndReleasesBorrow) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
++    test_enable_borrowed_group_key = true;
++    DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++    for (uint64_t id = 1; id <= 24; ++id)
++        graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(2048, 'x'))}, {"b", PropertyValue(int64_t(id % 3))}}});
++    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++        {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++    auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32; bounds.maximum_distinct_rows = 32;
++    bool indexed = false, fired = false;
++    graph::debug::PerfTrace::ScopedObserver observer(&indexed, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
++        if (!duration && key == "test.group_key.index_bytes") *static_cast<bool *>(p) = true;
++    });
++    QueryGuard guard(0, 1, [&] { if (indexed && !fired) { fired = true; throw MaterializedByteLimitExceeded(); } return size_t{0}; });
++    QueryContext context; context.guard = &guard;
++    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, bounds, context)), MaterializedByteLimitExceeded);
++    EXPECT_TRUE(fired);
++    const auto result = runtime.executeToQueryResult(aggregate, bounds);
++    ASSERT_EQ(result.rowCount(), 3U);
++    for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(8));
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyBudgetPressureCanFollowIndexAdmission) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
++    test_enable_borrowed_group_key = true;
++    bool rejectedAfterIndex = false;
++    for (size_t limit : {size_t(16384), size_t(32768), size_t(65536), size_t(131072), size_t(262144)}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        for (uint64_t id = 1; id <= 240; ++id)
++            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(256, 'x'))}, {"b", PropertyValue(int64_t(id))}}});
++        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++        auto bounds = directBounds(); bounds.maximum_node_records = 256; bounds.maximum_rows = 256;
++        bounds.maximum_distinct_rows = 256; bounds.maximum_materialized_bytes = limit;
++        bool indexed = false;
++        graph::debug::PerfTrace::ScopedObserver observer(&indexed, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
++            if (!duration && key == "test.group_key.index_bytes") *static_cast<bool *>(p) = true;
++        });
++        try { static_cast<void>(runtime.executeToQueryResult(aggregate, bounds)); }
++        catch (const MaterializedByteLimitExceeded &) {
++            if (indexed) { rejectedAfterIndex = true; std::cout << "GROUP_BUDGET_REJECT limit=" << limit << '\n'; break; }
++        }
++        catch (const std::runtime_error &error) {
++            if (std::string_view(error.what()).find("materializ") == std::string_view::npos) throw;
++            if (indexed) { rejectedAfterIndex = true; std::cout << "GROUP_BUDGET_REJECT limit=" << limit << " message=" << error.what() << '\n'; break; }
++        }
++    }
++    EXPECT_TRUE(rejectedAfterIndex);
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyIndexAdmissionDeclinesBeforeGroupEffects) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_reject_borrowed_group_index = false; } } reset;
++    ColumnAggregateTraceScope tracing;
++    std::vector<std::vector<PropertyValue>> expected;
++    for (bool enabled : {false, true}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        for (uint64_t id = 1; id <= 24; ++id)
++            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue("shared")}, {"b", PropertyValue(int64_t(id % 3))}}});
++        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++        auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32;
++        test_enable_borrowed_group_key = enabled; test_reject_borrowed_group_index = false;
++        size_t admitted = 0;
++        graph::debug::PerfTrace::ScopedObserver observer(&admitted, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
++            if (!duration && key == "test.group_key.index_bytes" && ++*static_cast<size_t *>(p) == 2U)
++                test_reject_borrowed_group_index = true;
++        });
++        debug::PerfTrace::reset(); const auto result = runtime.executeToQueryResult(aggregate, bounds);
++        if (!enabled) expected = observedCells(result);
++        else {
++            EXPECT_EQ(observedCells(result), expected);
++            EXPECT_EQ(admitted, 2U);
++            const auto trace = debug::PerfTrace::snapshotAndReset();
++            EXPECT_EQ(trace.at("test.group_key.budget_fallback").totalValue, 1);
++        }
++    }
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyCrossBatchReentryAndOwnedResults) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
++    for (bool enabled : {false, true}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        for (uint64_t id = 1; id <= 600; ++id)
++            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(128, 'z'))}, {"b", PropertyValue(int64_t(id % 3))}}});
++        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++        auto bounds = directBounds(); bounds.maximum_node_records = 700; bounds.maximum_rows = 700;
++        bounds.maximum_distinct_rows = 700; bounds.maximum_materialized_bytes = 64U * 1024U * 1024U;
++        test_enable_borrowed_group_key = enabled;
++        struct Reentry { LogicalPlanReadRuntime *runtime; logical::LogicalAggregate *plan; LogicalPlanReadRuntimeBounds *bounds; bool enabled; bool fired = false; bool valid = false; } reentry{&runtime, &aggregate, &bounds, enabled};
++        graph::debug::PerfTrace::ScopedObserver observer(&reentry, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
++            auto &state = *static_cast<Reentry *>(p);
++            if (duration || state.fired || key != (state.enabled ? "test.group_key.borrowed_hits" : "test.group_key.serialized_rows")) return;
++            state.fired = true;
++            try {
++                const auto nested = state.runtime->executeToQueryResult(*state.plan, *state.bounds);
++                state.valid = nested.rowCount() == 3U;
++                for (const auto &row : nested.getRows()) state.valid = state.valid && row.at("rows").asPrimitive() == PropertyValue(200);
++            } catch (...) { state.valid = false; }
++        });
++        const auto result = runtime.executeToQueryResult(aggregate, bounds);
++        ASSERT_TRUE(reentry.fired); EXPECT_TRUE(reentry.valid); ASSERT_EQ(result.rowCount(), 3U);
++        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(200));
++        EXPECT_GT(graph.direct_property_batches, 2U);
++        graph.nodes.at(1).properties = {{"a", PropertyValue("changed")}, {"b", PropertyValue(1)}};
++        const auto changed = runtime.executeToQueryResult(aggregate, bounds);
++        EXPECT_EQ(changed.rowCount(), 4U);
++        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(200));
++    }
++}
++
++TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyAsyncGuardSignalAndFollowingQuery) {
++    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
++    for (bool enabled : {false, true}) {
++        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
++        for (uint64_t id = 1; id <= 48; ++id)
++            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue("key")}, {"b", PropertyValue(int64_t(id % 3))}}});
++        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
++        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
++            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
++        auto bounds = directBounds(); bounds.maximum_node_records = 64; bounds.maximum_rows = 64;
++        test_enable_borrowed_group_key = enabled;
++        struct Signal { std::atomic<bool> seen{false}, cancelled{false}; bool enabled; } signal{{false}, {false}, enabled};
++        std::jthread worker([&](std::stop_token stop) {
++            while (!signal.seen.load() && !stop.stop_requested()) std::this_thread::yield();
++            if (!stop.stop_requested()) signal.cancelled.store(true);
++        });
++        graph::debug::PerfTrace::ScopedObserver observer(&signal, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
++            auto &s = *static_cast<Signal *>(p);
++            if (duration || s.seen.load() || key != (s.enabled ? "test.group_key.borrowed_hits" : "test.group_key.serialized_rows")) return;
++            s.seen.store(true);
++            while (!s.cancelled.load()) std::this_thread::yield();
++        });
++        QueryGuard guard(0, 1, [&] { if (signal.cancelled.load()) throw std::runtime_error("test async cancellation signal"); return size_t{0}; });
++        QueryContext context; context.guard = &guard;
++        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, bounds, context)), std::runtime_error);
++        EXPECT_TRUE(signal.cancelled.load());
++        const auto result = runtime.executeToQueryResult(aggregate, bounds);
++        ASSERT_EQ(result.rowCount(), 3U);
++        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(16));
+     }
+ }
+ 
+diff --git a/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp b/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
+index 647c9a0c..11a4de81 100644
+--- a/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime.cpp
+@@ -119,7 +119,7 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
+ 	auto projectedSource = std::make_unique<logical::LogicalProject>(std::move(source), std::move(items));
+ 	logical::LogicalTraversal traversal(
+ 			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
+-			{{"weight", PropertyValue(int64_t{7})}});
++			OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(int64_t{7})}}));
+ 	std::vector<uint64_t> edgeIds;
+ 	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
+ 	traversalBounds.maximum_adjacency_page_records = 2U;
+diff --git a/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp b/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
+index 46bfbbcd..abf9d77f 100644
+--- a/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
++++ b/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp
+@@ -10,7 +10,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsTargetLabelsBeforeMaterializingTyp
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	for (const std::string type: {std::string("KNOWS"), std::string{}}) {
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", type, "out", {"Person"}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", type, "out", {"Person"}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	for (int retry = 0; retry < 2; ++retry) {
+ 		size_t rows = 0U;
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+@@ -31,7 +31,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsMissingTypedTopologyEndpointBefore
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -52,7 +52,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsDuplicateTopologyBeforeReadingEdge
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+@@ -73,7 +73,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, ReferenceTraversalRejectsMissingEndpointB
+ 	DirectEdgeBackend backend(graph);
+ 	LogicalPlanReadRuntime runtime(backend);
+ 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
+-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
++			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	const auto run = [&] {
+ 		auto snapshot = backend.openLogicalGraphReadSnapshot();
+ 		LogicalPlanReadRow input;
+diff --git a/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp b/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
+index 2f9cc52d..e4b0efbe 100644
+--- a/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp
+@@ -6,6 +6,8 @@
+  * @license Apache-2.0
+  **/
+ 
++#include "graph/debug/PerfTrace.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+ #include "graph/query/execution/RetainedPropertyBytes.hpp"
+ #include <functional>
+ #include <memory>
+@@ -302,7 +304,11 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
+ 		2U * rowBytes + 2U * sizeof(PropertyValue) - 1U;
+ 	size_t delivered = 0U;
+ 	bool keySlotsRejected = false;
+-	for (size_t budget = minimumBudget; budget < minimumBudget + 4096U; ++budget) {
++	debug::PerfTrace::ScopedObserver observer(&keySlotsRejected,
++		[](void *owner, std::string_view key, int64_t, bool) noexcept {
++			if (key == "query.sort.key_slot_admission_rejected") *static_cast<bool *>(owner) = true;
++		});
++	for (size_t budget = 1U; budget < minimumBudget + 4096U; ++budget) {
+ 		constrained.maximum_materialized_bytes = budget;
+ 		delivered = 0U;
+ 		try {
+@@ -311,12 +317,17 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
+ 				return true;
+ 			}));
+ 			break;
+-		} catch (const std::runtime_error &error) {
+-			if (std::string_view(error.what()).find("Sort key slots") != std::string::npos) {
+-				keySlotsRejected = true;
++		} catch (const MaterializedByteLimitExceeded &) {
++			if (keySlotsRejected) break;
++			// Earlier shared-account admissions are expected at smaller budgets.
++		} catch (const std::invalid_argument &error) {
++			if (std::string_view(error.what()) != "logical-plan output batch storage exhausts its materialized byte bound") {
++				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
+ 				break;
+ 			}
+-			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound") {
++		} catch (const std::runtime_error &error) {
++			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" &&
++				std::string_view(error.what()) != "logical-plan output materialization exceeds its row or byte bound") {
+ 				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
+ 				break;
+ 			}
+@@ -324,7 +335,7 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
+ 	}
+ 	EXPECT_TRUE(keySlotsRejected) << "could not reach Sort key-slot admission after row-slot reservations";
+ 	EXPECT_EQ(delivered, 0U);
+-	constrained.maximum_materialized_bytes *= 4U;
++	constrained.maximum_materialized_bytes = bounds().maximum_materialized_bytes;
+ 	std::vector<PropertyValue> output;
+ 	static_cast<void>(runtime.execute(sort, constrained, [&](const LogicalPlanReadRow &row) {
+ 		output.push_back(std::get<PropertyValue>(row.values.at("value")));
+@@ -1360,7 +1371,7 @@ TEST(LogicalPlanUnionRuntimeTest, AnonymousTraversalDoesNotCopyUnboundEdgePayloa
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "", "target", "KNOWS", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto permitted = directBounds();
+ 	permitted.maximum_materialized_bytes = 8192U;
+ 	size_t delivered = 0U;
+@@ -1430,7 +1441,7 @@ TEST(LogicalPlanUnionRuntimeTest, CompleteAdjacencyAdmissionCombinesPayloadAndBu
+ 	LogicalPlanReadRow input;
+ 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
+ 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "r", "target", "", "out",
+-		{}, {}, {{"weight", PropertyValue(7)}});
++		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
+ 	auto bounds = directBounds();
+ 	bounds.maximum_materialized_bytes = 6000U;
+ 	size_t delivered = 0U;
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp b/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
+index db2b6cf1..d4f85752 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp
+@@ -169,3 +169,29 @@ TEST_F(RelocatableStorageBackendTest, FreeSummaryRebuildFencesIndeterminatePubli
+     EXPECT_NO_THROW((void)backend.verifyIntegrity());
+     EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNode(nodes.front()).node_id, nodes.front());
+ }
++
++// The larger companion remains in the separately run stress tier.
++TEST_F(RelocatableStorageBackendTest, ColdInsertionSmallDirectoryUsesBoundedSummary) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
++    for (const size_t pages : {2U, 3U}) {
++        std::vector<uint64_t> ids;
++        {
++            RelocatableStorageBackend populate(options); populate.open();
++            ids = populate.createLogicalNodes(std::vector<LogicalGraphNodeCreateRequest>(pages * capacity, {{"Import"}, {}}));
++            ASSERT_EQ(ids.size(), pages * capacity);
++            populate.deleteLogicalNodes({{ids.front()}});
++            populate.close();
++        }
++        RelocatableStorageBackend cold(options); cold.open();
++        ImportTrace trace;
++        ASSERT_EQ(cold.createLogicalNodes({{{"Import"}, {}}}).size(), 1U);
++        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++        EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
++        ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
++        EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
++        EXPECT_NO_THROW((void)cold.verifyIntegrity());
++        RecordProperty("largest_added_page_count", static_cast<int>(pages));
++        cold.close();
++    }
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp b/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp
+index cb12ce5e..7a1096c6 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp
+@@ -21,6 +21,7 @@
+ 
+ using namespace relocatable_storage_backend_test;
+ 
++
+ namespace {
+ 
+ 	void addThirdSelfEdge(const std::filesystem::path &path, uint64_t nodeId) {
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp b/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
+index 4550f2e9..204d1c3b 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
+@@ -1743,3 +1743,41 @@ TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceFitsTheUnchange
+     ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
+     reader.close();
+ }
++
++// The larger companion remains in the separately run stress tier.
++TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceSmallFixture) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    options.adaptive_property_row_chunks = false;
++    ASSERT_EQ(options.maximum_integrity_workspace_bytes, 8U * 1024U * 1024U);
++    RelocatableStorageBackend backend(options); backend.open();
++    // Exercise integrity and reopen on a small large-value fixture.
++    for (int64_t begin = 0; begin < 12; begin += 12) {
++        std::vector<LogicalGraphNodeCreateRequest> requests;
++        for (int64_t id = begin; id < begin + 12; ++id) {
++            requests.push_back({{"User"}, {{"id", PropertyValue(id)},
++                {"country", PropertyValue("country-" + std::to_string(id % 8))},
++                {"score", PropertyValue(id % 7)}, {"age", PropertyValue(18 + id % 53)}}});
++        }
++        (void)backend.createLogicalNodes(requests);
++    }
++    (void)backend.createLogicalNodeIndex({"contract_base_user_id", "User", {"id"}});
++    for (int id = 0; id < 3; ++id) {
++        (void)backend.createLogicalNodes({{{"Wide"}, {{"id", PropertyValue(id)},
++            {"body", PropertyValue(std::string(16U * 1024U, 'b'))}}}});
++    }
++    backend.close(); backend.open();
++    const auto generation = backend.currentNativeMetadataGeneration();
++    backend.resetIoStats();
++    RelocatableIntegrityReport report;
++    ASSERT_NO_THROW(report = backend.verifyIntegrity());
++    EXPECT_GE(report.large_value_manifest_routes, 3U);
++    EXPECT_GT(report.large_value_data_pages, 0U);
++    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
++    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
++    backend.close();
++    RelocatableStorageBackend reader(backendOptions()); reader.open();
++    ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
++    reader.close();
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
+index 89a27233..1186b84b 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
+@@ -29,6 +29,7 @@ using namespace relocatable_storage_backend_test;
+ namespace {
+ 
+ 	std::atomic<size_t> inTransactionsDelayedPublicationCalls{0U};
++	std::atomic<QueryGuard *> inTransactionsDelayedGuard{nullptr};
+ 
+ 	[[nodiscard]] PropertyValue delayedProcedurePublicationResult(
+ 			[[maybe_unused]] const std::vector<PropertyValue> &arguments,
+@@ -48,7 +49,12 @@ namespace {
+ 			[[maybe_unused]] const std::vector<PropertyValue> &arguments,
+ 			[[maybe_unused]] const graph::query::expressions::EvaluationContext &context) {
+ 		if (inTransactionsDelayedPublicationCalls.fetch_add(1U, std::memory_order_relaxed) != 0U) {
+-			std::this_thread::sleep_for(std::chrono::milliseconds(150));
++			QueryGuard *guard = inTransactionsDelayedGuard.load(std::memory_order_acquire);
++			if (guard == nullptr) throw std::logic_error("transaction timeout test has no guard");
++			// Start the deadline only once the second batch body is evaluated.
++			// The first one-row transaction has already returned from publication.
++			*guard = QueryGuard(1, 0);
++			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+ 		}
+ 		return PropertyValue(int64_t{1});
+ 	}
+@@ -714,13 +720,16 @@ TEST_F(RelocatableStorageBackendTest, TimedOutInTransactionsCallKeepsEarlierComm
+ 
+ 	{
+ 		QueryEngine engine(backend, backend);
+-		QueryGuard guard(100, 0);
++		QueryGuard guard(0, 0);
+ 		QueryContext context;
+ 		context.guard = &guard;
++		inTransactionsDelayedGuard.store(&guard, std::memory_order_release);
++		struct ResetGuard {
++			~ResetGuard() { inTransactionsDelayedGuard.store(nullptr, std::memory_order_release); }
++		} resetGuard;
+ 
+-		// The first batch evaluates immediately and commits. The second body crosses
+-		// the deadline after staging, so its immediate publication guard must reject
+-		// only that batch without revoking the already acknowledged first commit.
++		// The first batch completes with no deadline. The second evaluation starts
++		// an expired deadline before its publication, after the first batch committed.
+ 		EXPECT_THROW(static_cast<void>(engine.execute(
+ 					 "MATCH (seed:TimedOutLaterBatchSeed) "
+ 					 "CALL { WITH seed CREATE (:TimedOutLaterBatch "
+@@ -728,6 +737,7 @@ TEST_F(RelocatableStorageBackendTest, TimedOutInTransactionsCallKeepsEarlierComm
+ 					 "IN TRANSACTIONS OF 1 ROWS",
+ 					 context)),
+ 				 QueryTimeoutException);
++		EXPECT_EQ(inTransactionsDelayedPublicationCalls.load(std::memory_order_relaxed), 2U);
+ 		const QueryResult committed = engine.execute("MATCH (node:TimedOutLaterBatch) RETURN node.copied AS copied");
+ 		ASSERT_EQ(committed.rowCount(), 1U);
+ 		EXPECT_EQ(committed.getRows().front().at("copied").asPrimitive(), PropertyValue(int64_t{1}));
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+index 4da37a9c..b6ce671c 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+@@ -10,6 +10,9 @@
+ 
+ #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
+ #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
++#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
++#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
++#include "graph/storage/relocatable/index/BTreePageStore.hpp"
+ #include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
+ #include "graph/storage/relocatable/format/Format.hpp"
+ #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+@@ -250,6 +253,9 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 	snapshot = reopened.openLogicalGraphReadSnapshot();
+ 	EXPECT_EQ(snapshot->readEdge(existing.front()), LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	snapshot.reset();
++	// Pin the pre-retry generation across the streamed publication and verify
++	// the new edge and its derived metadata never leak into the old snapshot.
++	auto preRetrySnapshot = reopened.openLogicalGraphReadSnapshot();
+ 	std::unique_ptr<LogicalGraphTransaction> retry = reopened.beginLogicalGraphTransaction(false);
+ 	auto *const retryBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(retry.get());
+ 	ASSERT_NE(retryBulk, nullptr);
+@@ -263,7 +269,11 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 			  LogicalGraphEdge(committed.front(), nodes[0], nodes[1], "BULK_PROPERTY_SHORT_WRITE_RETRY",
+ 						   {{"payload", PropertyValue("property-short-write")}}));
+ 	snapshot.reset();
++	EXPECT_THROW(static_cast<void>(preRetrySnapshot->readEdge(committed.front())), FormatException);
++	EXPECT_EQ(preRetrySnapshot->readEdge(existing.front()),
++	          LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++	preRetrySnapshot.reset();
+ 	reopened.close();
+ }
+ 
+@@ -1862,3 +1872,123 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePrivateScratchSyncFailureR
+ 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+ 	backend.close();
+ }
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebuildsStaleFreeSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    uint64_t expectedFreePages = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    // Preserve the existing entries but make their source-directory marker
++    // stale, as happens after directory relocation. Reopen exercises the real
++    // metadata writer and its budget rather than a mock summary provider.
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        ASSERT_TRUE(stream->is_open());
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        ASSERT_TRUE(proof->fresh);
++        expectedFreePages = proof->free_pages + 1U;
++        const auto checkpoint = LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1U);
++        pin.release();
++        static_cast<void>(trees.upsert(RSS_EDGE_FREE_SPACE_INDEX_ID, EntityFreeSpaceIndex::generationKey(), 1U, checkpoint));
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    {
++        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
++        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
++        auto metadata = RelocatableMetadataStore::open(io);
++        SlottedPagePool pools(io, *metadata);
++        BTreePageStore trees(pools, *metadata);
++        auto pin = metadata->openSnapshot();
++        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
++        ASSERT_TRUE(proof.has_value());
++        EXPECT_TRUE(proof->fresh);
++        EXPECT_EQ(proof->free_pages, expectedFreePages);
++    }
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRetainsFreshSummaryInItsPublication) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    std::vector<uint64_t> nodes;
++    uint64_t oldEdge = 0U;
++    {
++        RelocatableStorageBackend backend(options);
++        backend.open();
++        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++        ASSERT_EQ(nodes.size(), 2U);
++        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
++        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++        backend.close();
++    }
++    RelocatableStorageBackend backend(options);
++    backend.open();
++    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
++    auto transaction = backend.beginLogicalGraphTransaction(false);
++    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
++    ASSERT_NE(bulk, nullptr);
++    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
++    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
++    ASSERT_EQ(added.size(), 1U);
++    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
++    transaction.reset();
++    EXPECT_NE(oldEdge, added.front());
++    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
++    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
++    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
++    currentSnapshot.reset();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    oldSnapshot.reset();
++    backend.close();
++    backend.open();
++    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
++    auto reopenedSnapshot = backend.openLogicalGraphReadSnapshot();
++    EXPECT_EQ(reopenedSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
++    EXPECT_EQ(reopenedSnapshot->readEdge(added.front()).target_node_id, nodes[1]);
++    reopenedSnapshot.reset();
++    backend.close();
++}
+diff --git a/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp b/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp
+index 4d1ce053..03d6b054 100644
+--- a/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp
++++ b/tests/src/storage/relocatable/entity/test_ScanReadProof.cpp
+@@ -1,10 +1,20 @@
+ #include "BuildingScanMembershipFixture.hpp"
+ #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
+ #include "graph/storage/LogicalGraphNodeScan.hpp"
++#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
++#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
+ #include "graph/query/api/QueryEngine.hpp"
++#include "query/execution/DirectPropertyColumns.hpp"
++#include "CypherParserImpl.hpp"
++#include "graph/query/optimization/LogicalPlanOptimizer.hpp"
++#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+ #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
+ #include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
++#include <chrono>
++#include <map>
++#include <iostream>
+ 
++namespace graph::query::execution { extern thread_local bool test_enable_streaming_count; extern thread_local bool test_disable_streaming_count; extern thread_local bool test_enable_borrowed_group_key; }
+ static_assert(!std::is_default_constructible_v<VerifiedScanRoot>);
+ static_assert(!std::is_default_constructible_v<ScanBatchReadGrant>);
+ static_assert(!std::is_copy_constructible_v<ScanBatchReadGrant>);
+@@ -22,7 +32,7 @@ protected:
+     std::shared_ptr<graph::query::execution::MaterializedByteBudget> control =
+         std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+     std::unique_ptr<ScanBuildingImageBuilder> builder;
+-    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false) {
++    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false, bool mixedNumbers = false) {
+         if (scalarRows) {
+             initialize(true, true);
+             LargeValueStore values(io, *metadata);
+@@ -57,6 +67,12 @@ protected:
+                 const auto id = tx.createNode(std::span(nodeLabels).first(labelCount));
+                 PropertyCollectionRoot row{id, graph::Node::typeId,
+                     {{1, graph::PropertyValue(int64_t(id))}, {2, graph::PropertyValue("short")}}};
++                if (mixedNumbers) {
++                    auto &number = row.entries.front();
++                    if (id % 11U == 0U) row.entries.erase(row.entries.begin());
++                    else if (id % 7U == 0U) number.value = graph::PropertyValue();
++                    else if (id % 4U == 0U) number.value = graph::PropertyValue(double(id));
++                }
+                 if (typedColumns > 2U) {
+                     row.entries.clear();
+                     for (size_t token = 1; token <= typedColumns; ++token)
+@@ -161,6 +177,78 @@ protected:
+         const auto retained = properties.readEntityOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1});
+         ASSERT_TRUE(retained); EXPECT_EQ(retained->entries.size(), 3U);
+     }
++    void stratifiedSupplyProbe(size_t size) {
++        ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, size)); builder.reset();
++        RelocatableStorageBackendOptions options; options.data_path = target;
++        options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++        RelocatableStorageBackend backend(options); backend.open();
++        auto old = backend.openLogicalGraphReadSnapshot();
++        const std::array<std::string_view, 2> keys{"number", "text"};
++        using graph::query::execution::detail::DirectPropertyColumns;
++        using graph::query::execution::MaterializedByteBudget;
++        const auto gather = [&](std::string_view scenario, graph::storage::LogicalGraphReadSnapshot &snapshot,
++                                const std::vector<uint64_t> &ids, bool changed) {
++            std::map<std::string, int64_t> counters;
++            graph::debug::PerfTrace::ScopedObserver observer(&counters, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
++                if (duration) return;
++                if (key.starts_with("native_graph.hybrid.") || key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows") {
++                    try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
++                }
++            });
++            MaterializedByteBudget budget(4U * 1024U * 1024U);
++            graph::query::execution::MaterializedByteReservation source(&budget);
++            DirectPropertyColumns columns(snapshot, ids.size(), keys.size(), budget);
++            columns.readGather(ids, keys, [&](size_t bytes) { source.set(source.bytes() + bytes); }, [] {});
++            for (size_t i = 0; i < ids.size(); ++i) {
++                auto number = columns.cell(0, columns.rowId(i)); auto text = columns.cell(1, columns.rowId(i));
++                ASSERT_EQ(std::get<int64_t>(number.data), changed && ids[i] == 1U ? 999 : int64_t(ids[i]));
++                ASSERT_EQ(std::get<std::string_view>(text.data), changed && ids[i] == 1U ? "changed" : "short");
++            }
++            for (const auto &[key, value] : counters)
++                std::cout << "STRAT_WORK size=" << size << " case=" << scenario << " " << key << "=" << value << '\n';
++        };
++        std::vector<uint64_t> dense; for (uint64_t id = 1; id <= 32; ++id) dense.push_back(id);
++        gather("dense", *old, dense, false);
++        std::vector<uint64_t> sparse{1, 65, uint64_t(size)};
++        if (sparse[1] == sparse[2]) sparse.erase(sparse.begin() + 1);
++        gather("sparse", *old, sparse, false);
++        gather("unsorted_duplicate", *old, {uint64_t(size), 1, 65, 1, uint64_t(size)}, false);
++        backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{999})}, {"text", graph::PropertyValue("changed")}}}});
++        auto current = backend.openLogicalGraphReadSnapshot();
++        gather("old_after_update", *old, {1, 65, uint64_t(size)}, false);
++        gather("new_after_update", *current, {1, 65, uint64_t(size)}, true);
++        old.reset(); current.reset(); backend.close();
++        options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++        auto reopened = std::make_shared<RelocatableStorageBackend>(options); reopened->open();
++        std::map<std::string, int64_t> counters;
++        graph::debug::PerfTrace::ScopedObserver observer(&counters, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
++            if (!duration && (key.starts_with("native_graph.hybrid.") || key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows"))
++                try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
++        });
++        graph::query::QueryEngine engine(reopened);
++        const auto result = engine.execute("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
++        ASSERT_EQ(result.rowCount(), 1U);
++        EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), graph::PropertyValue(int64_t(size * (size + 1U) / 2U - 1U + 999U)));
++        EXPECT_EQ(result.getRows()[0].at("present").asPrimitive(), graph::PropertyValue(int64_t(size)));
++        for (const auto &[key, value] : counters)
++            std::cout << "STRAT_WORK size=" << size << " case=reopened_labeled_multi " << key << "=" << value << '\n';
++        for (int kind : {0, 1}) {
++            std::map<std::string, int64_t> extra;
++            graph::debug::PerfTrace::ScopedObserver extraObserver(&extra, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
++                if (!duration && key.starts_with("native_graph.hybrid."))
++                    try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
++            });
++            const auto alone = engine.execute(kind == 0 ?
++                "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total" :
++                "MATCH (n:Nodes) WHERE n.number >= 2 RETURN count(n.text) AS present");
++            ASSERT_EQ(alone.rowCount(), 1U);
++            const auto expected = kind == 0 ? int64_t(size * (size + 1U) / 2U - 1U + 999U) : int64_t(size);
++            EXPECT_EQ(alone.getRows()[0].at(kind == 0 ? "total" : "present").asPrimitive(), graph::PropertyValue(expected));
++            for (const auto &[key, value] : extra)
++                std::cout << "STRAT_WORK size=" << size << " case=" << (kind == 0 ? "reopened_sum" : "reopened_count") << " " << key << "=" << value << '\n';
++        }
++        reopened->close();
++    }
+     void TearDown() override {
+         builder.reset();
+         EXPECT_EQ(source->used(), 0U); EXPECT_EQ(work->used(), 0U); EXPECT_EQ(control->used(), 0U);
+@@ -1735,6 +1823,327 @@ TEST_F(ScanReadProofTest, QueryDirectoryContinuationDropsExpiredStateBeforeAFres
+     EXPECT_EQ(rows->used(), 0U);
+ }
+ 
++TEST_F(ScanReadProofTest, StreamingCountConsumesPersistentScanImageWithoutColumnMaterialization) {
++    struct Enable { Enable() { graph::query::execution::test_enable_streaming_count = true; } ~Enable() { graph::query::execution::test_enable_streaming_count = false; } } enable;
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    struct Work { int64_t source = 0, materialized = 0; } work;
++    graph::debug::PerfTrace::ScopedObserver observer(&work, [](void *ctx, std::string_view key, int64_t value, bool) noexcept {
++        auto &w = *static_cast<Work *>(ctx);
++        if (key == "logical_plan.streaming_count.source_rows") w.source += value;
++        if (key == "logical_plan.direct_property.rows") w.materialized += value;
++    });
++    graph::query::QueryEngine engine(backend);
++    auto result = engine.execute("MATCH (n) WHERE n.number >= 33 RETURN count(*) AS rows");
++    ASSERT_EQ(result.rowCount(), 1U);
++    EXPECT_EQ(result.getRows().front().at("rows").asPrimitive(), graph::PropertyValue(int64_t{32}));
++    EXPECT_EQ(work.source, 64); EXPECT_EQ(work.materialized, 0);
++}
++
++TEST_F(ScanReadProofTest, DISABLED_PersistentCountFusionProbe) {
++    const auto *rowsEnv = std::getenv("ZYX_PROBE_ROWS");
++    const auto *mixedEnv = std::getenv("ZYX_PROBE_MIXED");
++    ASSERT_NE(rowsEnv, nullptr); ASSERT_NE(mixedEnv, nullptr);
++    const size_t rows = std::stoull(rowsEnv); const bool mixed = std::string_view(mixedEnv) == "1";
++    ASSERT_TRUE(rows == 128U || rows == 512U);
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, rows, false, mixed)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target;
++    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    graph::query::QueryEngine engine(backend);
++    struct Reset { ~Reset() { graph::query::execution::test_enable_streaming_count = false; graph::query::execution::test_disable_streaming_count = false; } } reset;
++    for (int64_t threshold : {int64_t{0}, int64_t(rows / 2U), int64_t(rows + 1U)}) {
++        size_t expected = 0;
++        for (size_t id = 1; id <= rows; ++id) {
++            if (mixed && (id % 11U == 0U || id % 7U == 0U)) continue;
++            const auto value = mixed && id % 4U == 0U ? graph::PropertyValue(double(id)) : graph::PropertyValue(int64_t(id));
++            if (value >= graph::PropertyValue(threshold)) ++expected;
++        }
++        const auto query = "MATCH (n) WHERE n.number >= " + std::to_string(threshold) + " RETURN count(*) AS rows";
++        const auto execute = [&](bool enabled) {
++            graph::query::execution::test_enable_streaming_count = enabled;
++            graph::query::execution::test_disable_streaming_count = !enabled;
++            auto result = engine.execute(query);
++            if (result.rowCount() != 1 || result.getRows()[0].at("rows").asPrimitive() != graph::PropertyValue(int64_t(expected)))
++                throw std::runtime_error("persistent count oracle mismatch");
++        };
++        for (int iteration = 0; iteration < 9; ++iteration) for (int arm = 0; arm < 2; ++arm) {
++            const bool enabled = ((iteration + arm + int(mixed) + int(threshold)) & 1) == 0;
++            const auto before = std::chrono::steady_clock::now(); execute(enabled);
++            const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - before).count();
++            if (iteration >= 3) std::cout << "PERSIST_PROBE rows=" << rows << " mixed=" << mixed << " threshold=" << threshold
++                << " enabled=" << enabled << " expected=" << expected << " iteration=" << iteration - 3 << " ns=" << ns << '\n';
++        }
++        for (bool enabled : {false, true}) {
++            struct Counters { int64_t stream = 0, direct = 0; } c;
++            graph::debug::PerfTrace::ScopedObserver observe(&c, [](void *p, std::string_view key, int64_t v, bool) noexcept {
++                auto &counts = *static_cast<Counters *>(p);
++                if (key == "logical_plan.streaming_count.source_rows") counts.stream += v;
++                if (key == "logical_plan.direct_property.rows") counts.direct += v;
++            });
++            execute(enabled);
++            std::cout << "PERSIST_WORK rows=" << rows << " mixed=" << mixed << " threshold=" << threshold << " enabled=" << enabled
++                << " stream=" << c.stream << " direct=" << c.direct << '\n';
++        }
++    }
++    backend->close();
++}
++
++TEST_F(ScanReadProofTest, DISABLED_BorrowedGroupPersistentFixture) {
++    const char *rowsText = std::getenv("ZYX_GROUP_ROWS"), *modeText = std::getenv("ZYX_GROUP_MODE"),
++        *output = std::getenv("ZYX_GROUP_OUTPUT");
++    ASSERT_NE(rowsText, nullptr); ASSERT_NE(modeText, nullptr); ASSERT_NE(output, nullptr);
++    const size_t rows = std::stoull(rowsText), mode = std::stoull(modeText);
++    ASSERT_TRUE(rows == 512U || rows == 1536U); ASSERT_LT(mode, 5U);
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, rows)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    std::vector<graph::storage::LogicalGraphPropertyReplaceRequest> updates; updates.reserve(rows);
++    for (size_t id = 1; id <= rows; ++id) {
++        const size_t group = (mode == 1U || mode == 3U) ? id : (id * 37U + 19U) % 6U;
++        std::vector<graph::storage::LogicalGraphWriteProperty> properties;
++        properties.push_back({"number", graph::PropertyValue(int64_t(group))});
++        if (mode == 4U && id % 7U == 0U) { /* missing */ }
++        else if (mode == 4U && id % 7U == 1U) properties.push_back({"text", graph::PropertyValue()});
++        else if (mode == 4U && id % 7U == 2U)
++            properties.push_back({"text", graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t(group))})});
++        else properties.push_back({"text", graph::PropertyValue(std::string((mode == 2U || mode == 3U) ? 1024U : 8U, char('a' + group % 6U)))});
++        updates.push_back({id, std::move(properties)});
++    }
++    // A write transaction also bounds changed fields; leave room for the
++    // initial third field and for replacements that alter the property set.
++    for (size_t offset = 0; offset < updates.size(); offset += 16U) {
++        const size_t end = std::min(offset + 16U, updates.size());
++        backend.replaceLogicalNodeProperties({updates.begin() + offset, updates.begin() + end});
++    }
++    backend.close();
++    std::filesystem::copy_file(target, output, std::filesystem::copy_options::overwrite_existing);
++}
++
++TEST_F(ScanReadProofTest, DISABLED_BorrowedGroupPersistentWork) {
++    const char *file = std::getenv("ZYX_GROUP_INPUT"), *rowsText = std::getenv("ZYX_GROUP_ROWS"), *modeText = std::getenv("ZYX_GROUP_MODE");
++    ASSERT_NE(file, nullptr); ASSERT_NE(rowsText, nullptr); ASSERT_NE(modeText, nullptr);
++    const size_t rows = std::stoull(rowsText), mode = std::stoull(modeText);
++    ASSERT_TRUE(rows == 512U || rows == 1536U); ASSERT_LT(mode, 5U);
++    using Key = std::pair<std::string, int64_t>;
++    const auto valueKey = [](const graph::PropertyValue &v) { return std::to_string(int(v.getType())) + ":" + v.toString(); };
++    std::map<Key, int64_t> expected;
++    for (size_t id = 1; id <= rows; ++id) {
++        const size_t group = (mode == 1U || mode == 3U) ? id : (id * 37U + 19U) % 6U;
++        graph::PropertyValue text;
++        if (mode == 4U && (id % 7U == 0U || id % 7U == 1U)) text = graph::PropertyValue();
++        else if (mode == 4U && id % 7U == 2U) text = graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t(group))});
++        else text = graph::PropertyValue(std::string((mode == 2U || mode == 3U) ? 1024U : 8U, char('a' + group % 6U)));
++        ++expected[{valueKey(text), int64_t(group)}];
++    }
++    RelocatableStorageBackendOptions options; options.data_path = file; options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open(); graph::query::QueryEngine engine(backend);
++    struct Reset { ~Reset() { graph::query::execution::test_enable_borrowed_group_key = false; } } reset;
++    for (bool enabled : {false, true}) {
++        graph::query::execution::test_enable_borrowed_group_key = enabled;
++        struct Work { int64_t direct = 0, serialized = 0, bytes = 0, hits = 0, indexPeak = 0; } w;
++        graph::debug::PerfTrace::ScopedObserver observer(&w, [](void *ctx, std::string_view key, int64_t n, bool duration) noexcept {
++            if (duration) return; auto &v = *static_cast<Work *>(ctx);
++            if (key == "logical_plan.aggregate.direct_input_rows") v.direct += n;
++            else if (key == "test.group_key.serialized_rows") v.serialized += n;
++            else if (key == "test.group_key.serialized_bytes") v.bytes += n;
++            else if (key == "test.group_key.borrowed_hits") v.hits += n;
++            else if (key == "test.group_key.index_bytes") v.indexPeak = std::max(v.indexPeak, n);
++        });
++        const auto result = engine.execute("MATCH (n:Nodes) RETURN n.text AS a, n.number AS b, count(*) AS rows");
++        std::map<Key, int64_t> actual;
++        for (const auto &row : result.getRows()) {
++            const auto &a = row.at("a").asPrimitive(), &b = row.at("b").asPrimitive(), &count = row.at("rows").asPrimitive();
++            ASSERT_TRUE(actual.emplace(Key{valueKey(a), std::get<int64_t>(b.getVariant())}, std::get<int64_t>(count.getVariant())).second);
++        }
++        EXPECT_EQ(actual, expected); EXPECT_EQ(w.direct, int64_t(rows));
++        std::cout << "GROUP_WORK rows=" << rows << " mode=" << mode << " enabled=" << enabled << " direct=" << w.direct
++            << " serialized=" << w.serialized << " bytes=" << w.bytes << " hits=" << w.hits << " index_peak=" << w.indexPeak << '\n';
++    }
++    backend->close();
++}
++
++TEST_F(ScanReadProofTest, UntimedGenericPropertySupplyWorkOnIndependentImage) {
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target;
++    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    std::map<std::string, int64_t> counts;
++    graph::debug::PerfTrace::ScopedObserver observer(&counts, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
++        if (duration) return;
++        if (key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows" ||
++            key == "native_graph.hybrid.grouped_column_batches" || key == "native_graph.hybrid.owner_route_checks_performed" ||
++            key == "native_graph.hybrid.certified_owner_route_checks_saved" || key == "native_graph.hybrid.group_directory_cursor_restarts" ||
++            key == "native_graph.hybrid.typed_run_admissions") {
++            try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += value; }
++            catch (...) { std::terminate(); }
++        }
++    });
++    graph::query::QueryEngine engine(backend);
++    const auto result = engine.execute("MATCH (n) RETURN sum(n.number) AS total");
++    ASSERT_EQ(result.rowCount(), 1U);
++    EXPECT_EQ(result.getRows().front().at("total").asPrimitive(), graph::PropertyValue(int64_t{18528}));
++    EXPECT_EQ(counts["logical_plan.certified_scan.borrowed_ids"], 192);
++    EXPECT_EQ(counts["logical_plan.direct_property.rows"], 192);
++    for (const auto &[key, value] : counts) std::cout << "SUPPLY_WORK " << key << "=" << value << '\n';
++    backend->close();
++}
++
++TEST_F(ScanReadProofTest, StratifiedSupply128) { stratifiedSupplyProbe(128); }
++TEST_F(ScanReadProofTest, StratifiedSupply192) { stratifiedSupplyProbe(192); }
++TEST_F(ScanReadProofTest, StratifiedSupply512) { stratifiedSupplyProbe(512); }
++
++TEST_F(ScanReadProofTest, OwnerAuthenticationSameSnapshotPhaseDiagnosis) {
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    auto old = backend.openLogicalGraphReadSnapshot();
++    backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{999})}, {"text", graph::PropertyValue("changed")}}}});
++    auto current = backend.openLogicalGraphReadSnapshot();
++    graph::parser::cypher::CypherParserImpl parser;
++    auto plan = parser.parseToLogical("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
++    graph::query::optimization::LogicalPlanOptimizer optimizer;
++    plan.root = optimizer.optimize(std::move(plan.root)).root;
++    const auto dumpPlan = [&](const auto &self, const graph::query::logical::LogicalOperator &op, size_t depth) -> void {
++        std::cout << "OWNER_PLAN depth=" << depth << " type=" << int(op.getType()) << " description=" << op.toString() << '\n';
++        for (const auto *child : op.getChildren()) self(self, *child, depth + 1);
++    };
++    dumpPlan(dumpPlan, *plan.root, 0);
++    graph::query::execution::LogicalPlanReadRuntime runtime(backend);
++    graph::query::execution::LogicalPlanReadRuntimeBounds bounds;
++    bounds.maximum_node_records = 256; bounds.maximum_rows = 512; bounds.maximum_distinct_rows = 512;
++    bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128; bounds.maximum_adjacency_page_records = 16;
++    bounds.maximum_node_page_records = 16; bounds.maximum_metadata_pages_per_node_page = 8192; bounds.maximum_property_entries = 16;
++    const auto run = [&](const char *label, graph::storage::LogicalGraphReadSnapshot &snapshot, int64_t total, int64_t present) {
++        struct Counts { std::array<unsigned, 193> other{}, selected{}, nonnull{}; size_t invalid = 0; } counts;
++        const auto fence = snapshot.mutationFence(); ASSERT_TRUE(fence.has_value());
++        graph::debug::PerfTrace::ScopedObserver observe(&counts, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
++            if (duration || (key != "test.owner_auth.other" && key != "test.owner_auth.selected" && key != "test.owner_auth.nonnull")) return;
++            auto &c = *static_cast<Counts *>(ctx);
++            if (value < 1 || value > 192) { ++c.invalid; return; }
++            auto &slot = key == "test.owner_auth.nonnull" ? c.nonnull[size_t(value)] : key == "test.owner_auth.selected" ? c.selected[size_t(value)] : c.other[size_t(value)];
++            ++slot;
++        });
++        size_t rows = 0;
++        (void)runtime.executeWithSnapshot(snapshot, *plan.root, bounds, [&](const auto &row) {
++            ++rows;
++            EXPECT_EQ(std::get<graph::PropertyValue>(row.values.at("total")), graph::PropertyValue(total));
++            EXPECT_EQ(std::get<graph::PropertyValue>(row.values.at("present")), graph::PropertyValue(present));
++            return true;
++        }, {});
++        EXPECT_EQ(rows, 1U); EXPECT_EQ(counts.invalid, 0U); EXPECT_EQ(snapshot.mutationFence(), fence);
++        size_t other = 0, selected = 0, nonnull = 0, repeated = 0, cross = 0;
++        for (size_t id = 1; id <= 192; ++id) {
++            const auto a = counts.other[id], b = counts.nonnull[id], c = counts.selected[id]; other += a; nonnull += b; selected += c;
++            if (a + b + c > 1) ++repeated;
++            if ((a || c) && b) ++cross;
++            if (a + b + c > 1) std::cout << "OWNER_REPEAT snapshot=" << label << " owner=" << id << " group=" << (id - 1) / 64 + 1
++                << " other=" << a << " selected=" << c << " nonnull=" << b << '\n';
++        }
++        std::cout << "OWNER_SUMMARY snapshot=" << label << " other=" << other << " selected=" << selected << " nonnull=" << nonnull
++            << " repeated=" << repeated << " cross=" << cross << '\n';
++    };
++    run("old", *old, 18527, 191);
++    run("new", *current, 19526, 192);
++    old.reset(); current.reset(); backend.close();
++}
++
++TEST_F(ScanReadProofTest, BudgetedPresenceOwnsResourcesAndPreservesPinnedValues) {
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    backend.replaceLogicalNodeProperties({{1, {{"text", graph::PropertyValue(std::string(8192, 'q'))},
++        {"larger", graph::PropertyValue(std::string(65536, 'r'))}, {"nullable", graph::PropertyValue()}}}});
++    auto old = backend.openLogicalGraphReadSnapshot();
++    backend.replaceLogicalNodeProperties({{1, {{"text", graph::PropertyValue()}}}});
++    auto current = backend.openLogicalGraphReadSnapshot();
++    const auto *before = dynamic_cast<const graph::storage::LogicalGraphBudgetedNonNullProvider *>(old.get());
++    const auto *after = dynamic_cast<const graph::storage::LogicalGraphBudgetedNonNullProvider *>(current.get());
++    ASSERT_NE(before, nullptr); ASSERT_NE(after, nullptr);
++    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
++    EXPECT_THROW(static_cast<void>(before->nodePropertyIsNonNullWithOwner(1, "text", tiny)),
++        graph::query::execution::MaterializedByteLimitExceeded);
++    EXPECT_EQ(tiny->used(), 0U);
++    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
++    int64_t decoded = 0;
++    graph::debug::PerfTrace::ScopedObserver observer(&decoded, [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
++        if (!duration && (key == "native_graph.read.property_full_decode" || key == "native_graph.read.property_selected_decode"))
++            *static_cast<int64_t *>(p) += value;
++    });
++    EXPECT_TRUE(before->nodePropertyIsNonNullWithOwner(1, "text", budget));
++    EXPECT_TRUE(before->nodePropertyIsNonNullWithOwner(1, "larger", budget));
++    EXPECT_FALSE(before->nodePropertyIsNonNullWithOwner(1, "nullable", budget));
++    EXPECT_FALSE(before->nodePropertyIsNonNullWithOwner(1, "missing", budget));
++    EXPECT_FALSE(after->nodePropertyIsNonNullWithOwner(1, "text", budget));
++    EXPECT_EQ(budget->used(), 0U);
++    EXPECT_EQ(decoded, 0);
++    old.reset(); current.reset(); backend.close();
++}
++
++TEST_F(ScanReadProofTest, BudgetedPresenceDeclinesRealRowBeforeResult) {
++    initialize(true, true);
++    LargeValueStore values(io, *metadata);
++    PropertyCollectionRootStore properties(*pages, values, *metadata);
++    BTreePageStore indexes(*pages, *metadata);
++    NativeGraphWritePlannerOptions options;
++    options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(127);
++    options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(127), 989};
++    NativeGraphWritePlanner planner(*metadata, *entities, *labels, properties, indexes, options);
++    auto tx = planner.beginTransaction();
++    const auto id = tx.createNode({});
++    tx.replaceNodeProperty({id, graph::Node::typeId, {{2, graph::PropertyValue("row")}}});
++    ASSERT_TRUE(tx.commit().committed());
++    auto snapshot = metadata->openSnapshot();
++    const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, id};
++    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
++    size_t effects = 0;
++    {
++        graph::utils::OwnedAllocationScope owner(budget);
++        graph::storage::BudgetedPresenceScope scope;
++        try {
++            const bool present = properties.readEntityPropertyExists(snapshot, key, 2U, true).value_or(false);
++            effects += present; FAIL() << "legacy ROW unexpectedly accepted";
++        } catch (const graph::storage::LogicalGraphBufferPressure &) { EXPECT_EQ(effects, 0U); }
++    }
++    EXPECT_EQ(budget->used(), 0U);
++    EXPECT_EQ(properties.readEntityPropertyExists(snapshot, key, 2U, true), std::optional<bool>{true});
++}
++
++TEST_F(ScanReadProofTest, PublicQueryEnginePlanOwnerAuthenticationDiagnosis) {
++    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
++    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    graph::query::QueryEngine engine(backend);
++    auto plan = engine.buildPlan("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
++    ASSERT_TRUE(plan.root);
++    const auto dump = [&](const auto &self, const graph::query::logical::LogicalOperator &op, size_t depth) -> void {
++        std::cout << "PUBLIC_PLAN depth=" << depth << " type=" << int(op.getType()) << " description=" << op.toString() << '\n';
++        for (const auto *child : op.getChildren()) self(self, *child, depth + 1);
++    };
++    dump(dump, *plan.root, 0);
++    struct Counts { std::array<unsigned, 193> other{}, selected{}, nonnull{}; size_t invalid = 0; } c;
++    graph::debug::PerfTrace::ScopedObserver observe(&c, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
++        if (duration || (key != "test.owner_auth.other" && key != "test.owner_auth.selected" && key != "test.owner_auth.nonnull")) return;
++        auto &counts = *static_cast<Counts *>(ctx);
++        if (value < 1 || value > 192) { ++counts.invalid; return; }
++        auto &slot = key == "test.owner_auth.nonnull" ? counts.nonnull[size_t(value)] : key == "test.owner_auth.selected" ? counts.selected[size_t(value)] : counts.other[size_t(value)];
++        ++slot;
++    });
++    const auto result = engine.executePlan(std::move(plan), {});
++    ASSERT_EQ(result.rowCount(), 1U);
++    EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), graph::PropertyValue(int64_t{18527}));
++    EXPECT_EQ(result.getRows()[0].at("present").asPrimitive(), graph::PropertyValue(int64_t{191}));
++    EXPECT_EQ(c.invalid, 0U);
++    size_t a = 0, b = 0, other = 0, cross = 0;
++    for (size_t i = 1; i <= 192; ++i) {
++        a += c.selected[i]; b += c.nonnull[i]; other += c.other[i];
++        if (c.selected[i] && c.nonnull[i]) ++cross;
++    }
++    std::cout << "PUBLIC_SUMMARY selected=" << a << " nonnull=" << b << " other=" << other << " cross=" << cross << '\n';
++    backend->close();
++}
++
+ #else
+ TEST(ScanReadProofTest, OrdinaryFormatsRejectVerificationBeforeIo) {
+     const auto path = std::filesystem::temp_directory_path() /
+diff --git a/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp b/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp
+index 2d246f5c..74b6af8e 100644
+--- a/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp
++++ b/tests/src/storage/relocatable/metadata/test_LocationDirectory.cpp
+@@ -2053,3 +2053,42 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsAllStreamedTypedRangeAndSourceBo
+ 			},
+ 			FormatError::FERR_INVALID_HEADER);
+ }
++
++TEST_F(RelocatableLocationDirectoryTest, StreamedLogicalRoutesPreserveExistingAndNewChildrenAcrossRootGrowth) {
++    const Superblock initial = superblock();
++    SuperblockFile bootstrap(dataIo);
++    bootstrap.initializeNew(initial);
++    MetadataPageFile pages(dataIo, initial);
++    MetadataPagePoolAllocator allocator(dataIo, initial);
++    LocationDirectory directory(pages, allocator);
++    const EntityPageLocation existing{1U, PageId(11U), 0U, 1U};
++    MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
++    directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
++    seed.publish(bootstrap);
++    MetadataWriteBatch migration(allocator, seed.candidate(), LogSequenceNumber(3U));
++    static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
++    migration.publish(bootstrap);
++    const Superblock before = migration.candidate();
++    ASSERT_TRUE(before.usesPageDirectoryBootstrap());
++    const uint64_t leaf = RSS_LOCATION_LEAF_MAX_ENTRIES;
++    const std::array<EntityPageLocation, 3> additions{{
++        {2U, PageId(12U), 0U, 1U},
++        {leaf + 1U, PageId(13U), 0U, 1U},
++        {leaf * RSS_CATALOG_RADIX_FANOUT + 1U, PageId(14U), 0U, 1U}}};
++    MetadataWriteBatch append(allocator, before, LogSequenceNumber(4U));
++    auto session = directory.beginAppendEdgePageLocations(append, additions.front().entity_id,
++                                                           additions.back().entity_id, additions.size());
++    for (const auto &entry : additions) session.append(entry);
++    session.finish();
++    MetadataPageRouteDirectory routes(pages);
++    append.reserveMetadataFrames(routes.nextBootstrapFrameCount(append));
++    static_cast<void>(routes.publishNextBootstrap(append));
++    append.publish(bootstrap);
++    const Superblock after = append.candidate();
++    EXPECT_EQ(directory.findEdgePageLocation(before, existing.entity_id), existing);
++    for (const auto &entry : additions) {
++        EXPECT_FALSE(directory.findEdgePageLocationOptional(before, entry.entity_id).has_value());
++        EXPECT_EQ(directory.findEdgePageLocation(after, entry.entity_id), entry);
++    }
++    EXPECT_EQ(directory.findEdgePageLocation(after, existing.entity_id), existing);
++}
+diff --git a/tests/src/storage/test_PreadHelper.cpp b/tests/src/storage/test_PreadHelper.cpp
+index 293e645b..156ff326 100644
+--- a/tests/src/storage/test_PreadHelper.cpp
++++ b/tests/src/storage/test_PreadHelper.cpp
+@@ -12,6 +12,13 @@
+ #include <chrono>
+ #include <filesystem>
+ #include "graph/storage/PreadHelper.hpp"
++#ifdef _WIN32
++#include "graph/storage/PwriteHelper.hpp"
++#include "graph/storage/StorageIO.hpp"
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#include <atomic>
++#include <thread>
++#endif
+ 
+ using namespace graph::storage;
+ 
+@@ -146,6 +153,119 @@ TEST_F(PreadHelperTest, ZeroCountReadReturnsError) {
+ 	portable_close(fd);
+ }
+ 
++#ifdef _WIN32
++TEST_F(PreadHelperTest, ReadOnlyStorageBorrowsLeaseWithoutEscapingWriterHandle) {
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE;
++        file_handle_t reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    // Open the read-only handle first, then independently open the writer.
++    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
++    char before = 0, during = 0, after = 0;
++    ASSERT_EQ(io.readAt(0U, &before, 1U), 1U);
++    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
++    ASSERT_NE(token, INVALID_FILE_HANDLE);
++    struct Lease {
++        file_handle_t handle;
++        bool held = true;
++        ~Lease() { if (held) detail::WindowsLeaseReadBridge::unlock(handle); }
++    } lease{token};
++    EXPECT_EQ(io.readAt(0U, &during, 1U), 1U);
++    EXPECT_EQ(before, during);
++    std::atomic<bool> failed{false};
++    std::thread reader([&] {
++        try {
++            for (size_t i = 0; i < 100U; ++i) {
++                char value = 0;
++                if (io.readAt(0U, &value, 1U) != 1U || value != before) failed = true;
++            }
++        } catch (...) { failed = true; }
++    });
++    const int closeResult = portable_close_rw(handles.writer);
++    EXPECT_EQ(closeResult, 0);
++    if (closeResult == 0) handles.writer = INVALID_FILE_HANDLE;
++    const file_handle_t contender = portable_open_rw(testFile_.c_str());
++    EXPECT_NE(contender, INVALID_FILE_HANDLE);
++    if (contender != INVALID_FILE_HANDLE) {
++        OVERLAPPED overlap = {};
++        const BOOL acquired = ::LockFileEx(reinterpret_cast<HANDLE>(contender),
++            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlap);
++        const DWORD error = acquired ? ERROR_SUCCESS : ::GetLastError();
++        EXPECT_FALSE(acquired);
++        if (!acquired) EXPECT_EQ(error, ERROR_LOCK_VIOLATION);
++        else ::UnlockFileEx(reinterpret_cast<HANDLE>(contender), 0U, 1U, 0U, &overlap);
++        portable_close_rw(contender);
++    }
++    detail::WindowsLeaseReadBridge::unlock(token);
++    lease.held = false;
++    reader.join();
++    EXPECT_FALSE(failed.load());
++    EXPECT_EQ(io.readAt(0U, &after, 1U), 1U);
++    EXPECT_EQ(before, after);
++}
++#endif
++
++#ifdef _WIN32
++TEST_F(PreadHelperTest, ReadOnlyLeaseBorrowResolvesHardLinkIdentity) {
++    const std::string alias = testFile_ + ".hardlink";
++    struct RemoveAlias { std::string path; ~RemoveAlias() { std::error_code ec; std::filesystem::remove(path, ec); } } cleanup{alias};
++    ASSERT_TRUE(::CreateHardLinkA(alias.c_str(), testFile_.c_str(), nullptr));
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE, reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    handles.reader = portable_open(alias.c_str(), O_RDONLY);
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
++    ASSERT_NE(token, INVALID_FILE_HANDLE);
++    struct Lease { file_handle_t handle; ~Lease() { detail::WindowsLeaseReadBridge::unlock(handle); } } lease{token};
++    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
++    char value = 0;
++    EXPECT_EQ(io.readAt(0U, &value, 1U), 1U);
++}
++#endif
++
++#ifdef _WIN32
++TEST_F(PreadHelperTest, WindowsExclusiveByteLockUsesTheLockingHandle) {
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE;
++        file_handle_t reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    const file_handle_t writer = handles.writer, reader = handles.reader;
++    OVERLAPPED lock = {};
++    ASSERT_TRUE(::LockFileEx(reinterpret_cast<HANDLE>(writer),
++                             LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
++                             0U, 1U, 0U, &lock));
++    char value = 0;
++    EXPECT_EQ(portable_pread(writer, &value, 1U, 0), 1);
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), -1);
++    EXPECT_EQ(::GetLastError(), ERROR_LOCK_VIOLATION);
++    EXPECT_TRUE(::UnlockFileEx(reinterpret_cast<HANDLE>(writer), 0U, 1U, 0U, &lock));
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), 1);
++}
++#endif
++
+ #ifdef _WIN32
+ TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
+ 	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+diff --git a/tests/test_run_test_process.py b/tests/test_run_test_process.py
+index 8b574134..f6379443 100644
+--- a/tests/test_run_test_process.py
++++ b/tests/test_run_test_process.py
+@@ -31,6 +31,15 @@ def _gate_path():
+ 
+ 
+ def _pid_is_active(pid: int) -> bool:
++    if sys.platform.startswith("linux"):
++        try:
++            stat = Path(f"/proc/{pid}/stat").read_text()
++            if stat[stat.rindex(")") + 2:].split()[0] in ("Z", "X"):
++                return False
++        except FileNotFoundError:
++            return False
++        except (OSError, ValueError, IndexError):
++            pass
+     try:
+         os.kill(pid, 0)
+     except ProcessLookupError:
+@@ -139,7 +148,9 @@ def test_runner_reaps_child_that_outlives_successful_test_root(tmp_path):
+         "    time.sleep(0.01)\n"
+     )
+ 
+-    assert runner.run([sys.executable, "-c", parent_program], 5.0) == 0
++    # The child has its own five-second startup deadline; allow the parent
++    # additional time to exit on a loaded CI worker before the supervisor timeout.
++    assert runner.run([sys.executable, "-c", parent_program], 15.0) == 0
+     assert child_pid_path.exists()
+     child_pid = int(child_pid_path.read_text())
+ 
+@@ -214,7 +225,7 @@ def test_shard_runner_reaps_children_that_outlive_successful_shard_roots(tmp_pat
+         "    time.sleep(0.01)\n"
+     )
+ 
+-    assert shard_runner.run_shards([sys.executable, "-c", parent_program], 2, 5.0, None) == 0
++    assert shard_runner.run_shards([sys.executable, "-c", parent_program], 2, 15.0, None) == 0
+     child_pids = [int(path.read_text()) for path in marker_directory.glob("*.pid")]
+     assert len(child_pids) == 2
+ 
+@@ -230,3 +241,19 @@ def test_shard_runner_fails_when_final_cleanup_reports_an_unreapable_process(mon
+     monkeypatch.setattr(shard_runner, "terminate_and_reap_processes", lambda *args, **kwargs: [(0, 12345)])
+ 
+     assert shard_runner.run_shards([sys.executable, "-c", "pass"], 2, 5.0, None) == 125
++
++
++@pytest.mark.parametrize('script_name', ['run_test_process.py', 'run_test_shards.py'])
++def test_linux_group_detection_never_treats_live_member_as_zombie(tmp_path, monkeypatch, script_name):
++    module = _load_script(script_name)
++    for pid, state in [(101, 'Z'), (102, 'S')]:
++        directory = tmp_path / str(pid)
++        directory.mkdir()
++        (directory / 'stat').write_text(f'{pid} (test) {state} 1 77 77 0')
++    monkeypatch.setattr(module, 'Path', lambda path: tmp_path if path == '/proc' else Path(path))
++    assert module._linux_group_has_live_members(77)
++    (tmp_path / '102' / 'stat').write_text('102 (test) Z 1 77 77 0')
++    assert not module._linux_group_has_live_members(77)
++    (tmp_path / '102' / 'stat').write_text('invalid')
++    assert module._linux_group_has_live_members(77)
++    assert module._linux_group_has_live_members(999)

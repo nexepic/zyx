@@ -1,0 +1,105 @@
+{
+  "scope": "untimed separately instrumented, full result oracle",
+  "runs": [
+    {
+      "rows": 512,
+      "mode": 0,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=512 mode=0 enabled=0 direct=512 serialized=512 bytes=13312 hits=0 index_peak=0",
+        "GROUP_WORK rows=512 mode=0 enabled=1 direct=512 serialized=6 bytes=156 hits=506 index_peak=296"
+      ],
+      "log": "work-512-0.log"
+    },
+    {
+      "rows": 512,
+      "mode": 1,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=512 mode=1 enabled=0 direct=512 serialized=512 bytes=13312 hits=0 index_peak=0",
+        "GROUP_WORK rows=512 mode=1 enabled=1 direct=512 serialized=512 bytes=13312 hits=0 index_peak=20712"
+      ],
+      "log": "work-512-1.log"
+    },
+    {
+      "rows": 512,
+      "mode": 2,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=512 mode=2 enabled=0 direct=512 serialized=512 bytes=533504 hits=0 index_peak=0",
+        "GROUP_WORK rows=512 mode=2 enabled=1 direct=512 serialized=6 bytes=6252 hits=506 index_peak=296"
+      ],
+      "log": "work-512-2.log"
+    },
+    {
+      "rows": 512,
+      "mode": 3,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=512 mode=3 enabled=0 direct=512 serialized=512 bytes=533504 hits=0 index_peak=0",
+        "GROUP_WORK rows=512 mode=3 enabled=1 direct=512 serialized=512 bytes=533504 hits=0 index_peak=20712"
+      ],
+      "log": "work-512-3.log"
+    },
+    {
+      "rows": 512,
+      "mode": 4,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=512 mode=4 enabled=0 direct=512 serialized=512 bytes=11033 hits=0 index_peak=0",
+        "GROUP_WORK rows=512 mode=4 enabled=1 direct=512 serialized=85 bytes=2187 hits=427 index_peak=488"
+      ],
+      "log": "work-512-4.log"
+    },
+    {
+      "rows": 1536,
+      "mode": 0,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=1536 mode=0 enabled=0 direct=1536 serialized=1536 bytes=39936 hits=0 index_peak=0",
+        "GROUP_WORK rows=1536 mode=0 enabled=1 direct=1536 serialized=6 bytes=156 hits=1530 index_peak=296"
+      ],
+      "log": "work-1536-0.log"
+    },
+    {
+      "rows": 1536,
+      "mode": 1,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=1536 mode=1 enabled=0 direct=1536 serialized=1536 bytes=39936 hits=0 index_peak=0",
+        "GROUP_WORK rows=1536 mode=1 enabled=1 direct=1536 serialized=1536 bytes=39936 hits=0 index_peak=68008"
+      ],
+      "log": "work-1536-1.log"
+    },
+    {
+      "rows": 1536,
+      "mode": 2,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=1536 mode=2 enabled=0 direct=1536 serialized=1536 bytes=1600512 hits=0 index_peak=0",
+        "GROUP_WORK rows=1536 mode=2 enabled=1 direct=1536 serialized=6 bytes=6252 hits=1530 index_peak=296"
+      ],
+      "log": "work-1536-2.log"
+    },
+    {
+      "rows": 1536,
+      "mode": 3,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=1536 mode=3 enabled=0 direct=1536 serialized=1536 bytes=1600512 hits=0 index_peak=0",
+        "GROUP_WORK rows=1536 mode=3 enabled=1 direct=1536 serialized=1536 bytes=1600512 hits=0 index_peak=68008"
+      ],
+      "log": "work-1536-3.log"
+    },
+    {
+      "rows": 1536,
+      "mode": 4,
+      "exit": 0,
+      "work": [
+        "GROUP_WORK rows=1536 mode=4 enabled=0 direct=1536 serialized=1536 bytes=33132 hits=0 index_peak=0",
+        "GROUP_WORK rows=1536 mode=4 enabled=1 direct=1536 serialized=232 bytes=6156 hits=1304 index_peak=488"
+      ],
+      "log": "work-1536-4.log"
+    }
+  ]
+}

@@ -169,3 +169,29 @@ TEST_F(RelocatableStorageBackendTest, FreeSummaryRebuildFencesIndeterminatePubli
     EXPECT_NO_THROW((void)backend.verifyIntegrity());
     EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNode(nodes.front()).node_id, nodes.front());
 }
+
+// The larger companion remains in the separately run stress tier.
+TEST_F(RelocatableStorageBackendTest, ColdInsertionSmallDirectoryUsesBoundedSummary) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_NODE);
+    for (const size_t pages : {2U, 3U}) {
+        std::vector<uint64_t> ids;
+        {
+            RelocatableStorageBackend populate(options); populate.open();
+            ids = populate.createLogicalNodes(std::vector<LogicalGraphNodeCreateRequest>(pages * capacity, {{"Import"}, {}}));
+            ASSERT_EQ(ids.size(), pages * capacity);
+            populate.deleteLogicalNodes({{ids.front()}});
+            populate.close();
+        }
+        RelocatableStorageBackend cold(options); cold.open();
+        ImportTrace trace;
+        ASSERT_EQ(cold.createLogicalNodes({{{"Import"}, {}}}).size(), 1U);
+        const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+        EXPECT_FALSE(counters.contains("native_graph.commit.entity_insert_node_directory_pages"));
+        ASSERT_TRUE(counters.contains("native_graph.write.entity_free_summary.candidate_pages"));
+        EXPECT_EQ(counters.at("native_graph.write.entity_free_summary.candidate_pages").totalValue, 1);
+        EXPECT_NO_THROW((void)cold.verifyIntegrity());
+        RecordProperty("largest_added_page_count", static_cast<int>(pages));
+        cold.close();
+    }
+}

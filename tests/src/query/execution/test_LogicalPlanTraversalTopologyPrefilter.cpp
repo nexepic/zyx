@@ -10,7 +10,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsTargetLabelsBeforeMaterializingTyp
 	LogicalPlanReadRuntime runtime(backend);
 	for (const std::string type: {std::string("KNOWS"), std::string{}}) {
 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
-			"a", "r", "b", type, "out", {"Person"}, {}, {{"weight", PropertyValue(7)}});
+			"a", "r", "b", type, "out", {"Person"}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	for (int retry = 0; retry < 2; ++retry) {
 		size_t rows = 0U;
 		auto snapshot = backend.openLogicalGraphReadSnapshot();
@@ -31,7 +31,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsMissingTypedTopologyEndpointBefore
 	DirectEdgeBackend backend(graph);
 	LogicalPlanReadRuntime runtime(backend);
 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
+			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	const auto run = [&] {
 		auto snapshot = backend.openLogicalGraphReadSnapshot();
 		LogicalPlanReadRow input;
@@ -52,7 +52,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsDuplicateTopologyBeforeReadingEdge
 	DirectEdgeBackend backend(graph);
 	LogicalPlanReadRuntime runtime(backend);
 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
+			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	const auto run = [&] {
 		auto snapshot = backend.openLogicalGraphReadSnapshot();
 		LogicalPlanReadRow input;
@@ -73,7 +73,7 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, ReferenceTraversalRejectsMissingEndpointB
 	DirectEdgeBackend backend(graph);
 	LogicalPlanReadRuntime runtime(backend);
 	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalSingleRow>(),
-			"a", "r", "b", "KNOWS", "out", {}, {}, {{"weight", PropertyValue(7)}});
+			"a", "r", "b", "KNOWS", "out", {}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	const auto run = [&] {
 		auto snapshot = backend.openLogicalGraphReadSnapshot();
 		LogicalPlanReadRow input;

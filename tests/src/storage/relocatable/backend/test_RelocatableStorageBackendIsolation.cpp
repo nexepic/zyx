@@ -28,7 +28,9 @@ TEST_F(RelocatableStorageBackendTest, IsolationWriteSkewRejectsSecondWriterAndPr
 		for (auto id : ids) EXPECT_EQ(transaction->readSnapshot().readNodeProperty(id, "on_call"), PropertyValue(true));
 	(void) first->stageMutationBatch(isolationSet(ids[0], "on_call", PropertyValue(false)));
 	(void) second->stageMutationBatch(isolationSet(ids[1], "on_call", PropertyValue(false)));
+	const auto fenceBeforeFirstCommit = backend.currentNativeLogicalGraphMutationFence();
 	(void) first->commit();
+	EXPECT_NE(backend.currentNativeLogicalGraphMutationFence(), fenceBeforeFirstCommit);
 	EXPECT_THROW(static_cast<void>(second->commit()), LogicalGraphMutationConflict);
 	EXPECT_EQ(second->state(), LogicalGraphTransactionState::LGTTS_CONFLICTED);
 	for (auto id : ids) EXPECT_EQ(reader->readSnapshot().readNodeProperty(id, "on_call"), PropertyValue(true));
@@ -38,6 +40,12 @@ TEST_F(RelocatableStorageBackendTest, IsolationWriteSkewRejectsSecondWriterAndPr
 	EXPECT_EQ(fresh->readNodeProperty(ids[1], "on_call"), PropertyValue(true));
 	fresh.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+	backend.open();
+	auto reopened = backend.openLogicalGraphReadSnapshot();
+	EXPECT_EQ(reopened->readNodeProperty(ids[0], "on_call"), PropertyValue(false));
+	EXPECT_EQ(reopened->readNodeProperty(ids[1], "on_call"), PropertyValue(true));
+	reopened.reset();
+	backend.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, IsolationRangeReadsRetainOldMembershipAndDerivedWriteConflictsOnPhantom) {
@@ -161,4 +169,17 @@ TEST_F(RelocatableStorageBackendTest, IsolationSimultaneousCommitHasOneWinnerAnd
 	(void)retry->stageMutationBatch(isolationSet(ids[firstLost?0:1],"value",PropertyValue(firstLost?11:22)));(void)retry->commit();
 	auto fresh=backend.openLogicalGraphReadSnapshot();EXPECT_EQ(fresh->readNodeProperty(ids[0],"value"),PropertyValue(11));EXPECT_EQ(fresh->readNodeProperty(ids[1],"value"),PropertyValue(22));
 	fresh.reset();(void)reader->commit();EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, LogicalIdLeaseDoesNotChangeGraphFence) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto before = backend.currentNativeLogicalGraphMutationFence();
+    const auto generation = backend.currentNativeMetadataGeneration();
+    auto reservation = backend.reserveLogicalGraphCreationIds(1U, 0U);
+    EXPECT_GT(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), before);
+    backend.abandonLogicalGraphCreationIds(reservation);
+    backend.close();
 }

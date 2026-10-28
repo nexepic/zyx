@@ -1,0 +1,392 @@
+{
+  "protocol_sha256": "8d36e20da030916c470948bbdd58c3e21fbb9b77ff1a7056b2df4fd022c948de",
+  "tests": "three fixtures passed including complete oracles",
+  "rows": [
+    {
+      "size": 128,
+      "case": "dense",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 62,
+        "native_graph.hybrid.column_decodes": 2,
+        "native_graph.hybrid.column_membership_cache_hits": 129,
+        "native_graph.hybrid.column_membership_decodes": 1,
+        "native_graph.hybrid.column_window_page_reuses": 3,
+        "native_graph.hybrid.direct_column_locator_reads": 2,
+        "native_graph.hybrid.group_cache_hits": 127,
+        "native_graph.hybrid.group_decodes": 1,
+        "native_graph.hybrid.owner_route_checks": 32,
+        "native_graph.hybrid.owner_route_checks_performed": 32
+      }
+    },
+    {
+      "size": 128,
+      "case": "new_after_update",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 2,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 14,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 10,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 128,
+      "case": "old_after_update",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 2,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 14,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 10,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 128,
+      "case": "reopened_count",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 252,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 514,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 510,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 128,
+        "native_graph.hybrid.owner_route_checks_performed": 128
+      }
+    },
+    {
+      "size": 128,
+      "case": "reopened_labeled_multi",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 252,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 514,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 510,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 128,
+        "native_graph.hybrid.owner_route_checks_performed": 128
+      }
+    },
+    {
+      "size": 128,
+      "case": "reopened_sum",
+      "counts": {
+        "native_graph.hybrid.certified_owner_route_checks_saved": 128,
+        "native_graph.hybrid.column_decodes": 2,
+        "native_graph.hybrid.column_membership_cache_hits": 4,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 4,
+        "native_graph.hybrid.direct_column_locator_reads": 2,
+        "native_graph.hybrid.group_cache_hits": 2,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.group_directory_cursor_restarts": 1,
+        "native_graph.hybrid.group_directory_window_hits": 1,
+        "native_graph.hybrid.group_directory_window_refills": 1,
+        "native_graph.hybrid.grouped_column_batches": 2,
+        "native_graph.hybrid.typed_run_admissions": 2,
+        "native_graph.hybrid.typed_run_admitted_bytes": 2304
+      }
+    },
+    {
+      "size": 128,
+      "case": "sparse",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 4,
+        "native_graph.hybrid.column_decodes": 2,
+        "native_graph.hybrid.column_membership_cache_hits": 13,
+        "native_graph.hybrid.column_membership_decodes": 1,
+        "native_graph.hybrid.column_window_page_reuses": 3,
+        "native_graph.hybrid.direct_column_locator_reads": 2,
+        "native_graph.hybrid.group_cache_hits": 11,
+        "native_graph.hybrid.group_decodes": 1,
+        "native_graph.hybrid.owner_route_checks": 2,
+        "native_graph.hybrid.owner_route_checks_performed": 2
+      }
+    },
+    {
+      "size": 128,
+      "case": "unsorted_duplicate",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 12,
+        "native_graph.hybrid.group_cache_hits": 12
+      }
+    },
+    {
+      "size": 192,
+      "case": "dense",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 62,
+        "native_graph.hybrid.column_decodes": 2,
+        "native_graph.hybrid.column_membership_cache_hits": 129,
+        "native_graph.hybrid.column_membership_decodes": 1,
+        "native_graph.hybrid.column_window_page_reuses": 3,
+        "native_graph.hybrid.direct_column_locator_reads": 2,
+        "native_graph.hybrid.group_cache_hits": 127,
+        "native_graph.hybrid.group_decodes": 1,
+        "native_graph.hybrid.owner_route_checks": 32,
+        "native_graph.hybrid.owner_route_checks_performed": 32
+      }
+    },
+    {
+      "size": 192,
+      "case": "new_after_update",
+      "counts": {
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 15,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 9,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 192,
+      "case": "old_after_update",
+      "counts": {
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 15,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 9,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 192,
+      "case": "reopened_count",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 378,
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 768,
+        "native_graph.hybrid.column_membership_decodes": 6,
+        "native_graph.hybrid.column_window_page_reuses": 15,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 762,
+        "native_graph.hybrid.group_decodes": 6,
+        "native_graph.hybrid.owner_route_checks": 384,
+        "native_graph.hybrid.owner_route_checks_performed": 384
+      }
+    },
+    {
+      "size": 192,
+      "case": "reopened_labeled_multi",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 378,
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 768,
+        "native_graph.hybrid.column_membership_decodes": 6,
+        "native_graph.hybrid.column_window_page_reuses": 15,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 762,
+        "native_graph.hybrid.group_decodes": 6,
+        "native_graph.hybrid.owner_route_checks": 384,
+        "native_graph.hybrid.owner_route_checks_performed": 384
+      }
+    },
+    {
+      "size": 192,
+      "case": "reopened_sum",
+      "counts": {
+        "native_graph.hybrid.certified_owner_route_checks_saved": 192,
+        "native_graph.hybrid.column_decodes": 3,
+        "native_graph.hybrid.column_membership_cache_hits": 6,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 3,
+        "native_graph.hybrid.group_cache_hits": 3,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.group_directory_cursor_restarts": 1,
+        "native_graph.hybrid.group_directory_window_hits": 2,
+        "native_graph.hybrid.group_directory_window_refills": 1,
+        "native_graph.hybrid.grouped_column_batches": 3,
+        "native_graph.hybrid.typed_run_admissions": 3,
+        "native_graph.hybrid.typed_run_admitted_bytes": 3456
+      }
+    },
+    {
+      "size": 192,
+      "case": "sparse",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 2,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 14,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 10,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 2,
+        "native_graph.hybrid.owner_route_checks_performed": 2
+      }
+    },
+    {
+      "size": 192,
+      "case": "unsorted_duplicate",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 9,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 512,
+      "case": "dense",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 62,
+        "native_graph.hybrid.column_decodes": 2,
+        "native_graph.hybrid.column_membership_cache_hits": 129,
+        "native_graph.hybrid.column_membership_decodes": 1,
+        "native_graph.hybrid.column_window_page_reuses": 3,
+        "native_graph.hybrid.direct_column_locator_reads": 2,
+        "native_graph.hybrid.group_cache_hits": 127,
+        "native_graph.hybrid.group_decodes": 1,
+        "native_graph.hybrid.owner_route_checks": 32,
+        "native_graph.hybrid.owner_route_checks_performed": 32
+      }
+    },
+    {
+      "size": 512,
+      "case": "new_after_update",
+      "counts": {
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 15,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 9,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 512,
+      "case": "old_after_update",
+      "counts": {
+        "native_graph.hybrid.column_decodes": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 15,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 9,
+        "native_graph.hybrid.direct_column_locator_reads": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    },
+    {
+      "size": 512,
+      "case": "reopened_count",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 1008,
+        "native_graph.hybrid.column_decodes": 16,
+        "native_graph.hybrid.column_membership_cache_hits": 2048,
+        "native_graph.hybrid.column_membership_decodes": 16,
+        "native_graph.hybrid.column_window_page_reuses": 32,
+        "native_graph.hybrid.direct_column_locator_reads": 16,
+        "native_graph.hybrid.group_cache_hits": 2032,
+        "native_graph.hybrid.group_decodes": 16,
+        "native_graph.hybrid.owner_route_checks": 1024,
+        "native_graph.hybrid.owner_route_checks_performed": 1024
+      }
+    },
+    {
+      "size": 512,
+      "case": "reopened_labeled_multi",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 1008,
+        "native_graph.hybrid.column_decodes": 16,
+        "native_graph.hybrid.column_membership_cache_hits": 2048,
+        "native_graph.hybrid.column_membership_decodes": 16,
+        "native_graph.hybrid.column_window_page_reuses": 32,
+        "native_graph.hybrid.direct_column_locator_reads": 16,
+        "native_graph.hybrid.group_cache_hits": 2032,
+        "native_graph.hybrid.group_decodes": 16,
+        "native_graph.hybrid.owner_route_checks": 1024,
+        "native_graph.hybrid.owner_route_checks_performed": 1024
+      }
+    },
+    {
+      "size": 512,
+      "case": "reopened_sum",
+      "counts": {
+        "native_graph.hybrid.certified_owner_route_checks_saved": 512,
+        "native_graph.hybrid.column_decodes": 8,
+        "native_graph.hybrid.column_membership_cache_hits": 16,
+        "native_graph.hybrid.column_membership_decodes": 8,
+        "native_graph.hybrid.column_window_page_reuses": 16,
+        "native_graph.hybrid.direct_column_locator_reads": 8,
+        "native_graph.hybrid.group_cache_hits": 8,
+        "native_graph.hybrid.group_decodes": 8,
+        "native_graph.hybrid.group_directory_cursor_restarts": 1,
+        "native_graph.hybrid.group_directory_window_hits": 7,
+        "native_graph.hybrid.group_directory_window_refills": 1,
+        "native_graph.hybrid.grouped_column_batches": 8,
+        "native_graph.hybrid.typed_run_admissions": 8,
+        "native_graph.hybrid.typed_run_admitted_bytes": 9216
+      }
+    },
+    {
+      "size": 512,
+      "case": "sparse",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 2,
+        "native_graph.hybrid.column_decodes": 4,
+        "native_graph.hybrid.column_membership_cache_hits": 14,
+        "native_graph.hybrid.column_membership_decodes": 2,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.direct_column_locator_reads": 4,
+        "native_graph.hybrid.group_cache_hits": 10,
+        "native_graph.hybrid.group_decodes": 2,
+        "native_graph.hybrid.owner_route_checks": 2,
+        "native_graph.hybrid.owner_route_checks_performed": 2
+      }
+    },
+    {
+      "size": 512,
+      "case": "unsorted_duplicate",
+      "counts": {
+        "native_graph.hybrid.column_cache_hits": 6,
+        "native_graph.hybrid.column_membership_cache_hits": 9,
+        "native_graph.hybrid.column_membership_decodes": 3,
+        "native_graph.hybrid.column_window_page_reuses": 6,
+        "native_graph.hybrid.group_cache_hits": 9,
+        "native_graph.hybrid.group_decodes": 3,
+        "native_graph.hybrid.owner_route_checks": 3,
+        "native_graph.hybrid.owner_route_checks_performed": 3
+      }
+    }
+  ],
+  "limitations": [
+    "scenarios within a fixture reuse snapshot and cache state; missing events are not proved zero",
+    "comparisons use different queries and plans and cannot isolate timing or demonstrate a safe authority reuse",
+    "no CPU or wall-clock conclusions"
+  ]
+}

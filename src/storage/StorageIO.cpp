@@ -22,6 +22,10 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 
+#ifdef _WIN32
+#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
+#endif
+
 namespace graph::storage {
 
 	namespace {
@@ -469,13 +473,26 @@ namespace graph::storage {
 		requireAddressableRange(offset, size, "readAt");
 
 		if (readFd_ != INVALID_FILE_HANDLE) {
-			const pwrite_ssize_t bytesRead =
+			pwrite_ssize_t bytesRead =
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 					nativeReadHookForTesting
 							? nativeReadHookForTesting(readFd_, buf, size, static_cast<pwrite_off_t>(offset))
 							: portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
 #else
 					portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+#endif
+#ifdef _WIN32
+            // The old byte-zero lease denies a second handle, including an
+            // independently opened read-only backend in this process.
+            if (bytesRead < 0 && offset == 0U && ::GetLastError() == ERROR_LOCK_VIOLATION
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                && !nativeReadHookForTesting
+#endif
+            ) {
+                const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(readFd_, buf, size);
+                // A lease may have ended between the failed read and lookup.
+                bytesRead = borrowed ? *borrowed : portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+            }
 #endif
 			if (bytesRead < 0) {
 				throw std::runtime_error("StorageIO::readAt pread failed at offset " + std::to_string(offset));

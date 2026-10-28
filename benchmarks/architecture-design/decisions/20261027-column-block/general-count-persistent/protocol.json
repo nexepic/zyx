@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "purpose": "Bounded persistent SCAN fixture COUNT fusion comparison; not the original formal window or an adoption decision",
+  "build": "CMake Release, LLVM coverage OFF, SCAN and HYBRID experimental formats ON, streaming-count default OFF; test-only per-thread enable switch",
+  "generator": "ScanReadProofTest offline SCAN image builder, deterministic owner ID as integer value, no random generator",
+  "sizes": [128, 512],
+  "types": ["integer", "mixed integer/double/null/missing"],
+  "selectivity": "threshold 0, midpoint and one greater than maximum; independently computed under PropertyValue type-sensitive ordering",
+  "processes": 3,
+  "warmups_per_arm": 3,
+  "measured_per_arm": 6,
+  "ordering": "alternate arm order each sample; same query, reopened database, snapshot policy, resource bounds and output consumption",
+  "oracle": "independently compute expected count from generated properties and check full query result on every invocation",
+  "work": "separate observer-enabled untimed query reports streamed and materialized row counts; samples record query time with observer disabled",
+  "resource_scope": "7 MiB fixture conversion/work budget; 64 MiB default query materialization; capture process peak RSS when available; allocations unavailable unless separately instrumented",
+  "limits": "single thread, warm reopened database, no I/O-cold, concurrent/write or Kuzu claims; preserve all samples and instability; abort rather than enlarge budgets"
+}

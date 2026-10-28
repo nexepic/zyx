@@ -1,0 +1,26 @@
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+index 4da37a9c..57dcfc04 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdgeFaults.cpp
+@@ -250,6 +250,9 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 	snapshot = reopened.openLogicalGraphReadSnapshot();
+ 	EXPECT_EQ(snapshot->readEdge(existing.front()), LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	snapshot.reset();
++	// Pin the pre-retry generation across the streamed publication and verify
++	// the new edge and its derived metadata never leak into the old snapshot.
++	auto preRetrySnapshot = reopened.openLogicalGraphReadSnapshot();
+ 	std::unique_ptr<LogicalGraphTransaction> retry = reopened.beginLogicalGraphTransaction(false);
+ 	auto *const retryBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(retry.get());
+ 	ASSERT_NE(retryBulk, nullptr);
+@@ -263,7 +266,11 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
+ 			  LogicalGraphEdge(committed.front(), nodes[0], nodes[1], "BULK_PROPERTY_SHORT_WRITE_RETRY",
+ 						   {{"payload", PropertyValue("property-short-write")}}));
+ 	snapshot.reset();
++	EXPECT_THROW(static_cast<void>(preRetrySnapshot->readEdge(committed.front())), FormatException);
++	EXPECT_EQ(preRetrySnapshot->readEdge(existing.front()),
++	          LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++	preRetrySnapshot.reset();
+ 	reopened.close();
+ }
+ 

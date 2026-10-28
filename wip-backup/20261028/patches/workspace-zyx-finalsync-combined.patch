@@ -1,0 +1,83 @@
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -2340,8 +2340,9 @@
+ 		const size_t MAX_CONFLICT_RETRIES = rebaseValidation ? 3U : 4U;
+ 		for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
+ 			MetadataSnapshotPin beforeExecution = metadata_->openSnapshot();
++            const Superblock superblockBeforeExecution = beforeExecution.superblock();
+ 			const LogicalGraphMutationFence graphFenceBeforeExecution =
+-					makeLogicalGraphMutationFence(beforeExecution.superblock());
++					makeLogicalGraphMutationFence(superblockBeforeExecution);
+ 			if (rebaseValidation) {
+ 				rebaseValidation(beforeExecution);
+ 				fenceValidator = [graphFenceBeforeExecution](const Superblock &base) {
+@@ -2356,24 +2357,12 @@
+ 					: native_graph_mutation_executor_->executeWithPropertyPatches(
+ 						batch, patches, maximumPropertyEntries, fenceValidator, control);
+ 			} catch (...) {
+-				// A failed final durability fence can leave a complete inactive
+-				// Superblock selected even though the caller received an error. Compare
+-				// graph-state roots while this publication gate is held: metadata-only
+-				// ID leases may advance a Superblock generation before the Graph batch
+-				// starts, but only changed Graph roots make this batch indeterminate.
+-				try {
+-					MetadataSnapshotPin afterFailure = metadata_->openSnapshot();
+-					const bool graphStateChanged =
+-							makeLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
+-					afterFailure.release();
+-					if (graphStateChanged) {
+-						requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+-					}
+-				} catch (...) {
+-					// If recovery inspection itself fails, continuing on this handle
+-					// would risk writing over an unknown durable generation.
+-					requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+-				}
++                // A published COW page can change while its logical graph roots stay
++                // stable. Any publication observed after this attempt began makes an
++                // exceptional outcome uncertain, even if the graph fence is unchanged.
++                // Metadata-only publication may conservatively require reopen here;
++                // this does not change the transaction conflict predicate.
++                markReopenRequiredIfPublicationAdvanced(superblockBeforeExecution);
+ 				throw;
+ 			}
+ 			if (execution.committed()) {
+--- a/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
+@@ -144,7 +144,7 @@
+ 	backend.open();
+ 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
+ 	auto physical = backend.openSnapshot();
+-	const auto oldRoot = physical.superblock().entity_property_directory_root;
++	const auto oldGeneration = physical.superblock().generation;
+ 	physical.release();
+ 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
+ 	{
+@@ -156,7 +156,10 @@
+ 				if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+ 					try {
+ 						const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+-						if (candidate.entity_property_directory_root != oldRoot) publicationWritten.store(true);
++						// This transaction stages only replacement of an existing node: it
++                        // does not lease IDs. A newer superblock is its publication;
++                        // the logical property root may be stable after page relocation.
++                        if (candidate.generation > oldGeneration) publicationWritten.store(true);
+ 					} catch (const std::exception &) {
+ 						// Other control frames are outside this graph publication.
+ 					}
+@@ -175,6 +178,7 @@
+ 			return portable_fsync(fd);
+ 		});
+ 		EXPECT_THROW(static_cast<void>(transaction->commit()), std::runtime_error);
++        EXPECT_TRUE(publicationWritten.load());
+ 		EXPECT_TRUE(failedFinalSync.load());
+ 		EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_INDETERMINATE);
+ 	}
+@@ -195,6 +199,7 @@
+ 	EXPECT_TRUE(rank->value == PropertyValue(1) || rank->value == PropertyValue(2));
+ 	snapshot.reset();
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++    EXPECT_EQ(reopened.createLogicalNodes({{{"WritableAfterReopen"}, {}}}).size(), 1U);
+ 	reopened.close();
+ }
+ 

@@ -1,0 +1,167 @@
+--- a/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
++++ b/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
+@@ -37,6 +37,7 @@
+ 	struct MetadataSnapshotRegistryState {
+         std::shared_ptr<MetadataSnapshotCoordination> coordination;
+ 		SuperblockFile *bootstrap = nullptr;
++        uint64_t local_snapshot_count = 0;
+ 		MetadataSnapshotRegistryLimits limits;
+ 		std::shared_ptr<std::pmr::memory_resource> memory_owner;
+         std::shared_ptr<std::pmr::memory_resource> control_owner;
+@@ -55,6 +56,7 @@
+ 							 const Superblock &superblock) {
+ 			std::lock_guard lock(state->coordination->snapshots_mutex);
+ 			auto &snapshot = state->coordination->snapshots.at(superblock.generation.value());
++            --state->local_snapshot_count;
+ 			if (--snapshot.second == 0U) {
+ 				state->coordination->snapshots.erase(superblock.generation.value());
+ 			}
+@@ -166,6 +168,7 @@
+ 										   "relocatable metadata snapshot reference count overflows");
+ 			}
+ 			++position->second.second;
++            ++state_->local_snapshot_count;
+ 		}
+ 		return MetadataSnapshotPin(state_, snapshot, std::move(readContext));
+ 	}
+@@ -208,6 +211,7 @@
+ 										   "relocatable metadata snapshot reference count overflows");
+ 			}
+ 			++position->second.second;
++            ++state_->local_snapshot_count;
+ 		}
+ 		return MetadataSnapshotPin(state_, current, std::move(readContext));
+ 	}
+@@ -242,6 +246,11 @@
+ 		}
+ 		return false;
+ 	}
++
++    uint64_t MetadataSnapshotRegistry::localSnapshotCount() const {
++        std::lock_guard lock(state_->coordination->snapshots_mutex);
++        return state_->local_snapshot_count;
++    }
+ 
+ 	uint64_t MetadataSnapshotRegistry::activeSnapshotCount() const {
+         return snapshotPressure().active_snapshot_count;
+--- a/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
+@@ -134,6 +134,7 @@
+ 										 const std::function<bool(const Superblock &)> &predicate) const;
+ 
+ 		[[nodiscard]] uint64_t activeSnapshotCount() const;
++        [[nodiscard]] uint64_t localSnapshotCount() const;
+ 		// One registry-lock sample, optionally excluding the observer's own pin.
+ 		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
+ 
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -1899,6 +1899,7 @@
+ 		[[nodiscard]] Superblock migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
+ 																 const MetadataPublishOptions &options = {});
+ 		[[nodiscard]] uint64_t activeSnapshotCount() const;
++        [[nodiscard]] uint64_t localSnapshotCount() const;
+ 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
+ 
+ 	private:
+--- a/src/storage/relocatable/metadata/MetadataStoreLookup.cpp
++++ b/src/storage/relocatable/metadata/MetadataStoreLookup.cpp
+@@ -967,6 +967,7 @@
+ 	}
+ 
+ 	uint64_t RelocatableMetadataStore::activeSnapshotCount() const { return snapshots_.activeSnapshotCount(); }
++    uint64_t RelocatableMetadataStore::localSnapshotCount() const { return snapshots_.localSnapshotCount(); }
+ 
+ 
+ } // namespace graph::storage
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -1595,7 +1595,7 @@
+ 				}
+ 			}
+ 		}
+-		if (metadata_->activeSnapshotCount() != 0U) {
++		if (metadata_->localSnapshotCount() != 0U) {
+ 			if (maintenancePausedForClose) {
+ 				maintenance_->resume();
+ 			}
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DirectReadContracts.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_DirectReadContracts.cpp
+@@ -7,6 +7,8 @@
+  **/
+ 
+ #include <array>
++#include <barrier>
++#include <future>
+ #include <chrono>
+ #include <filesystem>
+ #include <limits>
+@@ -396,6 +398,39 @@
+ 	EXPECT_EQ(backend.readNode(snapshot, fixture.person_node_id).node_id, fixture.person_node_id);
+ 	snapshot.release();
+ 	backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, ConcurrentForeignClosePreservesPinnedOwner) {
++    const NativeGraphFixture fixture = materializeNativeGraphFixture();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend owner(options); owner.open();
++    RelocatableStorageBackend other(options); other.open();
++    auto pin = owner.openSnapshot();
++    std::barrier gate(2);
++    auto closed = std::async(std::launch::async, [&] { gate.arrive_and_wait(); other.close(); });
++    gate.arrive_and_wait();
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    EXPECT_NO_THROW(closed.get());
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    EXPECT_THROW(owner.close(), std::logic_error);
++    pin.release(); owner.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, ClosingAnotherHandlePreservesOwningSnapshotAndReopen) {
++    const NativeGraphFixture fixture = materializeNativeGraphFixture();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend owner(options); owner.open();
++    RelocatableStorageBackend other(options); other.open();
++    auto pin = owner.openSnapshot();
++    EXPECT_THROW(owner.close(), std::logic_error);
++    EXPECT_NO_THROW(other.close());
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    other.open();
++    auto otherPin = other.openSnapshot();
++    EXPECT_EQ(other.readNode(otherPin, fixture.person_node_id).node_id, fixture.person_node_id);
++    otherPin.release(); other.close();
++    EXPECT_EQ(owner.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
++    pin.release(); owner.close();
+ }
+ 
+ TEST_F(RelocatableStorageBackendTest, CloseRejectsPinnedSnapshotUntilItIsReleased) {
+--- a/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
+@@ -442,6 +442,26 @@
+     context.reset(); EXPECT_EQ(registry.activeSnapshotCount(), 1U); pin.release(); EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+ }
+ 
++TEST_F(RelocatableMetadataSnapshotRegistryTest, ForeignPinBlocksReclaimUntilOwnerReleases) {
++    const Superblock initial = superblock(1, 1);
++    SuperblockFile bootstrap(io); bootstrap.initializeNew(initial);
++    MetadataPageFile pages(io, initial); MetadataPagePoolAllocator allocator(io, initial);
++    CatalogTree tree(pages, allocator); auto domain = makeMetadataSnapshotCoordination();
++    MetadataSnapshotRegistry owner(bootstrap, {}, {}, {}, domain), writerRegistry(bootstrap, {}, {}, {}, domain);
++    { auto writer = writerRegistry.beginWrite();
++      tree.upsertAndPublish(bootstrap, bootstrap.recover(), std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)); }
++    auto pin = owner.openSnapshot();
++    EXPECT_EQ(owner.localSnapshotCount(), 1U); EXPECT_EQ(writerRegistry.localSnapshotCount(), 0U);
++    { auto writer = writerRegistry.beginWrite();
++      auto next = tree.upsertAndPublish(bootstrap, bootstrap.recover(), std::vector{entry(101, 3, 3)}, LogSequenceNumber(3));
++      writerRegistry.reclaimAfterPublication(writer, allocator, next); }
++    EXPECT_EQ(allocator.stats().allocated_pages, 4U);
++    EXPECT_EQ(tree.find(pin.superblock(), SegmentId(1)).physical_slot, PhysicalSlotId(100));
++    pin.release();
++    { auto writer = writerRegistry.beginWrite(); writerRegistry.reclaimAfterPublication(writer, allocator, bootstrap.recover()); }
++    EXPECT_EQ(allocator.stats().allocated_pages, 2U);
++}
++
+ TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainCountsForeignPinsButKeepsGuardOwnershipLocal) {
+     SuperblockFile firstBootstrap(io); firstBootstrap.initializeNew(superblock(1, 1));
+     SuperblockFile secondBootstrap(io); auto domain = makeMetadataSnapshotCoordination();

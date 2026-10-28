@@ -144,7 +144,7 @@ TEST_F(RelocatableStorageBackendTest, ExplicitPropertyTransactionFinalSyncFailur
 	backend.open();
 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
 	auto physical = backend.openSnapshot();
-	const auto oldRoot = physical.superblock().entity_property_directory_root;
+	const auto oldBootstrap = physical.superblock().page_directory_root;
 	physical.release();
 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
 	{
@@ -156,7 +156,10 @@ TEST_F(RelocatableStorageBackendTest, ExplicitPropertyTransactionFinalSyncFailur
 				if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
 					try {
 						const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
-						if (candidate.entity_property_directory_root != oldRoot) publicationWritten.store(true);
+						// This property-only transaction has no ID-lease publication. A
+				// new bootstrap marks its final graph publication even when the
+				// typed Property directory root retains the same slot identity.
+					if (candidate.page_directory_root != oldBootstrap) publicationWritten.store(true);
 					} catch (const std::exception &) {
 						// Other control frames are outside this graph publication.
 					}

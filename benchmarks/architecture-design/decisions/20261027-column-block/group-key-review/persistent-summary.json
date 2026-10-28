@@ -1,0 +1,375 @@
+{
+  "scope": "synthetic warm reopened SCAN; includes complete result consumption/oracle; no query-level allocation or P95 claim",
+  "scenarios": [
+    {
+      "rows": 512,
+      "mode": 0,
+      "control_ns_median": 3373994.5,
+      "candidate_ns_median": 3562931.0,
+      "control_over_candidate": 0.9469716084875065,
+      "process_ratios": [
+        0.6127588088083754,
+        0.7822757550838947,
+        2.401532766029947
+      ],
+      "process_medians_ns": {
+        "control": [
+          2476670.0,
+          3955544.5,
+          5849635.5
+        ],
+        "candidate": [
+          4041835.0,
+          5056458.0,
+          2435792.5
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 512,
+      "mode": 1,
+      "control_ns_median": 6443113.5,
+      "candidate_ns_median": 7042687.0,
+      "control_over_candidate": 0.9148658033503406,
+      "process_ratios": [
+        0.9252149277284873,
+        1.1498117017379466,
+        0.8037012311777689
+      ],
+      "process_medians_ns": {
+        "control": [
+          12131494.0,
+          6148771.0,
+          5256824.5
+        ],
+        "candidate": [
+          13112082.0,
+          5347633.0,
+          6540769.5
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 512,
+      "mode": 2,
+      "control_ns_median": 7662621.5,
+      "candidate_ns_median": 9446938.5,
+      "control_over_candidate": 0.8111221958309562,
+      "process_ratios": [
+        0.8722013854155282,
+        0.5042167622766248,
+        1.2970422430403123
+      ],
+      "process_medians_ns": {
+        "control": [
+          11184060.0,
+          4849548.5,
+          9002664.5
+        ],
+        "candidate": [
+          12822795.5,
+          9617983.5,
+          6940918.5
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 512,
+      "mode": 3,
+      "control_ns_median": 17954154.5,
+      "candidate_ns_median": 18932902.0,
+      "control_over_candidate": 0.9483044120758667,
+      "process_ratios": [
+        0.8216119962468608,
+        1.0369920736816889,
+        0.8284726740173435
+      ],
+      "process_medians_ns": {
+        "control": [
+          16076553.0,
+          18496992.5,
+          18166714.0
+        ],
+        "candidate": [
+          19567086.5,
+          17837159.0,
+          21927958.0
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 512,
+      "mode": 4,
+      "control_ns_median": 3276099.5,
+      "candidate_ns_median": 3051821.5,
+      "control_over_candidate": 1.0734898813708469,
+      "process_ratios": [
+        1.3981855644522012,
+        0.835971789690537,
+        1.016791583518471
+      ],
+      "process_medians_ns": {
+        "control": [
+          3358307.5,
+          3107552.5,
+          3309892.5
+        ],
+        "candidate": [
+          2401904.0,
+          3717293.5,
+          3255232.0
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 1536,
+      "mode": 0,
+      "control_ns_median": 7499712.0,
+      "candidate_ns_median": 9064747.0,
+      "control_over_candidate": 0.8273492906089933,
+      "process_ratios": [
+        0.6795587856921035,
+        0.9308314897041061,
+        0.8514058153761743
+      ],
+      "process_medians_ns": {
+        "control": [
+          5627032.5,
+          8643731.0,
+          8890107.5
+        ],
+        "candidate": [
+          8280420.5,
+          9286032.0,
+          10441680.5
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 1536,
+      "mode": 1,
+      "control_ns_median": 23848677.0,
+      "candidate_ns_median": 22646342.5,
+      "control_over_candidate": 1.0530917740911143,
+      "process_ratios": [
+        1.7781037385864282,
+        0.788916700850065,
+        0.7363162464119932
+      ],
+      "process_medians_ns": {
+        "control": [
+          33771062.0,
+          17644813.5,
+          24233952.5
+        ],
+        "candidate": [
+          18992740.0,
+          22365876.5,
+          32912424.0
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 1536,
+      "mode": 2,
+      "control_ns_median": 28056635.0,
+      "candidate_ns_median": 41350104.5,
+      "control_over_candidate": 0.6785142465601266,
+      "process_ratios": [
+        1.0164187606949078,
+        0.9094597960188544,
+        0.7193094143038339
+      ],
+      "process_medians_ns": {
+        "control": [
+          45515009.0,
+          38309541.5,
+          23922168.5
+        ],
+        "candidate": [
+          44779780.5,
+          42123403.0,
+          33257132.5
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 1536,
+      "mode": 3,
+      "control_ns_median": 68289918.0,
+      "candidate_ns_median": 57852738.0,
+      "control_over_candidate": 1.18040943887565,
+      "process_ratios": [
+        1.2190582405970138,
+        1.2027733750669471,
+        1.0233025499056134
+      ],
+      "process_medians_ns": {
+        "control": [
+          70525857.0,
+          50694443.5,
+          75222424.0
+        ],
+        "candidate": [
+          57852738.0,
+          42147959.5,
+          73509466.0
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    },
+    {
+      "rows": 1536,
+      "mode": 4,
+      "control_ns_median": 10280911.0,
+      "candidate_ns_median": 12799043.5,
+      "control_over_candidate": 0.8032561964493675,
+      "process_ratios": [
+        0.9513295707471981,
+        0.7951701094679245,
+        0.6876789184745631
+      ],
+      "process_medians_ns": {
+        "control": [
+          11545231.5,
+          8525668.0,
+          10048434.5
+        ],
+        "candidate": [
+          12135890.5,
+          10721816.5,
+          14612102.0
+        ]
+      },
+      "process_peak_rss_kib": {
+        "control": [
+          31360,
+          31360,
+          31360
+        ],
+        "candidate": [
+          31360,
+          31360,
+          31360
+        ]
+      },
+      "samples_per_arm": 24
+    }
+  ]
+}

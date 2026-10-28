@@ -1,0 +1,18 @@
+{
+  "status": "optional interface and private receiver only; no native provider or query integration",
+  "source_sha256": {
+    "include/graph/storage/LogicalGraphJointPropertyRead.hpp": "9b63033cfb6203767e3b62cf52fee2cef946d986b1b44887487612aa8d1e7c4f",
+    "src/query/execution/JointPropertyWindow.hpp": "e2190311b92f12e0cb85ff4a3f7774ea0ac6256d2a8cbaff4c73cbe5cef1fe7f",
+    "tests/src/query/execution/test_StreamingPredicateCount.cpp": "e1024aa5a34a20766ed33cd9fa93b40dc25c56c8f3c080fc63f0d4e961ef4005"
+  },
+  "test_build": "coverage-instrumented SCAN/HYBRID test build",
+  "result": "25 related tests passed, including five joint-window fake-provider contract tests and public/old/new snapshot diagnostics",
+  "public_query": "QueryEngine buildPlan using native statistics backend; Aggregate -> Filter -> NodeScan; 191 cross-stage duplicate owner authentications, full oracle passed",
+  "coverage_limits": [
+    "fake provider cannot prove real LargeValue, competing ROW, epoch, recovery or storage admission semantics",
+    "no native producer, aggregate consumer or production work reduction exists",
+    "no on/off timing comparison applicable"
+  ],
+  "default_behavior": "unchanged; provider not implemented by native snapshot",
+  "failure_semantics": "provider cannot mask a source-admission exception by swallowing it and declining; original exception is rethrown"
+}

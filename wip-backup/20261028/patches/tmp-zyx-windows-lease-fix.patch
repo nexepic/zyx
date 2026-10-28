@@ -1,0 +1,346 @@
+diff --git a/src/storage/StorageIO.cpp b/src/storage/StorageIO.cpp
+index a760fb17..0d9d372c 100644
+--- a/src/storage/StorageIO.cpp
++++ b/src/storage/StorageIO.cpp
+@@ -22,6 +22,10 @@
+ #include "graph/storage/PreadHelper.hpp"
+ #include "graph/storage/relocatable/cache/BufferPool.hpp"
+ 
++#ifdef _WIN32
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#endif
++
+ namespace graph::storage {
+ 
+ 	namespace {
+@@ -469,13 +473,26 @@ namespace graph::storage {
+ 		requireAddressableRange(offset, size, "readAt");
+ 
+ 		if (readFd_ != INVALID_FILE_HANDLE) {
+-			const pwrite_ssize_t bytesRead =
++			pwrite_ssize_t bytesRead =
+ #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+ 					nativeReadHookForTesting
+ 							? nativeReadHookForTesting(readFd_, buf, size, static_cast<pwrite_off_t>(offset))
+ 							: portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+ #else
+ 					portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
++#endif
++#ifdef _WIN32
++            // The old byte-zero lease denies a second handle, including an
++            // independently opened read-only backend in this process.
++            if (bytesRead < 0 && offset == 0U && ::GetLastError() == ERROR_LOCK_VIOLATION
++#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
++                && !nativeReadHookForTesting
++#endif
++            ) {
++                const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(readFd_, buf, size);
++                // A lease may have ended between the failed read and lookup.
++                bytesRead = borrowed ? *borrowed : portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
++            }
+ #endif
+ 			if (bytesRead < 0) {
+ 				throw std::runtime_error("StorageIO::readAt pread failed at offset " + std::to_string(offset));
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index b9b7d0a8..fb59d1f8 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -96,6 +96,9 @@
+ #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
+ #include "graph/storage/relocatable/vector/VectorMappingIds.hpp"
+ #include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
++#ifdef _WIN32
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#endif
+ #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
+ #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
+ #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
+@@ -161,29 +164,20 @@ namespace graph::storage {
+ 			return created;
+ 		}
+ 
+-		[[nodiscard]] bool tryLockNativeBulkSessionFile(file_handle_t handle) {
++		[[nodiscard]] file_handle_t tryLockNativeBulkSessionFile(file_handle_t handle) {
+ 			if (handle == INVALID_FILE_HANDLE) { // the native session lease is created only from the validated writable backend handle.
+ 				throw std::logic_error("relocatable bulk session requires a native writable file handle");
+ 			}
+ #ifdef _WIN32
+-			OVERLAPPED overlapped = {};
+-			if (::LockFileEx(reinterpret_cast<HANDLE>(handle),
+-							 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlapped)) {
+-				return true;
+-			}
+-			if (::GetLastError() == ERROR_LOCK_VIOLATION) {
+-				return false;
+-			}
+-			throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+-								"relocatable bulk session could not lock the database");
++			return detail::WindowsLeaseReadBridge::tryLock(handle);
+ #else
+ 			// Unlike process-scoped fcntl record locks, flock stays attached to this
+ 			// open handle when another backend in the same process closes its own FD.
+ 			if (::flock(handle, LOCK_EX | LOCK_NB) == 0) {
+-				return true;
++				return handle;
+ 			}
+ 			if (errno == EACCES || errno == EAGAIN) {
+-				return false;
++				return INVALID_FILE_HANDLE;
+ 			}
+ 			throw std::system_error(errno, std::generic_category(),
+ 								"relocatable bulk session could not lock the database");
+@@ -195,8 +189,7 @@ namespace graph::storage {
+ 				return;
+ 			}
+ #ifdef _WIN32
+-			OVERLAPPED overlapped = {};
+-			static_cast<void>(::UnlockFileEx(reinterpret_cast<HANDLE>(handle), 0U, 1U, 0U, &overlapped));
++			detail::WindowsLeaseReadBridge::unlock(handle);
+ #else
+ 			static_cast<void>(::flock(handle, LOCK_UN));
+ #endif
+@@ -211,9 +204,7 @@ namespace graph::storage {
+ 			if (!process_lock_.owns_lock()) {
+ 				return;
+ 			}
+-			if (tryLockNativeBulkSessionFile(handle)) {
+-				handle_ = handle;
+-			}
++			handle_ = tryLockNativeBulkSessionFile(handle);
+ 		}
+ 
+ 		~NativeBulkSessionLease() { unlockNativeBulkSessionFile(handle_); }
+diff --git a/tests/src/storage/test_PreadHelper.cpp b/tests/src/storage/test_PreadHelper.cpp
+index 293e645b..156ff326 100644
+--- a/tests/src/storage/test_PreadHelper.cpp
++++ b/tests/src/storage/test_PreadHelper.cpp
+@@ -12,6 +12,13 @@
+ #include <chrono>
+ #include <filesystem>
+ #include "graph/storage/PreadHelper.hpp"
++#ifdef _WIN32
++#include "graph/storage/PwriteHelper.hpp"
++#include "graph/storage/StorageIO.hpp"
++#include "graph/storage/detail/WindowsLeaseReadBridge.hpp"
++#include <atomic>
++#include <thread>
++#endif
+ 
+ using namespace graph::storage;
+ 
+@@ -146,6 +153,119 @@ TEST_F(PreadHelperTest, ZeroCountReadReturnsError) {
+ 	portable_close(fd);
+ }
+ 
++#ifdef _WIN32
++TEST_F(PreadHelperTest, ReadOnlyStorageBorrowsLeaseWithoutEscapingWriterHandle) {
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE;
++        file_handle_t reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    // Open the read-only handle first, then independently open the writer.
++    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
++    char before = 0, during = 0, after = 0;
++    ASSERT_EQ(io.readAt(0U, &before, 1U), 1U);
++    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
++    ASSERT_NE(token, INVALID_FILE_HANDLE);
++    struct Lease {
++        file_handle_t handle;
++        bool held = true;
++        ~Lease() { if (held) detail::WindowsLeaseReadBridge::unlock(handle); }
++    } lease{token};
++    EXPECT_EQ(io.readAt(0U, &during, 1U), 1U);
++    EXPECT_EQ(before, during);
++    std::atomic<bool> failed{false};
++    std::thread reader([&] {
++        try {
++            for (size_t i = 0; i < 100U; ++i) {
++                char value = 0;
++                if (io.readAt(0U, &value, 1U) != 1U || value != before) failed = true;
++            }
++        } catch (...) { failed = true; }
++    });
++    const int closeResult = portable_close_rw(handles.writer);
++    EXPECT_EQ(closeResult, 0);
++    if (closeResult == 0) handles.writer = INVALID_FILE_HANDLE;
++    const file_handle_t contender = portable_open_rw(testFile_.c_str());
++    EXPECT_NE(contender, INVALID_FILE_HANDLE);
++    if (contender != INVALID_FILE_HANDLE) {
++        OVERLAPPED overlap = {};
++        const BOOL acquired = ::LockFileEx(reinterpret_cast<HANDLE>(contender),
++            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0U, 1U, 0U, &overlap);
++        const DWORD error = acquired ? ERROR_SUCCESS : ::GetLastError();
++        EXPECT_FALSE(acquired);
++        if (!acquired) EXPECT_EQ(error, ERROR_LOCK_VIOLATION);
++        else ::UnlockFileEx(reinterpret_cast<HANDLE>(contender), 0U, 1U, 0U, &overlap);
++        portable_close_rw(contender);
++    }
++    detail::WindowsLeaseReadBridge::unlock(token);
++    lease.held = false;
++    reader.join();
++    EXPECT_FALSE(failed.load());
++    EXPECT_EQ(io.readAt(0U, &after, 1U), 1U);
++    EXPECT_EQ(before, after);
++}
++#endif
++
++#ifdef _WIN32
++TEST_F(PreadHelperTest, ReadOnlyLeaseBorrowResolvesHardLinkIdentity) {
++    const std::string alias = testFile_ + ".hardlink";
++    struct RemoveAlias { std::string path; ~RemoveAlias() { std::error_code ec; std::filesystem::remove(path, ec); } } cleanup{alias};
++    ASSERT_TRUE(::CreateHardLinkA(alias.c_str(), testFile_.c_str(), nullptr));
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE, reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    handles.reader = portable_open(alias.c_str(), O_RDONLY);
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    const file_handle_t token = detail::WindowsLeaseReadBridge::tryLock(handles.writer);
++    ASSERT_NE(token, INVALID_FILE_HANDLE);
++    struct Lease { file_handle_t handle; ~Lease() { detail::WindowsLeaseReadBridge::unlock(handle); } } lease{token};
++    StorageIO io(nullptr, INVALID_FILE_HANDLE, handles.reader, StorageIOAccessMode::SIOAM_READ_ONLY, uint64_t{1} << 30U);
++    char value = 0;
++    EXPECT_EQ(io.readAt(0U, &value, 1U), 1U);
++}
++#endif
++
++#ifdef _WIN32
++TEST_F(PreadHelperTest, WindowsExclusiveByteLockUsesTheLockingHandle) {
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE;
++        file_handle_t reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    const file_handle_t writer = handles.writer, reader = handles.reader;
++    OVERLAPPED lock = {};
++    ASSERT_TRUE(::LockFileEx(reinterpret_cast<HANDLE>(writer),
++                             LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
++                             0U, 1U, 0U, &lock));
++    char value = 0;
++    EXPECT_EQ(portable_pread(writer, &value, 1U, 0), 1);
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), -1);
++    EXPECT_EQ(::GetLastError(), ERROR_LOCK_VIOLATION);
++    EXPECT_TRUE(::UnlockFileEx(reinterpret_cast<HANDLE>(writer), 0U, 1U, 0U, &lock));
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), 1);
++}
++#endif
++
+ #ifdef _WIN32
+ TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
+ 	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+diff --git a/include/graph/storage/detail/WindowsLeaseReadBridge.hpp b/include/graph/storage/detail/WindowsLeaseReadBridge.hpp
+new file mode 100644
+index 00000000..6c7a82fa
+--- /dev/null
++++ b/include/graph/storage/detail/WindowsLeaseReadBridge.hpp
+@@ -0,0 +1,90 @@
++#pragma once
++#ifdef _WIN32
++
++#include <array>
++#include <map>
++#include <mutex>
++#include <optional>
++#include <system_error>
++#include <stdexcept>
++#include "graph/storage/PreadHelper.hpp"
++
++namespace graph::storage::detail {
++// One process-local borrow registry for the existing byte-zero native lease.
++// Callers only receive bytes, never the write-capable handle. Holding mutex_
++// across a borrow pins the lease handle until unlock and deregistration.
++class WindowsLeaseReadBridge final {
++    using Identity = std::array<DWORD, 3>;
++    struct Registry {
++        std::mutex mutex;
++        std::map<Identity, file_handle_t> owners;
++    };
++    static Registry &registry() { static Registry *value = new Registry; return *value; }
++    static std::optional<Identity> identity(file_handle_t handle) noexcept {
++        BY_HANDLE_FILE_INFORMATION information = {};
++        if (!::GetFileInformationByHandle(reinterpret_cast<HANDLE>(handle), &information)) return std::nullopt;
++        return Identity{information.dwVolumeSerialNumber, information.nFileIndexHigh, information.nFileIndexLow};
++    }
++public:
++    // The lease owns a non-inheritable duplicate and locks that exact handle.
++    // Its value cannot be reused while the registry contains it, even if the
++    // backend's original writer handle closes before an outstanding borrow.
++    static file_handle_t tryLock(file_handle_t handle) {
++        auto &state = registry();
++        HANDLE duplicate = INVALID_HANDLE_VALUE;
++        if (!::DuplicateHandle(::GetCurrentProcess(), reinterpret_cast<HANDLE>(handle), ::GetCurrentProcess(),
++                               &duplicate, 0U, FALSE, DUPLICATE_SAME_ACCESS))
++            throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
++                                    "relocatable bulk session could not retain the database handle");
++        struct HandleGuard {
++            HANDLE handle;
++            ~HandleGuard() { if (handle != INVALID_HANDLE_VALUE) ::CloseHandle(handle); }
++        } retained{duplicate};
++        const auto id = identity(reinterpret_cast<file_handle_t>(duplicate));
++        if (!id) throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
++                                         "relocatable bulk session could not identify the database");
++        std::lock_guard guard(state.mutex);
++        OVERLAPPED overlapped = {};
++        if (!::LockFileEx(duplicate, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
++                          0U, 1U, 0U, &overlapped)) {
++            const DWORD error = ::GetLastError();
++            if (error == ERROR_LOCK_VIOLATION) return INVALID_FILE_HANDLE;
++            throw std::system_error(static_cast<int>(error), std::system_category(),
++                                    "relocatable bulk session could not lock the database");
++        }
++        const auto token = reinterpret_cast<file_handle_t>(duplicate);
++        try {
++            if (!state.owners.emplace(*id, token).second)
++                throw std::logic_error("duplicate process-local bulk session lease");
++        } catch (...) {
++            static_cast<void>(::UnlockFileEx(duplicate, 0U, 1U, 0U, &overlapped));
++            throw;
++        }
++        retained.handle = INVALID_HANDLE_VALUE;
++        return token;
++    }
++    static void unlock(file_handle_t token) noexcept {
++        auto &state = registry();
++        std::lock_guard guard(state.mutex);
++        bool found = false;
++        for (auto it = state.owners.begin(); it != state.owners.end(); ++it) {
++            if (it->second == token) { state.owners.erase(it); found = true; break; }
++        }
++        if (!found) return;
++        OVERLAPPED overlapped = {};
++        const HANDLE handle = reinterpret_cast<HANDLE>(token);
++        static_cast<void>(::UnlockFileEx(handle, 0U, 1U, 0U, &overlapped));
++        ::CloseHandle(handle);
++    }
++    static std::optional<pwrite_ssize_t> readLockedByte(file_handle_t reader, void *buffer, size_t bytes) {
++        const auto id = identity(reader);
++        if (!id) return std::nullopt;
++        auto &state = registry();
++        std::lock_guard guard(state.mutex);
++        const auto owner = state.owners.find(*id);
++        if (owner == state.owners.end()) return std::nullopt;
++        return static_cast<pwrite_ssize_t>(portable_pread(owner->second, buffer, bytes, 0));
++    }
++};
++}
++#endif

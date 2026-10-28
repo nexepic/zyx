@@ -1,0 +1,30 @@
+--- a/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
+@@ -7,6 +7,7 @@
+ 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
+ 	auto physical = backend.openSnapshot();
+ 	const auto oldRoot = physical.superblock().entity_property_directory_root;
++	const auto oldHybridRoot = physical.superblock().hybrid_property_descriptor_root;
+ 	physical.release();
+ 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
+ 	{
+@@ -18,7 +19,10 @@
+ 				if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+ 					try {
+ 						const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+-						if (candidate.entity_property_directory_root != oldRoot) publicationWritten.store(true);
++						// Property changes can publish through the hybrid descriptor instead
++                        // of the legacy owner-property directory.
++                        if (candidate.entity_property_directory_root != oldRoot ||
++                            candidate.hybrid_property_descriptor_root != oldHybridRoot) publicationWritten.store(true);
+ 					} catch (const std::exception &) {
+ 						// Other control frames are outside this graph publication.
+ 					}
+@@ -57,6 +61,7 @@
+ 	EXPECT_TRUE(rank->value == PropertyValue(1) || rank->value == PropertyValue(2));
+ 	snapshot.reset();
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++    EXPECT_EQ(reopened.createLogicalNodes({{{"WritableAfterReopen"}, {}}}).size(), 1U);
+ 	reopened.close();
+ }
+ 

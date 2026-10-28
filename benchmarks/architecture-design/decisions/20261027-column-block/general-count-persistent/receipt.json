@@ -1,0 +1,126 @@
+{
+  "protocol_sha256": "31f063699b2a1a7a399dea90236c851531281c1bc62dbcf8b5a557ce50623ad2",
+  "binary_sha256": "b425ca52e71da63153ea0910a41ee35169fa1f873be807dc8cb49e780c04bcb6",
+  "runs": [
+    {
+      "process": 0,
+      "rows": 128,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.497588,
+      "system_cpu_seconds": 0.09811099999999999,
+      "file": "run-0-128-0.log"
+    },
+    {
+      "process": 0,
+      "rows": 128,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.420246,
+      "system_cpu_seconds": 0.06572599999999999,
+      "file": "run-0-128-1.log"
+    },
+    {
+      "process": 0,
+      "rows": 512,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.776837,
+      "system_cpu_seconds": 0.077136,
+      "file": "run-0-512-0.log"
+    },
+    {
+      "process": 0,
+      "rows": 512,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.7900739999999999,
+      "system_cpu_seconds": 0.077211,
+      "file": "run-0-512-1.log"
+    },
+    {
+      "process": 1,
+      "rows": 128,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.35447799999999996,
+      "system_cpu_seconds": 0.13047,
+      "file": "run-1-128-0.log"
+    },
+    {
+      "process": 1,
+      "rows": 128,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.331624,
+      "system_cpu_seconds": 0.07003,
+      "file": "run-1-128-1.log"
+    },
+    {
+      "process": 1,
+      "rows": 512,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 1.153841,
+      "system_cpu_seconds": 0.13674,
+      "file": "run-1-512-0.log"
+    },
+    {
+      "process": 1,
+      "rows": 512,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.7847839999999999,
+      "system_cpu_seconds": 0.122261,
+      "file": "run-1-512-1.log"
+    },
+    {
+      "process": 2,
+      "rows": 128,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.235237,
+      "system_cpu_seconds": 0.058757,
+      "file": "run-2-128-0.log"
+    },
+    {
+      "process": 2,
+      "rows": 128,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.39447099999999996,
+      "system_cpu_seconds": 0.043782999999999996,
+      "file": "run-2-128-1.log"
+    },
+    {
+      "process": 2,
+      "rows": 512,
+      "mixed": 0,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.886211,
+      "system_cpu_seconds": 0.1432,
+      "file": "run-2-512-0.log"
+    },
+    {
+      "process": 2,
+      "rows": 512,
+      "mixed": 1,
+      "exit_code": 0,
+      "max_rss_kib_linux": 34432,
+      "user_cpu_seconds": 0.725124,
+      "system_cpu_seconds": 0.0895,
+      "file": "run-2-512-1.log"
+    }
+  ]
+}

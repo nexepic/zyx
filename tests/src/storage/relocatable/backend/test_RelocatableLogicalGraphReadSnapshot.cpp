@@ -21,6 +21,7 @@
 
 using namespace relocatable_storage_backend_test;
 
+
 namespace {
 
 	void addThirdSelfEdge(const std::filesystem::path &path, uint64_t nodeId) {

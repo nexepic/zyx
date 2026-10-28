@@ -10,6 +10,9 @@
 
 #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
+#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/entity/EntityFreeSpaceIndex.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
@@ -250,6 +253,9 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
 	snapshot = reopened.openLogicalGraphReadSnapshot();
 	EXPECT_EQ(snapshot->readEdge(existing.front()), LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
 	snapshot.reset();
+	// Pin the pre-retry generation across the streamed publication and verify
+	// the new edge and its derived metadata never leak into the old snapshot.
+	auto preRetrySnapshot = reopened.openLogicalGraphReadSnapshot();
 	std::unique_ptr<LogicalGraphTransaction> retry = reopened.beginLogicalGraphTransaction(false);
 	auto *const retryBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(retry.get());
 	ASSERT_NE(retryBulk, nullptr);
@@ -263,7 +269,11 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePropertyPageShortWriteReta
 			  LogicalGraphEdge(committed.front(), nodes[0], nodes[1], "BULK_PROPERTY_SHORT_WRITE_RETRY",
 						   {{"payload", PropertyValue("property-short-write")}}));
 	snapshot.reset();
+	EXPECT_THROW(static_cast<void>(preRetrySnapshot->readEdge(committed.front())), FormatException);
+	EXPECT_EQ(preRetrySnapshot->readEdge(existing.front()),
+	          LogicalGraphEdge(existing.front(), nodes[0], nodes[1], "EXISTING_EDGE"));
 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	preRetrySnapshot.reset();
 	reopened.close();
 }
 
@@ -1861,4 +1871,124 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePrivateScratchSyncFailureR
 	snapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebuildsStaleFreeSummaryInItsPublication) {
+    materializeNativeDatabase();
+    auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    std::vector<uint64_t> nodes;
+    uint64_t oldEdge = 0U;
+    uint64_t expectedFreePages = 0U;
+    {
+        RelocatableStorageBackend backend(options);
+        backend.open();
+        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+        ASSERT_EQ(nodes.size(), 2U);
+        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
+        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+        backend.close();
+    }
+    // Preserve the existing entries but make their source-directory marker
+    // stale, as happens after directory relocation. Reopen exercises the real
+    // metadata writer and its budget rather than a mock summary provider.
+    {
+        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+        ASSERT_TRUE(stream->is_open());
+        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::open(io);
+        SlottedPagePool pools(io, *metadata);
+        BTreePageStore trees(pools, *metadata);
+        auto pin = metadata->openSnapshot();
+        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
+        ASSERT_TRUE(proof.has_value());
+        ASSERT_TRUE(proof->fresh);
+        expectedFreePages = proof->free_pages + 1U;
+        const auto checkpoint = LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1U);
+        pin.release();
+        static_cast<void>(trees.upsert(RSS_EDGE_FREE_SPACE_INDEX_ID, EntityFreeSpaceIndex::generationKey(), 1U, checkpoint));
+    }
+    RelocatableStorageBackend backend(options);
+    backend.open();
+    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
+    ASSERT_NE(bulk, nullptr);
+    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
+    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
+    ASSERT_EQ(added.size(), 1U);
+    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
+    transaction.reset();
+    EXPECT_NE(oldEdge, added.front());
+    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
+    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
+    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
+    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
+    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
+    currentSnapshot.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    oldSnapshot.reset();
+    backend.close();
+    {
+        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::open(io);
+        SlottedPagePool pools(io, *metadata);
+        BTreePageStore trees(pools, *metadata);
+        auto pin = metadata->openSnapshot();
+        const auto proof = EntityFreeSpaceIndex::readProof(*metadata, trees, pin, EntityPageRecordKind::EPRK_EDGE);
+        ASSERT_TRUE(proof.has_value());
+        EXPECT_TRUE(proof->fresh);
+        EXPECT_EQ(proof->free_pages, expectedFreePages);
+    }
+    backend.open();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRetainsFreshSummaryInItsPublication) {
+    materializeNativeDatabase();
+    auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    std::vector<uint64_t> nodes;
+    uint64_t oldEdge = 0U;
+    {
+        RelocatableStorageBackend backend(options);
+        backend.open();
+        nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+        ASSERT_EQ(nodes.size(), 2U);
+        oldEdge = backend.createLogicalEdges({{nodes[0], nodes[1], "OLD", {}}}).at(0);
+        ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+        backend.close();
+    }
+    RelocatableStorageBackend backend(options);
+    backend.open();
+    ASSERT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    auto oldSnapshot = backend.openLogicalGraphReadSnapshot();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
+    ASSERT_NE(bulk, nullptr);
+    const std::array<uint64_t, 1U> sources{nodes[0]}, targets{nodes[1]};
+    const auto added = bulk->appendPersistedBulkEdges({"NEW", sources, targets, {}});
+    ASSERT_EQ(added.size(), 1U);
+    ASSERT_NO_THROW(static_cast<void>(transaction->commit()));
+    transaction.reset();
+    EXPECT_NE(oldEdge, added.front());
+    EXPECT_THROW(static_cast<void>(oldSnapshot->readEdge(added.front())), FormatException);
+    EXPECT_EQ(oldSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
+    auto currentSnapshot = backend.openLogicalGraphReadSnapshot();
+    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(oldEdge)));
+    EXPECT_NO_THROW(static_cast<void>(currentSnapshot->readEdge(added.front())));
+    currentSnapshot.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    oldSnapshot.reset();
+    backend.close();
+    backend.open();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    auto reopenedSnapshot = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(reopenedSnapshot->readEdge(oldEdge).target_node_id, nodes[1]);
+    EXPECT_EQ(reopenedSnapshot->readEdge(added.front()).target_node_id, nodes[1]);
+    reopenedSnapshot.reset();
+    backend.close();
 }

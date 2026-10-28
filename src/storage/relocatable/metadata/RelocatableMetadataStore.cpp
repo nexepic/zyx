@@ -380,6 +380,15 @@ namespace graph::storage {
 
 	void RelocatableMetadataStore::prepareBootstrapRoutes(MetadataWriteBatch &batch) {
         MetadataPageRouteDirectory routes(pages_);
+        if (batch.candidate().usesPageDirectoryBootstrap() && batch.metadataPageRoutes().empty() &&
+            !batch.pendingBootstrapDataRoot().has_value() && !batch.bootstrapRouteRefreshRequested() &&
+            batch.ensureMetadataFrameCapacity(1U) != 0U) {
+            // Publish ownership of the bounded capacity pool in this same
+            // ID-only batch. Graph directories remain unchanged.
+            try { debug::PerfTrace::addValue("native_graph.write.id_capacity_pool", 1); } catch (...) {}
+            prepareBatchPublication(batch);
+            return;
+        }
         prepareBootstrapWithRoutes(batch, routes);
     }
 

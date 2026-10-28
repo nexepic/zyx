@@ -1,0 +1,23 @@
+--- a/tests/src/query/execution/test_LogicalGraphReadExecutor.cpp
++++ b/tests/src/query/execution/test_LogicalGraphReadExecutor.cpp
+@@ -1,3 +1,4 @@
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+ /**
+  * @file test_LogicalGraphReadExecutor.cpp
+  * @brief Core unit tests for the bounded format-independent logical graph executor.
+@@ -1536,12 +1537,9 @@
+ 					std::make_shared<expressions::LiteralExpression>(int64_t{1}), wideAlias}}), 0);
+ 	LogicalPlanReadRuntimeBounds bounded = runtimeBounds();
+ 	bounded.maximum_materialized_bytes = 1024U;
+-	try {
+-		static_cast<void>(runtime.executeToQueryResult(root, bounded));
+-		FAIL() << "output column storage must be bounded even when the plan emits no rows";
+-	} catch (const std::runtime_error &error) {
+-		EXPECT_STREQ(error.what(), "logical-plan result columns exceeded their materialized byte bound");
+-	}
++    // LIMIT 0 performs no row delivery. The wide output alias must be admitted
++    // while building result-column metadata and must fail at that budget.
++    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(root, bounded)), graph::query::execution::MaterializedByteLimitExceeded);
+ 
+ 	bounded.maximum_materialized_bytes = 16U * 1024U;
+ 	const graph::query::QueryResult result = runtime.executeToQueryResult(root, bounded);

@@ -1427,6 +1427,25 @@ protected:
     }
 };
 
+TEST_F(CatalogSelectedLookupTest, StreamedAppendUpdatesLogicalChildWithoutChangingOldRoot) {
+    CatalogTree tree(*pages, allocator);
+    MetadataWriteBatch batch(allocator, current, LogSequenceNumber(3U));
+    const uint64_t added = 1U + 64U * RSS_CATALOG_PAGE_MAX_ENTRIES;
+    auto session = tree.beginAppend(batch, SegmentId(added), SegmentId(added), 1U);
+    session.append(entry(added, 999U, 1U, 3U));
+    session.finish();
+    const auto root = pages->readMetadataRadixUnresolvedView(batch.candidate().catalog_root);
+    ASSERT_TRUE(root->logical_children_enabled);
+    const auto routes = batch.metadataPageRoutes();
+    const auto found = std::ranges::find(routes, root->logical_children[64], &MetadataPageRoute::page_id);
+    ASSERT_NE(found, routes.end());
+    const auto leaf = pages->readCatalogLeaf(found->physical_reference);
+    EXPECT_EQ(leaf.entries.size(), 1U);
+    EXPECT_EQ(leaf.entries.back().segment_id, SegmentId(added));
+    EXPECT_EQ(tree.find(current, SegmentId(1U)).physical_slot, PhysicalSlotId(500U));
+    EXPECT_FALSE(tree.findOptional(current, SegmentId(added)).has_value());
+}
+
 TEST_F(CatalogSelectedLookupTest, PointReadsResolveOnlyTheRequestedCatalogRoute) {
     CatalogTree tree(*pages, allocator);
     graph::debug::PerfTrace::setValueCollectionEnabled(true);

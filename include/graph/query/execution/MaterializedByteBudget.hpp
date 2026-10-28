@@ -40,6 +40,12 @@ namespace graph::query::execution {
 			parent_.emplace(std::move(account));
 			upstream_ = upstream;
 		}
+		// Used when an enclosing execution state may have no shared account.
+		struct OptionalAccountTag {};
+		MaterializedByteBudget(size_t maximumBytes, std::shared_ptr<detail::ResourceAccount> account, OptionalAccountTag)
+			: MaterializedByteBudget(maximumBytes) {
+			if (account) parent_.emplace(std::move(account));
+		}
 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
 		[[nodiscard]] size_t available() const noexcept { return maximum_bytes_ - used_bytes_; }

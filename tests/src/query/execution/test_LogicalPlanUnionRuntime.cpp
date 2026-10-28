@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
 #include <functional>
 #include <memory>
@@ -302,7 +304,11 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
 		2U * rowBytes + 2U * sizeof(PropertyValue) - 1U;
 	size_t delivered = 0U;
 	bool keySlotsRejected = false;
-	for (size_t budget = minimumBudget; budget < minimumBudget + 4096U; ++budget) {
+	debug::PerfTrace::ScopedObserver observer(&keySlotsRejected,
+		[](void *owner, std::string_view key, int64_t, bool) noexcept {
+			if (key == "query.sort.key_slot_admission_rejected") *static_cast<bool *>(owner) = true;
+		});
+	for (size_t budget = 1U; budget < minimumBudget + 4096U; ++budget) {
 		constrained.maximum_materialized_bytes = budget;
 		delivered = 0U;
 		try {
@@ -311,12 +317,17 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
 				return true;
 			}));
 			break;
-		} catch (const std::runtime_error &error) {
-			if (std::string_view(error.what()).find("Sort key slots") != std::string::npos) {
-				keySlotsRejected = true;
+		} catch (const MaterializedByteLimitExceeded &) {
+			if (keySlotsRejected) break;
+			// Earlier shared-account admissions are expected at smaller budgets.
+		} catch (const std::invalid_argument &error) {
+			if (std::string_view(error.what()) != "logical-plan output batch storage exhausts its materialized byte bound") {
+				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
 				break;
 			}
-			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound") {
+		} catch (const std::runtime_error &error) {
+			if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" &&
+				std::string_view(error.what()) != "logical-plan output materialization exceeds its row or byte bound") {
 				ADD_FAILURE() << "unexpected constrained Sort failure: " << error.what();
 				break;
 			}
@@ -324,7 +335,7 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
 	}
 	EXPECT_TRUE(keySlotsRejected) << "could not reach Sort key-slot admission after row-slot reservations";
 	EXPECT_EQ(delivered, 0U);
-	constrained.maximum_materialized_bytes *= 4U;
+	constrained.maximum_materialized_bytes = bounds().maximum_materialized_bytes;
 	std::vector<PropertyValue> output;
 	static_cast<void>(runtime.execute(sort, constrained, [&](const LogicalPlanReadRow &row) {
 		output.push_back(std::get<PropertyValue>(row.values.at("value")));
@@ -1360,7 +1371,7 @@ TEST(LogicalPlanUnionRuntimeTest, AnonymousTraversalDoesNotCopyUnboundEdgePayloa
 	LogicalPlanReadRow input;
 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "", "target", "KNOWS", "out",
-		{}, {}, {{"weight", PropertyValue(7)}});
+		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	auto permitted = directBounds();
 	permitted.maximum_materialized_bytes = 8192U;
 	size_t delivered = 0U;
@@ -1430,7 +1441,7 @@ TEST(LogicalPlanUnionRuntimeTest, CompleteAdjacencyAdmissionCombinesPayloadAndBu
 	LogicalPlanReadRow input;
 	input.values.emplace("source", EntityRef{1U, false, 0U, 0U, 0U});
 	logical::LogicalTraversal root(std::make_unique<logical::LogicalSingleRow>(), "source", "r", "target", "", "out",
-		{}, {}, {{"weight", PropertyValue(7)}});
+		{}, {}, OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(7)}}));
 	auto bounds = directBounds();
 	bounds.maximum_materialized_bytes = 6000U;
 	size_t delivered = 0U;

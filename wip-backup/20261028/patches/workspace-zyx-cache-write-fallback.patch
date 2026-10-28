@@ -1,0 +1,221 @@
+--- a/src/storage/relocatable/cache/BufferPool.cpp
++++ b/src/storage/relocatable/cache/BufferPool.cpp
+@@ -210,11 +210,20 @@
+ 			entry = found->second.get();
+ 		} else {
+ 			++misses_;
+-			ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+-			auto fresh = allocateEntryLocked();
+-			Entry &stored = *fresh;
+-			static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+-			entry = &stored;
++            try {
++                ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
++                auto fresh = allocateEntryLocked();
++                Entry &stored = *fresh;
++                static_cast<void>(storeEntryLocked(key, std::move(fresh)));
++                entry = &stored;
++            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
++                // No resident entry exists for this key; stale generations have
++                // already been checked and invalidated under the cache lock.
++                try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
++                io_.writeAtUncached(key.page_offset, input.data(), input.size());
++                disk_write_bytes_ += input.size();
++                return;
++            }
+ 		}
+ 
+ 		std::copy(input.begin(), input.end(), entry->bytes.begin());
+@@ -334,11 +343,21 @@
+ 				entry = found->second.get();
+ 			} else {
+ 				++misses_;
+-				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+-				auto fresh = allocateEntryLocked();
+-				Entry &stored = *fresh;
+-				static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+-				entry = &stored;
++                try {
++                    ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
++                    auto fresh = allocateEntryLocked();
++                    Entry &stored = *fresh;
++                    static_cast<void>(storeEntryLocked(key, std::move(fresh)));
++                    entry = &stored;
++                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
++                    // Whole-range pin checks and stale-generation invalidation
++                    // have completed before writing any page in this batch.
++                    try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
++                    io_.writeAtUncached(key.page_offset,
++                        input.data() + page * RSS_BUFFER_POOL_PAGE_BYTES, RSS_BUFFER_POOL_PAGE_BYTES);
++                    disk_write_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
++                    continue;
++                }
+ 			}
+ 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
+ 						RSS_BUFFER_POOL_PAGE_BYTES, entry->bytes.begin());
+--- a/tests/src/storage/relocatable/cache/test_BufferPool.cpp
++++ b/tests/src/storage/relocatable/cache/test_BufferPool.cpp
+@@ -753,6 +753,67 @@
+ 	EXPECT_THROW((void)pool_->pin({0U, 1U}), ResourceAdmissionDenied);
+ 	EXPECT_EQ(pool_->stats().resident_bytes, 0U); EXPECT_EQ(memory->used(), 0U);
+ 	pool_.reset(); EXPECT_EQ(memory->used(), 0U);
++}
++
++TEST_F(BufferPoolTest, ExhaustedCacheCreditWritesTypedPagesWithoutAdmission) {
++    open(2U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> one{}; one.fill(std::byte{42});
++    pool_->writePage({0U, 1U}, one);
++    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> both{}; both.fill(std::byte{73});
++    pool_->writePages({0U, 2U}, both);
++    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> actual{};
++    EXPECT_EQ(pool_->readPages({0U, 2U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
++    EXPECT_EQ(actual, both);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++}
++
++#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
++TEST_F(BufferPoolTest, ExhaustedCacheCreditPropagatesShortWriteAndAllowsExactRetry) {
++    open(1U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x5a});
++    bool faulted = false;
++    {
++        StorageIO::ScopedNativeWriteHookForTesting shortWrite([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
++            faulted = true;
++            return portable_pwrite(fd, bytes, count / 2U, offset);
++        });
++        EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::system_error);
++    }
++    EXPECT_TRUE(faulted);
++    EXPECT_EQ(memory->used(), 0U);
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++    EXPECT_NO_THROW(pool_->writePage({0U, 1U}, page));
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> actual{};
++    EXPECT_EQ(pool_->readPage({0U, 1U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
++    EXPECT_EQ(actual, page);
++}
++#endif
++
++TEST_F(BufferPoolTest, CacheWriteAdmissionFallbackDoesNotHideAllocatorFailure) {
++    open(1U);
++    auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
++    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    memory->fail_at = 1U;
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x52});
++    EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::bad_alloc);
++    EXPECT_EQ(diskByte(0U), std::byte{1});
++    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
++    EXPECT_EQ(memory->grant->used(), 0U);
++}
++
++TEST_F(BufferPoolTest, CachePressureNeverBypassesPinnedGeneration) {
++    open(2U); auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
++    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
++    auto pin = pool_->pin({0U, 1U});
++    graph::query::execution::detail::PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - memory->used());
++    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x77});
++    EXPECT_THROW(pool_->writePage({0U, 2U}, page), std::logic_error);
++    EXPECT_THROW(pool_->writePages({0U, 2U}, page), std::logic_error);
++    EXPECT_EQ(pin.bytes()[0], std::byte{1});
++    EXPECT_EQ(diskByte(0U), std::byte{1});
+ }
+ 
+ TEST_F(BufferPoolTest, EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache) {
+--- a/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp
+@@ -1398,6 +1398,8 @@
+     const auto kind = static_cast<size_t>(ResourceClass::RCK_WRITE);
+     const auto baseline = domain->usage().classes[kind];
+     auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, domain->classMaximum(ResourceClass::RCK_WRITE));
++    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
++    PrepaidMemoryResource::ExternalReservation cachePressure(cache, cache->capacity() - cache->used());
+     ResourceLease pressure(account); pressure.set(account->available());
+     const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+     EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}})), ResourceAdmissionDenied);
+@@ -1405,6 +1407,7 @@
+     EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+     EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+     pressure.reset();
++    cachePressure.set(0U);
+     const auto created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
+     EXPECT_EQ(created.size(), 1U); EXPECT_EQ(domain->usage().classes[kind], baseline);
+     backend.close();
+@@ -1439,6 +1442,48 @@
+     EXPECT_EQ(edge.source_node_id, nodes[0]); EXPECT_EQ(edge.target_node_id, nodes[1]);
+     EXPECT_EQ(edge.properties.front().value, PropertyValue(7));
+     snapshot.reset(); backend.close();
++}
++
++TEST_F(RelocatableStorageBackendTest, CacheWriteFallbackPreservesForeignPinnedSnapshotAcrossReopen) {
++    using namespace execution::detail;
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend writer(options); writer.open();
++    const auto nodes = writer.createLogicalNodes({{{"Fallback"}, {}}, {{"Fallback"}, {}}});
++    RelocatableStorageBackend reader(options); reader.open();
++    auto old = reader.openLogicalGraphReadSnapshot();
++    const auto outgoing = [&](auto &snapshot) {
++        return snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 8U).edges;
++    };
++    EXPECT_TRUE(outgoing(old).empty());
++    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(writer.queryResourceDomain());
++    std::vector<uint64_t> edges;
++    auto transaction = writer.beginLogicalGraphTransaction(false);
++    LogicalGraphTransactionOverlay overlay(*transaction);
++    const bool oldTrace = debug::PerfTrace::areValuesEnabled();
++    debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true);
++    {
++        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
++        edges = overlay.createLogicalEdges({{nodes[0], nodes[1], "FallbackType", {}}});
++        EXPECT_EQ(transaction->commit().created_edge_ids, edges);
++    }
++    transaction.reset();
++    const auto trace = debug::PerfTrace::snapshotAndReset(); debug::PerfTrace::setValueCollectionEnabled(oldTrace);
++    ASSERT_TRUE(trace.contains("storage.buffer_pool.write_admission_fallback"));
++    EXPECT_GT(trace.at("storage.buffer_pool.write_admission_fallback").totalValue, 0);
++    ASSERT_EQ(edges.size(), 1U);
++    EXPECT_TRUE(outgoing(old).empty());
++    auto current = writer.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(outgoing(current).size(), 1U);
++    EXPECT_EQ(outgoing(current).front().edge_id, edges.front());
++    current.reset(); writer.close();
++    EXPECT_TRUE(outgoing(old).empty());
++    old.reset(); reader.close();
++    RelocatableStorageBackend reopened(options); reopened.open();
++    auto fresh = reopened.openLogicalGraphReadSnapshot();
++    ASSERT_EQ(outgoing(fresh).size(), 1U);
++    EXPECT_EQ(outgoing(fresh).front().edge_id, edges.front());
++    fresh.reset(); reopened.close();
+ }
+ 
+ TEST_F(RelocatableStorageBackendTest, NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit) {
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -23,6 +23,7 @@
+ #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
+ #include "graph/utils/OwnedPmrObject.hpp"
++#include "graph/utils/OwnedStdVector.hpp"
+ #include <memory_resource>
+ #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+@@ -453,7 +454,7 @@
+ 						}
+ 						++count;
+ 					}
+-					std::vector<std::byte> buffer(count * RSS_PAGE_SIZE);
++					utils::OwnedStdVector<std::byte> buffer(count * RSS_PAGE_SIZE);
+ 					for (size_t index = 0U; index < count; ++index) {
+ 						std::memcpy(buffer.data() + index * RSS_PAGE_SIZE, pending_pages_[offset + index].bytes.data(), RSS_PAGE_SIZE);
+ 					}
+@@ -472,7 +473,7 @@
+ 
+ 			MetadataPageFile &pageFile_;
+ 			MetadataWriteBatch &batch_;
+-			std::vector<PendingPage> pending_pages_;
++			utils::OwnedStdVector<PendingPage> pending_pages_;
+ 		};
+ 
+ 		[[nodiscard]] size_t writePageCount(const MutableNode &node) {

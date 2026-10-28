@@ -1,8 +1,16 @@
 #include <gtest/gtest.h>
+#include <atomic>
+#include <thread>
 
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalAggregateAccumulator.hpp"
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+
+namespace graph::query::execution {
+extern thread_local bool test_enable_borrowed_group_key;
+extern thread_local bool test_force_borrowed_group_collision;
+extern thread_local bool test_reject_borrowed_group_index;
+}
 
 namespace graph::query::execution {
 namespace {
@@ -611,6 +619,7 @@ TEST(LogicalPlanDirectColumnAggregateTest, CompleteTupleGroupingDistinctAndNumer
 }
 
 TEST(LogicalPlanDirectColumnAggregateTest, RepeatedCompositeKeysPreserveOwnedGroupsAcrossScratchReuse) {
+    ColumnAggregateTraceScope traceScope;
     std::vector<std::vector<PropertyValue>> expected;
     for (const bool direct : {false, true}) {
         DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
@@ -625,11 +634,239 @@ TEST(LogicalPlanDirectColumnAggregateTest, RepeatedCompositeKeysPreserveOwnedGro
         logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
             {directField("country"), directField("rank")}, {{"count", nullptr, "rows"}}, {"country", "rank"});
         auto bounds = directBounds(); bounds.maximum_node_records = 128; bounds.maximum_rows = 128;
+        debug::PerfTrace::reset();
         const auto result = runtime.executeToQueryResult(aggregate, bounds);
         ASSERT_EQ(result.rowCount(), 6U);
         for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(16));
         if (!direct) expected = observedCells(result);
-        else { EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U); }
+        else {
+            EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U);
+            const auto trace = debug::PerfTrace::snapshotAndReset();
+            EXPECT_EQ(trace.at("test.group_key.serialized_rows").totalValue, 96);
+            EXPECT_EQ(trace.at("test.group_key.misses").totalValue, 6);
+            EXPECT_EQ(trace.at("test.group_key.hits").totalValue, 90);
+            std::cout << "GROUP_KEY_SERIALIZED_BYTES " << trace.at("test.group_key.serialized_bytes").totalValue << '\n';
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyIndependentUniqueRepeatedAndForcedCollisions) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_force_borrowed_group_collision = false; } } reset;
+    ColumnAggregateTraceScope traceScope;
+    for (bool unique : {false, true}) for (bool collision : {false, true}) {
+        std::vector<std::vector<PropertyValue>> expected;
+        for (bool enabled : {false, true}) {
+            DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+            for (uint64_t id = 1; id <= 240; ++id) {
+                const uint64_t value = unique ? id : (id * 37 + 19) % 6;
+                const std::string text = value % 2 ? std::string("a\0b", 3) : std::string(1024, 'z');
+                graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(text)}, {"b", PropertyValue(int64_t(value))}}});
+            }
+            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+            logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+                {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+            auto bounds = directBounds(); bounds.maximum_node_records = 256; bounds.maximum_rows = 256;
+            bounds.maximum_distinct_rows = 256;
+            test_enable_borrowed_group_key = enabled; test_force_borrowed_group_collision = collision;
+            int64_t indexPeak = 0;
+            graph::debug::PerfTrace::ScopedObserver observer(&indexPeak, [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "test.group_key.index_bytes") *static_cast<int64_t *>(p) = std::max(*static_cast<int64_t *>(p), value);
+            });
+            debug::PerfTrace::reset(); const auto result = runtime.executeToQueryResult(aggregate, bounds);
+            EXPECT_EQ(result.rowCount(), unique ? 240U : 6U);
+            if (!enabled) expected = observedCells(result);
+            else {
+                EXPECT_EQ(observedCells(result), expected);
+                const auto trace = debug::PerfTrace::snapshotAndReset();
+                EXPECT_EQ(trace.at("test.group_key.serialized_rows").totalValue, unique ? 240 : 6);
+                if (!unique) EXPECT_EQ(trace.at("test.group_key.borrowed_hits").totalValue, 234);
+                EXPECT_GT(indexPeak, 0);
+                std::cout << "GROUP_INDEX_BYTES unique=" << unique << " collision=" << collision << " bytes=" << indexPeak << '\n';
+            }
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyMixedFallbackAndFloatingEncodingMatchesControl) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_force_borrowed_group_collision = false; } } reset;
+    std::vector<std::string> expected;
+    for (bool enabled : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+        const auto nan1 = std::bit_cast<double>(UINT64_C(0x7ff8000000000001));
+        const auto nan2 = std::bit_cast<double>(UINT64_C(0x7ff8000000000002));
+        const std::vector<PropertyValue> values{PropertyValue(), PropertyValue(true), PropertyValue(int64_t{0}),
+            PropertyValue(0.0), PropertyValue(-0.0), PropertyValue(nan1), PropertyValue(nan1), PropertyValue(nan2),
+            PropertyValue(std::string("a\0b", 3)), PropertyValue(std::vector<PropertyValue>{PropertyValue(1)})};
+        for (size_t i = 0; i < values.size(); ++i)
+            graph.nodes.emplace(i + 1, LogicalGraphNode{i + 1, {}, {{"a", values[i]}, {"b", PropertyValue(1)}}});
+        graph.nodes.emplace(11, LogicalGraphNode{11, {}, {{"b", PropertyValue(1)}}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+        test_enable_borrowed_group_key = enabled; test_force_borrowed_group_collision = true;
+        auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32; bounds.maximum_distinct_rows = 32;
+        const auto result = runtime.executeToQueryResult(aggregate, bounds);
+        std::vector<std::string> signatures;
+        int64_t total = 0;
+        for (const auto &row : result.getRows()) {
+            const auto &key = row.at("a").asPrimitive();
+            const auto count = std::get<int64_t>(row.at("rows").asPrimitive().getVariant()); total += count;
+            std::string data;
+            if (key.getType() == PropertyType::DOUBLE) {
+                double number = std::get<double>(key.getVariant()); if (number == 0.0) number = 0.0;
+                data = std::to_string(std::bit_cast<uint64_t>(number));
+            } else data = key.toString();
+            signatures.push_back(std::to_string(int(key.getType())) + ":" + data + ":" + std::to_string(count));
+        }
+        std::sort(signatures.begin(), signatures.end()); EXPECT_EQ(total, 11);
+        if (!enabled) expected = std::move(signatures); else EXPECT_EQ(signatures, expected);
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyGuardExceptionDoesNotReplayAndReleasesBorrow) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
+    test_enable_borrowed_group_key = true;
+    DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+    for (uint64_t id = 1; id <= 24; ++id)
+        graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(2048, 'x'))}, {"b", PropertyValue(int64_t(id % 3))}}});
+    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+        {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+    auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32; bounds.maximum_distinct_rows = 32;
+    bool indexed = false, fired = false;
+    graph::debug::PerfTrace::ScopedObserver observer(&indexed, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+        if (!duration && key == "test.group_key.index_bytes") *static_cast<bool *>(p) = true;
+    });
+    QueryGuard guard(0, 1, [&] { if (indexed && !fired) { fired = true; throw MaterializedByteLimitExceeded(); } return size_t{0}; });
+    QueryContext context; context.guard = &guard;
+    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, bounds, context)), MaterializedByteLimitExceeded);
+    EXPECT_TRUE(fired);
+    const auto result = runtime.executeToQueryResult(aggregate, bounds);
+    ASSERT_EQ(result.rowCount(), 3U);
+    for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(8));
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyBudgetPressureCanFollowIndexAdmission) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
+    test_enable_borrowed_group_key = true;
+    bool rejectedAfterIndex = false;
+    for (size_t limit : {size_t(16384), size_t(32768), size_t(65536), size_t(131072), size_t(262144)}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+        for (uint64_t id = 1; id <= 240; ++id)
+            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(256, 'x'))}, {"b", PropertyValue(int64_t(id))}}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+        auto bounds = directBounds(); bounds.maximum_node_records = 256; bounds.maximum_rows = 256;
+        bounds.maximum_distinct_rows = 256; bounds.maximum_materialized_bytes = limit;
+        bool indexed = false;
+        graph::debug::PerfTrace::ScopedObserver observer(&indexed, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+            if (!duration && key == "test.group_key.index_bytes") *static_cast<bool *>(p) = true;
+        });
+        try { static_cast<void>(runtime.executeToQueryResult(aggregate, bounds)); }
+        catch (const MaterializedByteLimitExceeded &) {
+            if (indexed) { rejectedAfterIndex = true; std::cout << "GROUP_BUDGET_REJECT limit=" << limit << '\n'; break; }
+        }
+        catch (const std::runtime_error &error) {
+            if (std::string_view(error.what()).find("materializ") == std::string_view::npos) throw;
+            if (indexed) { rejectedAfterIndex = true; std::cout << "GROUP_BUDGET_REJECT limit=" << limit << " message=" << error.what() << '\n'; break; }
+        }
+    }
+    EXPECT_TRUE(rejectedAfterIndex);
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyIndexAdmissionDeclinesBeforeGroupEffects) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; test_reject_borrowed_group_index = false; } } reset;
+    ColumnAggregateTraceScope tracing;
+    std::vector<std::vector<PropertyValue>> expected;
+    for (bool enabled : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+        for (uint64_t id = 1; id <= 24; ++id)
+            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue("shared")}, {"b", PropertyValue(int64_t(id % 3))}}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+        auto bounds = directBounds(); bounds.maximum_node_records = 32; bounds.maximum_rows = 32;
+        test_enable_borrowed_group_key = enabled; test_reject_borrowed_group_index = false;
+        size_t admitted = 0;
+        graph::debug::PerfTrace::ScopedObserver observer(&admitted, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+            if (!duration && key == "test.group_key.index_bytes" && ++*static_cast<size_t *>(p) == 2U)
+                test_reject_borrowed_group_index = true;
+        });
+        debug::PerfTrace::reset(); const auto result = runtime.executeToQueryResult(aggregate, bounds);
+        if (!enabled) expected = observedCells(result);
+        else {
+            EXPECT_EQ(observedCells(result), expected);
+            EXPECT_EQ(admitted, 2U);
+            const auto trace = debug::PerfTrace::snapshotAndReset();
+            EXPECT_EQ(trace.at("test.group_key.budget_fallback").totalValue, 1);
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyCrossBatchReentryAndOwnedResults) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
+    for (bool enabled : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+        for (uint64_t id = 1; id <= 600; ++id)
+            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue(std::string(128, 'z'))}, {"b", PropertyValue(int64_t(id % 3))}}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+        auto bounds = directBounds(); bounds.maximum_node_records = 700; bounds.maximum_rows = 700;
+        bounds.maximum_distinct_rows = 700; bounds.maximum_materialized_bytes = 64U * 1024U * 1024U;
+        test_enable_borrowed_group_key = enabled;
+        struct Reentry { LogicalPlanReadRuntime *runtime; logical::LogicalAggregate *plan; LogicalPlanReadRuntimeBounds *bounds; bool enabled; bool fired = false; bool valid = false; } reentry{&runtime, &aggregate, &bounds, enabled};
+        graph::debug::PerfTrace::ScopedObserver observer(&reentry, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+            auto &state = *static_cast<Reentry *>(p);
+            if (duration || state.fired || key != (state.enabled ? "test.group_key.borrowed_hits" : "test.group_key.serialized_rows")) return;
+            state.fired = true;
+            try {
+                const auto nested = state.runtime->executeToQueryResult(*state.plan, *state.bounds);
+                state.valid = nested.rowCount() == 3U;
+                for (const auto &row : nested.getRows()) state.valid = state.valid && row.at("rows").asPrimitive() == PropertyValue(200);
+            } catch (...) { state.valid = false; }
+        });
+        const auto result = runtime.executeToQueryResult(aggregate, bounds);
+        ASSERT_TRUE(reentry.fired); EXPECT_TRUE(reentry.valid); ASSERT_EQ(result.rowCount(), 3U);
+        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(200));
+        EXPECT_GT(graph.direct_property_batches, 2U);
+        graph.nodes.at(1).properties = {{"a", PropertyValue("changed")}, {"b", PropertyValue(1)}};
+        const auto changed = runtime.executeToQueryResult(aggregate, bounds);
+        EXPECT_EQ(changed.rowCount(), 4U);
+        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(200));
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, BorrowedKeyAsyncGuardSignalAndFollowingQuery) {
+    struct Reset { ~Reset() { test_enable_borrowed_group_key = false; } } reset;
+    for (bool enabled : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = true;
+        for (uint64_t id = 1; id <= 48; ++id)
+            graph.nodes.emplace(id, LogicalGraphNode{id, {}, {{"a", PropertyValue("key")}, {"b", PropertyValue(int64_t(id % 3))}}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("a"), directField("b")}, {{"count", nullptr, "rows"}}, {"a", "b"});
+        auto bounds = directBounds(); bounds.maximum_node_records = 64; bounds.maximum_rows = 64;
+        test_enable_borrowed_group_key = enabled;
+        struct Signal { std::atomic<bool> seen{false}, cancelled{false}; bool enabled; } signal{{false}, {false}, enabled};
+        std::jthread worker([&](std::stop_token stop) {
+            while (!signal.seen.load() && !stop.stop_requested()) std::this_thread::yield();
+            if (!stop.stop_requested()) signal.cancelled.store(true);
+        });
+        graph::debug::PerfTrace::ScopedObserver observer(&signal, [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+            auto &s = *static_cast<Signal *>(p);
+            if (duration || s.seen.load() || key != (s.enabled ? "test.group_key.borrowed_hits" : "test.group_key.serialized_rows")) return;
+            s.seen.store(true);
+            while (!s.cancelled.load()) std::this_thread::yield();
+        });
+        QueryGuard guard(0, 1, [&] { if (signal.cancelled.load()) throw std::runtime_error("test async cancellation signal"); return size_t{0}; });
+        QueryContext context; context.guard = &guard;
+        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, bounds, context)), std::runtime_error);
+        EXPECT_TRUE(signal.cancelled.load());
+        const auto result = runtime.executeToQueryResult(aggregate, bounds);
+        ASSERT_EQ(result.rowCount(), 3U);
+        for (const auto &row : result.getRows()) EXPECT_EQ(row.at("rows").asPrimitive(), PropertyValue(16));
     }
 }
 

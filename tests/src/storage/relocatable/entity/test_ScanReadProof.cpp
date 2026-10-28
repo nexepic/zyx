@@ -1,10 +1,20 @@
 #include "BuildingScanMembershipFixture.hpp"
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
+#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
 #include "graph/query/api/QueryEngine.hpp"
+#include "query/execution/DirectPropertyColumns.hpp"
+#include "CypherParserImpl.hpp"
+#include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 #include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
+#include <chrono>
+#include <map>
+#include <iostream>
 
+namespace graph::query::execution { extern thread_local bool test_enable_streaming_count; extern thread_local bool test_disable_streaming_count; extern thread_local bool test_enable_borrowed_group_key; }
 static_assert(!std::is_default_constructible_v<VerifiedScanRoot>);
 static_assert(!std::is_default_constructible_v<ScanBatchReadGrant>);
 static_assert(!std::is_copy_constructible_v<ScanBatchReadGrant>);
@@ -22,7 +32,7 @@ protected:
     std::shared_ptr<graph::query::execution::MaterializedByteBudget> control =
         std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     std::unique_ptr<ScanBuildingImageBuilder> builder;
-    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false) {
+    void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false, bool mixedNumbers = false) {
         if (scalarRows) {
             initialize(true, true);
             LargeValueStore values(io, *metadata);
@@ -57,6 +67,12 @@ protected:
                 const auto id = tx.createNode(std::span(nodeLabels).first(labelCount));
                 PropertyCollectionRoot row{id, graph::Node::typeId,
                     {{1, graph::PropertyValue(int64_t(id))}, {2, graph::PropertyValue("short")}}};
+                if (mixedNumbers) {
+                    auto &number = row.entries.front();
+                    if (id % 11U == 0U) row.entries.erase(row.entries.begin());
+                    else if (id % 7U == 0U) number.value = graph::PropertyValue();
+                    else if (id % 4U == 0U) number.value = graph::PropertyValue(double(id));
+                }
                 if (typedColumns > 2U) {
                     row.entries.clear();
                     for (size_t token = 1; token <= typedColumns; ++token)
@@ -160,6 +176,78 @@ protected:
         PropertyCollectionRootStore properties(pages, values, store());
         const auto retained = properties.readEntityOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1});
         ASSERT_TRUE(retained); EXPECT_EQ(retained->entries.size(), 3U);
+    }
+    void stratifiedSupplyProbe(size_t size) {
+        ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, size)); builder.reset();
+        RelocatableStorageBackendOptions options; options.data_path = target;
+        options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+        RelocatableStorageBackend backend(options); backend.open();
+        auto old = backend.openLogicalGraphReadSnapshot();
+        const std::array<std::string_view, 2> keys{"number", "text"};
+        using graph::query::execution::detail::DirectPropertyColumns;
+        using graph::query::execution::MaterializedByteBudget;
+        const auto gather = [&](std::string_view scenario, graph::storage::LogicalGraphReadSnapshot &snapshot,
+                                const std::vector<uint64_t> &ids, bool changed) {
+            std::map<std::string, int64_t> counters;
+            graph::debug::PerfTrace::ScopedObserver observer(&counters, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
+                if (duration) return;
+                if (key.starts_with("native_graph.hybrid.") || key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows") {
+                    try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
+                }
+            });
+            MaterializedByteBudget budget(4U * 1024U * 1024U);
+            graph::query::execution::MaterializedByteReservation source(&budget);
+            DirectPropertyColumns columns(snapshot, ids.size(), keys.size(), budget);
+            columns.readGather(ids, keys, [&](size_t bytes) { source.set(source.bytes() + bytes); }, [] {});
+            for (size_t i = 0; i < ids.size(); ++i) {
+                auto number = columns.cell(0, columns.rowId(i)); auto text = columns.cell(1, columns.rowId(i));
+                ASSERT_EQ(std::get<int64_t>(number.data), changed && ids[i] == 1U ? 999 : int64_t(ids[i]));
+                ASSERT_EQ(std::get<std::string_view>(text.data), changed && ids[i] == 1U ? "changed" : "short");
+            }
+            for (const auto &[key, value] : counters)
+                std::cout << "STRAT_WORK size=" << size << " case=" << scenario << " " << key << "=" << value << '\n';
+        };
+        std::vector<uint64_t> dense; for (uint64_t id = 1; id <= 32; ++id) dense.push_back(id);
+        gather("dense", *old, dense, false);
+        std::vector<uint64_t> sparse{1, 65, uint64_t(size)};
+        if (sparse[1] == sparse[2]) sparse.erase(sparse.begin() + 1);
+        gather("sparse", *old, sparse, false);
+        gather("unsorted_duplicate", *old, {uint64_t(size), 1, 65, 1, uint64_t(size)}, false);
+        backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{999})}, {"text", graph::PropertyValue("changed")}}}});
+        auto current = backend.openLogicalGraphReadSnapshot();
+        gather("old_after_update", *old, {1, 65, uint64_t(size)}, false);
+        gather("new_after_update", *current, {1, 65, uint64_t(size)}, true);
+        old.reset(); current.reset(); backend.close();
+        options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+        auto reopened = std::make_shared<RelocatableStorageBackend>(options); reopened->open();
+        std::map<std::string, int64_t> counters;
+        graph::debug::PerfTrace::ScopedObserver observer(&counters, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
+            if (!duration && (key.starts_with("native_graph.hybrid.") || key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows"))
+                try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
+        });
+        graph::query::QueryEngine engine(reopened);
+        const auto result = engine.execute("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), graph::PropertyValue(int64_t(size * (size + 1U) / 2U - 1U + 999U)));
+        EXPECT_EQ(result.getRows()[0].at("present").asPrimitive(), graph::PropertyValue(int64_t(size)));
+        for (const auto &[key, value] : counters)
+            std::cout << "STRAT_WORK size=" << size << " case=reopened_labeled_multi " << key << "=" << value << '\n';
+        for (int kind : {0, 1}) {
+            std::map<std::string, int64_t> extra;
+            graph::debug::PerfTrace::ScopedObserver extraObserver(&extra, [](void *ctx, std::string_view key, int64_t v, bool duration) noexcept {
+                if (!duration && key.starts_with("native_graph.hybrid."))
+                    try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += v; } catch (...) { std::terminate(); }
+            });
+            const auto alone = engine.execute(kind == 0 ?
+                "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total" :
+                "MATCH (n:Nodes) WHERE n.number >= 2 RETURN count(n.text) AS present");
+            ASSERT_EQ(alone.rowCount(), 1U);
+            const auto expected = kind == 0 ? int64_t(size * (size + 1U) / 2U - 1U + 999U) : int64_t(size);
+            EXPECT_EQ(alone.getRows()[0].at(kind == 0 ? "total" : "present").asPrimitive(), graph::PropertyValue(expected));
+            for (const auto &[key, value] : extra)
+                std::cout << "STRAT_WORK size=" << size << " case=" << (kind == 0 ? "reopened_sum" : "reopened_count") << " " << key << "=" << value << '\n';
+        }
+        reopened->close();
     }
     void TearDown() override {
         builder.reset();
@@ -1733,6 +1821,327 @@ TEST_F(ScanReadProofTest, QueryDirectoryContinuationDropsExpiredStateBeforeAFres
     ASSERT_TRUE(visit(fresh));
     for (auto count : seen) EXPECT_EQ(count, 1U);
     EXPECT_EQ(rows->used(), 0U);
+}
+
+TEST_F(ScanReadProofTest, StreamingCountConsumesPersistentScanImageWithoutColumnMaterialization) {
+    struct Enable { Enable() { graph::query::execution::test_enable_streaming_count = true; } ~Enable() { graph::query::execution::test_enable_streaming_count = false; } } enable;
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    struct Work { int64_t source = 0, materialized = 0; } work;
+    graph::debug::PerfTrace::ScopedObserver observer(&work, [](void *ctx, std::string_view key, int64_t value, bool) noexcept {
+        auto &w = *static_cast<Work *>(ctx);
+        if (key == "logical_plan.streaming_count.source_rows") w.source += value;
+        if (key == "logical_plan.direct_property.rows") w.materialized += value;
+    });
+    graph::query::QueryEngine engine(backend);
+    auto result = engine.execute("MATCH (n) WHERE n.number >= 33 RETURN count(*) AS rows");
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(result.getRows().front().at("rows").asPrimitive(), graph::PropertyValue(int64_t{32}));
+    EXPECT_EQ(work.source, 64); EXPECT_EQ(work.materialized, 0);
+}
+
+TEST_F(ScanReadProofTest, DISABLED_PersistentCountFusionProbe) {
+    const auto *rowsEnv = std::getenv("ZYX_PROBE_ROWS");
+    const auto *mixedEnv = std::getenv("ZYX_PROBE_MIXED");
+    ASSERT_NE(rowsEnv, nullptr); ASSERT_NE(mixedEnv, nullptr);
+    const size_t rows = std::stoull(rowsEnv); const bool mixed = std::string_view(mixedEnv) == "1";
+    ASSERT_TRUE(rows == 128U || rows == 512U);
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, rows, false, mixed)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    graph::query::QueryEngine engine(backend);
+    struct Reset { ~Reset() { graph::query::execution::test_enable_streaming_count = false; graph::query::execution::test_disable_streaming_count = false; } } reset;
+    for (int64_t threshold : {int64_t{0}, int64_t(rows / 2U), int64_t(rows + 1U)}) {
+        size_t expected = 0;
+        for (size_t id = 1; id <= rows; ++id) {
+            if (mixed && (id % 11U == 0U || id % 7U == 0U)) continue;
+            const auto value = mixed && id % 4U == 0U ? graph::PropertyValue(double(id)) : graph::PropertyValue(int64_t(id));
+            if (value >= graph::PropertyValue(threshold)) ++expected;
+        }
+        const auto query = "MATCH (n) WHERE n.number >= " + std::to_string(threshold) + " RETURN count(*) AS rows";
+        const auto execute = [&](bool enabled) {
+            graph::query::execution::test_enable_streaming_count = enabled;
+            graph::query::execution::test_disable_streaming_count = !enabled;
+            auto result = engine.execute(query);
+            if (result.rowCount() != 1 || result.getRows()[0].at("rows").asPrimitive() != graph::PropertyValue(int64_t(expected)))
+                throw std::runtime_error("persistent count oracle mismatch");
+        };
+        for (int iteration = 0; iteration < 9; ++iteration) for (int arm = 0; arm < 2; ++arm) {
+            const bool enabled = ((iteration + arm + int(mixed) + int(threshold)) & 1) == 0;
+            const auto before = std::chrono::steady_clock::now(); execute(enabled);
+            const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - before).count();
+            if (iteration >= 3) std::cout << "PERSIST_PROBE rows=" << rows << " mixed=" << mixed << " threshold=" << threshold
+                << " enabled=" << enabled << " expected=" << expected << " iteration=" << iteration - 3 << " ns=" << ns << '\n';
+        }
+        for (bool enabled : {false, true}) {
+            struct Counters { int64_t stream = 0, direct = 0; } c;
+            graph::debug::PerfTrace::ScopedObserver observe(&c, [](void *p, std::string_view key, int64_t v, bool) noexcept {
+                auto &counts = *static_cast<Counters *>(p);
+                if (key == "logical_plan.streaming_count.source_rows") counts.stream += v;
+                if (key == "logical_plan.direct_property.rows") counts.direct += v;
+            });
+            execute(enabled);
+            std::cout << "PERSIST_WORK rows=" << rows << " mixed=" << mixed << " threshold=" << threshold << " enabled=" << enabled
+                << " stream=" << c.stream << " direct=" << c.direct << '\n';
+        }
+    }
+    backend->close();
+}
+
+TEST_F(ScanReadProofTest, DISABLED_BorrowedGroupPersistentFixture) {
+    const char *rowsText = std::getenv("ZYX_GROUP_ROWS"), *modeText = std::getenv("ZYX_GROUP_MODE"),
+        *output = std::getenv("ZYX_GROUP_OUTPUT");
+    ASSERT_NE(rowsText, nullptr); ASSERT_NE(modeText, nullptr); ASSERT_NE(output, nullptr);
+    const size_t rows = std::stoull(rowsText), mode = std::stoull(modeText);
+    ASSERT_TRUE(rows == 512U || rows == 1536U); ASSERT_LT(mode, 5U);
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, rows)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    std::vector<graph::storage::LogicalGraphPropertyReplaceRequest> updates; updates.reserve(rows);
+    for (size_t id = 1; id <= rows; ++id) {
+        const size_t group = (mode == 1U || mode == 3U) ? id : (id * 37U + 19U) % 6U;
+        std::vector<graph::storage::LogicalGraphWriteProperty> properties;
+        properties.push_back({"number", graph::PropertyValue(int64_t(group))});
+        if (mode == 4U && id % 7U == 0U) { /* missing */ }
+        else if (mode == 4U && id % 7U == 1U) properties.push_back({"text", graph::PropertyValue()});
+        else if (mode == 4U && id % 7U == 2U)
+            properties.push_back({"text", graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t(group))})});
+        else properties.push_back({"text", graph::PropertyValue(std::string((mode == 2U || mode == 3U) ? 1024U : 8U, char('a' + group % 6U)))});
+        updates.push_back({id, std::move(properties)});
+    }
+    // A write transaction also bounds changed fields; leave room for the
+    // initial third field and for replacements that alter the property set.
+    for (size_t offset = 0; offset < updates.size(); offset += 16U) {
+        const size_t end = std::min(offset + 16U, updates.size());
+        backend.replaceLogicalNodeProperties({updates.begin() + offset, updates.begin() + end});
+    }
+    backend.close();
+    std::filesystem::copy_file(target, output, std::filesystem::copy_options::overwrite_existing);
+}
+
+TEST_F(ScanReadProofTest, DISABLED_BorrowedGroupPersistentWork) {
+    const char *file = std::getenv("ZYX_GROUP_INPUT"), *rowsText = std::getenv("ZYX_GROUP_ROWS"), *modeText = std::getenv("ZYX_GROUP_MODE");
+    ASSERT_NE(file, nullptr); ASSERT_NE(rowsText, nullptr); ASSERT_NE(modeText, nullptr);
+    const size_t rows = std::stoull(rowsText), mode = std::stoull(modeText);
+    ASSERT_TRUE(rows == 512U || rows == 1536U); ASSERT_LT(mode, 5U);
+    using Key = std::pair<std::string, int64_t>;
+    const auto valueKey = [](const graph::PropertyValue &v) { return std::to_string(int(v.getType())) + ":" + v.toString(); };
+    std::map<Key, int64_t> expected;
+    for (size_t id = 1; id <= rows; ++id) {
+        const size_t group = (mode == 1U || mode == 3U) ? id : (id * 37U + 19U) % 6U;
+        graph::PropertyValue text;
+        if (mode == 4U && (id % 7U == 0U || id % 7U == 1U)) text = graph::PropertyValue();
+        else if (mode == 4U && id % 7U == 2U) text = graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t(group))});
+        else text = graph::PropertyValue(std::string((mode == 2U || mode == 3U) ? 1024U : 8U, char('a' + group % 6U)));
+        ++expected[{valueKey(text), int64_t(group)}];
+    }
+    RelocatableStorageBackendOptions options; options.data_path = file; options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open(); graph::query::QueryEngine engine(backend);
+    struct Reset { ~Reset() { graph::query::execution::test_enable_borrowed_group_key = false; } } reset;
+    for (bool enabled : {false, true}) {
+        graph::query::execution::test_enable_borrowed_group_key = enabled;
+        struct Work { int64_t direct = 0, serialized = 0, bytes = 0, hits = 0, indexPeak = 0; } w;
+        graph::debug::PerfTrace::ScopedObserver observer(&w, [](void *ctx, std::string_view key, int64_t n, bool duration) noexcept {
+            if (duration) return; auto &v = *static_cast<Work *>(ctx);
+            if (key == "logical_plan.aggregate.direct_input_rows") v.direct += n;
+            else if (key == "test.group_key.serialized_rows") v.serialized += n;
+            else if (key == "test.group_key.serialized_bytes") v.bytes += n;
+            else if (key == "test.group_key.borrowed_hits") v.hits += n;
+            else if (key == "test.group_key.index_bytes") v.indexPeak = std::max(v.indexPeak, n);
+        });
+        const auto result = engine.execute("MATCH (n:Nodes) RETURN n.text AS a, n.number AS b, count(*) AS rows");
+        std::map<Key, int64_t> actual;
+        for (const auto &row : result.getRows()) {
+            const auto &a = row.at("a").asPrimitive(), &b = row.at("b").asPrimitive(), &count = row.at("rows").asPrimitive();
+            ASSERT_TRUE(actual.emplace(Key{valueKey(a), std::get<int64_t>(b.getVariant())}, std::get<int64_t>(count.getVariant())).second);
+        }
+        EXPECT_EQ(actual, expected); EXPECT_EQ(w.direct, int64_t(rows));
+        std::cout << "GROUP_WORK rows=" << rows << " mode=" << mode << " enabled=" << enabled << " direct=" << w.direct
+            << " serialized=" << w.serialized << " bytes=" << w.bytes << " hits=" << w.hits << " index_peak=" << w.indexPeak << '\n';
+    }
+    backend->close();
+}
+
+TEST_F(ScanReadProofTest, UntimedGenericPropertySupplyWorkOnIndependentImage) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    std::map<std::string, int64_t> counts;
+    graph::debug::PerfTrace::ScopedObserver observer(&counts, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
+        if (duration) return;
+        if (key == "logical_plan.certified_scan.borrowed_ids" || key == "logical_plan.direct_property.rows" ||
+            key == "native_graph.hybrid.grouped_column_batches" || key == "native_graph.hybrid.owner_route_checks_performed" ||
+            key == "native_graph.hybrid.certified_owner_route_checks_saved" || key == "native_graph.hybrid.group_directory_cursor_restarts" ||
+            key == "native_graph.hybrid.typed_run_admissions") {
+            try { (*static_cast<std::map<std::string, int64_t> *>(ctx))[std::string(key)] += value; }
+            catch (...) { std::terminate(); }
+        }
+    });
+    graph::query::QueryEngine engine(backend);
+    const auto result = engine.execute("MATCH (n) RETURN sum(n.number) AS total");
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(result.getRows().front().at("total").asPrimitive(), graph::PropertyValue(int64_t{18528}));
+    EXPECT_EQ(counts["logical_plan.certified_scan.borrowed_ids"], 192);
+    EXPECT_EQ(counts["logical_plan.direct_property.rows"], 192);
+    for (const auto &[key, value] : counts) std::cout << "SUPPLY_WORK " << key << "=" << value << '\n';
+    backend->close();
+}
+
+TEST_F(ScanReadProofTest, StratifiedSupply128) { stratifiedSupplyProbe(128); }
+TEST_F(ScanReadProofTest, StratifiedSupply192) { stratifiedSupplyProbe(192); }
+TEST_F(ScanReadProofTest, StratifiedSupply512) { stratifiedSupplyProbe(512); }
+
+TEST_F(ScanReadProofTest, OwnerAuthenticationSameSnapshotPhaseDiagnosis) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{999})}, {"text", graph::PropertyValue("changed")}}}});
+    auto current = backend.openLogicalGraphReadSnapshot();
+    graph::parser::cypher::CypherParserImpl parser;
+    auto plan = parser.parseToLogical("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
+    graph::query::optimization::LogicalPlanOptimizer optimizer;
+    plan.root = optimizer.optimize(std::move(plan.root)).root;
+    const auto dumpPlan = [&](const auto &self, const graph::query::logical::LogicalOperator &op, size_t depth) -> void {
+        std::cout << "OWNER_PLAN depth=" << depth << " type=" << int(op.getType()) << " description=" << op.toString() << '\n';
+        for (const auto *child : op.getChildren()) self(self, *child, depth + 1);
+    };
+    dumpPlan(dumpPlan, *plan.root, 0);
+    graph::query::execution::LogicalPlanReadRuntime runtime(backend);
+    graph::query::execution::LogicalPlanReadRuntimeBounds bounds;
+    bounds.maximum_node_records = 256; bounds.maximum_rows = 512; bounds.maximum_distinct_rows = 512;
+    bounds.maximum_edge_records = 256; bounds.maximum_edges_per_node = 128; bounds.maximum_adjacency_page_records = 16;
+    bounds.maximum_node_page_records = 16; bounds.maximum_metadata_pages_per_node_page = 8192; bounds.maximum_property_entries = 16;
+    const auto run = [&](const char *label, graph::storage::LogicalGraphReadSnapshot &snapshot, int64_t total, int64_t present) {
+        struct Counts { std::array<unsigned, 193> other{}, selected{}, nonnull{}; size_t invalid = 0; } counts;
+        const auto fence = snapshot.mutationFence(); ASSERT_TRUE(fence.has_value());
+        graph::debug::PerfTrace::ScopedObserver observe(&counts, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
+            if (duration || (key != "test.owner_auth.other" && key != "test.owner_auth.selected" && key != "test.owner_auth.nonnull")) return;
+            auto &c = *static_cast<Counts *>(ctx);
+            if (value < 1 || value > 192) { ++c.invalid; return; }
+            auto &slot = key == "test.owner_auth.nonnull" ? c.nonnull[size_t(value)] : key == "test.owner_auth.selected" ? c.selected[size_t(value)] : c.other[size_t(value)];
+            ++slot;
+        });
+        size_t rows = 0;
+        (void)runtime.executeWithSnapshot(snapshot, *plan.root, bounds, [&](const auto &row) {
+            ++rows;
+            EXPECT_EQ(std::get<graph::PropertyValue>(row.values.at("total")), graph::PropertyValue(total));
+            EXPECT_EQ(std::get<graph::PropertyValue>(row.values.at("present")), graph::PropertyValue(present));
+            return true;
+        }, {});
+        EXPECT_EQ(rows, 1U); EXPECT_EQ(counts.invalid, 0U); EXPECT_EQ(snapshot.mutationFence(), fence);
+        size_t other = 0, selected = 0, nonnull = 0, repeated = 0, cross = 0;
+        for (size_t id = 1; id <= 192; ++id) {
+            const auto a = counts.other[id], b = counts.nonnull[id], c = counts.selected[id]; other += a; nonnull += b; selected += c;
+            if (a + b + c > 1) ++repeated;
+            if ((a || c) && b) ++cross;
+            if (a + b + c > 1) std::cout << "OWNER_REPEAT snapshot=" << label << " owner=" << id << " group=" << (id - 1) / 64 + 1
+                << " other=" << a << " selected=" << c << " nonnull=" << b << '\n';
+        }
+        std::cout << "OWNER_SUMMARY snapshot=" << label << " other=" << other << " selected=" << selected << " nonnull=" << nonnull
+            << " repeated=" << repeated << " cross=" << cross << '\n';
+    };
+    run("old", *old, 18527, 191);
+    run("new", *current, 19526, 192);
+    old.reset(); current.reset(); backend.close();
+}
+
+TEST_F(ScanReadProofTest, BudgetedPresenceOwnsResourcesAndPreservesPinnedValues) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    backend.replaceLogicalNodeProperties({{1, {{"text", graph::PropertyValue(std::string(8192, 'q'))},
+        {"larger", graph::PropertyValue(std::string(65536, 'r'))}, {"nullable", graph::PropertyValue()}}}});
+    auto old = backend.openLogicalGraphReadSnapshot();
+    backend.replaceLogicalNodeProperties({{1, {{"text", graph::PropertyValue()}}}});
+    auto current = backend.openLogicalGraphReadSnapshot();
+    const auto *before = dynamic_cast<const graph::storage::LogicalGraphBudgetedNonNullProvider *>(old.get());
+    const auto *after = dynamic_cast<const graph::storage::LogicalGraphBudgetedNonNullProvider *>(current.get());
+    ASSERT_NE(before, nullptr); ASSERT_NE(after, nullptr);
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    EXPECT_THROW(static_cast<void>(before->nodePropertyIsNonNullWithOwner(1, "text", tiny)),
+        graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(tiny->used(), 0U);
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    int64_t decoded = 0;
+    graph::debug::PerfTrace::ScopedObserver observer(&decoded, [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+        if (!duration && (key == "native_graph.read.property_full_decode" || key == "native_graph.read.property_selected_decode"))
+            *static_cast<int64_t *>(p) += value;
+    });
+    EXPECT_TRUE(before->nodePropertyIsNonNullWithOwner(1, "text", budget));
+    EXPECT_TRUE(before->nodePropertyIsNonNullWithOwner(1, "larger", budget));
+    EXPECT_FALSE(before->nodePropertyIsNonNullWithOwner(1, "nullable", budget));
+    EXPECT_FALSE(before->nodePropertyIsNonNullWithOwner(1, "missing", budget));
+    EXPECT_FALSE(after->nodePropertyIsNonNullWithOwner(1, "text", budget));
+    EXPECT_EQ(budget->used(), 0U);
+    EXPECT_EQ(decoded, 0);
+    old.reset(); current.reset(); backend.close();
+}
+
+TEST_F(ScanReadProofTest, BudgetedPresenceDeclinesRealRowBeforeResult) {
+    initialize(true, true);
+    LargeValueStore values(io, *metadata);
+    PropertyCollectionRootStore properties(*pages, values, *metadata);
+    BTreePageStore indexes(*pages, *metadata);
+    NativeGraphWritePlannerOptions options;
+    options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(127);
+    options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(127), 989};
+    NativeGraphWritePlanner planner(*metadata, *entities, *labels, properties, indexes, options);
+    auto tx = planner.beginTransaction();
+    const auto id = tx.createNode({});
+    tx.replaceNodeProperty({id, graph::Node::typeId, {{2, graph::PropertyValue("row")}}});
+    ASSERT_TRUE(tx.commit().committed());
+    auto snapshot = metadata->openSnapshot();
+    const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, id};
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+    size_t effects = 0;
+    {
+        graph::utils::OwnedAllocationScope owner(budget);
+        graph::storage::BudgetedPresenceScope scope;
+        try {
+            const bool present = properties.readEntityPropertyExists(snapshot, key, 2U, true).value_or(false);
+            effects += present; FAIL() << "legacy ROW unexpectedly accepted";
+        } catch (const graph::storage::LogicalGraphBufferPressure &) { EXPECT_EQ(effects, 0U); }
+    }
+    EXPECT_EQ(budget->used(), 0U);
+    EXPECT_EQ(properties.readEntityPropertyExists(snapshot, key, 2U, true), std::optional<bool>{true});
+}
+
+TEST_F(ScanReadProofTest, PublicQueryEnginePlanOwnerAuthenticationDiagnosis) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 2U, false, 192U)); builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    graph::query::QueryEngine engine(backend);
+    auto plan = engine.buildPlan("MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present");
+    ASSERT_TRUE(plan.root);
+    const auto dump = [&](const auto &self, const graph::query::logical::LogicalOperator &op, size_t depth) -> void {
+        std::cout << "PUBLIC_PLAN depth=" << depth << " type=" << int(op.getType()) << " description=" << op.toString() << '\n';
+        for (const auto *child : op.getChildren()) self(self, *child, depth + 1);
+    };
+    dump(dump, *plan.root, 0);
+    struct Counts { std::array<unsigned, 193> other{}, selected{}, nonnull{}; size_t invalid = 0; } c;
+    graph::debug::PerfTrace::ScopedObserver observe(&c, [](void *ctx, std::string_view key, int64_t value, bool duration) noexcept {
+        if (duration || (key != "test.owner_auth.other" && key != "test.owner_auth.selected" && key != "test.owner_auth.nonnull")) return;
+        auto &counts = *static_cast<Counts *>(ctx);
+        if (value < 1 || value > 192) { ++counts.invalid; return; }
+        auto &slot = key == "test.owner_auth.nonnull" ? counts.nonnull[size_t(value)] : key == "test.owner_auth.selected" ? counts.selected[size_t(value)] : counts.other[size_t(value)];
+        ++slot;
+    });
+    const auto result = engine.executePlan(std::move(plan), {});
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), graph::PropertyValue(int64_t{18527}));
+    EXPECT_EQ(result.getRows()[0].at("present").asPrimitive(), graph::PropertyValue(int64_t{191}));
+    EXPECT_EQ(c.invalid, 0U);
+    size_t a = 0, b = 0, other = 0, cross = 0;
+    for (size_t i = 1; i <= 192; ++i) {
+        a += c.selected[i]; b += c.nonnull[i]; other += c.other[i];
+        if (c.selected[i] && c.nonnull[i]) ++cross;
+    }
+    std::cout << "PUBLIC_SUMMARY selected=" << a << " nonnull=" << b << " other=" << other << " cross=" << cross << '\n';
+    backend->close();
 }
 
 #else

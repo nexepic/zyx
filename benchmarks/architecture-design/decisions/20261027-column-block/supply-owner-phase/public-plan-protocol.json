@@ -1,0 +1,10 @@
+{
+ "version": 1,
+ "purpose": "Untimed public QueryEngine plan and stage-aware owner-authentication check, distinct from no-statistics diagnostic",
+ "fixture": "192 deterministic SCAN nodes, reopened read-only, number=ID and text=short",
+ "query": "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present",
+ "plan": "QueryEngine.buildPlan with its normal statistics provider and cache behavior; execute the exact returned plan via executePlan",
+ "oracle": "one row sum=18527 count=191",
+ "events": "test-only selected/nonnull/other authentication events keyed by synthetic owner ID; count owners seen in both selected and nonnull stages",
+ "interpretation": "no latency attribution; public plan result may differ from the explicit caller-owned snapshot diagnostic. This evidence does not grant authority or prove a safe production reuse mechanism."
+}

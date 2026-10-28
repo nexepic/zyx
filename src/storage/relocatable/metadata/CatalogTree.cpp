@@ -781,6 +781,9 @@ namespace graph::storage {
 									  "relocatable streamed Catalog append assigned one radix child twice");
 			}
 			page.children[childIndex] = child;
+			if (page.logical_children_enabled) {
+				page.logical_children[childIndex] = readChildPageId(pages, child, level != 0U);
+			}
 			pending[level]->assigned_children.set(childIndex);
 		}
 

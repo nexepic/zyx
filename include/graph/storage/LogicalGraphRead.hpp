@@ -349,6 +349,9 @@ namespace graph::storage {
 		// derived in-memory views detect those staged graph changes without
 		// exposing or fabricating physical page locations.
 		uint64_t logical_revision = 0U;
+		// A published data Page Directory root changes for graph-page COW even
+		// when typed Entity and Property directory roots remain unchanged.
+		std::array<uint64_t, GRAPH_STATE_TOKENS_PER_ROOT> data_page_root_tokens{};
 
 		[[nodiscard]] constexpr bool isValid() const { return backend_token != 0U && format_token != 0U; }
 		constexpr bool operator==(const LogicalGraphMutationFence &) const = default;

@@ -1,0 +1,63 @@
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp b/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp
+index 4aceb25b..e3a41476 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp
+@@ -551,3 +551,30 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupAdmissionDenialPrecedes
+     scratch.reset();
+     EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+ }
++
++// The larger companion remains in the separately run stress tier.
++TEST_F(RelocatableStorageBackendTest, NativeLogicalReadonlySortSmallSpillPreservesCollection) {
++	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
++	graph::query::LogicalReadExecutionOptions reads;reads.bounds.maximum_materialized_bytes=4U*1024U*1024U;
++	graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend),reads);const auto fence=backend->currentNativeLogicalGraphMutationFence();
++	const bool wasEnabled=graph::debug::PerfTrace::isEnabled(),wasCollecting=graph::debug::PerfTrace::areValuesEnabled();
++	struct RestoreTrace{bool enabled,collecting;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(collecting);graph::debug::PerfTrace::setEnabled(enabled);}}restore{wasEnabled,wasCollecting};
++	graph::debug::PerfTrace::setEnabled(true);graph::debug::PerfTrace::setValueCollectionEnabled(true);(void)graph::debug::PerfTrace::snapshotAndReset();
++	graph::query::QueryGuard guard(120000,64);graph::query::QueryContext context;context.guard=&guard;
++	const std::string payload(3000U, 'x');
++	const auto query = "UNWIND range(1,256) AS x WITH x, '" + payload + "' AS payload ORDER BY x DESC RETURN collect(x) AS ordered, collect(payload) AS values";
++	const auto result=engine.execute(query,context);
++	ASSERT_EQ(result.rowCount(),1U);
++	const auto &values=std::get<std::vector<PropertyValue>>(result.getRows()[0].at("values").asPrimitive().getVariant());
++	ASSERT_EQ(values.size(),256U);
++	const auto &ordered=std::get<std::vector<PropertyValue>>(result.getRows()[0].at("ordered").asPrimitive().getVariant());
++	ASSERT_EQ(ordered.size(),256U);
++	for(size_t i=0;i<ordered.size();++i) EXPECT_EQ(ordered[i], PropertyValue(static_cast<int64_t>(256U-i)));
++	for(const auto &value : values) EXPECT_EQ(value, PropertyValue(payload));
++	const auto trace=graph::debug::PerfTrace::snapshotAndReset();
++	ASSERT_TRUE(trace.contains("logical_plan.sort.spilled"));
++	EXPECT_EQ(trace.at("logical_plan.sort.spilled").totalValue,1);
++	graph::debug::PerfTrace::setValueCollectionEnabled(wasCollecting);graph::debug::PerfTrace::setEnabled(wasEnabled);
++	EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(),fence);
++	EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity()));backend->close();
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp
+index af2efee7..1d98a898 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp
+@@ -386,3 +386,23 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryDeletionImagesPreserveBothDirectio
+     EXPECT_TRUE(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1000).edges.empty());
+     now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+ }
++
++// The larger companion remains in the separately run stress tier.
++TEST_F(RelocatableStorageBackendTest, OrdinaryIndexImagesSmallBatchesPreserveSnapshots) {
++    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend backend(options); backend.open();
++    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
++    const std::vector<LogicalGraphEdgeCreateRequest> batch(16, {nodes[0], nodes[1], "FRESH_BATCH", {}});
++    DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
++    static_cast<void>(backend.createLogicalEdges(batch)); auto old = backend.openLogicalGraphReadSnapshot();
++    for (size_t round = 0; round < 2; ++round) {
++        EXPECT_EQ(backend.createLogicalEdges(batch).size(), 16U);
++        const auto counts = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(counts);
++        EXPECT_EQ(counts->edge_count, (round + 2U) * 16U);
++        EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 32).edges.size(), 16U);
++    }
++    EXPECT_GE(work.ordinary_plans, 2); EXPECT_GE(work.ordinary_member_plans, 2); EXPECT_GT(work.fresh_pools, 0);
++    old.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close(); backend.open();
++    const auto counts = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(counts); EXPECT_EQ(counts->edge_count, 48U);
++    EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
++}

@@ -162,6 +162,16 @@ public:
 		return stats;
 	}
 
+	void appendSingleColumnPredicates(std::span<const ColumnPredicate> predicates) {
+        if (column_count_ != 1U) throw std::invalid_argument("streaming predicates require one column");
+        for (const auto &predicate : predicates) {
+            if (predicate.column != 0U) throw std::invalid_argument("streaming predicate ordinal changed");
+            predicates_.push_back(predicate);
+        }
+    }
+
+	[[nodiscard]] std::span<const ColumnPredicate> predicates() const noexcept { return predicates_; }
+
 private:
 	size_t column_count_;
 	BudgetMemoryResource memory_;

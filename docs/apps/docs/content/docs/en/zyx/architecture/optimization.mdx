@@ -12,9 +12,9 @@ projectOrder: 1
 
 # Column Block Supply and Execution Architecture Plan
 
-Updated: 2026-10-27 (Asia/Shanghai). Plan ID: `column-block-20261027`. **R0 accepted; column-block architecture implementation not started; accepted progress 10%.** Writing the plan and organizing historical evidence earn no implementation credit.
+Updated: 2026-10-27 (Asia/Shanghai). Plan ID: `column-block-20261027`. **R0 accepted; R1 streaming count is experimental and has not met its exit conditions.** Writing the plan and organizing historical evidence earn no implementation credit.
 
-This is the sole active roadmap. Both former `scan-supply-20261026` documents are preserved verbatim under `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/`. Former stages, 100% status and borderline acceptance do not govern this plan. Retain historical implementations and failures without presenting completed work as new tasks.
+This is the scan-analysis roadmap under the broader general-performance goal. The `general-adoption-20261027` revision below governs future adoption decisions for this work. The previously cited `benchmarks/architecture-design/archive/20261027-superseded-scan-supply/` is absent from this checkout and visible branch history. The former `scan-supply-20261026` texts can be read at commit `b317283a66b70a51812fa04387fbe515b22f03c4` using the corresponding language path of this file. Do not infer why the directory is absent or restore files. Former stages, 100% status and borderline acceptance do not govern this plan. Retain historical implementations and failures without presenting completed work as new tasks.
 
 ## 1. Current baseline: the problem remains
 
@@ -74,11 +74,11 @@ Prioritize validating a combination of **scan input pruning, block-amortized loc
 
 R0 completes the freeze, qualified coarse attribution, work counts, Kuzu input comparison, tail investigation and preregistered gates. A reversible experiment on real persisted data establishes causal work reduction: reusing budget-accounted temporary group keys within a batch reduces multi-key allocations from 125998 to 26618, removing 99380 allocations with identical complete results and 37 passing module tests. See `key-scratch/experiment-receipt.json`. Per-row serialization and hashing remain; this is neither a complete column-block architecture nor a proportional speedup claim.
 
-R0 acceptance explicitly requires a qualified coarse cost model, demonstrated work elimination, carried uncertainties and preregistered gates; it no longer requires every microscopic time share to be measured first. Detailed timing and specific P95 causes remain unresolved for subsequent validation. Final Kuzu and tail acceptance conditions are unchanged. The 10% credits the attribution/validation stage, not 10% attainment of the performance goal.
+R0 acceptance explicitly requires a qualified coarse cost model, demonstrated work elimination, carried uncertainties and preregistered gates; it no longer requires every microscopic time share to be measured first. Detailed timing and specific P95 causes remain unresolved for subsequent validation. The original scan-project Kuzu and tail targets and historical decisions remain traceable; the new adoption criteria are below. The 10% credits the attribution/validation stage, not 10% attainment of the performance goal.
 
 ## 3. Objectives, scope and priorities
 
-The final goal is to match or exceed Kuzu on all eight primary comparisons under equivalent semantics, resources and result consumption, with lifecycle and adoption costs validated. Report architectural milestones separately from Kuzu attainment.
+The long-term goal is general performance across diverse real graph-database workloads, preserving semantics and maintainability. Matching or exceeding Kuzu on eight comparisons is a separate scan-project competitive objective, not the sole condition for general adoption. Report architectural evidence, adoption decisions and Kuzu gaps separately; changing criteria does not make an earlier experiment pass.
 
 Prioritize an end-to-end storage/execution column-block contract; next, proven expensive scan location and column-block directories; then typed filter/count/group consumption. R0 attribution determines implementation order; do not unconditionally rewrite all three layers.
 
@@ -95,17 +95,38 @@ Do not preselect larger logical groups, a new large-block format, replacement tr
 
 64 is a logical grouping granularity, not a requirement that all computation use that size. Decouple scan windows from logical groups before enlarging groups. Current evidence supports testing interface and access-pattern changes, not rebuilding the entire database.
 
+Streaming COUNT fusion is enabled only with the explicit build option `ZYX_EXPERIMENTAL_STREAMING_COUNT=ON`; it is off by default and remains an unaccepted experiment. The bounded 2026-10-27 persistent SCAN comparison covered 12 cases, three processes and complete result checks; small mixed-type cases regressed and process variability prevents a stable net-benefit claim. Evidence and negative results are in `benchmarks/architecture-design/decisions/20261027-column-block/general-count-persistent/`. Keep it off by default. Before continuing, examine actual authentication, dispatch and per-row state work; if general benefit cannot be demonstrated, stop this candidate and return to the established supply/location problem. Representative scale, cold cache, write/concurrency and per-query resource evidence remain missing; experimental statistics are not connected to pruning.
+
+The joint value/non-NULL window is deferred: public QueryEngine diagnostics observed repeated authentication across stages, but the joint provider and executor are not connected and no production work has been eliminated. An independent experimental budgeted probe and private receiver exist; default queries do not use them, and real ROW routes decline conservatively. The scan grant is active only inside the value source, whereas the aggregate's non-NULL check currently runs afterward. Synchronous cross-stage consumption and fallback before batch side effects require a separate architecture decision and validation; incomplete budget auditing alone does not prove the design infeasible. Shared buffer-pool pages remain under the existing resource contract. See `supply-owner-phase/design.md`; there is no evidence that the approach is impossible in principle.
+
+The multi-key borrowed lookup experiment `ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY` is off by default and is not adopted. An independent persistent SCAN comparison covered 512/1536 rows, repeated/unique keys, short/long strings and complex-value fallback; all complete-result oracles passed, but latency was variable and most scenarios did not show a net benefit. Unique keys added index memory without reducing key construction. The frozen protocol, all samples and untimed work counts are in `group-key-review/persistent-result.md`. Preserve the negative result, do not route using thresholds derived from this dataset, and do not count R1/R2 as complete.
+
+### General adoption rules `general-adoption-20261027`
+
+This new version governs future candidates in this project; it does not replace or alter the original `intermediate-gates.json`, frozen baseline, samples, failures or competitive objective. Original R0–R4 percentages describe only the original project exits, not overall graph-database performance. Never identify special cases by query text, fixed property names, datasets, row counts or distributions. Selection by general operator semantics, input capabilities and cost is allowed with equivalent fallback.
+
+| Risk tier | Required evidence |
+| --- | --- |
+| Every change | Relevant-module complete-result oracle; NULL/missing, mixed types, sparse and duplicate rows, budget refusal, cancellation, exceptions, reentry, snapshots and fallback; deterministic work, fast-path and fallback rates; same-machine same-window end-to-end comparison against ZYX control and stability |
+| Scan or operator | As relevant, selection rates, dense/sparse/skewed and high-cardinality data, complex values, single/multiple properties and groups; warm, cold and beyond-cache working sets; guard point reads, traversal and joins; report individual results, not just a geometric mean |
+| Persistence or statistics | Old/new snapshots, read-your-writes, updates/deletes/type changes, atomic publication, recovery, reopen, reclamation and physical reuse; record statistics construction/maintenance/invalidation, write amplification, file growth, conversion, RSS and accounts |
+| Before adoption | Risk-appropriate read-heavy, write-heavy and mixed workloads; freeze query templates, generation rules, seeds and an independent holdout before measurement; the observed holdout is not blind. Record distributions, environment and results per category |
+
+This is not a Cartesian product or a full benchmark on every iteration. Before each candidate preregister required cases, same-path disable switch or equivalent control, budgets, resource limits, fallback scope and material-regression review rules. Correctness and work counts can justify further stages; adoption requires demonstrated net benefit in representative cases and recorded maintenance/fallback costs. Fix reproducible material regressions or restrict use only within the scope frozen before implementation; report tradeoffs by workload rather than hiding them in an average. Retain samples and process statistics; when P95 samples are insufficient, perform focused follow-up and report uncertainty rather than attributing one outlier. Report Kuzu competitive gaps separately from ZYX adoption. Run relevant modules only; do not claim untested platforms pass.
+
+Before introducing block statistics, specify ownership and budget, authenticated provenance, snapshot/version/generation binding, maintenance or invalidation for updates/deletes/type changes and read-your-writes, atomic publication, recovery, old-pin reclamation and format compatibility. Fully read when coverage of visible values or impossibility of a match cannot be proved. Compare pruning enabled and disabled on the same path, recording candidates, skipped blocks, decoding and statistics build/maintenance costs. Proceed only when evidence shows benefit exceeds added work; do not assume a persistent-format change.
+
 ## 4. Stages and exits
 
 | Stage | Weight | Cumulative exit | Status |
 | --- | ---: | ---: | --- |
 | R0 Current attribution and freeze | 10% | 10% | Accepted; detailed timing and tail causes carried as risks |
-| R1 Minimal complete block path | 25% | 35% | Not started |
+| R1 Minimal complete block path | 25% | 35% | Streaming count in experiment; pruning and exit conditions incomplete |
 | R2 General scan/operator integration | 25% | 60% | Not started |
 | R3 Lifecycle and adoption costs | 20% | 80% | Not started |
 | R4 Formal comparison and target acceptance | 20% | 100% | Not started |
 
-Credit stages only at their exits. Credible new R0 attribution earns stage credit; repeated observations, cleanup and prose do not. R1/R2 may exit on correctness and deterministic work evidence; speedup claims wait for R4. Commit/push work with evidence on substantive accepted stage growth, not cosmetic percentage changes. No automatic main merge.
+Credit stages only at their exits. Credible new R0 attribution earns stage credit; repeated observations, cleanup and prose do not. R1/R2 may exit on correctness and deterministic work evidence; speedup claims wait for R4. Do not credit documentation or local experiments as stage completion. Commits, pushes and merges follow the user’s authorization for the current work.
 
 ### R0: identify current costs first
 
@@ -120,7 +141,7 @@ A user-mode hardware instruction-counter attempt returned ENOENT from `perf_even
 
 Exit evidence must identify the largest removable current cost, observation quality, work the candidate eliminates, and whether its conditional end-to-end upper bound justifies reconstruction. Build a supported cost model; a100x gap does not prove100x available speedup. If only a small cost is established, change direction before broad implementation.
 
-Before R0 exits, reversible bounded implementation experiments may test established work-count hotspots using complete results, relevant module tests and deterministic counters. Experiments earn no stage credit and do not complete R1/R2. Precise time attribution and tail causes remain open; final Kuzu acceptance is unchanged.
+Before R0 exits, reversible bounded implementation experiments may test established work-count hotspots using complete results, relevant module tests and deterministic counters. Experiments earn no stage credit and do not complete R1/R2. Precise time attribution and tail causes remain open; the original scan-project Kuzu objective remains traceable.
 
 ### R1: minimal complete vertical experiment
 
@@ -156,7 +177,9 @@ Measure open/authentication, conversion, maintenance, peak RSS, resource account
 
 No full unit suite. Code files must stay within3000 lines and pass the source-size check. Preserve Linux/macOS/Windows and WASM contracts; unexecuted platforms are not passing results.
 
-### R4: one formal window with explicit success/failure
+### R4: original scan-project formal window (competitive objective retained)
+
+The original 1.5x and eight-query Kuzu gates in this section measure only the original scan-project competitive objective. General adoption is decided separately under `general-adoption-20261027`. Do not alter old samples, protocol, failures or preregistered thresholds, or retroactively mark them passed.
 
 After source and necessary tests stabilize, run current frozen ZYX/new candidate/Kuzu on two datasets and four primary queries. Three independent processes, three warmups and ten measured samples each, rotating engine order. Fix one thread, CPU affinity,64 MiB BufferPool,64 MiB ZYX query materialization,6 GiB address space and2 GiB file limits; preserve default query timeout and semantics. Record Kuzu settings and result consumption explicitly.
 
@@ -166,12 +189,12 @@ Before exiting R0 and implementing R1, preregister meaningful intermediate gain 
 
 The intermediate gain gate is preregistered in `benchmarks/architecture-design/decisions/20261027-column-block/intermediate-gates.json`: against the concurrent current control, require at least 1.5x geometric-mean speedup across eight primary P50s and at least 1.5x on each dataset’s all-node query; both pooled P50 and the median of three independent-process P50s must meet each gate. This is a target, not a prediction or a replacement for the eight-query Kuzu condition.
 
-**The fixed final100% performance condition is candidate P50 no higher than Kuzu on all eight primaries. Candidate P95 over Kuzu by more than5% requires review; unresolved reproducible material tail regressions prevent acceptance.** Also review greater-than5% P50/P95, RSS or file-cost regressions against current ZYX for primaries, point/full-entity/adjacency reads, actual property updates, no-ops and edge batches. Fix reproducible material regressions or apply explicit restrictions within the adoption scope frozen before implementation; do not shrink scope after measurement to manufacture100%.
+**The original scan-project competitive performance condition is candidate P50 no higher than Kuzu on all eight primaries. Candidate P95 over Kuzu by more than5% requires review; unresolved reproducible material tail regressions prevent acceptance.** Also review greater-than5% P50/P95, RSS or file-cost regressions against current ZYX for primaries, point/full-entity/adjacency reads, actual property updates, no-ops and edge batches. Fix reproducible material regressions or apply explicit restrictions within the adoption scope frozen before implementation; do not shrink scope after measurement to manufacture100%.
 
-If Kuzu conditions fail, report actual gains, remaining gaps and stage progress with R4 incomplete. Do not reuse the former convention of100% for a finished plan with an unmet performance target. Preserve failures and revise this roadmap from evidence before another registered candidate; no indefinite unregistered candidate sequence.
+If Kuzu conditions fail, report actual gains and remaining gaps, and keep the original competitive objective incomplete. Do not reuse the former convention of100% for a finished plan with an unmet performance target. Preserve failures and revise this roadmap from evidence before another registered candidate; no indefinite unregistered candidate sequence.
 
 ## 5. Immediate deliverables and execution discipline
 
 Proceed to the R1 minimal column-block experiment using the R0 work evidence; continue investigating detailed costs and tail risks alongside it before persistent-format edits. Keep the attribution summaries, formal baseline samples, observation-quality checks, deterministic work, Kuzu comparability, P95 findings, candidate cost model and preregistered entry/stop rules under `benchmarks/architecture-design/decisions/20261027-column-block/`.
 
-Each round reports eliminated work, tests/evidence, accepted progress and remaining obstacles. Commit/push work after substantive stage growth. Necessary correctness fixes may proceed but are not architectural gains; documents, old tests and baseline substitutions cannot establish a breakthrough.
+Each round reports eliminated work, tests/evidence, accepted progress and remaining obstacles. Commit and push only when authorized for the current work. Necessary correctness fixes may proceed but are not architectural gains; documents, old tests and baseline substitutions cannot establish a breakthrough.

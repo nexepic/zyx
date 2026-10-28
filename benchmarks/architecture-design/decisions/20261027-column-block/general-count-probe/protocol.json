@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "purpose": "Bounded same-path experimental COUNT fusion comparison; not a formal benchmark or Kuzu comparison",
+  "source": "LogicalPlanCertifiedBatchHandoffTest deterministic certified-source in-memory fixture; no persistent I/O",
+  "seed": 20261027,
+  "rows": [96, 384],
+  "types": ["integer", "mixed integer/double/null/missing"],
+  "thresholds": ["greater than all", "greater than 90 percent", "greater than 10 percent"],
+  "ordering": "alternate fusion enabled and disabled for each iteration; reverse first arm across scenarios",
+  "processes": 3,
+  "warmups_per_arm": 3,
+  "measured_per_arm": 6,
+  "budget_bytes": 67108864,
+  "oracle": "independently evaluate PropertyValue semantics for every input and verify complete result on every iteration",
+  "instrumentation": "steady_clock query plus full result, observer disabled during timing; separate untimed source_rows/direct_rows trace",
+  "constraints": "single-threaded, test build with coverage and synthetic callback fixture; no I/O, no concurrency or production claims; retain every sample",
+  "adoption": "no adoption decision from this micro-experiment alone; record regressions and variance"
+}

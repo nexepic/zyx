@@ -632,6 +632,8 @@
 						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
 												   std::min(rows.bytes(), state.shared.bounds.maximum_materialized_bytes) ||
 							keySlotBytes > state.shared.materialized_budget.available()) {
+							// Diagnostics must not change the budget rejection if tracing fails.
+							try { debug::PerfTrace::addValue("query.sort.key_slot_admission_rejected", 1); } catch (...) {}
 							throw MaterializedByteLimitExceeded();
 						}
 						keySlots.set(keySlotBytes);

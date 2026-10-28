@@ -89,9 +89,25 @@
 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
 				const bool replacesRoot = mutation.replacement_root.has_value();
 				const bool retiresRoot = mutation.retire_root;
+                if (plan.entity_free_summary_fence) {
+                    const auto &fence = *plan.entity_free_summary_fence;
+                    if (!earlyPublicationPlanner || fence.index_id != RSS_EDGE_FREE_SPACE_INDEX_ID ||
+                        mutation.index_id != fence.index_id ||
+                        fence.expected_entity_root != current.edge_entity_directory_root ||
+                        !fence.target_directory_generation.isValid() ||
+                        std::ranges::any_of(effectiveSummaryFences, [&fence](const auto &existing) {
+                            return existing.index_id == fence.index_id;
+                        })) {
+                        throw FormatException(FormatError::FERR_INVALID_STATE,
+                                              "invalid streamed Edge free-space summary fence");
+                    }
+                    effectiveSummaryFences.push_back(fence);
+                }
 				bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
-											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
+                                            (mutation.index_id == RSS_EDGE_FREE_SPACE_INDEX_ID &&
+                                             plan.entity_free_summary_fence.has_value());
 				if (!allowedIndexId && isSystemCatalogIndexDefinitionId(mutation.index_id) &&
 						replacesRoot && mutation.expected_root.has_value()) {
 					// Logical members are admitted only by their authenticated published

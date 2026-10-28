@@ -1,0 +1,13 @@
+{
+ "version": 1,
+ "purpose": "Untimed follow-up identifying whether aggregate composition explains observed owner-route and group work; not a performance test",
+ "fixture": "same three independently generated persisted SCAN fixtures, 128/192/512 nodes, after node 1 is changed and backend is reopened",
+ "queries": [
+  "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total",
+  "MATCH (n:Nodes) WHERE n.number >= 2 RETURN count(n.text) AS present",
+  "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present"
+ ],
+ "oracle": "sum equals N*(N+1)/2-1+999, count equals N, exactly one result row in every case",
+ "metrics": "separate scoped observer per query; same hybrid group/membership/column decodes and owner route performed/saved events; missing counters do not establish zero",
+ "interpretation": "Compare structural counts, not timing; caches and plan choices can vary between queries. Multiple checks are not automatically redundant: authenticate snapshot, route and publication boundaries before proposing reuse."
+}

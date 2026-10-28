@@ -1,0 +1,276 @@
+{
+  "protocol_sha256": "31f063699b2a1a7a399dea90236c851531281c1bc62dbcf8b5a557ce50623ad2",
+  "binary_sha256": "b425ca52e71da63153ea0910a41ee35169fa1f873be807dc8cb49e780c04bcb6",
+  "cases": [
+    {
+      "rows": 128,
+      "mixed": false,
+      "threshold": 0,
+      "matches": 128,
+      "fusion_median_ns": 519695.0,
+      "control_median_ns": 569850.0,
+      "pooled_speedup": 1.096508529041072,
+      "process_speedups": [
+        0.5984070052224194,
+        1.1163937560270774,
+        1.190634315051441
+      ],
+      "fusion_range_ns": [
+        329040,
+        2540073
+      ],
+      "control_range_ns": [
+        379166,
+        2068047
+      ]
+    },
+    {
+      "rows": 128,
+      "mixed": false,
+      "threshold": 64,
+      "matches": 65,
+      "fusion_median_ns": 651401.5,
+      "control_median_ns": 637399.5,
+      "pooled_speedup": 0.9785048084783348,
+      "process_speedups": [
+        0.8228920564422995,
+        1.0930875796368678,
+        0.836184999975511
+      ],
+      "fusion_range_ns": [
+        352365,
+        2289857
+      ],
+      "control_range_ns": [
+        338998,
+        1808543
+      ]
+    },
+    {
+      "rows": 128,
+      "mixed": false,
+      "threshold": 129,
+      "matches": 0,
+      "fusion_median_ns": 532249.0,
+      "control_median_ns": 528300.5,
+      "pooled_speedup": 0.9925814797209577,
+      "process_speedups": [
+        0.9674259792354164,
+        0.9997176650507565,
+        1.0015969243765874
+      ],
+      "fusion_range_ns": [
+        326085,
+        1406766
+      ],
+      "control_range_ns": [
+        334780,
+        2950667
+      ]
+    },
+    {
+      "rows": 128,
+      "mixed": true,
+      "threshold": 0,
+      "matches": 100,
+      "fusion_median_ns": 900768.0,
+      "control_median_ns": 737352.5,
+      "pooled_speedup": 0.8185820322213933,
+      "process_speedups": [
+        0.9706267389419198,
+        1.375735625036502,
+        0.8820914641784833
+      ],
+      "fusion_range_ns": [
+        444767,
+        1905011
+      ],
+      "control_range_ns": [
+        494349,
+        2100512
+      ]
+    },
+    {
+      "rows": 128,
+      "mixed": true,
+      "threshold": 64,
+      "matches": 63,
+      "fusion_median_ns": 776925.5,
+      "control_median_ns": 774800.5,
+      "pooled_speedup": 0.9972648600155356,
+      "process_speedups": [
+        1.0005072870612914,
+        1.4410102559740328,
+        0.962920659193493
+      ],
+      "fusion_range_ns": [
+        434196,
+        2211563
+      ],
+      "control_range_ns": [
+        456144,
+        2443820
+      ]
+    },
+    {
+      "rows": 128,
+      "mixed": true,
+      "threshold": 129,
+      "matches": 26,
+      "fusion_median_ns": 1067070.0,
+      "control_median_ns": 781720.5,
+      "pooled_speedup": 0.7325859596839945,
+      "process_speedups": [
+        0.7907471020840208,
+        1.0847470008433655,
+        0.5844879602525711
+      ],
+      "fusion_range_ns": [
+        522439,
+        2697027
+      ],
+      "control_range_ns": [
+        438935,
+        3132189
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": false,
+      "threshold": 0,
+      "matches": 512,
+      "fusion_median_ns": 717806.0,
+      "control_median_ns": 816114.5,
+      "pooled_speedup": 1.1369569215080397,
+      "process_speedups": [
+        1.3761070918390859,
+        1.2657043682278677,
+        0.9491079311226023
+      ],
+      "fusion_range_ns": [
+        454898,
+        1697675
+      ],
+      "control_range_ns": [
+        516234,
+        1674220
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": false,
+      "threshold": 256,
+      "matches": 257,
+      "fusion_median_ns": 694084.0,
+      "control_median_ns": 882211.5,
+      "pooled_speedup": 1.2710442828245572,
+      "process_speedups": [
+        1.4076930464848252,
+        0.8695221162652874,
+        1.3370570047399315
+      ],
+      "fusion_range_ns": [
+        460715,
+        1322483
+      ],
+      "control_range_ns": [
+        500691,
+        2424857
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": false,
+      "threshold": 513,
+      "matches": 0,
+      "fusion_median_ns": 646495.0,
+      "control_median_ns": 877725.5,
+      "pooled_speedup": 1.3576678860625373,
+      "process_speedups": [
+        1.0635999690490747,
+        1.381882874155803,
+        1.1577419193495813
+      ],
+      "fusion_range_ns": [
+        429679,
+        1867940
+      ],
+      "control_range_ns": [
+        521926,
+        1335654
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": true,
+      "threshold": 0,
+      "matches": 399,
+      "fusion_median_ns": 1035616.0,
+      "control_median_ns": 1107747.0,
+      "pooled_speedup": 1.069650333714427,
+      "process_speedups": [
+        1.146802506149425,
+        1.0654593588989414,
+        0.9906802070140573
+      ],
+      "fusion_range_ns": [
+        836375,
+        1366222
+      ],
+      "control_range_ns": [
+        928877,
+        1457659
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": true,
+      "threshold": 256,
+      "matches": 249,
+      "fusion_median_ns": 1072067.0,
+      "control_median_ns": 1111496.5,
+      "pooled_speedup": 1.0367789513155428,
+      "process_speedups": [
+        1.1013112508754104,
+        1.1688224709836232,
+        0.9189666364713389
+      ],
+      "fusion_range_ns": [
+        844294,
+        1925031
+      ],
+      "control_range_ns": [
+        878990,
+        1729163
+      ]
+    },
+    {
+      "rows": 512,
+      "mixed": true,
+      "threshold": 513,
+      "matches": 100,
+      "fusion_median_ns": 1060241.0,
+      "control_median_ns": 1081710.0,
+      "pooled_speedup": 1.0202491697642329,
+      "process_speedups": [
+        1.072088181903574,
+        1.0474720447336496,
+        0.8585660781891132
+      ],
+      "fusion_range_ns": [
+        844314,
+        1650227
+      ],
+      "control_range_ns": [
+        844365,
+        2002597
+      ]
+    }
+  ],
+  "work_observations": 72,
+  "allocation_metrics": "not instrumented",
+  "rss_scope": "whole process including fixture building and reopen; not per query",
+  "limitations": "small generated warm persistent SCAN fixture, three processes, six samples per arm; not formal or production",
+  "decision": "Keep experimental streaming COUNT disabled by default; net benefit and stability not established.",
+  "release_regression": "18 relevant tests passed including default-disabled and explicit enable"
+}

@@ -1,0 +1,49 @@
+diff --git a/tests/src/storage/test_PreadHelper.cpp b/tests/src/storage/test_PreadHelper.cpp
+index 293e645b..d42133ee 100644
+--- a/tests/src/storage/test_PreadHelper.cpp
++++ b/tests/src/storage/test_PreadHelper.cpp
+@@ -12,6 +12,9 @@
+ #include <chrono>
+ #include <filesystem>
+ #include "graph/storage/PreadHelper.hpp"
++#ifdef _WIN32
++#include "graph/storage/PwriteHelper.hpp"
++#endif
+ 
+ using namespace graph::storage;
+ 
+@@ -146,6 +149,34 @@ TEST_F(PreadHelperTest, ZeroCountReadReturnsError) {
+ 	portable_close(fd);
+ }
+ 
++#ifdef _WIN32
++TEST_F(PreadHelperTest, WindowsExclusiveByteLockUsesTheLockingHandle) {
++    struct Handles {
++        file_handle_t writer = INVALID_FILE_HANDLE;
++        file_handle_t reader = INVALID_FILE_HANDLE;
++        ~Handles() {
++            if (reader != INVALID_FILE_HANDLE) portable_close(reader);
++            if (writer != INVALID_FILE_HANDLE) portable_close_rw(writer);
++        }
++    } handles;
++    handles.writer = portable_open_rw(testFile_.c_str());
++    ASSERT_NE(handles.writer, INVALID_FILE_HANDLE);
++    handles.reader = portable_open(testFile_.c_str(), O_RDONLY);
++    ASSERT_NE(handles.reader, INVALID_FILE_HANDLE);
++    const file_handle_t writer = handles.writer, reader = handles.reader;
++    OVERLAPPED lock = {};
++    ASSERT_TRUE(::LockFileEx(reinterpret_cast<HANDLE>(writer),
++                             LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
++                             0U, 1U, 0U, &lock));
++    char value = 0;
++    EXPECT_EQ(portable_pread(writer, &value, 1U, 0), 1);
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), -1);
++    EXPECT_EQ(::GetLastError(), ERROR_LOCK_VIOLATION);
++    EXPECT_TRUE(::UnlockFileEx(reinterpret_cast<HANDLE>(writer), 0U, 1U, 0U, &lock));
++    EXPECT_EQ(portable_pread(reader, &value, 1U, 0), 1);
++}
++#endif
++
+ #ifdef _WIN32
+ TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
+ 	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);

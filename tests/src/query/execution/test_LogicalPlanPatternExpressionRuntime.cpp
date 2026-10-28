@@ -119,7 +119,7 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 	auto projectedSource = std::make_unique<logical::LogicalProject>(std::move(source), std::move(items));
 	logical::LogicalTraversal traversal(
 			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
-			{{"weight", PropertyValue(int64_t{7})}});
+			OwnedPropertyMap(PropertyValue::MapType{{"weight", PropertyValue(int64_t{7})}}));
 	std::vector<uint64_t> edgeIds;
 	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
 	traversalBounds.maximum_adjacency_page_records = 2U;

@@ -257,9 +257,19 @@ jobs:
         shell: bash
 
       - name: Run Unit Tests
+        id: unit_tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
-          ctest --test-dir buildDir --build-config Debug --output-on-failure
+          python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite
+        shell: bash
+
+      # Preserve the original large-scale correctness and recovery contracts as
+      # an explicit gate; a smaller unit case does not replace these checks.
+      - name: Run storage stress gates
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/stress-%p.profraw"
+          python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite
         shell: bash
 
       # Keep the storage-format cutover visible as an explicit cross-platform

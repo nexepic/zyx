@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "purpose": "Untimed single-query same-snapshot owner authentication identity diagnosis; no inference of elapsed or CPU share",
+ "fixture": "existing offline SCAN image generator, deterministic IDs 1..192, initial values number=ID and text=short; three groups",
+ "query": "MATCH (n:Nodes) WHERE n.number >= 2 RETURN sum(n.number) AS total, count(n.text) AS present",
+ "snapshots": "explicit caller-owned old pin; update owner 1 number to 999 and text to changed; execute exact query independently on old and new pinned snapshots",
+ "events": "test-build-only owner authentication event emitted immediately before Entity Map and competing ROW checks, stage=count_nonnull while nodePropertyIsNonNull runs, otherwise stage=other; owner ID derives logical group (ID-1)/64+1. Separately count certified checks saved. Bounded 1..192 IDs; record per-stage and cross-stage multiplicities.",
+ "oracle": "one result row; old SUM=18527 and COUNT=191; new SUM=19526 and COUNT=192; verify each owner event is within range and each query uses explicitly supplied immutable snapshot",
+ "plan": "parse and optimize logical query with project optimizer; record operator types, query and optimizer settings; test does not claim the plan necessarily matches earlier QueryEngine plan",
+ "risk": "Do not share or retain authentication authority; events are diagnostic only, tests may allocate while observing. No use for timing or CPU attribution.",
+ "decision": "If the same owner is rechecked under the same pin, analyze stage, group, epoch and source authority before designing any reuse; if not observed, stop this particular duplicate-authentication hypothesis. No cache enlargement or persistent-format change."
+}

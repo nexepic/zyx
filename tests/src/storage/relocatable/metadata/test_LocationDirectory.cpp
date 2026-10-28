@@ -2053,3 +2053,42 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsAllStreamedTypedRangeAndSourceBo
 			},
 			FormatError::FERR_INVALID_HEADER);
 }
+
+TEST_F(RelocatableLocationDirectoryTest, StreamedLogicalRoutesPreserveExistingAndNewChildrenAcrossRootGrowth) {
+    const Superblock initial = superblock();
+    SuperblockFile bootstrap(dataIo);
+    bootstrap.initializeNew(initial);
+    MetadataPageFile pages(dataIo, initial);
+    MetadataPagePoolAllocator allocator(dataIo, initial);
+    LocationDirectory directory(pages, allocator);
+    const EntityPageLocation existing{1U, PageId(11U), 0U, 1U};
+    MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+    directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
+    seed.publish(bootstrap);
+    MetadataWriteBatch migration(allocator, seed.candidate(), LogSequenceNumber(3U));
+    static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
+    migration.publish(bootstrap);
+    const Superblock before = migration.candidate();
+    ASSERT_TRUE(before.usesPageDirectoryBootstrap());
+    const uint64_t leaf = RSS_LOCATION_LEAF_MAX_ENTRIES;
+    const std::array<EntityPageLocation, 3> additions{{
+        {2U, PageId(12U), 0U, 1U},
+        {leaf + 1U, PageId(13U), 0U, 1U},
+        {leaf * RSS_CATALOG_RADIX_FANOUT + 1U, PageId(14U), 0U, 1U}}};
+    MetadataWriteBatch append(allocator, before, LogSequenceNumber(4U));
+    auto session = directory.beginAppendEdgePageLocations(append, additions.front().entity_id,
+                                                           additions.back().entity_id, additions.size());
+    for (const auto &entry : additions) session.append(entry);
+    session.finish();
+    MetadataPageRouteDirectory routes(pages);
+    append.reserveMetadataFrames(routes.nextBootstrapFrameCount(append));
+    static_cast<void>(routes.publishNextBootstrap(append));
+    append.publish(bootstrap);
+    const Superblock after = append.candidate();
+    EXPECT_EQ(directory.findEdgePageLocation(before, existing.entity_id), existing);
+    for (const auto &entry : additions) {
+        EXPECT_FALSE(directory.findEdgePageLocationOptional(before, entry.entity_id).has_value());
+        EXPECT_EQ(directory.findEdgePageLocation(after, entry.entity_id), entry);
+    }
+    EXPECT_EQ(directory.findEdgePageLocation(after, existing.entity_id), existing);
+}

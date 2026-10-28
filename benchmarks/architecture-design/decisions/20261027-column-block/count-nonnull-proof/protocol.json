@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "scope": "Predicate simplification in experimental streaming COUNT only; default remains disabled",
+  "hypothesis": "Explicit NON_NULL predicates are tautologies for values already known non-null and may be skipped without changing result or authentication, duplicate detection, admission, cancellation, snapshot and callback lifetime semantics.",
+  "work_count": "One generic predicate comparison dispatch is eliminated per evaluated NON_NULL term on each valid non-null cell; NULL and missing never pass.",
+  "test_data": "new sparse and reordered ordinal sequence with integers, double, boolean, text, complex value, explicit NULL and missing; conjunction of NON_NULL and comparison; compare full scalar PropertyValue oracle",
+  "guardrails": "run relevant module tests; verify malformed duplicate and cancellation behavior, mixed types and NaN; do not select by dataset, size or query text",
+  "interpretation": "deterministic structural work elimination only; no timing, general speedup or adoption claim; prior persistent probe cannot be reused to establish benefit"
+}

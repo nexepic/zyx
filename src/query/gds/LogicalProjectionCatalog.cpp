@@ -65,6 +65,7 @@ namespace graph::query::gds {
 		for (const uint64_t token: fence.graph_state_tokens) {
 			combine(token);
 		}
+		for (const uint64_t token: fence.data_page_root_tokens) combine(token);
 		combine(fence.logical_revision);
 		return value;
 	}

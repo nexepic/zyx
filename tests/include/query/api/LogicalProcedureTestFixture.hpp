@@ -31,6 +31,7 @@ namespace graph::query::test {
 			size_t training_cancellation_checks_before_throw = 0U;
 			mutable size_t training_cancellation_checks = 0U;
 			std::chrono::milliseconds training_prepare_delay{0};
+			std::function<void()> training_prepare_hook;
 			std::chrono::milliseconds training_preview_delay{0};
 			std::chrono::milliseconds training_commit_delay{0};
 			std::chrono::milliseconds projection_scan_delay{0};
@@ -414,6 +415,7 @@ namespace graph::query::test {
 			prepareTraining(const storage::LogicalGraphVectorTrainingRequest &request) {
 				++training_preparations;
 				last_training_request = request;
+				if (state->training_prepare_hook) state->training_prepare_hook();
 				if (state->training_prepare_delay.count() > 0) {
 					std::this_thread::sleep_for(state->training_prepare_delay);
 				}

@@ -17,6 +17,14 @@ option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
 option(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT "Build isolated hybrid-property format prototype" OFF)
 option(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT "Build isolated complete-scan format prototype" OFF)
+option(ZYX_EXPERIMENTAL_STREAMING_COUNT "Enable experimental streaming count fusion" OFF)
+option(ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY "Enable experimental borrowed group-key lookup" OFF)
+option(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE "Expose experimental budgeted non-null probes" OFF)
+set_source_files_properties("${PROJECT_SOURCE_DIR}/src/query/execution/LogicalPlanReadRuntime.cpp" PROPERTIES
+    COMPILE_DEFINITIONS "ZYX_EXPERIMENTAL_STREAMING_COUNT=$<BOOL:${ZYX_EXPERIMENTAL_STREAMING_COUNT}>;ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY=$<BOOL:${ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY}>")
+set_source_files_properties("${PROJECT_SOURCE_DIR}/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp"
+    "${PROJECT_SOURCE_DIR}/src/storage/relocatable/property/PropertyCollectionRootStore.cpp" PROPERTIES
+    COMPILE_DEFINITIONS "ZYX_EXPERIMENTAL_BUDGETED_PRESENCE=$<BOOL:${ZYX_EXPERIMENTAL_BUDGETED_PRESENCE}>")
 if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT)
     message(FATAL_ERROR "Scan-path format requires the hybrid-property format option")
 endif()

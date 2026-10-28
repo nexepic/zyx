@@ -1,0 +1,8 @@
+{
+ "version": 1,
+ "purpose": "Untimed phase refinement after the same-owner duplicate was observed; distinguish snapshot selected-property entry points from other authentication before proposing reuse",
+ "fixture_and_query": "identical to protocol.json; retain both old and new caller-owned snapshots and complete results",
+ "events": "test-only thread-local scoped stage: nonnull for nodePropertyIsNonNull; selected for direct property-value and sorted column/cell read entry points; other for all remaining checks. Owner ID and group retained; bounded 192 IDs and scoped restoration on exceptions.",
+ "interpretation": "same owner and pin with two checks is verified, but selected stage does not prove a capability can safely escape callbacks. Require competing ROW, mutation epoch, reentry, admission and budget preservation. Unclassified other events require further analysis, not guessed attribution.",
+ "no_timing": "diagnostic output is not a performance measurement"
+}

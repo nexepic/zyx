@@ -1,3 +1,21 @@
+#if ZYX_BUILD_STREAMING_COUNT_PATH
+        [[nodiscard]] bool streamingCountEnabled() noexcept {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+            return (ZYX_EXPERIMENTAL_STREAMING_COUNT || test_enable_streaming_count) && !test_disable_streaming_count;
+#else
+            return ZYX_EXPERIMENTAL_STREAMING_COUNT;
+#endif
+        }
+#endif
+#if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
+		[[nodiscard]] bool borrowedGroupKeyEnabled() noexcept {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+            return ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY || test_enable_borrowed_group_key;
+#else
+            return ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY;
+#endif
+        }
+#endif
 		struct NodeColumnReceiver {
 			std::span<const std::string_view> keys;
 			std::function<bool(std::span<const std::string>,
@@ -6,6 +24,10 @@
 			std::function<bool(std::span<const std::string>, const detail::DirectPropertyColumns &,
 				const SelectionVector &, std::span<const size_t>)> consumeDirect{};
 			const logical::LogicalOperator *filterOwner = nullptr;
+#if ZYX_BUILD_STREAMING_COUNT_PATH
+            std::function<bool(size_t)> consumeCount{};
+            std::span<const detail::ColumnPredicate> countPredicates{};
+#endif
 		};
 		[[nodiscard]] constexpr bool supportsChargedRowHandoff(logical::LogicalOpType type) {
 			return type == logical::LogicalOpType::LOP_SORT || type == logical::LogicalOpType::LOP_FILTER ||
@@ -44,6 +66,13 @@
 		};
 
 
+		// Kept outside the traversal lambda so the callback has a stable type on
+		// compilers that cannot capture a function over a local class correctly.
+		struct VariableTraversalAdjacentEdge {
+			storage::LogicalGraphEdgeTopology topology;
+			std::optional<storage::EntityRef> reference;
+		};
+
 		// Query owners outlive every task and all borrowed batch views.
 		// Shared caches and budgets are currently confined to one execution thread.
 		struct ExecutionSharedState {
@@ -58,9 +87,8 @@
 			// path row that the caller did not request.
 			bool allow_cross_row_entity_batches = false;
 			size_t resident_output_batch_bytes = 0U;
-			MaterializedByteBudget materialized_budget = context && context->resource_account
-				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
-				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
+			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes,
+				context ? context->resource_account : nullptr, MaterializedByteBudget::OptionalAccountTag{}};
 			detail::ProcedureBudgetHandoff procedure_handoff{materialized_budget};
 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
 			MaterializedByteReservation final_result_reservation{&materialized_budget};

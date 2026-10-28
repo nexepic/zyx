@@ -1,0 +1,27 @@
+--- a/tests/src/storage/relocatable/property/test_HybridPropertyColdRowInspection.cpp
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyColdRowInspection.cpp
+@@ -78,7 +78,23 @@
+     EXPECT_THROW(Inspection(pin, {0, 2, false, root}, {NODE, 1}, pin.superblock().generation, {}, memory), FormatException);
+     EXPECT_THROW(Inspection(pin, row, {EntityPropertyOwnerKind::EPOK_EDGE, 1}, pin.superblock().generation, {}, memory), FormatException);
+     auto tiny = std::make_shared<MaterializedByteBudget>(1);
+-    EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny), MaterializedByteLimitExceeded);
++    // Inline inspection borrows the token directory. Debug STL proxy storage,
++    // when present, remains subject to the same account.
++    if (7U * graph::utils::detail::standardContainerProxyBytes() > 1U) {
++        EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny), MaterializedByteLimitExceeded);
++    } else {
++        Inspection borrowed(pin, row, {NODE, 1}, pin.superblock().generation, {}, tiny);
++        EXPECT_EQ(borrowed.count(), 1U);
++        EXPECT_EQ(tiny->used(), 0U);
++    }
++    {
++        Inspection source(pin, row, {NODE, 1}, pin.superblock().generation, {}, memory);
++        const std::array<uint32_t, 1> selected{2};
++        size_t delivered = 0U;
++        const SelectedPropertyReadAdmission admission = [&](size_t bytes) { tiny->reserveUnmanaged(bytes); };
++        EXPECT_THROW(source.visitSelected(selected, [&](size_t, auto) { ++delivered; }, &admission), MaterializedByteLimitExceeded);
++        EXPECT_EQ(delivered, 0U);
++    }
+     EXPECT_EQ(tiny->used(), 0U); EXPECT_EQ(memory->used(), 0U);
+     Stop stop;
+     EXPECT_THROW(Inspection(pin, row, {NODE, 1}, pin.superblock().generation, {}, memory, nullptr, &stop), std::runtime_error);

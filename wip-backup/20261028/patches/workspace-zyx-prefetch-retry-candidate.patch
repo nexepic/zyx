@@ -1,0 +1,42 @@
+--- a/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp
++++ b/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp
+@@ -1088,7 +1088,7 @@
+ 	}
+ 
+ 	TEST(LogicalPlanDirectEdgeRuntimeTest, PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder) {
+-		for (const size_t payloadBytes: {size_t{500U}, size_t{1500U}}) {
++		for (const size_t payloadBytes: {size_t{500U}, size_t{3000U}}) {
+ 			for (const bool stopEarly: {false, true}) {
+ 				SCOPED_TRACE(payloadBytes);
+ 				SCOPED_TRACE(stopEarly);
+@@ -1123,12 +1123,12 @@
+ 				if (stopEarly)
+ 					expected.resize(1U);
+ 				EXPECT_EQ(delivered, expected);
+-				if (!stopEarly || payloadBytes == 1500U)
++				if (!stopEarly || payloadBytes == 3000U)
+ 					EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+ 				// This backend has no source admission: the first complete column
+ 				// exceeds the allowance shared with input rows, so post-read
+ 				// reservation retries a smaller batch before the first delivery.
+-				if (stopEarly && payloadBytes == 500U) {
++				if (stopEarly && payloadBytes == 3000U) {
+ 					// Row objects differ by standard library, so more than one
+ 					// halving can be needed. Every retry must preserve the pending
+ 					// prefix and shrink before the first successful delivery.
+@@ -1172,10 +1172,14 @@
+ 			graph.nodes.emplace(id, LogicalGraphNode{id, {"Person"}, {{"payload", payload}}});
+ 		}
+ 		delivered = 0U;
++        // The adaptive carrier cap can flush these references individually.
++        // Force a genuine pre-delivery rejection with an oversized first value.
++        graph.nodes.at(1U).properties.front().value = PropertyValue(std::string(8000U, 'x'));
+ 		const size_t readsBefore = graph.node_property_column_batch_reads;
+ 		EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, visit)), std::runtime_error);
+ 		EXPECT_EQ(delivered, 0U);
+-		EXPECT_GT(graph.node_property_column_batch_reads, readsBefore + 1U);
++		EXPECT_GT(graph.node_property_column_batch_reads, readsBefore);
++        graph.nodes.at(1U).properties.front().value = payload;
+ 		bounds.maximum_materialized_bytes = 16000U;
+ 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, visit)));
+ 		EXPECT_EQ(delivered, 6U);

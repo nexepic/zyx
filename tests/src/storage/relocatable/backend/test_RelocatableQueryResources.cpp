@@ -1743,3 +1743,41 @@ TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceFitsTheUnchange
     ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
     reader.close();
 }
+
+// The larger companion remains in the separately run stress tier.
+TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceSmallFixture) {
+    materializeNativeDatabase();
+    auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.adaptive_property_row_chunks = false;
+    ASSERT_EQ(options.maximum_integrity_workspace_bytes, 8U * 1024U * 1024U);
+    RelocatableStorageBackend backend(options); backend.open();
+    // Exercise integrity and reopen on a small large-value fixture.
+    for (int64_t begin = 0; begin < 12; begin += 12) {
+        std::vector<LogicalGraphNodeCreateRequest> requests;
+        for (int64_t id = begin; id < begin + 12; ++id) {
+            requests.push_back({{"User"}, {{"id", PropertyValue(id)},
+                {"country", PropertyValue("country-" + std::to_string(id % 8))},
+                {"score", PropertyValue(id % 7)}, {"age", PropertyValue(18 + id % 53)}}});
+        }
+        (void)backend.createLogicalNodes(requests);
+    }
+    (void)backend.createLogicalNodeIndex({"contract_base_user_id", "User", {"id"}});
+    for (int id = 0; id < 3; ++id) {
+        (void)backend.createLogicalNodes({{{"Wide"}, {{"id", PropertyValue(id)},
+            {"body", PropertyValue(std::string(16U * 1024U, 'b'))}}}});
+    }
+    backend.close(); backend.open();
+    const auto generation = backend.currentNativeMetadataGeneration();
+    backend.resetIoStats();
+    RelocatableIntegrityReport report;
+    ASSERT_NO_THROW(report = backend.verifyIntegrity());
+    EXPECT_GE(report.large_value_manifest_routes, 3U);
+    EXPECT_GT(report.large_value_data_pages, 0U);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
+    backend.close();
+    RelocatableStorageBackend reader(backendOptions()); reader.open();
+    ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
+    reader.close();
+}

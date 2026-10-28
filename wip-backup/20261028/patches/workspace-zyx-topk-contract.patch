@@ -1,0 +1,40 @@
+--- a/tests/integration/test_VectorizedNodeScan.cpp
++++ b/tests/integration/test_VectorizedNodeScan.cpp
+@@ -240,13 +240,35 @@
+ 	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person) RETURN n"), 4U));
+ }
+ 
++TEST_F(VectorizedNodeScanIntegrationTest, TopKMatchesCompleteSortForNullMissingAndTies) {
++    (void)execute("CREATE (:Person {name: 'Tie', score: 20})");
++    (void)execute("CREATE (:Person {name: 'NullScore', score: null})");
++    const auto names = [](const query::QueryResult &result) {
++        std::vector<std::string> out;
++        for (const auto &row : result.getRows()) out.push_back(row.at("name").asPrimitive().toString());
++        return out;
++    };
++    for (const std::string direction : {"ASC", "DESC"}) {
++        const std::string query = "MATCH (u:Person) RETURN u.name AS name ORDER BY u.score " + direction;
++        const auto full = names(execute(query));
++        const auto top = names(execute(query + " LIMIT 4"));
++        ASSERT_EQ(full.size(), 6U); ASSERT_EQ(top.size(), 4U);
++        EXPECT_EQ(top, (std::vector<std::string>(full.begin(), full.begin() + 4)));
++        const auto missing = std::find(full.begin(), full.end(), "MissingAge");
++        const auto explicitNull = std::find(full.begin(), full.end(), "NullScore");
++        ASSERT_NE(missing, full.end()); ASSERT_NE(explicitNull, full.end());
++        if (direction == "ASC") { EXPECT_GE(missing - full.begin(), 4); EXPECT_GE(explicitNull - full.begin(), 4); }
++        else { EXPECT_LT(missing - full.begin(), 2); EXPECT_LT(explicitNull - full.begin(), 2); }
++    }
++}
++
+ TEST_F(VectorizedNodeScanIntegrationTest, TopKPropertySortUsesLogicalProfileSummary) {
+ 	auto result = execute("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2");
+ 	ASSERT_EQ(result.rowCount(), 2U);
+ 	ASSERT_TRUE(result.getRows()[0].contains("name"));
+ 	ASSERT_TRUE(result.getRows()[1].contains("name"));
+-	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "Bob");
+-	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Alice");
++	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "MissingAge");
++	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Bob");
+ 	EXPECT_TRUE(hasLogicalProfileSummary(
+ 			executeProfiled("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2"), 2U));
+ }

@@ -1820,6 +1820,9 @@
 		vector_codebooks_.reset();
 		physical_.reset();
 		metadata_.reset();
+        // Expired weak coordination control blocks retain their prepaid owner
+        // until removed; live aliases and pins remain in the registry.
+        pruneMetadataCoordinationRegistry();
 		data_file_.reset();
         database_file_limit_.reset();
         native_cache_memory_.reset();

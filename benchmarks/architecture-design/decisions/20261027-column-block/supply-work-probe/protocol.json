@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "purpose": "Untimed, bounded diagnostic for generic property supply and location; no timing attribution or benchmark acceptance",
+  "fixture": "Existing offline persisted SCAN image fixture, 192 integer-valued nodes, deterministic IDs 1..192, three 64-owner groups; no random values",
+  "query": "MATCH (n) RETURN sum(n.number) AS total",
+  "oracle": "one row, total 18528; verify source and direct-column counters",
+  "instrumentation": "PerfTrace scoped observer, no elapsed time; certified scan candidates, direct input rows, grouped columns, owner route checks performed/saved, directory cursor restarts, run admissions and callback counts if available",
+  "semantics": "default COUNT fusion disabled; no change to persistent format, admission, snapshot, fallback, cancellation or authentication",
+  "falsifiability": "If counters do not establish repeated work beyond expected authenticated group and run boundaries, do not implement an optimization based solely on this fixture. Diagnostics are not a production profile or general latency estimate."
+}

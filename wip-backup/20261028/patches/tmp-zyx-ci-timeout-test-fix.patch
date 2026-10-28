@@ -1,0 +1,55 @@
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
+index 89a27233..1186b84b 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_ProcedureTransactions.cpp
+@@ -29,6 +29,7 @@ using namespace relocatable_storage_backend_test;
+ namespace {
+ 
+ 	std::atomic<size_t> inTransactionsDelayedPublicationCalls{0U};
++	std::atomic<QueryGuard *> inTransactionsDelayedGuard{nullptr};
+ 
+ 	[[nodiscard]] PropertyValue delayedProcedurePublicationResult(
+ 			[[maybe_unused]] const std::vector<PropertyValue> &arguments,
+@@ -48,7 +49,12 @@ namespace {
+ 			[[maybe_unused]] const std::vector<PropertyValue> &arguments,
+ 			[[maybe_unused]] const graph::query::expressions::EvaluationContext &context) {
+ 		if (inTransactionsDelayedPublicationCalls.fetch_add(1U, std::memory_order_relaxed) != 0U) {
+-			std::this_thread::sleep_for(std::chrono::milliseconds(150));
++			QueryGuard *guard = inTransactionsDelayedGuard.load(std::memory_order_acquire);
++			if (guard == nullptr) throw std::logic_error("transaction timeout test has no guard");
++			// Start the deadline only once the second batch body is evaluated.
++			// The first one-row transaction has already returned from publication.
++			*guard = QueryGuard(1, 0);
++			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+ 		}
+ 		return PropertyValue(int64_t{1});
+ 	}
+@@ -714,13 +720,16 @@ TEST_F(RelocatableStorageBackendTest, TimedOutInTransactionsCallKeepsEarlierComm
+ 
+ 	{
+ 		QueryEngine engine(backend, backend);
+-		QueryGuard guard(100, 0);
++		QueryGuard guard(0, 0);
+ 		QueryContext context;
+ 		context.guard = &guard;
++		inTransactionsDelayedGuard.store(&guard, std::memory_order_release);
++		struct ResetGuard {
++			~ResetGuard() { inTransactionsDelayedGuard.store(nullptr, std::memory_order_release); }
++		} resetGuard;
+ 
+-		// The first batch evaluates immediately and commits. The second body crosses
+-		// the deadline after staging, so its immediate publication guard must reject
+-		// only that batch without revoking the already acknowledged first commit.
++		// The first batch completes with no deadline. The second evaluation starts
++		// an expired deadline before its publication, after the first batch committed.
+ 		EXPECT_THROW(static_cast<void>(engine.execute(
+ 					 "MATCH (seed:TimedOutLaterBatchSeed) "
+ 					 "CALL { WITH seed CREATE (:TimedOutLaterBatch "
+@@ -728,6 +737,7 @@ TEST_F(RelocatableStorageBackendTest, TimedOutInTransactionsCallKeepsEarlierComm
+ 					 "IN TRANSACTIONS OF 1 ROWS",
+ 					 context)),
+ 				 QueryTimeoutException);
++		EXPECT_EQ(inTransactionsDelayedPublicationCalls.load(std::memory_order_relaxed), 2U);
+ 		const QueryResult committed = engine.execute("MATCH (node:TimedOutLaterBatch) RETURN node.copied AS copied");
+ 		ASSERT_EQ(committed.rowCount(), 1U);
+ 		EXPECT_EQ(committed.getRows().front().at("copied").asPrimitive(), PropertyValue(int64_t{1}));

@@ -1,0 +1,88 @@
+--- a/src/query/execution/read_runtime/PlanInspectionAndBatching.inc
++++ b/src/query/execution/read_runtime/PlanInspectionAndBatching.inc
+@@ -855,6 +855,13 @@
+                     else {
+                         rows.append(std::move(row));
+                         bufferedRowsBytes.absorb(std::move(rowCharge));
++                    }
++                    if (rows.size() == splitCapacity && !bufferedRows.empty()) {
++                        try {
++                            debug::PerfTrace::addValue("logical_plan.prefetch.pending_sibling_bytes", static_cast<int64_t>(pendingBytes.bytes()));
++                            debug::PerfTrace::addValue("logical_plan.prefetch.pending_sibling_count", static_cast<int64_t>(bufferedRows.size()));
++                            debug::PerfTrace::addValue("logical_plan.prefetch.split_budget_used", static_cast<int64_t>(state.shared.materialized_budget.used()));
++                        } catch (...) {}
+                     }
+ 					if (rows.size() == splitCapacity && !flush())
+ 						return false;
+--- a/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp
++++ b/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp
+@@ -1088,7 +1088,7 @@
+ 	}
+ 
+ 	TEST(LogicalPlanDirectEdgeRuntimeTest, PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder) {
+-		for (const size_t payloadBytes: {size_t{500U}, size_t{1500U}}) {
++		for (const size_t payloadBytes: {size_t{500U}, size_t{3000U}}) {
+ 			for (const bool stopEarly: {false, true}) {
+ 				SCOPED_TRACE(payloadBytes);
+ 				SCOPED_TRACE(stopEarly);
+@@ -1114,21 +1114,40 @@
+ 				bounds.maximum_materialized_bytes =
+ 					6U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + sizeof(EntityRef)) +
+ 					1500U + sizeof(LogicalPlanReadRow) + 2U * sizeof(PropertyValue) +
+-					SelectionVector::requiredStorageBytes(6U) + 6U * sizeof(uint64_t) + 512U;
++                    SelectionVector::requiredStorageBytes(6U) + 6U * sizeof(uint64_t) + 512U +
++                    2U * payloadBytes; // Shared source and destination payloads can overlap during handoff.
++                auto process = std::make_shared<detail::ProcessResourceBudget>(detail::ResourceLimits::uniform(1024U * 1024U));
++                auto database = std::make_shared<detail::DatabaseResourceBudget>(process, detail::ResourceLimits::uniform(1024U * 1024U));
++                auto account = std::make_shared<detail::ResourceAccount>(database, detail::ResourceClass::RCK_QUERY, 1024U * 1024U);
++                QueryContext context; context.resource_account = account;
++                const bool traceWasEnabled = debug::PerfTrace::areValuesEnabled();
++                debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true);
+ 				std::vector<PropertyValue> delivered;
+ 				EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) {
+ 					delivered.push_back(std::get<PropertyValue>(row.values.at("payload")));
+ 					return !stopEarly;
+-				})));
++				}, context)));
++                const auto trace = debug::PerfTrace::snapshotAndReset();
++                debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
++                EXPECT_EQ(account->used(), 0U);
++                if (payloadBytes == 3000U) {
++                    const auto pending = trace.find("logical_plan.prefetch.pending_sibling_bytes");
++                    const auto count = trace.find("logical_plan.prefetch.pending_sibling_count");
++                    const auto used = trace.find("logical_plan.prefetch.split_budget_used");
++                    ASSERT_NE(pending, trace.end()); ASSERT_NE(count, trace.end()); ASSERT_NE(used, trace.end());
++                    EXPECT_GT(pending->second.totalValue, 0);
++                    EXPECT_GT(count->second.totalValue, 0);
++                    EXPECT_GE(used->second.totalValue, pending->second.totalValue);
++                }
+ 				if (stopEarly)
+ 					expected.resize(1U);
+ 				EXPECT_EQ(delivered, expected);
+-				if (!stopEarly || payloadBytes == 1500U)
++				if (!stopEarly || payloadBytes == 3000U)
+ 					EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+ 				// This backend has no source admission: the first complete column
+ 				// exceeds the allowance shared with input rows, so post-read
+ 				// reservation retries a smaller batch before the first delivery.
+-				if (stopEarly && payloadBytes == 500U) {
++				if (stopEarly && payloadBytes == 3000U) {
+ 					// Row objects differ by standard library, so more than one
+ 					// halving can be needed. Every retry must preserve the pending
+ 					// prefix and shrink before the first successful delivery.
+@@ -1172,10 +1191,14 @@
+ 			graph.nodes.emplace(id, LogicalGraphNode{id, {"Person"}, {{"payload", payload}}});
+ 		}
+ 		delivered = 0U;
++        // The adaptive carrier cap can flush these references individually.
++        // Force a genuine pre-delivery rejection with an oversized first value.
++        graph.nodes.at(1U).properties.front().value = PropertyValue(std::string(8000U, 'x'));
+ 		const size_t readsBefore = graph.node_property_column_batch_reads;
+ 		EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, visit)), std::runtime_error);
+ 		EXPECT_EQ(delivered, 0U);
+-		EXPECT_GT(graph.node_property_column_batch_reads, readsBefore + 1U);
++		EXPECT_GT(graph.node_property_column_batch_reads, readsBefore);
++        graph.nodes.at(1U).properties.front().value = payload;
+ 		bounds.maximum_materialized_bytes = 16000U;
+ 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, visit)));
+ 		EXPECT_EQ(delivered, 6U);

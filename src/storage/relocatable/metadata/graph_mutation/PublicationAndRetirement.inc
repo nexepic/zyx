@@ -939,7 +939,7 @@
         // A record kind has one published directory root per database generation.
         // Verify that the marker's semantic generation names the actual result,
         // rather than guessing a future physical root address in the planner.
-        for (const auto &fence : derivedState.entity_free_summary_fences) {
+        for (const auto &fence : effectiveSummaryFences) {
             const auto root = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?
                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
             if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {

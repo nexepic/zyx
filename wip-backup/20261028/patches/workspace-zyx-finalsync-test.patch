@@ -1,0 +1,39 @@
+--- a/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp
+@@ -144,7 +144,7 @@
+ 	backend.open();
+ 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
+ 	auto physical = backend.openSnapshot();
+-	const auto oldRoot = physical.superblock().entity_property_directory_root;
++	const auto oldGeneration = physical.superblock().generation;
+ 	physical.release();
+ 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
+ 	{
+@@ -156,7 +156,10 @@
+ 				if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+ 					try {
+ 						const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+-						if (candidate.entity_property_directory_root != oldRoot) publicationWritten.store(true);
++						// This transaction stages only replacement of an existing node: it
++                        // does not lease IDs. A newer superblock is its publication;
++                        // the logical property root may be stable after page relocation.
++                        if (candidate.generation > oldGeneration) publicationWritten.store(true);
+ 					} catch (const std::exception &) {
+ 						// Other control frames are outside this graph publication.
+ 					}
+@@ -175,6 +178,7 @@
+ 			return portable_fsync(fd);
+ 		});
+ 		EXPECT_THROW(static_cast<void>(transaction->commit()), std::runtime_error);
++        EXPECT_TRUE(publicationWritten.load());
+ 		EXPECT_TRUE(failedFinalSync.load());
+ 		EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_INDETERMINATE);
+ 	}
+@@ -195,6 +199,7 @@
+ 	EXPECT_TRUE(rank->value == PropertyValue(1) || rank->value == PropertyValue(2));
+ 	snapshot.reset();
+ 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
++    EXPECT_EQ(reopened.createLogicalNodes({{{"WritableAfterReopen"}, {}}}).size(), 1U);
+ 	reopened.close();
+ }
+ 

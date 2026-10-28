@@ -136,6 +136,19 @@ TEST(CoordinatedMaterializedBudgetTest, NullParentAndUpstreamAreRejectedBeforeUs
 	EXPECT_THROW((MaterializedByteBudget(100U, accountWithLimit(100U), nullptr)), std::invalid_argument);
 }
 
+TEST(CoordinatedMaterializedBudgetTest, ExplicitOptionalParentPreservesLocalAndSharedAccounting) {
+	MaterializedByteBudget local(100U, nullptr, MaterializedByteBudget::OptionalAccountTag{});
+	MaterializedByteReservation localOwner(&local);
+	localOwner.set(40U); EXPECT_EQ(local.used(), 40U);
+	EXPECT_THROW(localOwner.set(101U), MaterializedByteLimitExceeded);
+	auto account = accountWithLimit(50U);
+	MaterializedByteBudget shared(100U, account, MaterializedByteBudget::OptionalAccountTag{});
+	MaterializedByteReservation sharedOwner(&shared);
+	sharedOwner.set(50U); EXPECT_EQ(account->used(), 50U);
+	EXPECT_THROW(sharedOwner.set(51U), ResourceAdmissionDenied);
+	sharedOwner.reset(); EXPECT_EQ(account->used(), 0U);
+}
+
 TEST(CoordinatedMaterializedBudgetTest, DetachedOutputRetainsGlobalChargeAfterLocalBudgetDestruction) {
 	auto account = accountWithLimit(100U);
 	std::optional<ResourceLease> output;

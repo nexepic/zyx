@@ -153,6 +153,38 @@ def _release_windows_gate(process: subprocess.Popen[bytes]) -> None:
         process.stdin.close()
 
 
+def _linux_group_has_live_members(process_group_id: int) -> bool:
+    """Return false only when every visible group member is a Linux zombie.
+
+    Unknown or inaccessible state stays active. Zombies cannot execute or keep
+    files open, but killpg(group, 0) still reports their group until PID 1 reaps.
+    """
+    try:
+        entries = list(Path('/proc').iterdir())
+    except OSError:
+        return True
+    found = False
+    for entry in entries:
+        if not entry.name.isdecimal():
+            continue
+        try:
+            stat = (entry / 'stat').read_text()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+        try:
+            fields = stat[stat.rindex(')') + 2:].split()
+            state, group = fields[0], int(fields[2])
+        except (ValueError, IndexError):
+            return True
+        if group == process_group_id:
+            found = True
+            if state not in ('Z', 'X'):
+                return True
+    return not found
+
+
 def _process_group_is_active(process_group_id: int) -> bool:
     """Return whether a POSIX process group still has a member."""
     try:
@@ -162,7 +194,7 @@ def _process_group_is_active(process_group_id: int) -> bool:
     except PermissionError:
         # The group still exists even if a sandbox prevents signalling it.
         return True
-    return True
+    return _linux_group_has_live_members(process_group_id) if sys.platform.startswith('linux') else True
 
 
 def _terminate_process_tree(

@@ -999,6 +999,8 @@ namespace graph::storage {
 		NativeGraphIndexTreeMutation mutation;
 		IndexTreeMultiPoolMutationPreparer preparer;
         std::shared_ptr<NativeGraphDeferredIndexImages> images;
+        // Internal streamed Edge summary plan, bound to the same writer-fenced generation.
+        std::optional<NativeGraphEntityFreeSummaryFence> entity_free_summary_fence;
 	};
 	struct NativeGraphDeferredIndexPlans {
 		std::vector<NativeGraphDeferredIndexPlan> plans;

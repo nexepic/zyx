@@ -1,0 +1,272 @@
+{
+  "protocol_sha256": "74b757bc1dc3250408c7a4e385d7e53b08cdf02cb607f601619627e536f8d57e",
+  "cases": [
+    {
+      "rows": 96,
+      "mixed": false,
+      "threshold": 10,
+      "expected": 86,
+      "enabled_median_ns": 613566.0,
+      "disabled_median_ns": 595671.5,
+      "speedup": 0.9708,
+      "process_speedups": [
+        0.7775,
+        1.6918,
+        1.1668
+      ],
+      "enabled_range_ns": [
+        244932,
+        2351873
+      ],
+      "disabled_range_ns": [
+        321902,
+        3194963
+      ]
+    },
+    {
+      "rows": 96,
+      "mixed": false,
+      "threshold": 90,
+      "expected": 9,
+      "enabled_median_ns": 384985.0,
+      "disabled_median_ns": 560129.0,
+      "speedup": 1.4549,
+      "process_speedups": [
+        1.4881,
+        1.5449,
+        1.1576
+      ],
+      "enabled_range_ns": [
+        242179,
+        1274666
+      ],
+      "disabled_range_ns": [
+        327331,
+        1547819
+      ]
+    },
+    {
+      "rows": 96,
+      "mixed": false,
+      "threshold": 101,
+      "expected": 0,
+      "enabled_median_ns": 305544.5,
+      "disabled_median_ns": 491697.0,
+      "speedup": 1.6092,
+      "process_speedups": [
+        0.7859,
+        1.5147,
+        1.7532
+      ],
+      "enabled_range_ns": [
+        234805,
+        1335504
+      ],
+      "disabled_range_ns": [
+        326405,
+        908329
+      ]
+    },
+    {
+      "rows": 96,
+      "mixed": true,
+      "threshold": 10,
+      "expected": 65,
+      "enabled_median_ns": 382134.0,
+      "disabled_median_ns": 512375.0,
+      "speedup": 1.3408,
+      "process_speedups": [
+        1.8621,
+        1.1775,
+        2.5631
+      ],
+      "enabled_range_ns": [
+        228461,
+        862051
+      ],
+      "disabled_range_ns": [
+        378167,
+        3052862
+      ]
+    },
+    {
+      "rows": 96,
+      "mixed": true,
+      "threshold": 90,
+      "expected": 16,
+      "enabled_median_ns": 345147.5,
+      "disabled_median_ns": 659859.0,
+      "speedup": 1.9118,
+      "process_speedups": [
+        2.5106,
+        1.7205,
+        1.39
+      ],
+      "enabled_range_ns": [
+        221914,
+        1685649
+      ],
+      "disabled_range_ns": [
+        333702,
+        1182104
+      ]
+    },
+    {
+      "rows": 96,
+      "mixed": true,
+      "threshold": 101,
+      "expected": 12,
+      "enabled_median_ns": 384900.0,
+      "disabled_median_ns": 465191.5,
+      "speedup": 1.2086,
+      "process_speedups": [
+        1.2196,
+        1.3315,
+        1.082
+      ],
+      "enabled_range_ns": [
+        215689,
+        1777251
+      ],
+      "disabled_range_ns": [
+        332053,
+        2770535
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": false,
+      "threshold": 10,
+      "expected": 346,
+      "enabled_median_ns": 1543844.0,
+      "disabled_median_ns": 2255330.5,
+      "speedup": 1.4609,
+      "process_speedups": [
+        1.7636,
+        1.3748,
+        1.3964
+      ],
+      "enabled_range_ns": [
+        890632,
+        4083048
+      ],
+      "disabled_range_ns": [
+        1525161,
+        12312284
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": false,
+      "threshold": 90,
+      "expected": 38,
+      "enabled_median_ns": 1546954.5,
+      "disabled_median_ns": 2042330.0,
+      "speedup": 1.3202,
+      "process_speedups": [
+        2.055,
+        1.2207,
+        1.5282
+      ],
+      "enabled_range_ns": [
+        998119,
+        5038997
+      ],
+      "disabled_range_ns": [
+        1513533,
+        7641365
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": false,
+      "threshold": 101,
+      "expected": 0,
+      "enabled_median_ns": 1539047.0,
+      "disabled_median_ns": 2462964.0,
+      "speedup": 1.6003,
+      "process_speedups": [
+        1.8376,
+        1.3151,
+        1.6232
+      ],
+      "enabled_range_ns": [
+        1107332,
+        6707760
+      ],
+      "disabled_range_ns": [
+        1466053,
+        8817597
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": true,
+      "threshold": 10,
+      "expected": 264,
+      "enabled_median_ns": 1885948.0,
+      "disabled_median_ns": 2785596.5,
+      "speedup": 1.477,
+      "process_speedups": [
+        2.506,
+        1.2165,
+        1.3279
+      ],
+      "enabled_range_ns": [
+        903561,
+        3302258
+      ],
+      "disabled_range_ns": [
+        1505639,
+        13191749
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": true,
+      "threshold": 90,
+      "expected": 72,
+      "enabled_median_ns": 1269432.5,
+      "disabled_median_ns": 2011011.5,
+      "speedup": 1.5842,
+      "process_speedups": [
+        1.5697,
+        1.5922,
+        1.4763
+      ],
+      "enabled_range_ns": [
+        918432,
+        4883951
+      ],
+      "disabled_range_ns": [
+        1498570,
+        36867880
+      ]
+    },
+    {
+      "rows": 384,
+      "mixed": true,
+      "threshold": 101,
+      "expected": 48,
+      "enabled_median_ns": 1697288.5,
+      "disabled_median_ns": 2790744.0,
+      "speedup": 1.6442,
+      "process_speedups": [
+        2.1816,
+        1.7383,
+        1.2212
+      ],
+      "enabled_range_ns": [
+        922446,
+        3590128
+      ],
+      "disabled_range_ns": [
+        1627997,
+        5416262
+      ]
+    }
+  ],
+  "work_observations": 72,
+  "limitations": "synthetic in-memory fixture; coverage-instrumented test build; no storage I/O; not production or formal baseline",
+  "binary_sha256": "bc004f38f51053cb0f69beec377ed547e880c59ebb62d60a0e341e06e5440f43"
+}

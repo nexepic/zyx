@@ -1,0 +1,102 @@
+--- a/tests/src/query/execution/test_BoundedBatch.cpp
++++ b/tests/src/query/execution/test_BoundedBatch.cpp
+@@ -160,8 +160,16 @@
+ 	source.append("abcd");
+ 	destination.append("xy");
+ 	auto moved = source.popBackCharged();
++    EXPECT_TRUE(source.empty());
++    EXPECT_EQ(source.bytes(), 0U);
++    EXPECT_EQ(moved.reservation.bytes(), 4U);
+ 	EXPECT_EQ(budget.used(), 6U);
++    // Retaining the original charge and charging the same row a second time
++    // must be rejected at this exact full-budget handoff boundary.
++    EXPECT_THROW(destination.append(moved.value), std::runtime_error);
++    EXPECT_EQ(budget.used(), 6U);
+ 	destination.appendCharged(std::move(moved.value), std::move(moved.reservation));
++    EXPECT_EQ(moved.reservation.bytes(), 0U);
+ 	EXPECT_EQ(destination.bytes(), 6U);
+ 	EXPECT_EQ(budget.used(), 6U);
+ 	destination.clear();
+--- a/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp
++++ b/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp
+@@ -1207,6 +1207,41 @@
+ 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
+ 		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[2].at("n").asNode().getId(), 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
++        for (const auto &keys : graph.node_property_column_batch_keys)
++            EXPECT_EQ(keys, (std::vector<std::string>{"priority"}));
++		EXPECT_EQ(graph.node_property_point_reads, 0U);
++	}
++
++	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedSortPrefetchCombinesRowsWhenBudgetAllows) {
++		DirectEdgeGraph graph = directGraph();
++		graph.enable_property_tokens = true;
++		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
++		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
++		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
++		DirectEdgeBackend backend(graph);
++		LogicalPlanReadRuntime runtime(backend);
++		std::vector<logical::LogicalSortItem> innerKeys;
++		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
++		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
++															std::move(innerKeys));
++		std::vector<logical::LogicalSortItem> outerKeys;
++		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
++		logical::LogicalSort outer(std::move(inner), std::move(outerKeys));
++		auto constrained = directBounds();
++		// Include buffered/source/output row frames and key/Property slots.
++		constrained.maximum_materialized_bytes =
++				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
++        constrained.maximum_materialized_bytes += 8U * 3U * sizeof(LogicalPlanReadRow);
++		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
++		ASSERT_EQ(result.rowCount(), 3U);
++		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
++		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 3U);
++		EXPECT_EQ(result.getRows()[2].at("n").asNode().getId(), 1U);
+ 		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+ 		EXPECT_EQ(graph.node_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"priority"}}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+@@ -1238,7 +1273,11 @@
+ 		ASSERT_EQ(result.rowCount(), 2U);
+ 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 1U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 
+@@ -1269,7 +1308,11 @@
+ 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);
+ 		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+ 		EXPECT_EQ(result.getRows()[2].at("m").asNode().getId(), 1U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 
+@@ -1325,7 +1368,11 @@
+ 		ASSERT_EQ(result.rowCount(), 2U);
+ 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 1U);
+ 		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
++        std::vector<uint64_t> fetched;
++        for (const auto &batch : graph.node_property_column_batch_ids)
++            fetched.insert(fetched.end(), batch.begin(), batch.end());
++        std::ranges::sort(fetched);
++        EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
+ 		EXPECT_EQ(graph.node_property_point_reads, 0U);
+ 	}
+ 

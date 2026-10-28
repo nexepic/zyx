@@ -1,0 +1,126 @@
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+@@ -380,6 +380,15 @@
+ 
+ 	void RelocatableMetadataStore::prepareBootstrapRoutes(MetadataWriteBatch &batch) {
+         MetadataPageRouteDirectory routes(pages_);
++        if (batch.candidate().usesPageDirectoryBootstrap() && batch.metadataPageRoutes().empty() &&
++            !batch.pendingBootstrapDataRoot().has_value() && !batch.bootstrapRouteRefreshRequested() &&
++            batch.ensureMetadataFrameCapacity(1U) != 0U) {
++            // Publish ownership of the bounded capacity pool in this same
++            // ID-only batch. Graph directories remain unchanged.
++            try { debug::PerfTrace::addValue("native_graph.write.id_capacity_pool", 1); } catch (...) {}
++            prepareBatchPublication(batch);
++            return;
++        }
+         prepareBootstrapWithRoutes(batch, routes);
+     }
+ 
+--- a/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreValidation.cpp
++++ b/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreValidation.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "storage/relocatable/metadata/RelocatableMetadataStoreValidationTestFixture.hpp"
+ 
++#include "graph/debug/PerfTrace.hpp"
+ #include <atomic>
+ #include <cerrno>
+ #include <limits>
+@@ -2084,3 +2085,97 @@
+ 	EXPECT_FALSE(reopened->findIndexRootOptional(recovered, DELTA_MAPPING_INDEX_ID).has_value());
+ 	recovered.release();
+ }
++
++TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityPoolPreservesPinnedGraphRoots) {
++    auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
++    const Superblock initial = store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U));
++    MetadataPageFile pages(io, initial);
++    const auto dataRoot = pages.readPageDirectoryBootstrap(initial.page_directory_root).data_page_directory_root;
++    std::vector<MetadataSnapshotPin> pins;
++    bool expanded = false;
++    graph::debug::PerfTrace::ScopedObserver observer(&expanded, [](void *owner, std::string_view key, int64_t, bool) noexcept {
++        if (key == "native_graph.write.id_capacity_pool") *static_cast<bool *>(owner) = true;
++    });
++    for (size_t index = 0; index < 128U && !expanded; ++index) {
++        pins.push_back(store->openSnapshot());
++        const auto lease = store->reserveNativeGraphLogicalIds(1U, 0U);
++        EXPECT_EQ(lease.superblock.node_entity_directory_root, initial.node_entity_directory_root);
++        EXPECT_EQ(lease.superblock.edge_entity_directory_root, initial.edge_entity_directory_root);
++        EXPECT_EQ(lease.superblock.entity_property_directory_root, initial.entity_property_directory_root);
++        EXPECT_EQ(pages.readPageDirectoryBootstrap(lease.superblock.page_directory_root).data_page_directory_root, dataRoot);
++    }
++    ASSERT_TRUE(expanded) << "the test must cross the frame-capacity boundary";
++    EXPECT_EQ(pins.front().superblock(), initial);
++    pins.clear();
++    store.reset();
++    auto reopened = RelocatableMetadataStore::open(io);
++    auto after = reopened->openSnapshot();
++    EXPECT_EQ(after.superblock().node_entity_directory_root, initial.node_entity_directory_root);
++    EXPECT_EQ(pages.readPageDirectoryBootstrap(after.superblock().page_directory_root).data_page_directory_root, dataRoot);
++}
++
++TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityPoolFailureRollsBackBeforePublication) {
++    auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
++    static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
++    std::vector<MetadataSnapshotPin> pins;
++    MetadataPublishOptions options;
++    struct Observation { bool hit = false; bool armed = true; MetadataPublishOptions *options; } observation{false, true, &options};
++    graph::debug::PerfTrace::ScopedObserver observer(&observation, [](void *owner, std::string_view key, int64_t, bool) noexcept {
++        auto &state = *static_cast<Observation *>(owner);
++        if (state.armed && key == "native_graph.write.id_capacity_pool") {
++            state.hit = true;
++            state.options->bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
++        }
++    });
++    Superblock beforeFailure;
++    bool failed = false;
++    for (size_t index = 0; index < 128U && !failed; ++index) {
++        pins.push_back(store->openSnapshot());
++        beforeFailure = pins.back().superblock();
++        try { static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U, options)); }
++        catch (const BootstrapPublishInterrupted &) { failed = true; }
++    }
++    ASSERT_TRUE(observation.hit);
++    ASSERT_TRUE(failed);
++    auto afterFailure = store->openSnapshot();
++    EXPECT_EQ(afterFailure.superblock(), beforeFailure);
++    afterFailure.release();
++    observation.armed = false;
++    options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_NONE;
++    const auto retry = store->reserveNativeGraphLogicalIds(1U, 0U, options);
++    EXPECT_EQ(retry.nodes.first_id, beforeFailure.next_logical_node_id);
++    EXPECT_EQ(retry.superblock.node_entity_directory_root, beforeFailure.node_entity_directory_root);
++    pins.clear();
++    store.reset();
++    auto reopened = RelocatableMetadataStore::open(io);
++    auto snapshot = reopened->openSnapshot();
++    EXPECT_EQ(snapshot.superblock().next_logical_node_id, retry.superblock.next_logical_node_id);
++}
++
++TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityRespectsFileLimitAndKeepsPublishedState) {
++    const Superblock initial = initialSuperblock();
++    const uint64_t limit = initial.data_region_offset + 8U * RSS_SEGMENT_SIZE;
++    io = std::make_shared<StorageIO>(dataFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE,
++                                      StorageIOAccessMode::SIOAM_READ_WRITE, limit);
++    auto store = RelocatableMetadataStore::initializeNew(io, initial);
++    static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
++    std::vector<MetadataSnapshotPin> pins;
++    Superblock before;
++    bool refused = false;
++    for (size_t index = 0; index < 256U && !refused; ++index) {
++        pins.push_back(store->openSnapshot());
++        before = pins.back().superblock();
++        try { static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U)); }
++        catch (const StorageFileLimitExceeded &) { refused = true; }
++    }
++    ASSERT_TRUE(refused) << "pinned leases must reach the bounded file limit";
++    EXPECT_LE(io->fileSize(), limit);
++    auto after = store->openSnapshot();
++    EXPECT_EQ(after.superblock(), before);
++    after.release();
++    pins.clear();
++    store.reset();
++    auto reopened = RelocatableMetadataStore::open(io);
++    auto snapshot = reopened->openSnapshot();
++    EXPECT_EQ(snapshot.superblock(), before);
++}

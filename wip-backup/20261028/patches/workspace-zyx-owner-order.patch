@@ -1,0 +1,32 @@
+--- a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
++++ b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+@@ -420,7 +420,8 @@
+ 												  "relocatable shared page batch append has inconsistent frame or payload metadata");
+ 			}
+ 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(*frame) * RSS_PAGE_SIZE;
+-			writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
++            const auto ownedPage = makeOwnedPage(pages[index].owner, pages[index].payload);
++            io.writePagesThrough({pageOffset, pool.generation.value()}, ownedPage.data(), ownedPage.size());
+ 			// Persist the owner frame before switching the inactive control record so
+ 			// a failed write leaves only unreachable state for reconciliation.
+ 			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
+@@ -1925,7 +1926,8 @@
+ 		}
+ 		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
+ 		const uint64_t pageOffset = offset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
+-		writeTypedPage(*io_, pageOffset, entry.generation, makeOwnedPage(owner, payload));
++        const auto ownedPage = makeOwnedPage(owner, payload);
++        io_->writePagesThrough({pageOffset, entry.generation.value()}, ownedPage.data(), ownedPage.size());
+ 		// The candidate must be complete before its allocation bit becomes durable.
+ 		// Otherwise a failed page write leaves recovery unable to distinguish a torn
+ 		// unpublished owner from corruption in a previously allocated frame.
+@@ -1954,7 +1956,8 @@
+ 		const uint64_t poolOffset =
+ 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
+ 		const uint64_t newPageOffset = poolOffset + static_cast<uint64_t>(newFrame) * RSS_PAGE_SIZE;
+-		writeTypedPage(*io_, newPageOffset, entry.generation, makeOwnedPage(newOwner, payload));
++        const auto ownedPage = makeOwnedPage(newOwner, payload);
++        io_->writePagesThrough({newPageOffset, entry.generation.value()}, ownedPage.data(), ownedPage.size());
+ 		static_cast<void>(oldOwner);
+ 		static_cast<void>(oldFrame);
+ 		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, poolHeader,
