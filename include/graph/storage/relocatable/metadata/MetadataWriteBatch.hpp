@@ -40,6 +40,9 @@ namespace graph::storage {
 		[[nodiscard]] const Superblock &candidate() const { return candidate_; }
 		[[nodiscard]] Generation generation() const { return candidate_.generation; }
 		[[nodiscard]] LogSequenceNumber checkpointLsn() const { return candidate_.checkpoint_lsn; }
+		// Each logical revision advances at most once in a physical publication.
+		void markGraphChanged();
+		void markSchemaChanged();
 		[[nodiscard]] bool usesAllocator(const MetadataPageAllocator &allocator) const {
 			return &allocator_ == &allocator;
 		}

@@ -62,6 +62,20 @@ namespace graph::storage {
 		batch_context_active_ = true;
 	}
 
+	void MetadataWriteBatch::markGraphChanged() {
+		if (candidate_.graph_revision != current_.graph_revision) return;
+		if (current_.graph_revision == std::numeric_limits<uint64_t>::max())
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW, "graph revision is exhausted");
+		++candidate_.graph_revision;
+	}
+
+	void MetadataWriteBatch::markSchemaChanged() {
+		if (candidate_.schema_revision != current_.schema_revision) return;
+		if (current_.schema_revision == std::numeric_limits<uint64_t>::max())
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW, "schema revision is exhausted");
+		++candidate_.schema_revision;
+	}
+
 	MetadataWriteBatch::~MetadataWriteBatch() {
 		abandonUnpublishedPages();
 		if (metadata_frame_reservation_active_) {

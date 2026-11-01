@@ -134,6 +134,30 @@ protected:
 	}
 };
 
+TEST_F(RelocatableMetadataWriteBatchTest, LogicalRevisionIntentAdvancesOnceAndRejectsOverflow) {
+	ScriptedPageAllocator allocator;
+	auto initial = superblock(1, 1);
+	initial.graph_revision = 12U;
+	initial.schema_revision = 30U;
+	{
+		MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2));
+		EXPECT_EQ(batch.candidate().graph_revision, 12U);
+		EXPECT_EQ(batch.candidate().schema_revision, 30U);
+		batch.markGraphChanged(); batch.markGraphChanged();
+		EXPECT_EQ(batch.candidate().graph_revision, 13U);
+		EXPECT_EQ(batch.candidate().schema_revision, 30U);
+		batch.markSchemaChanged(); batch.markSchemaChanged();
+		EXPECT_EQ(batch.candidate().schema_revision, 31U);
+	}
+	initial.graph_revision = std::numeric_limits<uint64_t>::max();
+	initial.schema_revision = std::numeric_limits<uint64_t>::max();
+	MetadataWriteBatch exhausted(allocator, initial, LogSequenceNumber(2));
+	expectFormatError([&] { exhausted.markGraphChanged(); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { exhausted.markSchemaChanged(); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	EXPECT_EQ(exhausted.candidate().graph_revision, initial.graph_revision);
+	EXPECT_EQ(exhausted.candidate().schema_revision, initial.schema_revision);
+}
+
 TEST_F(RelocatableMetadataWriteBatchTest, ValidatesConstructionAllocatorResultsAndRoots) {
 	ScriptedPageAllocator allocator;
 	const Superblock initial = superblock(1, 1);
