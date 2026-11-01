@@ -185,12 +185,16 @@ namespace graph::storage {
 						: metadata.isIdentityOnlyBootstrapAdvance(base, current);
 		const uint8_t unchanged =
 				static_cast<uint8_t>(current.database_id == base.database_id) &
+				static_cast<uint8_t>(current.graph_revision == base.graph_revision) &
+				static_cast<uint8_t>(current.schema_revision == base.schema_revision) &
 				static_cast<uint8_t>(current.flags == base.flags) &
 				static_cast<uint8_t>(current.data_region_offset == base.data_region_offset) &
 				static_cast<uint8_t>(current.catalog_root == base.catalog_root) &
 				static_cast<uint8_t>(identityOnlyBootstrap) &
 				static_cast<uint8_t>(current.extent_directory_root == base.extent_directory_root) &
-				static_cast<uint8_t>(current.allocator_root == base.allocator_root) &
+				// Allocation bookkeeping can advance without changing graph data.
+				// Planning resumes from the current snapshot after all graph roots
+				// and logical high-water marks below have been checked.
 				static_cast<uint8_t>(current.node_entity_directory_root == base.node_entity_directory_root) &
 				static_cast<uint8_t>(current.edge_entity_directory_root == base.edge_entity_directory_root) &
 				static_cast<uint8_t>(current.entity_property_directory_root == base.entity_property_directory_root) &
