@@ -1749,3 +1749,24 @@ TEST_F(NativeGraphWritePlannerVectorTest, RecoversNativeVectorDeltaAcrossSuperbl
 			  metadata_->findIndexRoot(recovered, manifest.vector_node_mapping_index_id).root_page_id);
 	recovered.release();
 }
+
+TEST_F(NativeGraphWritePlannerVectorTest, ReplacingVectorWithSameValueDoesNotAdvanceGraphRevision) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	auto bootstrap = planner.beginTransaction();
+	const std::array<uint64_t, 1U> labels{7U};
+	const auto nodeId = bootstrap.createNode(labels);
+	const std::vector<std::byte> value{std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}};
+	const std::array<NativeGraphVectorBootstrapRecord, 1U> records{{{nodeId, value}}};
+	bootstrap.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), records, vectorOptions());
+	ASSERT_TRUE(bootstrap.commit().committed());
+	auto before = metadata_->openSnapshot();
+	const auto revision = before.superblock().graph_revision;
+	auto transaction = planner.beginTransaction();
+	const std::array<NativeVectorMutation, 2U> mutations{{
+		{NativeVectorMutationKind::NVMK_ERASE, vectorDefinition().index_id, nodeId, 2U, VectorDistanceMetric::VDM_L2, {}},
+		{NativeVectorMutationKind::NVMK_INSERT, vectorDefinition().index_id, nodeId, 2U, VectorDistanceMetric::VDM_L2, value}}};
+	transaction.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	const auto committed = transaction.commit();
+	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, revision);
+}
