@@ -2065,7 +2065,13 @@ TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexWritesAdvanceGraphRevisionA
 	auto insertedSnapshot = metadata_->openSnapshot();
 	const auto secondLsn = insertedSnapshot.superblock().checkpoint_lsn.value() + 1U;
 	insertedSnapshot.release();
-	ASSERT_TRUE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(secondLsn)));
+	const auto noop = btree_pages_->upsert(root.index_id, key, 7U, LogSequenceNumber(secondLsn));
+	EXPECT_EQ(noop.superblock.graph_revision, initial + 1U);
+	ASSERT_TRUE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(secondLsn + 1U)));
 	auto erased = metadata_->openSnapshot();
 	EXPECT_EQ(erased.superblock().graph_revision, initial + 2U);
+	erased.release();
+	EXPECT_FALSE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(secondLsn + 2U)));
+	auto absent = metadata_->openSnapshot();
+	EXPECT_EQ(absent.superblock().graph_revision, initial + 2U);
 }

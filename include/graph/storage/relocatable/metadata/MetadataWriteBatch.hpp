@@ -25,6 +25,8 @@ namespace graph::storage {
 
 	struct MetadataPublishOptions {
 		BootstrapPublishFailpoint bootstrap_failpoint = BootstrapPublishFailpoint::BPF_NONE;
+		// Set only by a publisher that has established a semantic graph change.
+		bool logical_graph_change = false;
 	};
 
 	class MetadataWriteBatch final : public MetadataSlotReservationLookup {

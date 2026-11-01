@@ -445,6 +445,7 @@ namespace graph::storage {
 
 	void RelocatableMetadataStore::publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
 												const MetadataPublishOptions &options) {
+		if (options.logical_graph_change) batch.markGraphChanged();
         prepareBatchPublication(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();

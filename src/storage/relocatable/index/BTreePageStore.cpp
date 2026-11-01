@@ -37,6 +37,18 @@ namespace graph::storage {
 
 #include "btree_mutation/TransactionOverlay.inc"
 
+	namespace {
+		MetadataPublishOptions scalarIndexPublication(const MetadataPublishOptions &options, uint64_t indexId,
+												 bool changed = true) {
+			auto result = options;
+			const bool graphIndex = indexId != RSS_SYSTEM_CATALOG_INDEX_ID &&
+				indexId != RSS_LARGE_VALUE_CONTENT_INDEX_ID && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
+				!isHybridPropertyIndexId(indexId) && !isEntityFreeSpaceIndexId(indexId);
+			result.logical_graph_change = result.logical_graph_change || (graphIndex && changed);
+			return result;
+		}
+	}
+
 	BTreePageStore::BTreePageStore(SlottedPagePool &pages, RelocatableMetadataStore &metadata) :
 		pages_(pages), metadata_(metadata) {
 		if (!pages_.usesMetadataStore(metadata_)) {
@@ -737,8 +749,10 @@ namespace graph::storage {
 				const BTreePathNode &leaf = path.back();
 				utils::OwnedStdVector<BTreePageEntry> entries = leaf.entries;
 				bool replaced = false;
+				bool logicalChange = true;
 				for (BTreePageEntry &entry: entries) {
 					if (std::ranges::equal(entry.key, key)) {
+						logicalChange = entry.value_or_child != value;
 						entry.value_or_child = value;
 						replaced = true;
 					}
@@ -760,7 +774,7 @@ namespace graph::storage {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "relocatable deep structural B+Tree plan requires a leaf split");
 					}
-					return replace(*replacement, checkpointLsn, options);
+					return replace(*replacement, checkpointLsn, scalarIndexPublication(options, indexId, logicalChange));
 				}
 				try {
 					replacement.emplace(makeLeafPage(
@@ -1150,7 +1164,7 @@ namespace graph::storage {
 							[&mutationPlan, checkpointLsn](std::vector<IndexTreeMutationPoolBatch> &batches) {
 								mutationPlan.preparer(batches, checkpointLsn);
 							},
-							options);
+							scalarIndexPublication(options, indexId));
 					MetadataSnapshotPin publishedSnapshot = metadata_.openSnapshot();
 					const IndexRootLocation publishedRoot = metadata_.findIndexRoot(publishedSnapshot, indexId);
 					const PageLocation publishedRootLocation =
@@ -1169,7 +1183,7 @@ namespace graph::storage {
 					return SharedPagePoolAllocation{published, publishedRootPool, publishedRootLocation, owner};
 				}
 				ownedMutationSnapshot.release();
-				return replace(*replacement, checkpointLsn, options);
+				return replace(*replacement, checkpointLsn, scalarIndexPublication(options, indexId, logicalChange));
 			}
 			// ZYX_COV_EXCL_START: the leaf branch above handles the only other codec-valid node kind.
 			if (currentHeader.kind != BTreeNodeKind::BPN_INTERNAL || !currentHeader.leftmost_child.isValid()) {
@@ -2181,7 +2195,7 @@ namespace graph::storage {
 				[&mutationPlan, checkpointLsn](std::vector<IndexTreeMutationPoolBatch> &batches) {
 					mutationPlan.preparer(batches, checkpointLsn);
 				},
-				options));
+				scalarIndexPublication(options, indexId)));
 		return true;
 	}
 
@@ -2226,8 +2240,10 @@ namespace graph::storage {
 		const LogSequenceNumber expectedOwnerLsn = current.slottedPage().ownerCommittedLsn();
 		utils::OwnedStdVector<BTreePageEntry> entries = current.entries();
 		bool replaced = false;
+		bool logicalChange = true;
 		for (BTreePageEntry &entry: entries) {
 			if (std::ranges::equal(entry.key, key)) {
+				logicalChange = entry.value_or_child != value;
 				entry.value_or_child = value;
 				replaced = true;
 			}
@@ -2241,7 +2257,7 @@ namespace graph::storage {
 		if (replaced) {
 			BTreePage replacement = makeLeafPage(header, sourceOwner, {}, {}, entries);
 			snapshot.release();
-			return replace(replacement, checkpointLsn, options);
+			return replace(replacement, checkpointLsn, scalarIndexPublication(options, indexId, logicalChange));
 		}
 		std::optional<BTreePage> rootReplacement;
 		try {
@@ -2255,7 +2271,7 @@ namespace graph::storage {
 		}
 		if (rootReplacement.has_value()) {
 			snapshot.release();
-			return replace(*rootReplacement, checkpointLsn, options);
+			return replace(*rootReplacement, checkpointLsn, scalarIndexPublication(options, indexId));
 		}
 
 		// The attempted insert cannot fit in the root leaf. Preserve that leaf's
@@ -2392,7 +2408,7 @@ namespace graph::storage {
 		};
 		const Superblock published = metadata_.mutateIndexTreePagesAcrossPools(
 				requests, newPool, root, IndexTreeMutationAppendedPageReference{appendPoolOrdinal, 1U}, std::nullopt,
-				checkpointLsn, preparer, options);
+				checkpointLsn, preparer, scalarIndexPublication(options, indexId));
 		MetadataSnapshotPin publishedSnapshot = metadata_.openSnapshot();
 		const IndexRootLocation publishedRoot = metadata_.findIndexRoot(publishedSnapshot, indexId);
 		const PageLocation publishedLocation =
