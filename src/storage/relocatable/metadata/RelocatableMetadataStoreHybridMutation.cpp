@@ -2385,7 +2385,10 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
         }
         auto &image = images.back(); const auto slot = image.page.insert(encoded);
         image.location.free_bytes = image.page.stats().contiguous_free_bytes;
-        properties.push_back({{conversion.owner_kind, row.owner_entity_id}, slot.page_id, slot.slot_id, slot.generation});
+        const EntityPropertyKey propertyKey{conversion.owner_kind, row.owner_entity_id};
+        const auto previousOwner = locations_.findEntityPropertyRevision(current, propertyKey);
+        properties.push_back({propertyKey, slot.page_id, slot.slot_id, slot.generation,
+            previousOwner ? previousOwner->owner_revision : 0U});
     }
     // Allocate preserved hybrid frames only after ROW packing, so the two
     // layouts never share a packing cursor or an owner-kind header.

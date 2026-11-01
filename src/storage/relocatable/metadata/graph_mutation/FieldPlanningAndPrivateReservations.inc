@@ -726,10 +726,18 @@
             locations_.prepareReplaceIndexRoots(batch, installedRoots, {});
             if (!immutableImages.manifests_.empty()) locations_.prepareReplaceLargeValueManifests(batch, immutableImages.manifests_, {});
             utils::OwnedVector<EntityPropertyKey> erasedRows{utils::OwnedPmrAllocator<EntityPropertyKey>(conversion.memory)};
+            utils::OwnedVector<EntityPropertyLocation> retainedOwnerVersions{utils::OwnedPmrAllocator<EntityPropertyLocation>(conversion.memory)};
             erasedRows.reserve(owners.size());
-            for (const auto &owner : owners)
-                if (locations_.findEntityPropertyOptional(current, owner.key)) erasedRows.push_back(owner.key);
-            if (!erasedRows.empty()) locations_.prepareReplaceEntityProperties(batch, {}, erasedRows);
+            for (const auto &owner : owners) {
+                const auto previous = locations_.findEntityPropertyRevision(current, owner.key);
+                if (!previous || !previous->page_id.isValid()) continue;
+                if (previous->owner_revision != 0U)
+                    retainedOwnerVersions.push_back({owner.key, PageId{}, 0U, 0U, previous->owner_revision});
+                else
+                    erasedRows.push_back(owner.key);
+            }
+            if (!erasedRows.empty() || !retainedOwnerVersions.empty())
+                locations_.prepareReplaceEntityProperties(batch, retainedOwnerVersions, erasedRows);
             pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
             if (fields->compact_) batch.enableHybridColumnMembership();
             batch.hybrid_property_publication_ = true;

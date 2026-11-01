@@ -460,6 +460,23 @@ TEST_F(HybridPropertyQueryParityTest, NativePropertyChangedThenRestoredRejectsSt
     EXPECT_EQ(current->readNodeProperty(1, "age"), PropertyValue(int64_t(0)));
     current.reset(); backend.close();
 }
+TEST_F(HybridPropertyQueryParityTest, RowColumnRoundTripPreservesOwnerAndGraphRevisions) {
+    seed(false);
+    const auto revisions = [&]() {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 1U});
+        return std::pair(pin.superblock().graph_revision, owner ? owner->owner_revision : 0U);
+    };
+    const auto before = revisions();
+    ASSERT_NE(before.second, 0U);
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+    EXPECT_EQ(revisions(), before);
+    convert(EntityPropertyOwnerKind::EPOK_NODE, true);
+    EXPECT_EQ(revisions(), before);
+}
 TEST_F(HybridPropertyQueryParityTest, PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot) {
     seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
