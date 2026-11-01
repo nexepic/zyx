@@ -1423,6 +1423,11 @@ namespace graph::storage {
 				 "native graph transaction has overlapping existing and initial scalar Index mutations");
 		}
 		NativeGraphDerivedStateMutation derivedState;
+		// This is deliberately limited to material changes proven by the ROW
+		// Property planner; other graph and schema paths need explicit intent too.
+		derivedState.graph_revision_change = std::ranges::any_of(propertyPlans, [](const auto &plan) {
+			return plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE;
+		});
         derivedState.entity_free_summary_fences = std::move(freeSummaryFences);
         if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
         for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);

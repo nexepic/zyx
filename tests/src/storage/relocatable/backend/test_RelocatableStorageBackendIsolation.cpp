@@ -203,6 +203,26 @@ TEST_F(RelocatableStorageBackendTest, LogicalFenceIgnoresNoOpRollbackAndConfigur
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, RowPropertyPublicationPersistsLogicalRevisionOnce) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto id = backend.createLogicalNodes({{{"Revision"}, {{"value", PropertyValue(1)}}}}).front();
+	auto before = backend.openSnapshot();
+	const auto revision = before.superblock().graph_revision;
+	backend.replaceLogicalNodeProperties({{id, {{"value", PropertyValue(2)}}}});
+	auto changed = backend.openSnapshot();
+	EXPECT_EQ(changed.superblock().graph_revision, revision + 1U);
+	EXPECT_EQ(before.superblock().graph_revision, revision);
+	backend.replaceLogicalNodeProperties({{id, {{"value", PropertyValue(2)}}}});
+	auto noop = backend.openSnapshot();
+	EXPECT_EQ(noop.superblock().graph_revision, revision + 1U);
+	before.release(); changed.release(); noop.release(); backend.close(); backend.open();
+	auto reopened = backend.openSnapshot();
+	EXPECT_EQ(reopened.superblock().graph_revision, revision + 1U);
+	reopened.release(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, SchemaIdentitySurvivesValueOnlyChangeAndReopen) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
