@@ -606,3 +606,49 @@ TEST_F(RelocatableStorageBackendTest, NodeLeaseFinalSyncFailureRequiresReopenEve
 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
 	reopened.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, SuccessfulNodeLeaseThenPrecommitSyncFailureRemainsRetryable) {
+	materializeNativeDatabase();
+	auto options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	auto pin = backend.openSnapshot();
+	const auto before = pin.superblock();
+	pin.release();
+	std::atomic<bool> leaseWritten{false}, leaseSynced{false}, failed{false}, graphWritten{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting detectPublication([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+			if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+				try {
+					const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+					if (candidate.graph_revision > before.graph_revision) graphWritten.store(true);
+					if (candidate.graph_revision == before.graph_revision && candidate.next_logical_node_id > before.next_logical_node_id)
+						leaseWritten.store(true);
+				} catch (const std::exception &) {}
+			}
+			return portable_pwrite(fd, bytes, count, offset);
+		});
+		StorageIO::ScopedNativeSyncHookForTesting failLaterDataSync([&](file_handle_t fd) {
+			if (leaseSynced.load() && !failed.exchange(true)) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			const int result = portable_fsync(fd);
+			if (result == 0 && leaseWritten.load()) leaseSynced.store(true);
+			return result;
+		});
+		EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})), std::runtime_error);
+	}
+	ASSERT_TRUE(leaseSynced.load());
+	ASSERT_TRUE(failed.load());
+	EXPECT_FALSE(graphWritten.load());
+	EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+	EXPECT_NO_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})));
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
