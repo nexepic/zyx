@@ -1635,7 +1635,18 @@ namespace graph::storage {
 		std::vector<NativeGraphPropertyPageReplacementMaterialization> publishedProperties;
 		std::vector<NativeGraphPropertyPageBatchMaterialization> publishedPropertyPageBatches;
 		std::set<SegmentId> preparedPropertyPageBatches;
-		const NativeGraphDerivedStateMutation noDerivedState{};
+		NativeGraphDerivedStateMutation noDerivedState{};
+		// Direct graph-batch callers do not supply the planner's intent object.
+		// Preserve their semantic Entity/ROW changes in the same publication.
+		if (derivedState == nullptr) {
+			noDerivedState.graph_revision_change = !mutations.empty() || !appends.empty() || !newPools.empty();
+			for (const auto &plan : propertyPlans) {
+				if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE) {
+					noDerivedState.graph_revision_change = true;
+					noDerivedState.changed_property_owners.push_back(plan.key);
+				}
+			}
+		}
 		const NativeGraphDerivedStatePreparer noDerivedStatePreparer{};
 		const NativeGraphVectorBootstrapPreparer noVectorBootstrapPreparer{};
 		const NativeGraphVectorDeltaPreparer noVectorDeltaPreparer{};

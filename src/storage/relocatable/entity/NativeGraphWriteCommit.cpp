@@ -1426,6 +1426,7 @@ namespace graph::storage {
 		// Entity materializations and non-noop ROW Property plans carry logical
 		// changes. Other graph paths still require their own explicit intent.
 		derivedState.graph_revision_change = !mutations.empty() || !appends.empty() || !newPools.empty() ||
+			!vector_bootstraps_.empty() || !vector_deltas_.empty() ||
 			std::ranges::any_of(propertyPlans, [](const auto &plan) {
 			return plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE;
 		});
