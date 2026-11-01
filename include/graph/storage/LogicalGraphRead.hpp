@@ -333,9 +333,9 @@ namespace graph::storage {
 	};
 
 	struct LogicalGraphMutationFence {
-		// Each graph-visible root is represented by its physical slot, frame, and
-		// generation. Keep the storage width derived from that contract instead of
-		// repeating a total that silently becomes stale when the root set evolves.
+		// Opaque backend-defined fence storage. The relocatable backend uses
+		// durable graph and schema revisions, so physical root movement alone
+		// does not create a logical conflict. Keep the existing width for ABI.
 		static constexpr size_t GRAPH_STATE_ROOT_COUNT = 8U;
 		static constexpr size_t GRAPH_STATE_TOKENS_PER_ROOT = 3U;
 		static constexpr size_t GRAPH_STATE_TOKEN_COUNT = GRAPH_STATE_ROOT_COUNT * GRAPH_STATE_TOKENS_PER_ROOT;
@@ -348,8 +348,8 @@ namespace graph::storage {
 		// derived in-memory views detect those staged graph changes without
 		// exposing or fabricating physical page locations.
 		uint64_t logical_revision = 0U;
-		// A published data Page Directory root changes for graph-page COW even
-		// when typed Entity and Property directory roots remain unchanged.
+		// Reserved backend-defined data-page tokens; the relocatable logical
+		// revision fence leaves these zero for physical-only publications.
 		std::array<uint64_t, GRAPH_STATE_TOKENS_PER_ROOT> data_page_root_tokens{};
 
 		[[nodiscard]] constexpr bool isValid() const { return backend_token != 0U && format_token != 0U; }
