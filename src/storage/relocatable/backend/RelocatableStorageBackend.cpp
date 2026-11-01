@@ -1648,11 +1648,8 @@ namespace graph::storage {
 
 	LogicalGraphSchemaIdentity RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(const Superblock &superblock) {
 		const auto fence = makeLogicalGraphMutationFence(superblock);
-		const auto &catalog = superblock.index_root_directory_root;
-		const auto &pages = superblock.page_directory_root;
 		return LogicalGraphSchemaIdentity{fence.backend_token, fence.format_token,
-			{catalog.physical_slot.value(), static_cast<uint64_t>(catalog.frame_index), catalog.generation.value(),
-			 pages.physical_slot.value(), static_cast<uint64_t>(pages.frame_index), pages.generation.value()}, 0U, 0U};
+			{superblock.schema_revision, 0U, 0U, 0U, 0U, 0U}, 0U, 0U};
 	}
 
 	std::optional<LogicalGraphSchemaIdentity> RelocatableStorageBackend::logicalPlanCacheIdentity() const {

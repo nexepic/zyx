@@ -2247,6 +2247,9 @@ namespace graph::storage {
 									throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "streamed Edge final coordinator observed an incomplete LargeValue preparation");
 								}
+								context.metadata_batch.markGraphChanged();
+								if (prepared.catalog_tokens.new_property_tokens != 0U || prepared.catalog_tokens.new_schema_tokens != 0U)
+									context.metadata_batch.markSchemaChanged();
 								const NativeStreamedGraphPublicationShape &shape = *prepared.publication_shape;
 								// Private preparation measures this scalar shape against the sealed,
 								// writer-fenced source. Reusing it avoids a duplicate full replay

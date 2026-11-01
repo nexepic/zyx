@@ -243,6 +243,31 @@ TEST_F(RelocatableStorageBackendTest, SchemaRevisionTracksNewBindingsButNotConfi
 	reopened.release(); backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, StreamedEdgePublicationAdvancesGraphAndNewSchemaRevision) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto nodes = backend.createLogicalNodes({{{"Revision"}, {}}, {{"Revision"}, {}}});
+	auto before = backend.openSnapshot();
+	const auto graph = before.superblock().graph_revision;
+	const auto schema = before.superblock().schema_revision;
+	auto transaction = backend.beginLogicalGraphTransaction(false);
+	auto *bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
+	ASSERT_NE(bulk, nullptr);
+	const std::array<uint64_t, 1U> source{nodes[0]}, target{nodes[1]};
+	(void) bulk->appendPersistedBulkEdges({"REVISION_NEW_EDGE_TYPE", source, target, {}});
+	(void) transaction->commit(); transaction.reset();
+	auto after = backend.openSnapshot();
+	EXPECT_EQ(after.superblock().graph_revision, graph + 1U);
+	EXPECT_EQ(after.superblock().schema_revision, schema + 1U);
+	EXPECT_EQ(before.superblock().graph_revision, graph);
+	before.release(); after.release(); backend.close(); backend.open();
+	auto reopened = backend.openSnapshot();
+	EXPECT_EQ(reopened.superblock().graph_revision, graph + 1U);
+	EXPECT_EQ(reopened.superblock().schema_revision, schema + 1U);
+	reopened.release(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, SchemaIdentitySurvivesValueOnlyChangeAndReopen) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;

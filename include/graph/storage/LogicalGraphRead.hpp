@@ -318,8 +318,7 @@ namespace graph::storage {
 	// generation without invalidating this fence.
 	// Authenticated catalog observation for query-local property/schema binding.
 	// Catalog tokens are opaque equality data, never dereferenceable locations.
-	// This is conservative: catalog statistics and shared page-directory changes
-	// can invalidate it too. It is not an independent persistent schema epoch.
+	// Durable backends may use a schema revision independent of physical COW.
 	// Overlay view tokens distinguish unrelated transactions at equal revisions.
 	struct LogicalGraphSchemaIdentity {
 		uint64_t database_token = 0U;

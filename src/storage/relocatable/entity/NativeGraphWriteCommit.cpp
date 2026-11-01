@@ -1423,9 +1423,10 @@ namespace graph::storage {
 				 "native graph transaction has overlapping existing and initial scalar Index mutations");
 		}
 		NativeGraphDerivedStateMutation derivedState;
-		// This is deliberately limited to material changes proven by the ROW
-		// Property planner; other graph and schema paths need explicit intent too.
-		derivedState.graph_revision_change = std::ranges::any_of(propertyPlans, [](const auto &plan) {
+		// Entity materializations and non-noop ROW Property plans carry logical
+		// changes. Other graph paths still require their own explicit intent.
+		derivedState.graph_revision_change = !mutations.empty() || !appends.empty() || !newPools.empty() ||
+			std::ranges::any_of(propertyPlans, [](const auto &plan) {
 			return plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE;
 		});
 		derivedState.schema_revision_change = schema_revision_change_;

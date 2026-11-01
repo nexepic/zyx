@@ -85,6 +85,7 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     HybridPropertyPoolPlacement placement(*this, batch, writer, source, request.first_slot, request.last_slot, request.memory, check);
     if (!prepareHybridPropertyColumns(batch, writer, source, request, replacements,
         sourcePages, sourceTrees, sourceValues, sourceEntities, sourceLabels, placement)) return current;
+    batch.markGraphChanged();
     check(); publishBatch(batch, writer, options); placement.remember(); return batch.candidate();
 }
 
