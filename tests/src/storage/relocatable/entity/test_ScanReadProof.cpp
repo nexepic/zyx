@@ -2,6 +2,9 @@
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 #include "graph/storage/LogicalGraphNodeScan.hpp"
 #include "graph/storage/LogicalGraphJointPropertyRead.hpp"
+#include "graph/storage/LogicalGraphTransactionOverlay.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "query/execution/DirectPropertyColumns.hpp"
@@ -11,8 +14,13 @@
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 #include "graph/storage/relocatable/entity/CertifiedScanMembership.hpp"
 #include <chrono>
+#include <atomic>
+#include <cerrno>
 #include <map>
 #include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace graph::query::execution { extern thread_local bool test_enable_streaming_count; extern thread_local bool test_disable_streaming_count; extern thread_local bool test_enable_borrowed_group_key; }
 static_assert(!std::is_default_constructible_v<VerifiedScanRoot>);
@@ -2240,6 +2248,74 @@ TEST_F(ScanReadProofTest, PublicQueryEnginePlanOwnerAuthenticationDiagnosis) {
     }
     std::cout << "PUBLIC_SUMMARY selected=" << a << " nonnull=" << b << " other=" << other << " cross=" << cross << '\n';
     backend->close();
+}
+
+
+TEST_F(ScanReadProofTest, CompletedImageFinalSyncFailureReopensWholeDataAndRevision) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 64U));
+    builder.reset();
+    const auto versions = [&]() {
+        auto file = std::make_shared<std::fstream>(target, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 1U});
+        if (!owner) throw std::runtime_error("completed SCAN fixture lost its owner revision");
+        return std::array<uint64_t, 2U>{pin.superblock().graph_revision, owner->owner_revision};
+    };
+    const auto before = versions();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
+    {
+        auto transaction = backend.beginLogicalGraphTransaction(false);
+        std::vector<LogicalGraphWriteProperty> properties{{"number", graph::PropertyValue(int64_t{999})},
+            {"text", graph::PropertyValue(int64_t{888})}, {"list", graph::PropertyValue(int64_t{3})}};
+        for (int64_t token = 4; token <= 64; ++token)
+            properties.push_back({"K" + std::to_string(token), graph::PropertyValue(token)});
+        LogicalGraphMutationBatch staged;
+        staged.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+            LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1U}, std::move(properties)}};
+        (void) transaction->stageMutationBatch(std::move(staged));
+        StorageIO::ScopedNativeWriteHookForTesting detectPublication(
+            [&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+                if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+                    try {
+                        const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+                        if (candidate.graph_revision > before[0]) publicationWritten.store(true);
+                    } catch (const std::exception &) {}
+                }
+                return portable_pwrite(fd, bytes, count, offset);
+            });
+        StorageIO::ScopedNativeSyncHookForTesting rejectFinalSync([&](file_handle_t fd) {
+            if (publicationWritten.load() && !failedFinalSync.exchange(true)) {
+#ifdef _WIN32
+                SetLastError(ERROR_WRITE_FAULT);
+#else
+                errno = EIO;
+#endif
+                return -1;
+            }
+            return portable_fsync(fd);
+        });
+        EXPECT_THROW(static_cast<void>(transaction->commit()), std::runtime_error);
+        EXPECT_TRUE(failedFinalSync.load());
+        EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_INDETERMINATE);
+    }
+    backend.close();
+    RelocatableStorageBackend reopened(options); reopened.open();
+    auto snapshot = reopened.openLogicalGraphReadSnapshot();
+    const auto number = snapshot->readNodeProperty(1U, "number");
+    const auto text = snapshot->readNodeProperty(1U, "text");
+    const bool oldValues = number == graph::PropertyValue(int64_t{1}) && text == graph::PropertyValue(int64_t{2});
+    const bool newValues = number == graph::PropertyValue(int64_t{999}) && text == graph::PropertyValue(int64_t{888});
+    EXPECT_TRUE(oldValues || newValues);
+    snapshot.reset();
+    EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+    reopened.close();
+    const auto after = versions();
+    EXPECT_EQ(after[0], before[0] + (newValues ? 1U : 0U));
+    EXPECT_EQ(after[1], newValues ? after[0] : before[1]);
 }
 
 #else
