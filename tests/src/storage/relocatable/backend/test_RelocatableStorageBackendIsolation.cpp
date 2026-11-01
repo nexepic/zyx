@@ -237,6 +237,16 @@ TEST_F(RelocatableStorageBackendTest, SchemaRevisionTracksNewBindingsButNotConfi
 	auto unchanged = backend.openSnapshot();
 	EXPECT_EQ(unchanged.superblock().schema_revision, schema + 1U);
 	EXPECT_EQ(initial.superblock().schema_revision, schema);
+	{
+		auto rolledBack = backend.beginLogicalGraphTransaction(false);
+		LogicalGraphMutationBatch staged;
+		staged.node_creates = {{{"RevisionRolledBackLabel"}, {}}};
+		(void) rolledBack->stageMutationBatch(std::move(staged));
+		rolledBack->rollback();
+	}
+	auto afterRollback = backend.openSnapshot();
+	EXPECT_EQ(afterRollback.superblock().schema_revision, schema + 1U);
+	afterRollback.release();
 	initial.release(); created.release(); unchanged.release(); backend.close(); backend.open();
 	auto reopened = backend.openSnapshot();
 	EXPECT_EQ(reopened.superblock().schema_revision, schema + 1U);
@@ -261,9 +271,17 @@ TEST_F(RelocatableStorageBackendTest, StreamedEdgePublicationAdvancesGraphAndNew
 	EXPECT_EQ(after.superblock().graph_revision, graph + 1U);
 	EXPECT_EQ(after.superblock().schema_revision, schema + 1U);
 	EXPECT_EQ(before.superblock().graph_revision, graph);
-	before.release(); after.release(); backend.close(); backend.open();
+	auto repeated = backend.beginLogicalGraphTransaction(false);
+	auto *repeatedBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(repeated.get());
+	ASSERT_NE(repeatedBulk, nullptr);
+	(void) repeatedBulk->appendPersistedBulkEdges({"REVISION_NEW_EDGE_TYPE", source, target, {}});
+	(void) repeated->commit(); repeated.reset();
+	auto second = backend.openSnapshot();
+	EXPECT_EQ(second.superblock().graph_revision, graph + 2U);
+	EXPECT_EQ(second.superblock().schema_revision, schema + 1U);
+	before.release(); after.release(); second.release(); backend.close(); backend.open();
 	auto reopened = backend.openSnapshot();
-	EXPECT_EQ(reopened.superblock().graph_revision, graph + 1U);
+	EXPECT_EQ(reopened.superblock().graph_revision, graph + 2U);
 	EXPECT_EQ(reopened.superblock().schema_revision, schema + 1U);
 	reopened.release(); backend.close();
 }
