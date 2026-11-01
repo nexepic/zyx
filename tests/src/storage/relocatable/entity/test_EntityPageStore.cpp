@@ -2215,3 +2215,31 @@ TEST_F(RelocatableEntityPageStoreTest, BatchTransactionNewPoolSupportsNodesAndRe
 	EXPECT_FALSE(metadata->findPageLocationOptional(current, PageId(103U)).has_value());
 	EXPECT_FALSE(metadata->findNodePageLocationOptional(current, 1004U).has_value());
 }
+
+TEST_F(RelocatableEntityPageStoreTest, DirectEntityWritesAdvanceLogicalRevisionOnlyForChanges) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	auto before = metadata->openSnapshot();
+	const auto revision = before.superblock().graph_revision;
+	const auto firstNode = node(11U, 12U);
+	const auto allocated = store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, firstNode, LogSequenceNumber(2U));
+	ASSERT_TRUE(allocated.has_value());
+	EXPECT_EQ(allocated->superblock.graph_revision, revision + 1U);
+	auto afterAllocate = metadata->openSnapshot();
+	const auto appended = store.appendNodePage({allocated->pool, PageId(102U)}, 1002U, node(21U, 22U), LogSequenceNumber(3U));
+	EXPECT_EQ(appended.superblock.graph_revision, revision + 2U);
+	const auto inserted = store.insertNode(afterAllocate, PageId(101U), 1003U, node(31U, 32U), LogSequenceNumber(4U));
+	EXPECT_EQ(inserted.superblock.graph_revision, revision + 3U);
+	auto beforeUpdate = metadata->openSnapshot();
+	const auto replacement = node(41U, 42U);
+	const auto updated = store.updateNode(beforeUpdate, 1001U, replacement, LogSequenceNumber(5U));
+	EXPECT_EQ(updated.superblock.graph_revision, revision + 4U);
+	auto afterUpdate = metadata->openSnapshot();
+	const auto unchanged = store.updateNode(afterUpdate, 1001U, replacement, LogSequenceNumber(6U));
+	EXPECT_EQ(unchanged.superblock.graph_revision, revision + 4U);
+	auto afterNoop = metadata->openSnapshot();
+	const auto erased = store.eraseNode(afterNoop, 1001U, LogSequenceNumber(7U));
+	EXPECT_EQ(erased.superblock.graph_revision, revision + 5U);
+	EXPECT_EQ(store.readNode(afterAllocate, 1001U), firstNode);
+	EXPECT_EQ(store.readNode(afterUpdate, 1001U), replacement);
+}

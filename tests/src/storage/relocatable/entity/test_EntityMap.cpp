@@ -947,6 +947,22 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 	const auto semanticOwner = store->findEntityPropertyRevision(semanticSnapshot, propertyKey);
 	ASSERT_TRUE(semanticOwner.has_value());
 	EXPECT_EQ(semanticOwner->owner_revision, semanticPublished.graph_revision);
+	const auto route = store->findEntityPropertyLocation(semanticSnapshot, propertyKey);
+	MetadataPublishOptions logical;
+	logical.logical_graph_change = true;
+	const auto logicalRoute = store->upsertEntityPropertyLocations(std::span(&route, 1), {}, LogSequenceNumber(7U), logical);
+	EXPECT_EQ(logicalRoute.graph_revision, semanticPublished.graph_revision + 1U);
+	auto logicalSnapshot = store->openSnapshot();
+	ASSERT_TRUE(store->findEntityPropertyRevision(logicalSnapshot, propertyKey).has_value());
+	EXPECT_EQ(store->findEntityPropertyRevision(logicalSnapshot, propertyKey)->owner_revision, logicalRoute.graph_revision);
+	const auto erasedRoute = store->upsertEntityPropertyLocations({}, std::span(&propertyKey, 1), LogSequenceNumber(8U), logical);
+	EXPECT_EQ(erasedRoute.graph_revision, logicalRoute.graph_revision + 1U);
+	auto erasedSnapshot = store->openSnapshot();
+	const auto tombstone = store->findEntityPropertyRevision(erasedSnapshot, propertyKey);
+	ASSERT_TRUE(tombstone.has_value());
+	EXPECT_TRUE(tombstone->isTombstone());
+	EXPECT_EQ(tombstone->owner_revision, erasedRoute.graph_revision);
+	EXPECT_TRUE(store->findEntityPropertyLocationOptional(logicalSnapshot, propertyKey).has_value());
 }
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyCompleteEntityAndPropertyGeneration) {

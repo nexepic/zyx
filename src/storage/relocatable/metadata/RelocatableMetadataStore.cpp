@@ -576,7 +576,18 @@ namespace graph::storage {
 			}
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		locations_.prepareReplaceEntityProperties(batch, locations, erasedKeys);
+		if (options.logical_graph_change) {
+			// The caller explicitly identifies every semantic owner in this batch.
+			// Preserve absence as a versioned tombstone for stale blind writers.
+			batch.markGraphChanged();
+			std::vector<EntityPropertyLocation> changed(locations.begin(), locations.end());
+			for (auto &location : changed) location.owner_revision = batch.candidate().graph_revision;
+			for (const auto &key : erasedKeys)
+				changed.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			locations_.prepareReplaceEntityProperties(batch, changed, {});
+		} else {
+			locations_.prepareReplaceEntityProperties(batch, locations, erasedKeys);
+		}
 		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}

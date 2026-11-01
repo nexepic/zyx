@@ -2487,14 +2487,16 @@ namespace graph::storage {
 					// This typed metadata call owns one reservation and page location.
 					prepareNewPoolPage(entries.front(), page, checkpointLsn, locations.front());
 				};
+		auto logicalOptions = options;
+		logicalOptions.logical_graph_change = true;
 		const std::optional<CatalogSlotReservations> reservation =
 				isNodePage(kind)
 						? metadata_.reserveFirstFreeAndUpsertCatalogAndEntityPageLocations(
 								  std::span(&catalogRequest, 1), std::span(&location, 1), std::span(&mapping, 1), {},
-								  request.first_slot, request.last_slot, checkpointLsn, preparer, options)
+								  request.first_slot, request.last_slot, checkpointLsn, preparer, logicalOptions)
 						: metadata_.reserveFirstFreeAndUpsertCatalogAndEntityPageLocations(
 								  std::span(&catalogRequest, 1), std::span(&location, 1), {}, std::span(&mapping, 1),
-								  request.first_slot, request.last_slot, checkpointLsn, preparer, options);
+								  request.first_slot, request.last_slot, checkpointLsn, preparer, logicalOptions);
 		if (!reservation.has_value()) {
 			return std::nullopt;
 		}
@@ -2518,13 +2520,15 @@ namespace graph::storage {
 			prepareAppendPage(pool, page, checkpointLsn, location);
 			published = location;
 		};
+		auto logicalOptions = options;
+		logicalOptions.logical_graph_change = true;
 		const Superblock superblock =
 				isNodePage(kind) ? metadata_.appendEntityPageToExistingPool(request.expected_pool, published,
 																			std::span(&mapping, 1), {}, checkpointLsn,
-																			preparer, options)
+																			preparer, logicalOptions)
 								 : metadata_.appendEntityPageToExistingPool(request.expected_pool, published, {},
 																			std::span(&mapping, 1), checkpointLsn,
-																			preparer, options);
+																			preparer, logicalOptions);
 		return {superblock, request.expected_pool, published, mapping};
 	}
 
@@ -2553,14 +2557,16 @@ namespace graph::storage {
 										   checkpointLsn, replacement);
 					published = replacement;
 				};
+		auto logicalOptions = options;
+		logicalOptions.logical_graph_change = true;
 		const Superblock superblock =
 				isNodePage(kind)
 						? metadata_.replaceEntityPageInExistingPool(loaded.contents.pool, loaded.contents.location,
 																	published, std::span(&mapping, 1), {}, {}, {},
-																	checkpointLsn, preparer, options)
+																			checkpointLsn, preparer, logicalOptions)
 						: metadata_.replaceEntityPageInExistingPool(loaded.contents.pool, loaded.contents.location,
 																	published, {}, {}, std::span(&mapping, 1), {},
-																	checkpointLsn, preparer, options);
+																			checkpointLsn, preparer, logicalOptions);
 		return {superblock, loaded.contents.pool, published, mapping};
 	}
 
@@ -2575,6 +2581,9 @@ namespace graph::storage {
 		const EntityPageLocation mapping = isNodePage(kind) ? metadata_.findNodePageLocation(snapshot, entityId)
 															: metadata_.findEdgePageLocation(snapshot, entityId);
 		LoadedPage loaded = loadPage(snapshot, mapping.page_id, kind);
+		const bool changed = isNodePage(kind)
+				? loaded.page.findNode(mapping.slot_id, mapping.slot_generation, entityId) != std::optional(*node)
+				: loaded.page.findEdge(mapping.slot_id, mapping.slot_generation, entityId) != std::optional(*edge);
 		if (isNodePage(kind)) {
 			loaded.page.replace(mapping.slot_id, mapping.slot_generation, entityId, *node);
 		} else {
@@ -2592,9 +2601,11 @@ namespace graph::storage {
 										   checkpointLsn, replacement);
 					published = replacement;
 				};
+		auto logicalOptions = options;
+		logicalOptions.logical_graph_change = logicalOptions.logical_graph_change || changed;
 		const Superblock superblock =
 				metadata_.replaceEntityPageInExistingPool(loaded.contents.pool, loaded.contents.location, published, {},
-														  {}, {}, {}, checkpointLsn, preparer, options);
+																			  {}, {}, {}, checkpointLsn, preparer, logicalOptions);
 		return {superblock, loaded.contents.pool, published};
 	}
 
