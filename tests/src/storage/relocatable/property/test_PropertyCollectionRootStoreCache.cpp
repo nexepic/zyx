@@ -844,3 +844,22 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedBatchReacquiresAfterMutatio
     for (const auto count : delivered) EXPECT_EQ(count, 1U);
     EXPECT_EQ(io_->bufferPoolStats().pinned_bytes, 0U);
 }
+
+TEST_F(PropertyCollectionRootStoreCacheTest, ExplicitLogicalRoutesMergeChangedAndDeletedOwnersInKeyOrder) {
+	const auto second = metadata_->findEntityPropertyLocation(snapshot_, second_key_);
+	MetadataPublishOptions logical;
+	logical.logical_graph_change = true;
+	const auto revision = snapshot_.superblock().graph_revision;
+	const auto lsn = LogSequenceNumber(snapshot_.superblock().checkpoint_lsn.value() + 1U);
+	const auto published = metadata_->upsertEntityPropertyLocations(std::span(&second, 1U),
+		std::span(&first_key_, 1U), lsn, logical);
+	EXPECT_EQ(published.graph_revision, revision + 1U);
+	auto current = metadata_->openSnapshot();
+	const auto first = metadata_->findEntityPropertyRevision(current, first_key_);
+	const auto secondVersion = metadata_->findEntityPropertyRevision(current, second_key_);
+	ASSERT_TRUE(first.has_value()); ASSERT_TRUE(secondVersion.has_value());
+	EXPECT_TRUE(first->isTombstone());
+	EXPECT_EQ(first->owner_revision, published.graph_revision);
+	EXPECT_EQ(secondVersion->owner_revision, published.graph_revision);
+	EXPECT_TRUE(metadata_->findEntityPropertyLocationOptional(snapshot_, first_key_).has_value());
+}

@@ -579,11 +579,26 @@ namespace graph::storage {
 		if (options.logical_graph_change) {
 			// The caller explicitly identifies every semantic owner in this batch.
 			// Preserve absence as a versioned tombstone for stale blind writers.
+			uint64_t previous = 0U;
+			for (const auto &location : locations) {
+				const auto id = location.key.directoryId();
+				if (id <= previous)
+					throw FormatException(FormatError::FERR_INVALID_HEADER, "Property locations must be strictly ordered");
+				previous = id;
+			}
+			previous = 0U;
+			for (const auto &key : erasedKeys) {
+				const auto id = key.directoryId();
+				if (id <= previous)
+					throw FormatException(FormatError::FERR_INVALID_HEADER, "Property erasures must be strictly ordered");
+				previous = id;
+			}
 			batch.markGraphChanged();
 			std::vector<EntityPropertyLocation> changed(locations.begin(), locations.end());
 			for (auto &location : changed) location.owner_revision = batch.candidate().graph_revision;
 			for (const auto &key : erasedKeys)
 				changed.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			std::ranges::sort(changed, {}, [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
 			locations_.prepareReplaceEntityProperties(batch, changed, {});
 		} else {
 			locations_.prepareReplaceEntityProperties(batch, locations, erasedKeys);
