@@ -31,3 +31,5 @@ At `53a2662a`, a same-tree incremental core/test build succeeded. A newly linked
 The streamed revision test now additionally checks a second streamed Edge using the existing type advances only graph revision; the ordinary schema test now also stages and rolls back a new label and expects schema revision unchanged. These extensions have not yet been run.
 
 A focused normal entity test was added to require propertyless Node creation and deletion each to advance graph revision while a prior snapshot remains unchanged. Execution pending.
+
+At `1780756d`, a same-tree targeted build and run passed 3/3 for propertyless Node create/delete graph revision, staged new-label rollback, and repeated streamed Edge type (graph advances, schema unchanged). This adds case evidence but does not cover all graph/index publication paths; the physical graph fence remains unchanged and config-fence contract remains failing.
