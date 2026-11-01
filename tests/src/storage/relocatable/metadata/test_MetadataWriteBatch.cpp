@@ -640,6 +640,32 @@ TEST_F(RelocatableMetadataWriteBatchTest, RejectsInvalidOrDuplicateDataAndPoolOw
 	EXPECT_EQ(duplicatePoolAllocator.abandoned.size(), 2U);
 }
 
+TEST_F(RelocatableMetadataWriteBatchTest, LogicalRevisionsPublishAtomicallyWithCandidateRoots) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	ScriptedPageAllocator allocator;
+	{
+		MetadataWriteBatch interrupted(allocator, initial, LogSequenceNumber(2));
+		interrupted.setCatalogRoot(interrupted.allocatePage());
+		interrupted.markGraphChanged(); interrupted.markSchemaChanged();
+		EXPECT_THROW(interrupted.publish(bootstrap, BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE),
+			BootstrapPublishInterrupted);
+	}
+	EXPECT_EQ(bootstrap.recover(), initial);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2));
+	const auto root = batch.allocatePage();
+	batch.setCatalogRoot(root);
+	batch.markGraphChanged(); batch.markSchemaChanged();
+	batch.publish(bootstrap);
+	const auto recovered = bootstrap.recover();
+	EXPECT_EQ(recovered.catalog_root, root);
+	EXPECT_EQ(recovered.graph_revision, initial.graph_revision + 1U);
+	EXPECT_EQ(recovered.schema_revision, initial.schema_revision + 1U);
+	expectFormatError([&] { batch.markGraphChanged(); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.markSchemaChanged(); }, FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataWriteBatchTest, PublishesOnlyOnceAndRejectsStaleBootstrap) {
 	const Superblock initial = superblock(1, 1);
 	SuperblockFile bootstrap(io);

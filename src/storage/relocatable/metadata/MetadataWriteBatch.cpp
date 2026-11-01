@@ -63,6 +63,8 @@ namespace graph::storage {
 	}
 
 	void MetadataWriteBatch::markGraphChanged() {
+		if (published_)
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "published batch cannot change graph revision");
 		if (candidate_.graph_revision != current_.graph_revision) return;
 		if (current_.graph_revision == std::numeric_limits<uint64_t>::max())
 			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW, "graph revision is exhausted");
@@ -70,6 +72,8 @@ namespace graph::storage {
 	}
 
 	void MetadataWriteBatch::markSchemaChanged() {
+		if (published_)
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE, "published batch cannot change schema revision");
 		if (candidate_.schema_revision != current_.schema_revision) return;
 		if (current_.schema_revision == std::numeric_limits<uint64_t>::max())
 			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW, "schema revision is exhausted");
