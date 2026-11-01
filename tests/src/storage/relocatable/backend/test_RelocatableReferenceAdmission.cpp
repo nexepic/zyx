@@ -930,10 +930,18 @@ TEST_F(RelocatableStorageBackendTest, RangeDedupSharesByteBudgetAcrossBatchesAnd
 	};
 	for (bool composite: {false, true}) {
 		for (size_t retry = 0U; retry < 2U; ++retry) {
+            const bool traceWasEnabled = graph::debug::PerfTrace::areValuesEnabled();
+            graph::debug::PerfTrace::reset();
+            graph::debug::PerfTrace::setValueCollectionEnabled(true);
 			size_t delivered = 0U;
-			EXPECT_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
+			EXPECT_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
 				delivered += batch.candidates.size(); return true;
 			})), FormatException);
+            const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+            graph::debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
+            const auto rejection = trace.find("native_graph.read.range_dedup_shared_admission_rejected");
+            ASSERT_NE(rejection, trace.end());
+            EXPECT_EQ(rejection->second.totalValue, 1);
 			EXPECT_GT(delivered, 0U);
 			EXPECT_LT(delivered, nodes.size());
 			std::vector<uint64_t> actual;
@@ -943,7 +951,7 @@ TEST_F(RelocatableStorageBackendTest, RangeDedupSharesByteBudgetAcrossBatchesAnd
 			})));
 			EXPECT_EQ(actual, nodes);
 			delivered = 0U;
-			EXPECT_NO_THROW(static_cast<void>(visit(composite, 16U * 1024U, [&](const IndexCandidateBatch &batch) {
+			EXPECT_NO_THROW(static_cast<void>(visit(composite, 8U * 1024U, [&](const IndexCandidateBatch &batch) {
 				delivered += batch.candidates.size(); return false;
 			})));
 			EXPECT_GT(delivered, 0U);

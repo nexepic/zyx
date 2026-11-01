@@ -989,7 +989,11 @@
 			if (bytes > maximumCandidateBytes - retainedBoundary) {
 				throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
 			}
-			admitBoundaryKey(retainedBoundary + bytes);
+            try { admitBoundaryKey(retainedBoundary + bytes); }
+            catch (const FormatException &) {
+                try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
+                throw;
+            }
 			boundaryKeyBytes = retainedBoundary;
 		});
 		size_t totalCandidates = 0U;
@@ -1510,7 +1514,11 @@
 				if (bytes > maximumCandidateBytes - retainedBoundary) {
 					throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
 				}
-				admitBoundaryKey(retainedBoundary + bytes);
+                try { admitBoundaryKey(retainedBoundary + bytes); }
+                catch (const FormatException &) {
+                    try { traceNativeCandidateMetric("native_graph.read.range_dedup_shared_admission_rejected", 1U); } catch (...) {}
+                    throw;
+                }
 				boundaryKeyBytes = retainedBoundary;
 			});
 			size_t totalCandidates = 0U;
