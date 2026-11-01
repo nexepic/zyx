@@ -921,6 +921,32 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 	EXPECT_EQ(store->findNodePageLocation(afterRejected, node.entity_id), node);
 	EXPECT_EQ(store->findEntityPropertyLocation(afterRejected, propertyKey),
 			  store->findEntityPropertyLocation(current, propertyKey));
+
+	// The low-level coordinator accepts semantic intent separately from its
+	// physical page requests. Owner-only intent must establish the graph revision
+	// before the Property directory entries are encoded.
+	NativeGraphPropertyPageReplacementRequest semantic = propertyReplacement;
+	semantic.expected_location = store->findPageLocation(current, originalPropertyPage.page_id);
+	semantic.expected_owner_lsn = LogSequenceNumber(5U);
+	NativeGraphDerivedStateMutation semanticIntent;
+	semanticIntent.changed_property_owners.push_back(propertyKey);
+	const auto semanticPublished = store->mutateNativeGraphPages(
+			{}, {}, {}, std::span(&semantic, 1), {}, semanticIntent, LogSequenceNumber(6U),
+			[this, dataRegionOffset](std::span<EntityPageReplacementMaterialization>,
+					std::span<EntityPageAppendBatchMaterialization>, std::span<EntityPageNewPoolBatchMaterialization>,
+					std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
+					std::span<NativeGraphPropertyPageBatchMaterialization>) {
+				properties.front().replacement.page_index =
+						static_cast<uint8_t>(properties.front().expected_location.page_index + 1U);
+				prepareTestSharedPageFrame(*io, dataRegionOffset, properties.front().pool,
+						properties.front().replacement.page_id, properties.front().replacement.page_index,
+						properties.front().page_owner_id, PageOwnerKind::POK_PROPERTY, LogSequenceNumber(6U));
+			}, NativeGraphDerivedStatePreparer{});
+	EXPECT_EQ(semanticPublished.graph_revision, current.superblock().graph_revision + 1U);
+	auto semanticSnapshot = store->openSnapshot();
+	const auto semanticOwner = store->findEntityPropertyRevision(semanticSnapshot, propertyKey);
+	ASSERT_TRUE(semanticOwner.has_value());
+	EXPECT_EQ(semanticOwner->owner_revision, semanticPublished.graph_revision);
 }
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyCompleteEntityAndPropertyGeneration) {

@@ -78,7 +78,10 @@
         MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn,
             pendingNativeMemory ? pendingNativeMemory : hybridVectors ? hybridVectors->fields_.memory : hybridPropertyRootMutation && hybridPropertyRootMutation->conversion ?
                 hybridPropertyRootMutation->conversion->memory : std::shared_ptr<std::pmr::memory_resource>{});
-        if (derivedState.graph_revision_change) batch.markGraphChanged();
+        // Owner revisions are written while preparing this batch, before
+        // publishBatch sees options. Establish the final graph revision first.
+        if (derivedState.graph_revision_change || !derivedState.changed_property_owners.empty() ||
+            options.logical_graph_change) batch.markGraphChanged();
         if (derivedState.schema_revision_change) batch.markSchemaChanged();
         if ((hybridVectors && !hybridVectors->new_property_tokens_.empty()) ||
             (hybridTopology && !hybridTopology->new_property_tokens_.empty())) batch.markSchemaChanged();
