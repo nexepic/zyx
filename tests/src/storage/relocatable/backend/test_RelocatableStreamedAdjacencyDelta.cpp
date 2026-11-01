@@ -444,3 +444,54 @@ TEST_F(RelocatableStorageBackendTest, StreamedAdjacencyPreservesReadsAcross517To
     EXPECT_EQ(current->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 600U).edges.size(), 519U);
     current.reset(); EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallBoundRejectsBeforePublication) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.maximum_bulk_edge_index_entries = 520U;
+    options.maximum_bulk_edge_transaction_records = 256U;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+    std::vector<uint64_t> sources(256, nodes[0]), targets(256, nodes[1]);
+    const auto initial = append(backend, sources, targets); auto old = backend.openLogicalGraphReadSnapshot();
+    sources.resize(10); targets.resize(10);
+    DeltaWork work; graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
+    EXPECT_THROW((void)append(backend, sources, targets), FormatException);
+    EXPECT_EQ(work.refused, 1); EXPECT_EQ(work.full, 0); EXPECT_EQ(work.frames, 0);
+    const auto statistics = backend.readLogicalGraphCardinalityStatistics(); ASSERT_TRUE(statistics);
+    EXPECT_EQ(statistics->edge_count, initial.size());
+    auto now = backend.openLogicalGraphReadSnapshot(); EXPECT_EQ(now->readEdge(initial.back()), old->readEdge(initial.back()));
+    now.reset(); old.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallExactEntryBoundariesSurviveReopen) {
+    const auto basePath = data_path_;
+    for (const uint64_t limit : {517U, 518U, 519U}) {
+        data_path_ = basePath.string() + "." + std::to_string(limit);
+        materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+        options.maximum_bulk_edge_index_entries = limit;
+        options.maximum_bulk_edge_transaction_records = 256U;
+        RelocatableStorageBackend backend(options); backend.open();
+        const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+        std::vector<uint64_t> sources(256, nodes[0]), targets(256, nodes[1]);
+        const auto initial = append(backend, sources, targets); auto old = backend.openLogicalGraphReadSnapshot();
+        sources.resize(3); targets.resize(3); DeltaWork work;
+        graph::debug::PerfTrace::ScopedObserver observer(&work, DeltaWork::observe);
+        if (limit == 517U) {
+            EXPECT_THROW((void)append(backend, sources, targets), FormatException);
+            EXPECT_EQ(work.refused, 1); EXPECT_EQ(work.frames, 0);
+        } else {
+            EXPECT_EQ(append(backend, sources, targets).size(), 3U);
+            EXPECT_EQ(work.incremental, 1); EXPECT_EQ(work.full, 0); EXPECT_GT(work.frames, 0);
+        }
+        EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), 256U);
+        auto now = backend.openLogicalGraphReadSnapshot();
+        const size_t expected = limit == 517U ? 256U : 259U;
+        EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), expected);
+        old.reset(); now.reset(); backend.close(); backend.open();
+        now = backend.openLogicalGraphReadSnapshot();
+        EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 300).edges.size(), expected);
+        now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+        std::error_code error; std::filesystem::remove(data_path_, error);
+    }
+    data_path_ = basePath;
+}
