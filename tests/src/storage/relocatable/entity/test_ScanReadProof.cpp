@@ -767,6 +767,34 @@ TEST_F(ScanReadProofTest, CompletedImageFieldUpdatePreservesMembershipAndOldPinT
     EXPECT_EQ(result.getRows().front().at("total").asPrimitive(), graph::PropertyValue(int64_t{777}));
 }
 
+TEST_F(ScanReadProofTest, CompletedImageRejectsRestoredOwnerStalePublicTransaction) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
+    builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    const auto properties = [](int64_t number) {
+        return std::vector<LogicalGraphWriteProperty>{{"number", graph::PropertyValue(number)},
+            {"text", graph::PropertyValue("short")},
+            {"list", graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t{7})})}};
+    };
+    LogicalGraphMutationBatch staged;
+    staged.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1U}, properties(9)}};
+    (void)transaction->stageMutationBatch(std::move(staged));
+    backend.replaceLogicalNodeProperties({{1U, properties(2)}});
+    backend.replaceLogicalNodeProperties({{1U, properties(1)}});
+    EXPECT_THROW(static_cast<void>(transaction->commit()), LogicalGraphMutationConflict);
+    EXPECT_EQ(old->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{1}));
+    auto current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{1}));
+    current.reset(); old.reset(); transaction.reset(); backend.close();
+    backend.open(); current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{1}));
+    current.reset(); backend.close();
+}
+
 TEST_F(ScanReadProofTest, LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots) {
     ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U * 1024U * 1024U);
