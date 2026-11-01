@@ -160,8 +160,14 @@ TEST(BoundedBatchTest, ChargedAppendTransfersAnExistingRowWithoutDoubleCharge) {
 	source.append("abcd");
 	destination.append("xy");
 	auto moved = source.popBackCharged();
+	EXPECT_TRUE(source.empty());
+	EXPECT_EQ(source.bytes(), 0U);
+	EXPECT_EQ(moved.reservation.bytes(), 4U);
+	EXPECT_EQ(budget.used(), 6U);
+	EXPECT_THROW(destination.append(moved.value), std::runtime_error);
 	EXPECT_EQ(budget.used(), 6U);
 	destination.appendCharged(std::move(moved.value), std::move(moved.reservation));
+	EXPECT_EQ(moved.reservation.bytes(), 0U);
 	EXPECT_EQ(destination.bytes(), 6U);
 	EXPECT_EQ(budget.used(), 6U);
 	destination.clear();
