@@ -225,6 +225,7 @@ TEST_F(NativeGraphWritePlannerVectorTest, PublishesRawMappingsAndManifestInOneGe
 										  vectorOptions());
 	const NativeGraphWriteCommitResult committed = transaction.commit();
 	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, before.superblock().graph_revision + 1U);
 	// The Node identity lease precedes the atomic Vector publication.
 	EXPECT_EQ(committed.superblock.generation, Generation(3U));
 	EXPECT_THROW(static_cast<void>(metadata_->findIndexRoot(before, vectorDefinition().index_id)), FormatException);
@@ -1022,6 +1023,7 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacesMappingsRawLocationAndManifest
 	}());
 	const NativeGraphWriteCommitResult committed = delta.commit();
 	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, before.superblock().graph_revision + 1U);
 	EXPECT_EQ(committed.vector_rebuild_index_ids, std::vector<uint64_t>{vectorDefinition().index_id});
 	EXPECT_EQ(committed.superblock.generation, Generation(4U));
 
