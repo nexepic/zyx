@@ -26,6 +26,8 @@
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
+#include "graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp"
+#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/maintenance/DerivedObjectReachabilityReclaimer.hpp"
@@ -185,6 +187,75 @@ protected:
 		std::error_code error;
 		std::filesystem::remove(path_, error);
 	}
+
+	// The raw planner fixture does not maintain SCAN membership. Validate the
+	// exact vector image after building a completed image from real wide ROWs.
+	void expectIntegrityOnCompleteScanImage() {
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+        constexpr size_t seedCount = 512U, fieldCount = 32U;
+        size_t existingNodes = 0;
+        { auto pin = metadata_->openSnapshot();
+          metadata_->visitNodePageLocations(pin, [&](const EntityPageLocation &) { ++existingNodes; }); }
+        auto options = plannerOptions();
+        options.last_slot = PhysicalSlotId(255U);
+        options.property_roots.last_slot = PhysicalSlotId(255U);
+        NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, options);
+        SystemCatalog catalog(*indexes_, *metadata_);
+        auto tx = planner.beginTransaction();
+        auto schema = catalog.beginWrite(tx);
+        std::vector<uint32_t> tokens;
+        for (size_t i = 0; i < fieldCount; ++i)
+            tokens.push_back(schema.ensurePropertyToken("scan_fixture_" + std::to_string(i)));
+        for (size_t i = 0; i < seedCount; ++i) {
+            const uint64_t id = tx.createNode({});
+            PropertyCollectionRoot row{id, graph::Node::typeId, {}};
+            for (const auto token : tokens)
+                row.entries.push_back({token, PropertyValue(int64_t(id + token))});
+            tx.replaceNodeProperty(std::move(row));
+        }
+        schema.setGraphCardinalityStatistics({uint64_t(existingNodes + seedCount), 0U});
+        schema.finish();
+        ASSERT_TRUE(tx.commit().committed());
+        codebooks_.reset(); physical_.reset(); manifests_.reset(); raw_pages_.reset(); indexes_.reset();
+        properties_.reset(); labels_.reset(); slotted_pages_.reset(); entities_.reset(); metadata_.reset();
+        io_.reset(); file_->close(); file_.reset();
+        const auto target = std::filesystem::path(path_.string() + ".completed-scan");
+        auto sourceMemory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
+        auto work = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
+        auto builder = ScanBuildingImageBuilder::cloneWithPrimaryMembership(path_, target, sourceMemory,
+            UINT64_C(128) * 1024U * 1024U, 989U);
+        static_cast<void>(builder->constructFields(nullptr, work));
+        bool stopped = false;
+        for (size_t step = 0; step < 512U; ++step) {
+            const auto release = builder->releaseRetiredPoolOnce(work);
+            ASSERT_FALSE(release.blocked);
+            if (release.released) continue;
+            const auto before = builder->buildingRoot();
+            if (builder->reclaimMetadataOnce(work).superblock != before) continue;
+            if (builder->compactDataPoolOnce(work)) continue;
+            if (builder->compactMetadataPoolOnce(work)) continue;
+            stopped = true; break;
+        }
+        ASSERT_TRUE(stopped);
+        static_cast<void>(builder->truncateReleasedTailOnce(work));
+        ASSERT_LE(builder->targetFileBytes() * 10U, builder->sourceFileBytes() * 9U);
+        static_cast<void>(builder->complete(work));
+        builder.reset();
+        auto targetFile = std::make_shared<std::fstream>(target, std::ios::in | std::ios::binary);
+        ASSERT_TRUE(targetFile->is_open());
+        auto targetIo = std::make_shared<StorageIO>(targetFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto targetMetadata = RelocatableMetadataStore::openReadOnly(targetIo);
+        EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo, *targetMetadata).scan()));
+        targetMetadata.reset(); targetIo.reset(); targetFile.reset();
+        std::error_code ignored; std::filesystem::remove(target, ignored);
+        file_ = std::make_shared<std::fstream>(path_, std::ios::in | std::ios::out | std::ios::binary);
+        ASSERT_TRUE(file_->is_open());
+        io_ = std::make_shared<StorageIO>(file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        reopenNativeStores();
+#else
+        EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
+#endif
+    }
 
 	void reopenNativeStores() {
 		codebooks_.reset();
@@ -1057,7 +1128,6 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacesMappingsRawLocationAndManifest
 			  std::optional(VectorDeltaOperation::VDO_ERASE));
 	EXPECT_EQ(VectorDeltaMapping::findOperation(after, *indexes_, *metadata_, newManifest.delta_mapping_index_id, 2U),
 			  std::optional(VectorDeltaOperation::VDO_INSERT));
-	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
 	const auto rawEntry = std::ranges::find_if(newManifest.entries, [&](const VectorManifestEntry &entry) {
 		return entry.page_id == location.page_id && entry.storage_kind == VectorStorageKind::VSK_RAW;
 	});
@@ -1065,6 +1135,7 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacesMappingsRawLocationAndManifest
 	EXPECT_EQ(rawEntry->record_count, page.header().live_count);
 	after.release();
 	before.release();
+	ASSERT_NO_FATAL_FAILURE(expectIntegrityOnCompleteScanImage());
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail) {
@@ -1211,9 +1282,9 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacesAPartialRawTailAndAppendsTheRe
 	EXPECT_NE(appendedPage.page_id, oldTail.page_id);
 	EXPECT_EQ(raw_pages_->read(after, firstLocation.page_id).header().live_count, 2U);
 	EXPECT_EQ(raw_pages_->read(after, secondLocation.page_id).header().live_count, 1U);
-	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
 	after.release();
 	before.release();
+	ASSERT_NO_FATAL_FAILURE(expectIntegrityOnCompleteScanImage());
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, PublishesANewRawPoolWhenTheCurrentRawPoolIsFull) {
@@ -1341,12 +1412,12 @@ TEST_F(NativeGraphWritePlannerVectorTest, MovesTheManifestToANewPoolWhenCowFrame
 	EXPECT_TRUE(BTreeIndex(definition.index_id, *indexes_, *metadata_)
 				.find(beforeMove, VectorSemanticCodec::nodeMappingKey(nodeIds.back()))
 				.has_value());
-	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
 
 	afterMove.release();
 	for (MetadataSnapshotPin &snapshot: pinnedGenerations) {
 		snapshot.release();
 	}
+	ASSERT_NO_FATAL_FAILURE(expectIntegrityOnCompleteScanImage());
 	reopenNativeStores();
 	MetadataSnapshotPin recovered = metadata_->openSnapshot();
 	const VectorManifest recoveredManifest = manifests_->read(recovered, definition.index_id).manifest();

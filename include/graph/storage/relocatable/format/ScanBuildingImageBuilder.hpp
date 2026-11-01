@@ -26,6 +26,8 @@
 #include "graph/storage/relocatable/property/HybridPropertyDirectoryIntegrity.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
+#include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
+#include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
 
 namespace graph::storage {
     // Offline private-image construction. Only complete() can clear BUILDING
@@ -483,8 +485,17 @@ namespace graph::storage {
 
                             }
                         }
-                        if (selected->kind == SegmentKind::SGK_INDEX_PAGE_POOL)
+                        if (selected->kind == SegmentKind::SGK_INDEX_PAGE_POOL) {
                             supported = supported && metadata_->findIndexRootOptional(pin, selected->owner_id).has_value();
+                            // Vector manifests authenticate their mapping root generation.
+                            // The generic index-pool relocator cannot atomically rewrite
+                            // those manifests, so keep these pools in place until a
+                            // vector-aware relocation is available.
+                            if (VectorDeltaMapping::isMappingIndexId(selected->owner_id) ||
+                                VectorNodeMapping::isMappingIndexId(selected->owner_id) ||
+                                metadata_->findVectorManifestOptional(pin, selected->owner_id).has_value())
+                                supported = false;
+                        }
                         if (supported) break;
                         upper = selected->physical_slot.value();
                     }
