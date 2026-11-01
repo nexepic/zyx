@@ -420,6 +420,10 @@ TEST_F(RelocatableEntityPageStoreTest, ErasingAnEntityAtomicallyUnpublishesItsOw
 	MetadataSnapshotPin current = metadata->openSnapshot();
 	EXPECT_FALSE(metadata->findNodePageLocationOptional(current, 1001U).has_value());
 	EXPECT_FALSE(metadata->findEntityPropertyLocationOptional(current, key).has_value());
+	const auto deletedOwner = metadata->findEntityPropertyRevision(current, key);
+	ASSERT_TRUE(deletedOwner.has_value());
+	EXPECT_TRUE(deletedOwner->isTombstone());
+	EXPECT_EQ(deletedOwner->owner_revision, current.superblock().graph_revision);
 	EXPECT_EQ(properties.readEntity(before, key), root);
 	expectFormatError([&] { static_cast<void>(properties.readEntity(current, key)); }, FormatError::FERR_INVALID_STATE);
 	before.release();
@@ -2240,6 +2244,11 @@ TEST_F(RelocatableEntityPageStoreTest, DirectEntityWritesAdvanceLogicalRevisionO
 	auto afterNoop = metadata->openSnapshot();
 	const auto erased = store.eraseNode(afterNoop, 1001U, LogSequenceNumber(7U));
 	EXPECT_EQ(erased.superblock.graph_revision, revision + 5U);
+	auto afterErase = metadata->openSnapshot();
+	const auto deleted = metadata->findEntityPropertyRevision(afterErase, {EntityPropertyOwnerKind::EPOK_NODE, 1001U});
+	ASSERT_TRUE(deleted.has_value());
+	EXPECT_TRUE(deleted->isTombstone());
+	EXPECT_EQ(deleted->owner_revision, erased.superblock.graph_revision);
 	EXPECT_EQ(store.readNode(afterAllocate, 1001U), firstNode);
 	EXPECT_EQ(store.readNode(afterUpdate, 1001U), replacement);
 }
