@@ -206,9 +206,40 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::optional<Superblock> tryDecode(std::span<const std::byte> bytes) {
+			// Authenticate the envelope using its declared header length before
+			// interpreting a version we do not understand. A newer format may
+			// legitimately use a different header size.
+			if (bytes.size() == RSS_SUPERBLOCK_BYTES &&
+				LittleEndianCodec::readU32(bytes, MAGIC_OFFSET) == RSS_SUPERBLOCK_MAGIC &&
+				LittleEndianCodec::readU16(bytes, FORMAT_VERSION_OFFSET) != RSS_SUPERBLOCK_VERSION) {
+				const size_t headerBytes = LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET);
+				if (headerBytes >= HEADER_CRC_OFFSET + sizeof(uint32_t) && headerBytes <= bytes.size()) {
+					std::array<std::byte, RSS_SUPERBLOCK_BYTES> header{};
+					std::copy_n(bytes.begin(), headerBytes, header.begin());
+					const uint32_t expectedHeaderCrc = LittleEndianCodec::readU32(bytes, HEADER_CRC_OFFSET);
+					LittleEndianCodec::writeU32(header, HEADER_CRC_OFFSET, 0);
+					if (calculateCrc(std::span(header).first(headerBytes)) == expectedHeaderCrc &&
+						calculateCrc(bytes.subspan(headerBytes)) == LittleEndianCodec::readU32(bytes, PAYLOAD_CRC_OFFSET)) {
+						throwSuperblockError(FormatError::FERR_UNSUPPORTED_VERSION,
+							"unsupported authenticated relocatable superblock version");
+					}
+				}
+			}
 			try {
 				return SuperblockCodec::decode(bytes);
-			} catch (const FormatException &) {
+			} catch (const FormatException &error) {
+				// A checksum-valid slot in an unsupported format is not a torn
+				// write. Falling back to the other slot could open stale state and
+				// later overwrite a newer publication. Only trust the version error
+				// after authenticating the payload as well as the header checked by
+				// decode; damaged slots still permit the normal recovery fallback.
+				if (error.error() == FormatError::FERR_UNSUPPORTED_VERSION &&
+					bytes.size() == RSS_SUPERBLOCK_BYTES &&
+					LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET) == RSS_SUPERBLOCK_HEADER_BYTES &&
+					calculateCrc(bytes.subspan(RSS_SUPERBLOCK_HEADER_BYTES)) ==
+						LittleEndianCodec::readU32(bytes, PAYLOAD_CRC_OFFSET)) {
+					throw;
+				}
 				return std::nullopt;
 			}
 		}

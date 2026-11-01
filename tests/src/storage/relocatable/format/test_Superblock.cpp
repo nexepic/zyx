@@ -108,6 +108,28 @@ namespace {
 
 } // namespace
 
+TEST(RelocatableSuperblockTest, RejectsAuthenticatedUnsupportedSlotInsteadOfFallingBack) {
+	auto current = SuperblockCodec::encode(validSuperblock(4, 4));
+	auto unknown = SuperblockCodec::encode(validSuperblock(5, 5));
+	LittleEndianCodec::writeU16(unknown, 4U, static_cast<uint16_t>(RSS_SUPERBLOCK_VERSION + 1U));
+	recalculateCrc(unknown);
+	expectFormatError([&] { static_cast<void>(SuperblockCodec::selectNewest(current, unknown)); },
+		FormatError::FERR_UNSUPPORTED_VERSION);
+	expectFormatError([&] { static_cast<void>(SuperblockCodec::selectNewest(unknown, current)); },
+		FormatError::FERR_UNSUPPORTED_VERSION);
+	const size_t futureHeaderBytes = RSS_SUPERBLOCK_HEADER_BYTES + 16U;
+	LittleEndianCodec::writeU16(unknown, 6U, static_cast<uint16_t>(futureHeaderBytes));
+	LittleEndianCodec::writeU32(unknown, PAYLOAD_CRC_OFFSET,
+		graph::utils::calculateCrc(unknown.data() + futureHeaderBytes, unknown.size() - futureHeaderBytes));
+	LittleEndianCodec::writeU32(unknown, HEADER_CRC_OFFSET, 0U);
+	LittleEndianCodec::writeU32(unknown, HEADER_CRC_OFFSET,
+		graph::utils::calculateCrc(unknown.data(), futureHeaderBytes));
+	expectFormatError([&] { static_cast<void>(SuperblockCodec::selectNewest(current, unknown)); },
+		FormatError::FERR_UNSUPPORTED_VERSION);
+	unknown.back() ^= std::byte{1};
+	EXPECT_EQ(SuperblockCodec::selectNewest(current, unknown).generation, Generation(4));
+}
+
 TEST(RelocatableSuperblockTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 	const auto encoded = SuperblockCodec::encode(validSuperblock(7, 50));
 	EXPECT_EQ(encoded.size(), RSS_SUPERBLOCK_BYTES);
