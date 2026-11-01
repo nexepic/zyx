@@ -26,24 +26,18 @@ struct PrivateCloneFile {
         std::error_code ignored; std::filesystem::remove(path, ignored);
     }
 };
-auto legacySourceHeader() {
+auto currentSourceHeader() {
     Superblock value; value.database_id = DatabaseId(71); value.generation = Generation(2);
     value.checkpoint_lsn = LogSequenceNumber(2);
-    auto bytes = SuperblockCodec::encode(value);
-    LittleEndianCodec::writeU16(bytes, 4, 31); LittleEndianCodec::writeU16(bytes, 6, 336);
-    LittleEndianCodec::writeU32(bytes, 112, graph::utils::calculateCrc(bytes.data() + 336, bytes.size() - 336));
-    LittleEndianCodec::writeU32(bytes, 116, 0);
-    LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), 336));
-    return bytes;
+    value.graph_revision = 7U; value.schema_revision = 9U;
+    return SuperblockCodec::encode(value);
 }
 void initializeSource(StorageIO &io) {
     std::vector<std::byte> bytes(2U * RSS_SEGMENT_SIZE);
-    const auto header = legacySourceHeader();
+    const auto header = currentSourceHeader();
     std::copy(header.begin(), header.end(), bytes.begin());
     std::copy(header.begin(), header.end(), bytes.begin() + RSS_SUPERBLOCK_BYTES);
     auto envelope = SegmentEnvelopeCodec::encode(SegmentEnvelope{});
-    LittleEndianCodec::writeU16(envelope, 4, 5); LittleEndianCodec::writeU32(envelope, 52, 0);
-    LittleEndianCodec::writeU32(envelope, 52, graph::utils::calculateCrc(envelope.data(), envelope.size()));
     std::copy(envelope.begin(), envelope.end(), bytes.begin() + RSS_SEGMENT_SIZE);
     bytes[RSS_SEGMENT_SIZE + 512] = std::byte{0x53}; // free bytes remain free
     io.writeAt(0, bytes.data(), bytes.size()); io.sync();
@@ -59,11 +53,12 @@ TEST(ScanBuildingCloneTest, CopiesIndependentImageWithoutPublishingOrChangingSou
     graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
     const auto root = scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *target.io, budget, 1024U * 1024U, [] {});
     EXPECT_EQ(root.flags, RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+    EXPECT_EQ(root.graph_revision, 7U); EXPECT_EQ(root.schema_revision, 9U);
     EXPECT_EQ(targetHeader(*target.io).flags, RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
     EXPECT_EQ(target.io->fileSize(), source.io->fileSize()); EXPECT_EQ(budget.used(), 0U);
     std::array<std::byte, RSS_SUPERBLOCK_BYTES> unchanged{};
     ASSERT_EQ(source.io->readAt(0, unchanged.data(), unchanged.size()), unchanged.size());
-    EXPECT_EQ(unchanged, legacySourceHeader());
+    EXPECT_EQ(unchanged, currentSourceHeader());
     std::array<std::byte, RSS_ENVELOPE_BYTES> translated{};
     ASSERT_EQ(target.io->readAt(RSS_SEGMENT_SIZE, translated.data(), translated.size()), translated.size());
     EXPECT_EQ(SegmentEnvelopeCodec::decode(translated).state, SegmentState::SGS_FREE);
@@ -81,6 +76,35 @@ TEST(ScanBuildingCloneTest, RefusesFileAndWorkspaceBudgetsBeforeDestinationWrite
     EXPECT_EQ(target.io->fileSize(), 0U); EXPECT_EQ(tiny.used(), 0U);
     EXPECT_THROW((void)scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *source.io,
         budget, 1024U * 1024U, [] {}), std::invalid_argument);
+}
+TEST(ScanBuildingCloneTest, RejectsChecksumValidUnknownSuperblockEvenWithCurrentPeer) {
+    PrivateCloneFile source, target; initializeSource(*source.io);
+    auto header = currentSourceHeader();
+    LittleEndianCodec::writeU16(header, 4, RSS_SUPERBLOCK_VERSION + 1U);
+    LittleEndianCodec::writeU32(header, 116, 0U);
+    LittleEndianCodec::writeU32(header, 116, graph::utils::calculateCrc(header.data(), RSS_SUPERBLOCK_HEADER_BYTES));
+    source.io->writeAt(0, header.data(), header.size()); source.io->sync();
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    try {
+        (void)scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *target.io, budget, 1024U * 1024U, [] {});
+        FAIL() << "checksum-valid unknown format was accepted";
+    } catch (const FormatException &error) {
+        EXPECT_EQ(error.error(), FormatError::FERR_UNSUPPORTED_VERSION);
+    }
+    EXPECT_EQ(target.io->fileSize(), 0U); EXPECT_EQ(budget.used(), 0U);
+}
+TEST(ScanBuildingCloneTest, RecoversSameFormatTornSlotWithoutChangingRevisions) {
+    PrivateCloneFile source, target; initializeSource(*source.io);
+    const std::byte invalid{}; source.io->writeAt(0, &invalid, 1U); source.io->sync();
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    const auto root = scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *target.io, budget, 1024U * 1024U, [] {});
+    EXPECT_EQ(root.graph_revision, 7U); EXPECT_EQ(root.schema_revision, 9U);
+    std::array<std::byte, RSS_SUPERBLOCK_BYTES> peer{};
+    ASSERT_EQ(target.io->readAt(RSS_SUPERBLOCK_BYTES, peer.data(), peer.size()), peer.size());
+    const auto decoded = SuperblockCodec::decode(peer);
+    EXPECT_EQ(decoded.graph_revision, 7U); EXPECT_EQ(decoded.schema_revision, 9U);
+    EXPECT_TRUE(decoded.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+    EXPECT_EQ(budget.used(), 0U);
 }
 TEST(ScanBuildingCloneTest, CancellationAndChangingSourceLeaveOnlyBuildingTargets) {
     PrivateCloneFile source, cancelled, changed; initializeSource(*source.io);
@@ -108,8 +132,6 @@ TEST(ScanBuildingCloneTest, CorruptSegmentPayloadIsNotCopiedOrPromoted) {
     const std::byte payload{0x53}, corrupt{0x54};
     envelope.payload_crc = graph::utils::calculateCrc(&payload, 1);
     auto header = SegmentEnvelopeCodec::encode(envelope);
-    LittleEndianCodec::writeU16(header, 4, 5); LittleEndianCodec::writeU32(header, 52, 0);
-    LittleEndianCodec::writeU32(header, 52, graph::utils::calculateCrc(header.data(), header.size()));
     source.io->writeAt(RSS_SEGMENT_SIZE, header.data(), header.size());
     source.io->writeAt(RSS_SEGMENT_SIZE + RSS_ENVELOPE_BYTES, &corrupt, 1);
     source.io->sync();

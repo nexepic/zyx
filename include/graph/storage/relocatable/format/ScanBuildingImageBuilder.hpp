@@ -45,7 +45,7 @@ namespace graph::storage {
             if (source_handle_ != INVALID_FILE_HANDLE) static_cast<void>(portable_close(source_handle_));
         }
 
-        // Source must be an offline, stable default-format image. Exclusive
+        // Source must be an offline, stable current-format ROW image. Exclusive
         // creation never overwrites a destination. Failure may leave an invalid
         // or BUILDING artifact; neither this method nor its result opens it as
         // a complete graph. No temporary disk image is allocated.

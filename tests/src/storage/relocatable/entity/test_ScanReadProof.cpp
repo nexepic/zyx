@@ -100,7 +100,7 @@ protected:
                 ASSERT_TRUE(terminal.commit().committed());
             }
         } else { insert(1, 0, {7}); insert(65, 1, {11}); }
-        static_cast<void>(makeLegacyRowSource());
+        closeCurrentRowSource();
         std::filesystem::resize_file(path, std::filesystem::file_size(path) + 16U * RSS_SEGMENT_SIZE);
         target = path.string() + ".scan";
         builder = ScanBuildingImageBuilder::cloneWithPrimaryMembership(path, target, source,

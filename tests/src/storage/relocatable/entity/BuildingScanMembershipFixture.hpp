@@ -8,6 +8,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "graph/storage/relocatable/entity/BuildingScanMembership.hpp"
 #include "graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp"
+#include "graph/storage/relocatable/format/ScanFormatCloneCodec.hpp" // retained only by legacy fixture tests pending cleanup
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
@@ -110,6 +111,12 @@ protected:
         LittleEndianCodec::writeU32(header, 116, 0);
         LittleEndianCodec::writeU32(header, 116, graph::utils::calculateCrc(header.data(), 336));
         static_cast<void>(ScanFormatCloneCodec::legacySuperblockToBuilding(header));
+    }
+    void closeCurrentRowSource() {
+        const auto root = metadata->openSnapshot().superblock();
+        if (root.hybrid_property_descriptor_root.isValid())
+            throw std::logic_error("current ROW fixture cannot contain native fields");
+        labels.reset(); pages.reset(); entities.reset(); metadata.reset(); io.reset(); file.reset();
     }
     for (uint64_t offset = sourceRoot.data_region_offset; offset < legacy.size(); offset += RSS_SEGMENT_SIZE) {
         auto header = std::span(legacy).subspan(offset, RSS_ENVELOPE_BYTES);
