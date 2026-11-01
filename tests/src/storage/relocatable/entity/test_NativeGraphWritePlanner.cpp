@@ -2178,3 +2178,17 @@ TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexChangedThenRestoredRejectsS
 	ASSERT_TRUE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(lsn + 1U)));
 	EXPECT_FALSE(stale.commit().committed());
 }
+
+TEST_F(NativeGraphWritePlannerTest, ReplacingLabelsWithSameValueDoesNotAdvanceGraphRevision) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const std::array<uint64_t, 2U> labels{7U, 9U};
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode(labels);
+	ASSERT_TRUE(create.commit().committed());
+	auto before = metadata_->openSnapshot();
+	auto noop = planner.beginTransaction();
+	noop.replaceNodeLabels(id, labels);
+	const auto committed = noop.commit();
+	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, before.superblock().graph_revision);
+}
