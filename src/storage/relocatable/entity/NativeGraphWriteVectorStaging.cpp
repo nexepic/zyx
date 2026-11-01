@@ -359,6 +359,43 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER, "native graph Vector delta has duplicate Node transition kinds");
 			}
 		}
+		// A delete/insert pair with the same canonical vector is a logical no-op.
+		// Authenticate both mapping directions and the Raw record before eliding
+		// it; content equality alone must not bypass a stale transaction fence.
+		std::vector<const NativeVectorMutation *> effective;
+		effective.reserve(ordered.size());
+		for (size_t first = 0U; first < ordered.size();) {
+			size_t end = first + 1U;
+			while (end < ordered.size() && ordered[end]->node_id == ordered[first]->node_id) ++end;
+			bool noop = false;
+			if (end - first == 2U) {
+				const auto *insert = ordered[first]->kind == NativeVectorMutationKind::NVMK_INSERT ? ordered[first] : ordered[first + 1U];
+				const auto id = BTreeIndex(definition.index_id, mappingTrees, *context_->metadata).find(
+						snapshot_, VectorSemanticCodec::nodeMappingKey(insert->node_id));
+				const auto reverse = id ? VectorNodeMapping::findNode(snapshot_, mappingTrees, *context_->metadata,
+						sourceManifest.vector_node_mapping_index_id, *id) : std::nullopt;
+				const auto location = id ? context_->metadata->findVectorLocationOptional(snapshot_, *id) : std::nullopt;
+				if (id && *id != 0U && reverse && *reverse == insert->node_id && location) {
+					const auto page = rawPages.read(snapshot_, location->page_id);
+					const auto header = page.header();
+					const auto record = page.read(location->slot_id, location->slot_generation);
+					if (header.kind == VectorStorageKind::VSK_RAW && header.index_id == definition.index_id &&
+						record.size() == sizeof(uint64_t) + insert->encoded_bfloat16.size() &&
+						LittleEndianCodec::readU64(record, 0U) == *id)
+						noop = std::ranges::equal(std::span(record).subspan(sizeof(uint64_t)), insert->encoded_bfloat16);
+				}
+			}
+			if (!noop) effective.insert(effective.end(), ordered.begin() + first, ordered.begin() + end);
+			first = end;
+		}
+		ordered = std::move(effective);
+		if (ordered.empty()) {
+			// Keep the index identity staged so duplicate requests are still rejected.
+			StagedVectorDelta noop;
+			noop.mutation.index_id = definition.index_id;
+			vector_deltas_.push_back(std::move(noop));
+			return;
+		}
 
 		StagedVectorDelta staged;
 		staged.mapping_trees = &mappingTrees;

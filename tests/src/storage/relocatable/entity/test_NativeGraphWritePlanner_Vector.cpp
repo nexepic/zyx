@@ -1769,4 +1769,18 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacingVectorWithSameValueDoesNotAdv
 	const auto committed = transaction.commit();
 	ASSERT_TRUE(committed.committed());
 	EXPECT_EQ(committed.superblock.graph_revision, revision);
+	EXPECT_EQ(committed.superblock.generation, before.superblock().generation);
+	// Content equality cannot hide an intervening change and restoration.
+	auto stale = planner.beginTransaction();
+	stale.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	const std::vector<std::byte> other{std::byte{0x20}, std::byte{0x40}, std::byte{0x60}, std::byte{0x70}};
+	auto changed = mutations;
+	changed[1].encoded_bfloat16 = other;
+	auto writer = planner.beginTransaction();
+	writer.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), changed, vectorDeltaOptions());
+	ASSERT_TRUE(writer.commit().committed());
+	auto restore = planner.beginTransaction();
+	restore.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	ASSERT_TRUE(restore.commit().committed());
+	EXPECT_FALSE(stale.commit().committed());
 }

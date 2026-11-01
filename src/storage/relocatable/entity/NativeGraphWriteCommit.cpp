@@ -33,10 +33,15 @@ namespace graph::storage {
             !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() || !vector_bootstraps_.empty() || !vector_deltas_.empty()))
             fail(FormatError::FERR_INVALID_STATE, "free-space initialization cannot mix ordinary graph mutations");
         if (free_summary_checkpoint_) free_summary_checkpoint_();
+		// Empty-record Vector deltas are authenticated same-value pairs. They
+		// retain their staged identity until commit to reject duplicate requests.
+		const auto vectorNoops = std::erase_if(vector_deltas_, [](const StagedVectorDelta &delta) {
+			return delta.records.empty();
+		});
 		const bool hasGraphWork = rebuild_entity_free_summaries_ || !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
-		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
+		if (!hasGraphWork && vectorNoops == 0U && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
 		}
         if (hybrid_conversion_ || (hybrid_columns_ && !hybrid_catalog_credit_ && (!hybrid_vectors_ || hybrid_vectors_->semantics.empty()))) {
@@ -82,12 +87,20 @@ namespace graph::storage {
 			// Logical-ID leasing is already durable. A reservation-only transaction
 			// must not publish a second, empty metadata generation just to acknowledge
 			// IDs that are intentionally allowed to remain unused.
-			if (!context_->metadata->claimNativeGraphLogicalIdReservation(logicalIds)) {
+			MetadataSnapshotPin current = context_->metadata->openSnapshot();
+			if (vectorNoops != 0U && current.superblock() != snapshot_.superblock()) {
+				current.release();
+				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
 				snapshot_.release();
 				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
 				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
 			}
-			MetadataSnapshotPin current = context_->metadata->openSnapshot();
+			if (!context_->metadata->claimNativeGraphLogicalIdReservation(logicalIds)) {
+				current.release();
+				snapshot_.release();
+				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
+				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
+			}
 			const Superblock committed = current.superblock();
 			current.release();
 			snapshot_.release();
