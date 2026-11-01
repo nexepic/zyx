@@ -714,12 +714,16 @@ TEST_F(RelocatableStorageBackendTest, DeletedOwnerRevisionIsRetainedForOldPinThe
 	};
 	EXPECT_TRUE(checkOwner());
 	EXPECT_EQ(old->readNodeShaped(node, {.all_properties = true}).properties.front().value, PropertyValue(1));
+	const auto unrelated = backend.createLogicalNodes({{{}, {{"newer", PropertyValue(2)}}}}).front();
+	auto newer = backend.openLogicalGraphReadSnapshot();
 	old.reset();
 	for (size_t i = 0; i < 3U; ++i) {
 		const auto trigger = backend.createLogicalNodes({{{}, {}}}).front();
 		backend.deleteLogicalNodes({{trigger, false, 0U}});
 	}
 	EXPECT_FALSE(checkOwner());
+	EXPECT_NO_THROW(static_cast<void>(newer->readNode(unrelated)));
+	newer.reset();
 	backend.close();
 }
 
