@@ -842,3 +842,56 @@ TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceBudgetDenialDefersCleanupW
 	retry.close();
 	EXPECT_FALSE(ownerExists());
 }
+
+TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceFailureAfterDurableRootRequiresReopen) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}}}}).front();
+	auto pin = backend.openSnapshot(); const auto before = pin.superblock(); pin.release();
+	std::atomic<uint64_t> graphGeneration{0};
+	std::atomic<bool> graphSynced{false}, maintenanceWritten{false}, maintenanceSynced{false}, failed{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting detectPublication([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+			if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+				try {
+					const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+					if (candidate.graph_revision > before.graph_revision) {
+						if (graphSynced.load() && candidate.generation.value() > graphGeneration.load()) maintenanceWritten.store(true);
+						else if (!graphSynced.load()) graphGeneration.store(candidate.generation.value());
+					}
+				} catch (const std::exception &) {}
+			}
+			return portable_pwrite(fd, bytes, count, offset);
+		});
+		StorageIO::ScopedNativeSyncHookForTesting detectDurability([&](file_handle_t fd) {
+			const int result = portable_fsync(fd);
+			if (result == 0 && maintenanceWritten.load()) maintenanceSynced.store(true);
+			else if (result == 0 && graphGeneration.load() != 0U) graphSynced.store(true);
+			return result;
+		});
+		StorageIO::ScopedNativeReadHookForTesting failReconciliation([&](file_handle_t fd, void *bytes, size_t count, pwrite_off_t offset) {
+			if (maintenanceSynced.load() && !failed.exchange(true)) {
+#ifdef _WIN32
+				SetLastError(ERROR_READ_FAULT);
+#else
+				errno = EIO;
+#endif
+				return static_cast<pwrite_ssize_t>(-1);
+			}
+			return portable_pread(fd, bytes, count, offset);
+		});
+		EXPECT_NO_THROW(backend.deleteLogicalNodes({{node, false, 0U}}));
+	}
+	ASSERT_TRUE(maintenanceSynced.load()); ASSERT_TRUE(failed.load());
+	EXPECT_TRUE(backend.hasIndeterminateWriteOutcome());
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})), std::logic_error);
+	backend.close();
+	auto reopenOptions = backendOptions(); reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenOptions)); reopened.open();
+	auto snapshot = reopened.openLogicalGraphReadSnapshot();
+	EXPECT_THROW(static_cast<void>(snapshot->readNode(node)), FormatException);
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.createLogicalNodes({{{}, {}}})));
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity())); reopened.close();
+}
