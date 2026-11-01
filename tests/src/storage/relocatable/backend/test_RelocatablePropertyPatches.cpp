@@ -652,3 +652,39 @@ TEST_F(RelocatableStorageBackendTest, SuccessfulNodeLeaseThenPrecommitSyncFailur
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, OwnerReclamationMakesNodeAndEdgeProgressDuringSustainedNodeGrowth) {
+	materializeNativeDatabase();
+	auto options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	// Seed more than one budget-sized range before the tombstones. Each later
+	// round appends more Nodes than the default whole sweep budget of 64.
+	std::vector<LogicalGraphNodeCreateRequest> initial(130U);
+	initial.front().properties = {{"temporary", PropertyValue(1)}};
+	const auto nodes = backend.createLogicalNodes(initial);
+	ASSERT_EQ(nodes.size(), initial.size());
+	backend.replaceLogicalNodeProperties({{nodes.front(), {}}});
+	const auto edge = backend.createLogicalEdges({{nodes[0], nodes[1], "RECLAIM_LINK", {{"weight", PropertyValue(1)}}}}).front();
+	const auto oldNode = nodes.back();
+	backend.deleteLogicalEdges({{edge}});
+	backend.deleteLogicalNodes({{oldNode, false, 0U}});
+	constexpr size_t halfBudget = 32U;
+	const size_t rounds = (initial.size() + halfBudget - 1U) / halfBudget + 3U;
+	for (size_t round = 0; round < rounds; ++round) {
+		std::vector<LogicalGraphNodeCreateRequest> additions(65U);
+		const auto added = backend.createLogicalNodes(additions);
+		ASSERT_EQ(added.size(), additions.size());
+		backend.deleteLogicalNodes({{added.back(), false, 0U}});
+	}
+	backend.close();
+	auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::openReadOnly(io);
+	auto pin = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, oldNode}).has_value());
+	EXPECT_FALSE(metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_EDGE, edge}).has_value());
+	// Empty properties are represented without a page too, but this owner lives.
+	EXPECT_TRUE(metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, nodes[0]}).has_value());
+}
