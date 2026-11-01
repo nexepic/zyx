@@ -112,12 +112,6 @@ protected:
         LittleEndianCodec::writeU32(header, 116, graph::utils::calculateCrc(header.data(), 336));
         static_cast<void>(ScanFormatCloneCodec::legacySuperblockToBuilding(header));
     }
-    void closeCurrentRowSource() {
-        const auto root = metadata->openSnapshot().superblock();
-        if (root.hybrid_property_descriptor_root.isValid())
-            throw std::logic_error("current ROW fixture cannot contain native fields");
-        labels.reset(); pages.reset(); entities.reset(); metadata.reset(); io.reset(); file.reset();
-    }
     for (uint64_t offset = sourceRoot.data_region_offset; offset < legacy.size(); offset += RSS_SEGMENT_SIZE) {
         auto header = std::span(legacy).subspan(offset, RSS_ENVELOPE_BYTES);
         if (LittleEndianCodec::readU32(header, 0) != RSS_SEGMENT_MAGIC) continue;
@@ -129,6 +123,12 @@ protected:
       output.write(reinterpret_cast<const char *>(legacy.data()), static_cast<std::streamsize>(legacy.size()));
       if (!output.good()) throw std::runtime_error("cannot write legacy fixture"); }
         return legacy;
+    }
+    void closeCurrentRowSource() {
+        const auto root = metadata->openSnapshot().superblock();
+        if (root.hybrid_property_descriptor_root.isValid())
+            throw std::logic_error("current ROW fixture cannot contain native fields");
+        labels.reset(); pages.reset(); entities.reset(); metadata.reset(); io.reset(); file.reset();
     }
     BuildingScanMembershipRequest request(uint64_t group) {
         auto pin = metadata->openSnapshot(); const auto &root = pin.superblock();
