@@ -2030,3 +2030,25 @@ TEST_F(NativeGraphWritePlannerTest, StagedScalarIndexUpsertRejectsChangedThenRes
 	EXPECT_EQ(index.find(current, key), std::optional<uint64_t>(1U));
 	current.release();
 }
+
+TEST_F(NativeGraphWritePlannerTest, AllocatorOnlyPublicationDoesNotConflictWithStagedPropertyWrite) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode({});
+	create.replaceNodeProperty(propertyRoot(id, Node::typeId, 1));
+	ASSERT_TRUE(create.commit().committed());
+	auto staged = planner.beginTransaction();
+	staged.replaceNodeProperty(propertyRoot(id, Node::typeId, 2));
+	auto before = metadata_->openSnapshot();
+	const auto graphRevision = before.superblock().graph_revision;
+	const auto nextLsn = LogSequenceNumber(before.superblock().checkpoint_lsn.value() + 1U);
+	before.release();
+	const auto allocatorOnly = metadata_->setPhysicalSlotAllocated(PhysicalSlotId(79U), true, nextLsn);
+	EXPECT_EQ(allocatorOnly.graph_revision, graphRevision);
+	const auto committed = staged.commit();
+	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, graphRevision + 1U);
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, id}),
+			  propertyRoot(id, Node::typeId, 2));
+}
