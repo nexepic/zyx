@@ -99,17 +99,25 @@ namespace {
 	EntityPropertyLocation LocationDirectory::findEntityProperty(const Superblock &superblock,
 																 const EntityPropertyKey &key) const {
 		const LocationLeafEntry entry = find(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, key.directoryId());
-		return decodeEntityPropertyLocation(entry);
+		const auto location = decodeEntityPropertyLocation(entry);
+		if (location.isTombstone())
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE, "Entity Property owner has no live location");
+		return location;
 	}
 
 	std::optional<EntityPropertyLocation>
 	LocationDirectory::findEntityPropertyOptional(const Superblock &superblock, const EntityPropertyKey &key) const {
-		const std::optional<LocationLeafEntry> entry =
-				findOptional(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, key.directoryId());
-		if (!entry.has_value()) {
+		const auto location = findEntityPropertyRevision(superblock, key);
+		if (!location || location->isTombstone()) {
 			return std::nullopt;
 		}
-		return decodeEntityPropertyLocation(*entry);
+		return location;
+	}
+
+	std::optional<EntityPropertyLocation>
+	LocationDirectory::findEntityPropertyRevision(const Superblock &superblock, const EntityPropertyKey &key) const {
+		const auto entry = findOptional(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, key.directoryId());
+		return entry ? std::optional(decodeEntityPropertyLocation(*entry)) : std::nullopt;
 	}
 
 	StateLocation LocationDirectory::findState(const Superblock &superblock, uint64_t stateId) const {
@@ -331,7 +339,8 @@ namespace {
 										"relocatable Entity Property directory traversal requires a visitor");
 		}
 		visit(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, [&visitor](const LocationLeafEntry &entry) {
-			visitor(decodeEntityPropertyLocation(entry));
+			const auto location = decodeEntityPropertyLocation(entry);
+			if (!location.isTombstone()) visitor(location);
 		});
 	}
 
@@ -346,7 +355,8 @@ namespace {
 		return visitAfter(
 				superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, afterDirectoryId, maximumMetadataPages,
 				[&visitor](const LocationLeafEntry &entry) {
-					return visitor(decodeEntityPropertyLocation(entry));
+					const auto location = decodeEntityPropertyLocation(entry);
+					return location.isTombstone() || visitor(location);
 				},
 				visitedMetadataPages);
 	}

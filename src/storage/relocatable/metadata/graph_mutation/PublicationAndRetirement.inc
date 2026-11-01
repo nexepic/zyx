@@ -965,6 +965,22 @@
 		erasedProperties.insert(erasedProperties.end(), explicitlyErasedEntityProperties.begin(),
 								explicitlyErasedEntityProperties.end());
 		erasedProperties.insert(erasedProperties.end(), erasedEntityProperties.begin(), erasedEntityProperties.end());
+		// Stamp semantic owner changes, not every owner sharing a rewritten page.
+		// Empty results retain a directory tombstone so absence cannot erase ABA
+		// evidence for a concurrently staged blind write.
+		for (auto &location : upsertedEntityProperties) {
+			const bool changed = std::ranges::find(derivedState.changed_property_owners, location.key) !=
+				derivedState.changed_property_owners.end();
+			const auto previous = locations_.findEntityPropertyRevision(current, location.key);
+			location.owner_revision = changed ? batch.candidate().graph_revision :
+				(previous ? previous->owner_revision : 0U);
+		}
+		for (const auto &key : derivedState.changed_property_owners) {
+			const auto existing = std::ranges::find(upsertedEntityProperties, key, &EntityPropertyLocation::key);
+			if (existing == upsertedEntityProperties.end())
+				upsertedEntityProperties.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			std::erase(erasedProperties, key);
+		}
 		std::ranges::sort(upsertedEntityProperties, {},
 						  [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
 		std::ranges::sort(erasedProperties, {}, &EntityPropertyKey::directoryId);

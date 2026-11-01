@@ -254,6 +254,12 @@ TEST(RelocatableLocationLeafCodecTest, PropertyOwnerRevisionRoundTripsWithoutCha
 	const auto decoded = LocationLeafPageCodec::decode(LocationLeafPageCodec::encode(page));
 	ASSERT_EQ(decoded.entries.size(), 1U);
 	EXPECT_EQ(decodeEntityPropertyLocation(decoded.entries.front()), source);
+	const EntityPropertyLocation tombstone{{EntityPropertyOwnerKind::EPOK_NODE, 9U}, PageId{}, 0U, 0U,
+		UINT64_C(0x1234567800000000)};
+	page.entries = {encodeEntityPropertyLocation(tombstone)};
+	const auto decodedTombstone = LocationLeafPageCodec::decode(LocationLeafPageCodec::encode(page));
+	ASSERT_EQ(decodedTombstone.entries.size(), 1U);
+	EXPECT_EQ(decodeEntityPropertyLocation(decodedTombstone.entries.front()), tombstone);
 }
 
 TEST(RelocatableLocationLeafCodecTest, SupportsEntityPropertyLocations) {

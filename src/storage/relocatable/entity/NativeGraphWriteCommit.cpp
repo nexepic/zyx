@@ -1429,6 +1429,10 @@ namespace graph::storage {
 			return plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE;
 		});
 		derivedState.schema_revision_change = schema_revision_change_;
+		for (const auto &plan : propertyPlans) {
+			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE)
+				derivedState.changed_property_owners.push_back(plan.key);
+		}
         derivedState.entity_free_summary_fences = std::move(freeSummaryFences);
         if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
         for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);

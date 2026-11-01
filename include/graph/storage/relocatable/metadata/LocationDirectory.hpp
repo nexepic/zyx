@@ -129,6 +129,7 @@ namespace graph::storage {
 		uint16_t slot_id = 0;
 		uint32_t slot_generation = 0;
 		uint64_t owner_revision = 0;
+		[[nodiscard]] bool isTombstone() const noexcept { return !page_id.isValid(); }
 
 		constexpr bool operator==(const EntityPropertyLocation &) const = default;
 	};
@@ -393,6 +394,9 @@ namespace graph::storage {
 																const EntityPropertyKey &key) const;
 		[[nodiscard]] std::optional<EntityPropertyLocation>
 		findEntityPropertyOptional(const Superblock &superblock, const EntityPropertyKey &key) const;
+		// Includes a retained empty/deleted-owner tombstone, unlike ordinary reads.
+		[[nodiscard]] std::optional<EntityPropertyLocation>
+		findEntityPropertyRevision(const Superblock &superblock, const EntityPropertyKey &key) const;
 		// Resolves one caller-bounded, strictly ordered key batch with a single
 		// retained radix traversal. Results preserve input order and distinguish a
 		// missing owner from malformed directory state.

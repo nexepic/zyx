@@ -887,6 +887,7 @@ namespace graph::storage {
 		// Explicit logical intent; physical metadata work alone does not advance it.
 		bool graph_revision_change = false;
 		bool schema_revision_change = false;
+		std::vector<EntityPropertyKey> changed_property_owners;
 		// Sorted by IndexId and free of duplicates. This gives one native graph
 		// generation a deterministic, fail-closed derived-state publication order.
 		std::vector<NativeGraphIndexTreeMutation> index_tree_mutations;
@@ -1863,6 +1864,8 @@ namespace graph::storage {
 																		const EntityPropertyKey &key) const;
 		[[nodiscard]] std::optional<EntityPropertyLocation>
 		findEntityPropertyLocationOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key) const;
+		[[nodiscard]] std::optional<EntityPropertyLocation>
+		findEntityPropertyRevision(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key) const;
 		void findEntityPropertyLocationsSorted(
 				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
 				std::span<std::optional<EntityPropertyLocation>> results,

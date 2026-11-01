@@ -2282,7 +2282,7 @@ namespace graph::storage {
 			!batch.edge_deletes.empty() || !batch.node_label_replacements.empty() || batch.creation_identity_plan)
 			throw std::invalid_argument("blind Property rebase requires a bounded native replacement-only source");
 		// Dependency storage is a fixed stack array. Absence is a dependency too.
-		std::array<std::optional<EntityPropertyLocation>,64U> dependencies;
+		std::array<uint64_t,64U> dependencies{};
 		for (size_t i=0;i<batch.property_replacements.size();++i) {
 			const auto &entity=batch.property_replacements[i].entity;
 			if (entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
@@ -2290,13 +2290,15 @@ namespace graph::storage {
 				throw std::invalid_argument("blind Property rebase requires persisted Node owners");
 			if (!metadata_->findNodePageLocationOptional(source.pin_,entity.value))
 				throw LogicalGraphMutationConflict("blind Property rebase source Node is absent");
-			dependencies[i]=metadata_->findEntityPropertyLocationOptional(source.pin_,{EntityPropertyOwnerKind::EPOK_NODE,entity.value});
+			const auto owner = metadata_->findEntityPropertyRevision(source.pin_, {EntityPropertyOwnerKind::EPOK_NODE, entity.value});
+			dependencies[i] = owner ? owner->owner_revision : 0U;
 		}
 		const auto validate=[&](const MetadataSnapshotPin &latest) {
 			for(size_t i=0;i<batch.property_replacements.size();++i) {
 				const auto id=batch.property_replacements[i].entity.value;
+				const auto owner = metadata_->findEntityPropertyRevision(latest, {EntityPropertyOwnerKind::EPOK_NODE, id});
 				if (!metadata_->findNodePageLocationOptional(latest,id) ||
-					metadata_->findEntityPropertyLocationOptional(latest,{EntityPropertyOwnerKind::EPOK_NODE,id}) != dependencies[i])
+					(owner ? owner->owner_revision : 0U) != dependencies[i])
 					throw LogicalGraphMutationConflict("blind Property rebase owner changed or was deleted");
 			}
 		};

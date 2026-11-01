@@ -636,6 +636,15 @@ namespace graph::storage {
 		return locations_.findEntityPropertyOptional(snapshot.superblock(), key);
 	}
 
+	std::optional<EntityPropertyLocation>
+	RelocatableMetadataStore::findEntityPropertyRevision(const MetadataSnapshotPin &snapshot,
+												 const EntityPropertyKey &key) const {
+		if (!snapshots_.owns(snapshot) || !key.isValid())
+			throw FormatException(FormatError::FERR_INVALID_STATE, "owner revision lookup requires a valid key and snapshot");
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
+		return locations_.findEntityPropertyRevision(snapshot.superblock(), key);
+	}
+
 	void RelocatableMetadataStore::findEntityPropertyLocationsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
 			const std::span<std::optional<EntityPropertyLocation>> results,

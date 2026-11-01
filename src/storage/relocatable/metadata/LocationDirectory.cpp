@@ -78,6 +78,7 @@ namespace graph::storage {
 								  directoryType == MetadataDirectoryType::MDT_EDGE_ENTITY;
 			const bool isPage = directoryType == MetadataDirectoryType::MDT_PAGE;
 			const bool isProperty = directoryType == MetadataDirectoryType::MDT_ENTITY_PROPERTY;
+			const bool propertyTombstone = isProperty && !entry.segment_id.isValid();
 			const bool isState = directoryType == MetadataDirectoryType::MDT_STATE;
 			const bool isIndexRoot = directoryType == MetadataDirectoryType::MDT_INDEX_ROOT;
 			const bool isVectorLocation = directoryType == MetadataDirectoryType::MDT_VECTOR_LOCATION;
@@ -85,8 +86,11 @@ namespace graph::storage {
 			const bool isLargeValueManifest = directoryType == MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST;
 			const bool isRetireQueue = directoryType == MetadataDirectoryType::MDT_RETIRE_QUEUE;
 			const uint8_t invalid =
-					static_cast<uint8_t>(entry.logical_id == 0U) | static_cast<uint8_t>(!entry.segment_id.isValid()) |
-					static_cast<uint8_t>(!entry.generation.isValid()) |
+					static_cast<uint8_t>(entry.logical_id == 0U) | static_cast<uint8_t>(!entry.segment_id.isValid() && !propertyTombstone) |
+					static_cast<uint8_t>(!entry.generation.isValid() && !propertyTombstone) |
+					static_cast<uint8_t>(propertyTombstone && (entry.first_page != 0U ||
+						static_cast<uint32_t>(entry.generation.value()) != 0U ||
+						((entry.generation.value() >> 32U) == 0U && entry.free_bytes == 0U))) |
 					static_cast<uint8_t>(!isEntity && !isProperty && !isState && !isIndexRoot && !isVectorLocation &&
 										 !isVectorManifest && !isLargeValueManifest && !isRetireQueue &&
 										 entry.first_page < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
@@ -103,7 +107,7 @@ namespace graph::storage {
 										 (entry.page_count != 1U ||
 										  entry.first_page == std::numeric_limits<uint16_t>::max() ||
 										  (!isProperty && entry.generation.value() > std::numeric_limits<uint32_t>::max()))) |
-					static_cast<uint8_t>(isProperty && static_cast<uint32_t>(entry.generation.value()) == 0U) |
+					static_cast<uint8_t>(isProperty && !propertyTombstone && static_cast<uint32_t>(entry.generation.value()) == 0U) |
 					static_cast<uint8_t>(
 							(isIndexRoot || isVectorManifest || isLargeValueManifest) &&
 							(entry.first_page != RSS_PAGE_POOL_FIRST_DATA_FRAME || entry.page_count != 1U)) |
@@ -2719,7 +2723,8 @@ namespace graph::storage {
 			if (pending->logical_id != requested) {
 				continue;
 			}
-			results[index] = decodeEntityPropertyLocation(*pending);
+			const auto location = decodeEntityPropertyLocation(*pending);
+			if (!location.isTombstone()) results[index] = location;
 			pending.reset();
 		}
 	}
