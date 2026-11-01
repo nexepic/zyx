@@ -1784,3 +1784,35 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacingVectorWithSameValueDoesNotAdv
 	ASSERT_TRUE(restore.commit().committed());
 	EXPECT_FALSE(stale.commit().committed());
 }
+
+TEST_F(NativeGraphWritePlannerVectorTest, SameValueVectorPairDoesNotHideAnotherNodeChange) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	auto bootstrap = planner.beginTransaction();
+	const std::array<uint64_t, 1U> labels{7U};
+	const auto first = bootstrap.createNode(labels);
+	const auto second = bootstrap.createNode(labels);
+	const std::vector<std::byte> value{std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}};
+	const std::vector<std::byte> other{std::byte{0x20}, std::byte{0x40}, std::byte{0x60}, std::byte{0x70}};
+	const std::array<NativeGraphVectorBootstrapRecord, 2U> records{{{first, value}, {second, value}}};
+	bootstrap.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), records, vectorOptions());
+	ASSERT_TRUE(bootstrap.commit().committed());
+	auto before = metadata_->openSnapshot();
+	BTreeIndex mapping(vectorDefinition().index_id, *indexes_, *metadata_);
+	const auto firstId = mapping.find(before, VectorSemanticCodec::nodeMappingKey(first));
+	const auto secondId = mapping.find(before, VectorSemanticCodec::nodeMappingKey(second));
+	ASSERT_TRUE(firstId.has_value()); ASSERT_TRUE(secondId.has_value());
+	auto transaction = planner.beginTransaction();
+	const std::array<NativeVectorMutation, 4U> mutations{{
+		{NativeVectorMutationKind::NVMK_ERASE, vectorDefinition().index_id, first, 2U, VectorDistanceMetric::VDM_L2, {}},
+		{NativeVectorMutationKind::NVMK_INSERT, vectorDefinition().index_id, first, 2U, VectorDistanceMetric::VDM_L2, value},
+		{NativeVectorMutationKind::NVMK_ERASE, vectorDefinition().index_id, second, 2U, VectorDistanceMetric::VDM_L2, {}},
+		{NativeVectorMutationKind::NVMK_INSERT, vectorDefinition().index_id, second, 2U, VectorDistanceMetric::VDM_L2, other}}};
+	transaction.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	const auto committed = transaction.commit();
+	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, before.superblock().graph_revision + 1U);
+	auto after = metadata_->openSnapshot();
+	EXPECT_EQ(mapping.find(after, VectorSemanticCodec::nodeMappingKey(first)), firstId);
+	EXPECT_NE(mapping.find(after, VectorSemanticCodec::nodeMappingKey(second)), secondId);
+	EXPECT_EQ(mapping.find(before, VectorSemanticCodec::nodeMappingKey(second)), secondId);
+}
