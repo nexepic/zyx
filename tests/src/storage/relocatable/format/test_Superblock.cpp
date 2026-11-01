@@ -605,17 +605,17 @@ TEST(RelocatableSuperblockTest, CompactColumnMembershipFeatureRequiresNativeForm
     } else EXPECT_THROW(SuperblockCodec::encode(superblock), FormatException);
 }
 
-TEST(RelocatableSuperblockTest, IsolatedCompactCohortRejectsPriorPrototypeSlotsWithoutMigration) {
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        EXPECT_EQ(RSS_FORMAT_VERSION, 13);
-        EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 39);
-        for(const uint16_t version : {uint16_t(32),uint16_t(33),uint16_t(35),uint16_t(37)}) {
-            auto old = SuperblockCodec::encode(validSuperblock(7, 50));
-            LittleEndianCodec::writeU16(old, 4, version); recalculateCrc(old);
-            expectFormatError([&] { static_cast<void>(SuperblockCodec::decode(old)); }, FormatError::FERR_UNSUPPORTED_VERSION);
-            EXPECT_THROW(SuperblockCodec::selectNewest(old, old), FormatException);
-        }
-    } else {
-        EXPECT_EQ(RSS_FORMAT_VERSION, 5); EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 31);
+TEST(RelocatableSuperblockTest, CurrentFormatRejectsChecksumValidOtherVersionsWithoutFallback) {
+    const auto current = SuperblockCodec::encode(validSuperblock(7, 50));
+    EXPECT_NO_THROW(static_cast<void>(SuperblockCodec::decode(current)));
+    for (const uint16_t version : {uint16_t(31), uint16_t(32), uint16_t(33), uint16_t(35),
+                                  uint16_t(37), uint16_t(39), uint16_t(40), uint16_t(41),
+                                  uint16_t(42), uint16_t(43)}) {
+        if (version == RSS_SUPERBLOCK_VERSION) continue;
+        auto other = current;
+        LittleEndianCodec::writeU16(other, 4, version); recalculateCrc(other);
+        expectFormatError([&] { static_cast<void>(SuperblockCodec::decode(other)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+        EXPECT_THROW(static_cast<void>(SuperblockCodec::selectNewest(current, other)), FormatException);
+        EXPECT_THROW(static_cast<void>(SuperblockCodec::selectNewest(other, current)), FormatException);
     }
 }
