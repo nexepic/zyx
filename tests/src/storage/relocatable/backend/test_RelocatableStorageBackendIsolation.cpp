@@ -203,6 +203,27 @@ TEST_F(RelocatableStorageBackendTest, LogicalFenceIgnoresNoOpRollbackAndConfigur
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, SelectedColumnsSkipEmptyOwnerTombstones) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto ids = backend.createLogicalNodes({{{}, {{"value", PropertyValue(1)}}},
+		{{}, {{"value", PropertyValue(2)}}}, {{}, {{"value", PropertyValue(3)}}}});
+	ASSERT_EQ(ids.size(), 3U);
+	auto old = backend.openLogicalGraphReadSnapshot();
+	backend.replaceLogicalNodeProperties({{ids[0], {}}, {ids[2], {}}});
+	const std::array<std::string_view, 1U> names{"value"};
+	auto current = backend.openLogicalGraphReadSnapshot();
+	const auto values = current->readNodePropertyColumnsSorted(ids, names);
+	ASSERT_EQ(values.size(), 1U);
+	EXPECT_EQ(values[0], (std::vector<PropertyValue>{PropertyValue(), PropertyValue(2), PropertyValue()}));
+	EXPECT_EQ(old->readNodeProperty(ids[0], "value"), PropertyValue(1));
+	current.reset(); old.reset(); backend.close();
+	backend.open(); current = backend.openLogicalGraphReadSnapshot();
+	EXPECT_EQ(current->readNodePropertyColumnsSorted(ids, names)[0], values[0]);
+	current.reset(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, ConfigurationPublicationDoesNotConflictWithStagedGraphWrite) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;

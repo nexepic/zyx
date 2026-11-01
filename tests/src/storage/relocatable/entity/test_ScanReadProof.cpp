@@ -840,6 +840,30 @@ TEST_F(ScanReadProofTest, CompletedImageTracksOnlyChangedOwnerAcrossNoopAndReope
     EXPECT_EQ(current->readNodeProperty(2U, "number"), graph::PropertyValue(int64_t{888}));
     current.reset(); backend.close();
 }
+TEST_F(ScanReadProofTest, CompletedImageSelectedRowReadsSkipEmptyOwnerTombstones) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 64U));
+    builder.reset();
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto ids = backend.createLogicalNodes({
+        {{"Nodes"}, {{"number", graph::PropertyValue(int64_t{1})}}},
+        {{"Nodes"}, {{"number", graph::PropertyValue(int64_t{2})}}},
+        {{"Nodes"}, {{"number", graph::PropertyValue(int64_t{3})}}}});
+    ASSERT_EQ(ids.size(), 3U);
+    auto old = backend.openLogicalGraphReadSnapshot();
+    backend.replaceLogicalNodeProperties({{ids[0], {}}, {ids[2], {}}});
+    const std::array<std::string_view, 1U> names{"number"};
+    auto current = backend.openLogicalGraphReadSnapshot();
+    const auto values = current->readNodePropertyColumnsSorted(ids, names);
+    ASSERT_EQ(values.size(), 1U);
+    EXPECT_EQ(values[0], (std::vector<graph::PropertyValue>{graph::PropertyValue(),
+        graph::PropertyValue(int64_t{2}), graph::PropertyValue()}));
+    EXPECT_EQ(old->readNodeProperty(ids[0], "number"), graph::PropertyValue(int64_t{1}));
+    current.reset(); old.reset(); backend.close();
+    backend.open(); current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodePropertyColumnsSorted(ids, names)[0], values[0]);
+    current.reset(); backend.close();
+}
 
 TEST_F(ScanReadProofTest, LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots) {
     ASSERT_NO_FATAL_FAILURE(makeImage(true, true));

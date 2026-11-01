@@ -1354,6 +1354,9 @@ namespace graph::storage {
 			pending_directory_location_->key.directoryId() == requestedDirectoryId) {
 			std::optional<EntityPropertyLocation> result = std::move(pending_directory_location_);
 			pending_directory_location_.reset();
+			// Tombstones retain owner revision for conflict detection but have no
+			// physical Property page for a read cursor to dereference.
+			if (result->isTombstone()) return std::nullopt;
 			return result;
 		}
 		return std::nullopt;
