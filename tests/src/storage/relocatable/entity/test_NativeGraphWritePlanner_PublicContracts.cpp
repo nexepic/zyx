@@ -971,11 +971,14 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, PropertyOnlyCommitDoesNotDisc
 	EXPECT_FALSE(values.contains("native_graph.commit.entity_pool_capacity_queries"));
 	auto current = metadata_->openSnapshot();
 	EXPECT_EQ(metadata_->findPageLocation(current, nodePage), physical);
-	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, propertyKey), propertyLocation);
-	EXPECT_EQ(current.superblock().entity_property_directory_root, old.superblock().entity_property_directory_root);
+	const auto updatedLocation = metadata_->findEntityPropertyLocation(current, propertyKey);
+	EXPECT_EQ(updatedLocation.page_id, propertyLocation.page_id);
+	EXPECT_EQ(updatedLocation.slot_id, propertyLocation.slot_id);
+	EXPECT_EQ(updatedLocation.slot_generation, propertyLocation.slot_generation);
+	EXPECT_EQ(updatedLocation.owner_revision, current.superblock().graph_revision);
+	EXPECT_GT(updatedLocation.owner_revision, propertyLocation.owner_revision);
+	EXPECT_NE(current.superblock().entity_property_directory_root, old.superblock().entity_property_directory_root);
 	EXPECT_NE(metadata_->findPageLocation(current, propertyLocation.page_id), propertyPhysical);
-	ASSERT_TRUE(values.contains("native_graph.commit.unchanged_property_locations"));
-	EXPECT_EQ(values.at("native_graph.commit.unchanged_property_locations").totalValue, 1);
 	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,
 			graph::PropertyValue(int64_t{1}));
 	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries.front().value,

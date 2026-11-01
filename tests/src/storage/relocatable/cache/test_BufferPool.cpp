@@ -1040,7 +1040,7 @@ TEST_F(BufferPoolTest, ScopedSequentialStorageReadsRestoreNormalAdmissionAndStay
             catch (const std::runtime_error &) { otherThreadDenied = true; }
         });
         other.join(); EXPECT_TRUE(otherThreadDenied);
-        EXPECT_THROW(static_cast<void>(io_->pinTypedPage(missing)), std::runtime_error);
+        EXPECT_FALSE(io_->pinTypedPage(missing).has_value());
     }
     EXPECT_FALSE(StorageIO::SequentialReadScope::activeFor(*io_));
     EXPECT_THROW(static_cast<void>(io_->readAt(missing, image.data(), image.size())), std::runtime_error);
