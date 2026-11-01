@@ -203,6 +203,21 @@ TEST_F(RelocatableStorageBackendTest, LogicalFenceIgnoresNoOpRollbackAndConfigur
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, ConfigurationPublicationDoesNotConflictWithStagedGraphWrite) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto id = backend.createLogicalNodes({{{"Revision"}, {{"value", PropertyValue(1)}}}}).front();
+	auto transaction = backend.beginLogicalGraphTransaction(false);
+	EXPECT_EQ(transaction->readSnapshot().readNodeProperty(id, "value"), PropertyValue(1));
+	(void) transaction->stageMutationBatch(isolationSet(id, "value", PropertyValue(2)));
+	backend.setConfiguration("storage.compaction.enabled", PropertyValue(false));
+	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
+	auto current = backend.openLogicalGraphReadSnapshot();
+	EXPECT_EQ(current->readNodeProperty(id, "value"), PropertyValue(2));
+	current.reset(); transaction.reset(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, RowPropertyPublicationPersistsLogicalRevisionOnce) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
