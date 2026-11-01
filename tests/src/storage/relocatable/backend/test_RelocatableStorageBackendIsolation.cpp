@@ -223,6 +223,22 @@ TEST_F(RelocatableStorageBackendTest, RowPropertyPublicationPersistsLogicalRevis
 	reopened.release(); backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, EntityCreateAndDeleteAdvanceGraphRevision) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	auto before = backend.openSnapshot();
+	const auto revision = before.superblock().graph_revision;
+	const auto id = backend.createLogicalNodes({{{}, {}}}).front();
+	auto created = backend.openSnapshot();
+	EXPECT_EQ(created.superblock().graph_revision, revision + 1U);
+	backend.deleteLogicalNodes({{id, false, 0U}});
+	auto deleted = backend.openSnapshot();
+	EXPECT_EQ(deleted.superblock().graph_revision, revision + 2U);
+	EXPECT_EQ(before.superblock().graph_revision, revision);
+	before.release(); created.release(); deleted.release(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, SchemaRevisionTracksNewBindingsButNotConfigurationOrExistingValues) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;

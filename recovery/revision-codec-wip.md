@@ -29,3 +29,5 @@ The next unvalidated prototype adds explicit graph revision intent for ordinary 
 At `53a2662a`, a same-tree incremental core/test build succeeded. A newly linked same-tree selection passed 13/13: the normal ROW publication test, normal schema token/config test, streamed Edge graph/schema revision test, schema identity after value change/reopen, existing schema-binding examples, and all selected blind Property rebase cases. These tests establish those examples only. The general graph fence still uses physical roots and the config-fence regression remains red; scalar index, every graph writer, rollback, latest-only format, tombstone reclamation, hybrid/SCAN owner ABA and broader suite remain incomplete.
 
 The streamed revision test now additionally checks a second streamed Edge using the existing type advances only graph revision; the ordinary schema test now also stages and rolls back a new label and expects schema revision unchanged. These extensions have not yet been run.
+
+A focused normal entity test was added to require propertyless Node creation and deletion each to advance graph revision while a prior snapshot remains unchanged. Execution pending.
