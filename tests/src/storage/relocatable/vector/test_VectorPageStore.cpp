@@ -1280,3 +1280,26 @@ TEST_F(RelocatableVectorPageStoreTest, RecoversVectorPageEvacuationAtMetadataPub
 				  std::vector<std::byte>(16U, std::byte{0x11}));
 	}
 }
+
+TEST_F(RelocatableVectorPageStoreTest, ExplicitLogicalPageReplacementAdvancesRevisionWhilePhysicalRewriteDoesNot) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const auto initial = header(VectorStorageKind::VSK_RAW, PageId(101), Generation(1), LogSequenceNumber(2));
+	ASSERT_TRUE(store.allocate(allocationRequest(initial, SegmentId(71)), page(initial, std::byte{0x11}),
+		PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2)).has_value());
+	auto old = metadata->openSnapshot();
+	const auto revision = old.superblock().graph_revision;
+	const auto logicalHeader = header(VectorStorageKind::VSK_RAW, PageId(101), Generation(1), LogSequenceNumber(3));
+	MetadataPublishOptions logical;
+	logical.logical_graph_change = true;
+	const auto changed = store.replace(page(logicalHeader, std::byte{0x22}), SegmentId(71),
+		LogSequenceNumber(2), LogSequenceNumber(3), logical);
+	EXPECT_EQ(changed.superblock.graph_revision, revision + 1U);
+	auto current = metadata->openSnapshot();
+	EXPECT_EQ(store.read(old, PageId(101)).read(0), std::vector<std::byte>(16U, std::byte{0x11}));
+	EXPECT_EQ(store.read(current, PageId(101)).read(0), std::vector<std::byte>(16U, std::byte{0x22}));
+	const auto physicalHeader = header(VectorStorageKind::VSK_RAW, PageId(101), Generation(1), LogSequenceNumber(4));
+	const auto physical = store.replace(page(physicalHeader, std::byte{0x22}), SegmentId(71),
+		LogSequenceNumber(3), LogSequenceNumber(4));
+	EXPECT_EQ(physical.superblock.graph_revision, changed.superblock.graph_revision);
+}

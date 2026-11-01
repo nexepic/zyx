@@ -2252,3 +2252,30 @@ TEST_F(RelocatableEntityPageStoreTest, DirectEntityWritesAdvanceLogicalRevisionO
 	EXPECT_EQ(store.readNode(afterAllocate, 1001U), firstNode);
 	EXPECT_EQ(store.readNode(afterUpdate, 1001U), replacement);
 }
+
+TEST_F(RelocatableEntityPageStoreTest, DirectEdgeWritesPreserveNoopAndDeletedOwnerRevision) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	auto initial = metadata->openSnapshot();
+	const auto revision = initial.superblock().graph_revision;
+	const auto original = edge(1001U, 1002U, 21U);
+	const auto allocated = store.allocateEdge(newPool(31U, 901U, 101U, 40U), 2001U, original, LogSequenceNumber(2U));
+	ASSERT_TRUE(allocated.has_value());
+	EXPECT_EQ(allocated->superblock.graph_revision, revision + 1U);
+	auto before = metadata->openSnapshot();
+	const auto changed = edge(1001U, 1002U, 23U);
+	const auto updated = store.updateEdge(before, 2001U, changed, LogSequenceNumber(3U));
+	EXPECT_EQ(updated.superblock.graph_revision, revision + 2U);
+	auto after = metadata->openSnapshot();
+	const auto noop = store.updateEdge(after, 2001U, changed, LogSequenceNumber(4U));
+	EXPECT_EQ(noop.superblock.graph_revision, revision + 2U);
+	auto beforeErase = metadata->openSnapshot();
+	const auto erased = store.eraseEdge(beforeErase, 2001U, LogSequenceNumber(5U));
+	EXPECT_EQ(erased.superblock.graph_revision, revision + 3U);
+	auto current = metadata->openSnapshot();
+	const auto tombstone = metadata->findEntityPropertyRevision(current, {EntityPropertyOwnerKind::EPOK_EDGE, 2001U});
+	ASSERT_TRUE(tombstone.has_value());
+	EXPECT_TRUE(tombstone->isTombstone());
+	EXPECT_EQ(tombstone->owner_revision, erased.superblock.graph_revision);
+	EXPECT_EQ(store.readEdge(before, 2001U), original);
+}
