@@ -527,7 +527,30 @@ namespace graph::storage {
 		for (const EntityPageLocation &location: edges) {
 			validateLocation(location);
 		}
+		bool membershipChanged = false;
+		for (const auto &node : nodes)
+			membershipChanged = membershipChanged || !locations_.findNodePageLocationOptional(current, node.entity_id).has_value();
+		for (const auto &edge : edges)
+			membershipChanged = membershipChanged || !locations_.findEdgePageLocationOptional(current, edge.entity_id).has_value();
+		std::vector<EntityPropertyKey> removedOwners;
+		for (const auto id : erasedNodeIds)
+			if (locations_.findNodePageLocationOptional(current, id)) removedOwners.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+		for (const auto id : erasedEdgeIds)
+			if (locations_.findEdgePageLocationOptional(current, id)) removedOwners.push_back({EntityPropertyOwnerKind::EPOK_EDGE, id});
+		membershipChanged = membershipChanged || !removedOwners.empty();
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		if (membershipChanged) batch.markGraphChanged();
+		if (!removedOwners.empty()) {
+			std::ranges::sort(removedOwners);
+			std::vector<EntityPropertyLocation> tombstones;
+			tombstones.reserve(removedOwners.size());
+			for (const auto key : removedOwners) {
+				if (!key.isValid())
+					throw FormatException(FormatError::FERR_INVALID_HEADER, "Entity deletion has an invalid Property owner key");
+				tombstones.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			}
+			locations_.prepareReplaceEntityProperties(batch, tombstones, {});
+		}
 		for (const EntityPageLocation &location: nodes) {
 			batch.observeLogicalNodeId(location.entity_id);
 		}

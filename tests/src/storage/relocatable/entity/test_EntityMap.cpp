@@ -33,6 +33,7 @@ TEST_F(RelocatableMetadataStoreTest, EntityMapKeepsStablePageIdentityAcrossSnaps
 							  EntityPageLocation{102U, page.page_id, 4U, 1U}};
 	const std::array edges = {EntityPageLocation{201U, page.page_id, 8U, 1U}};
 	const Superblock published = store->upsertEntityPageLocations(nodes, {}, edges, {}, LogSequenceNumber(3U));
+	EXPECT_EQ(published.graph_revision, before.superblock().graph_revision + 1U);
 	EXPECT_TRUE(published.node_entity_directory_root.isValid());
 	EXPECT_TRUE(published.edge_entity_directory_root.isValid());
 	expectFormatError([&] { static_cast<void>(store->findNodePageLocation(before, 101U)); },
@@ -42,16 +43,23 @@ TEST_F(RelocatableMetadataStoreTest, EntityMapKeepsStablePageIdentityAcrossSnaps
 	EXPECT_EQ(store->findNodePageLocation(original, 101U), nodes.front());
 	EXPECT_EQ(store->findEdgePageLocation(original, 201U), edges.front());
 	const EntityPageLocation replacement{101U, page.page_id, 7U, 2U};
-	static_cast<void>(store->upsertEntityPageLocations(std::span(&replacement, 1), {}, {}, {}, LogSequenceNumber(4U)));
+	const auto relocated = store->upsertEntityPageLocations(std::span(&replacement, 1), {}, {}, {}, LogSequenceNumber(4U));
+	EXPECT_EQ(relocated.graph_revision, published.graph_revision);
 	MetadataSnapshotPin current = store->openSnapshot();
 	EXPECT_EQ(store->findNodePageLocation(original, 101U), nodes.front());
 	EXPECT_EQ(store->findNodePageLocation(current, 101U), replacement);
 	EXPECT_EQ(store->findNodePageLocation(current, 102U), nodes.back());
 
 	const std::array<uint64_t, 1U> erasedNodes{102U};
-	static_cast<void>(store->upsertEntityPageLocations({}, erasedNodes, {}, {}, LogSequenceNumber(5U)));
+	const auto erased = store->upsertEntityPageLocations({}, erasedNodes, {}, {}, LogSequenceNumber(5U));
+	EXPECT_EQ(erased.graph_revision, published.graph_revision + 1U);
 	MetadataSnapshotPin afterErase = store->openSnapshot();
 	EXPECT_TRUE(store->findNodePageLocationOptional(afterErase, 102U).has_value() == false);
+	const EntityPropertyKey erasedOwner{EntityPropertyOwnerKind::EPOK_NODE, 102U};
+	const auto tombstone = store->findEntityPropertyRevision(afterErase, erasedOwner);
+	ASSERT_TRUE(tombstone.has_value());
+	EXPECT_TRUE(tombstone->isTombstone());
+	EXPECT_EQ(tombstone->owner_revision, erased.graph_revision);
 	EXPECT_EQ(store->findNodePageLocation(current, 102U), nodes.back());
 	before.release();
 	original.release();
@@ -62,6 +70,7 @@ TEST_F(RelocatableMetadataStoreTest, EntityMapKeepsStablePageIdentityAcrossSnaps
 	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
 	EXPECT_EQ(reopened->findNodePageLocation(reopenedSnapshot, 101U), replacement);
 	EXPECT_FALSE(reopened->findNodePageLocationOptional(reopenedSnapshot, 102U).has_value());
+	EXPECT_EQ(reopened->findEntityPropertyRevision(reopenedSnapshot, erasedOwner), tombstone);
 	EXPECT_EQ(reopened->findEdgePageLocation(reopenedSnapshot, 201U), edges.front());
 }
 
