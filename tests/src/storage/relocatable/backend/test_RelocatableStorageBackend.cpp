@@ -1065,9 +1065,11 @@ TEST_F(RelocatableStorageBackendTest, LogicalMutationBatchRejectsAStaleReadSnaps
 	backend.close();
 }
 
-TEST_F(RelocatableStorageBackendTest, LogicalMutationFenceEncodesEveryGraphVisibleRoot) {
+TEST_F(RelocatableStorageBackendTest, LogicalMutationFenceTracksLogicalRevisionsAcrossPhysicalRootChanges) {
 	Superblock superblock;
 	superblock.database_id = DatabaseId(7U);
+	superblock.graph_revision = 17U;
+	superblock.schema_revision = 23U;
 	std::array<PhysicalPageRef *, LogicalGraphMutationFence::GRAPH_STATE_ROOT_COUNT> roots = {
 			&superblock.node_entity_directory_root,
 			&superblock.edge_entity_directory_root,
@@ -1083,16 +1085,25 @@ TEST_F(RelocatableStorageBackendTest, LogicalMutationFenceEncodesEveryGraphVisib
 						 Generation(201U + index)};
 	}
 
-	const LogicalGraphMutationFence fence = RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock);
+	const auto fence = RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock);
 	ASSERT_TRUE(fence.isValid());
 	ASSERT_EQ(fence.graph_state_tokens.size(), LogicalGraphMutationFence::GRAPH_STATE_ROOT_COUNT *
-													   LogicalGraphMutationFence::GRAPH_STATE_TOKENS_PER_ROOT);
-	for (size_t index = 0U; index < roots.size(); ++index) {
-		const size_t offset = index * LogicalGraphMutationFence::GRAPH_STATE_TOKENS_PER_ROOT;
-		EXPECT_EQ(fence.graph_state_tokens[offset], roots[index]->physical_slot.value());
-		EXPECT_EQ(fence.graph_state_tokens[offset + 1U], roots[index]->frame_index);
-		EXPECT_EQ(fence.graph_state_tokens[offset + 2U], roots[index]->generation.value());
+		LogicalGraphMutationFence::GRAPH_STATE_TOKENS_PER_ROOT);
+	EXPECT_EQ(fence.graph_state_tokens[0], 17U);
+	EXPECT_EQ(fence.graph_state_tokens[1], 23U);
+	for (auto *root : roots) {
+		const auto previous = *root;
+		*root = {PhysicalSlotId(previous.physical_slot.value() + 100U), previous.frame_index,
+			Generation(previous.generation.value() + 1U)};
+		EXPECT_EQ(RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock), fence);
+		*root = previous;
 	}
+	auto changed = superblock; ++changed.graph_revision;
+	EXPECT_NE(RelocatableStorageBackend::makeLogicalGraphMutationFence(changed), fence);
+	changed = superblock; ++changed.schema_revision;
+	EXPECT_NE(RelocatableStorageBackend::makeLogicalGraphMutationFence(changed), fence);
+	changed = superblock; changed.database_id = DatabaseId(8U);
+	EXPECT_NE(RelocatableStorageBackend::makeLogicalGraphMutationFence(changed), fence);
 }
 
 TEST_F(RelocatableStorageBackendTest, LogicalTransactionStagesMultipleBatchesAndPublishesOnce) {
