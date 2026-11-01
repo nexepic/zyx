@@ -2220,6 +2220,14 @@ namespace graph::storage {
 										 page.upserted_properties.end());
 			}
 		}
+		for (auto &location : result.properties) {
+			if (std::ranges::find(activeDerivedState.changed_property_owners, location.key) !=
+				activeDerivedState.changed_property_owners.end()) {
+				location.owner_revision = superblock.graph_revision;
+			} else if (const auto previous = metadata_.findEntityPropertyRevision(snapshot, location.key)) {
+				location.owner_revision = previous->owner_revision;
+			}
+		}
 		std::ranges::sort(result.properties, {},
 						  [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
 		return result;
