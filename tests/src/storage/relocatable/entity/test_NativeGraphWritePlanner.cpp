@@ -2052,3 +2052,20 @@ TEST_F(NativeGraphWritePlannerTest, AllocatorOnlyPublicationDoesNotConflictWithS
 	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, id}),
 			  propertyRoot(id, Node::typeId, 2));
 }
+
+TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexWritesAdvanceGraphRevisionAtomically) {
+	const auto root = allocateEmptyIndexRoot(*btree_pages_);
+	const std::array<std::byte, 1U> key{std::byte{0x42}};
+	auto before = metadata_->openSnapshot();
+	const auto initial = before.superblock().graph_revision;
+	const auto firstLsn = before.superblock().checkpoint_lsn.value() + 1U;
+	before.release();
+	const auto inserted = btree_pages_->upsert(root.index_id, key, 7U, LogSequenceNumber(firstLsn));
+	EXPECT_EQ(inserted.superblock.graph_revision, initial + 1U);
+	auto insertedSnapshot = metadata_->openSnapshot();
+	const auto secondLsn = insertedSnapshot.superblock().checkpoint_lsn.value() + 1U;
+	insertedSnapshot.release();
+	ASSERT_TRUE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(secondLsn)));
+	auto erased = metadata_->openSnapshot();
+	EXPECT_EQ(erased.superblock().graph_revision, initial + 2U);
+}
