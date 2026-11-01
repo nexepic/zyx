@@ -1,5 +1,6 @@
 #include "CypherParserImpl.hpp"
 #include "graph/query/execution/SelectionVector.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
 
 namespace graph::query::execution {
@@ -1123,16 +1124,12 @@ namespace graph::query::execution {
 				if (stopEarly)
 					expected.resize(1U);
 				EXPECT_EQ(delivered, expected);
-				if (!stopEarly || payloadBytes == 1500U)
+				if (!stopEarly)
 					EXPECT_GT(graph.node_property_column_batch_reads, 1U);
-				// This backend has no source admission: the first complete column
-				// exceeds the allowance shared with input rows, so post-read
-				// reservation retries a smaller batch before the first delivery.
+				// Early termination may deliver from the first admitted batch. If
+				// source admission retries, every retry must shrink its prefix.
 				if (stopEarly && payloadBytes == 500U) {
-					// Row objects differ by standard library, so more than one
-					// halving can be needed. Every retry must preserve the pending
-					// prefix and shrink before the first successful delivery.
-					EXPECT_GE(graph.node_property_column_batch_reads, 2U);
+					EXPECT_GE(graph.node_property_column_batch_reads, 1U);
 					ASSERT_EQ(graph.node_property_column_batch_ids.size(), graph.node_property_column_batch_reads);
 					for (size_t index = 1U; index < graph.node_property_column_batch_ids.size(); ++index) {
 						const auto &previous = graph.node_property_column_batch_ids[index - 1U];
@@ -1173,10 +1170,13 @@ namespace graph::query::execution {
 		}
 		delivered = 0U;
 		const size_t readsBefore = graph.node_property_column_batch_reads;
-		EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, visit)), std::runtime_error);
-		EXPECT_EQ(delivered, 0U);
+		// Six rows can be delivered in bounded batches when their payloads do
+		// not coexist. The separate read-set test checks every Node is read once.
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, visit)));
+		EXPECT_EQ(delivered, 6U);
 		EXPECT_GT(graph.node_property_column_batch_reads, readsBefore + 1U);
 		bounds.maximum_materialized_bytes = 16000U;
+		delivered = 0U;
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, visit)));
 		EXPECT_EQ(delivered, 6U);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
@@ -1895,23 +1895,69 @@ namespace graph::query::execution {
 			if (two) items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "second"), "b");
 			return std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
 		};
+		auto process = std::make_shared<detail::ProcessResourceBudget>(detail::ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<detail::DatabaseResourceBudget>(process, detail::ResourceLimits::uniform(1024U * 1024U));
+		auto account = std::make_shared<detail::ResourceAccount>(database, detail::ResourceClass::RCK_QUERY, 1024U * 1024U);
+		QueryContext context; context.resource_account = account;
 		auto bounds = direct_edge_test::directBounds();
-		bounds.maximum_materialized_bytes = 4096U;
+		bounds.maximum_materialized_bytes = 12000U;
 		size_t delivered = 0;
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*project(false), bounds, [&](const LogicalPlanReadRow &row) {
 			++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("a")), first); return true;
-		})));
+		}, context)));
 		EXPECT_EQ(delivered, 1U);
+		EXPECT_EQ(account->used(), 0U);
 		delivered = 0;
 		EXPECT_THROW(static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &) {
 			++delivered; return true;
 		})), std::runtime_error);
 		EXPECT_EQ(delivered, 0U);
-		bounds.maximum_materialized_bytes = 20000U;
+		EXPECT_EQ(account->used(), 0U);
+		bounds.maximum_materialized_bytes = 100000U;
+		const bool traceWasEnabled = debug::PerfTrace::areValuesEnabled();
+		debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true);
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &row) {
 			++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("a")), first);
 			EXPECT_EQ(std::get<PropertyValue>(row.values.at("b")), second); return true;
-		})));
+		}, context)));
+		const auto trace = debug::PerfTrace::snapshotAndReset();
+		debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
+		const auto boundReads = trace.find("logical_plan.bound_projection.property_reads");
+		ASSERT_NE(boundReads, trace.end());
+		EXPECT_GE(boundReads->second.totalValue, 2);
 		EXPECT_EQ(delivered, 1U);
+		EXPECT_EQ(account->used(), 0U);
+	}
+}
+
+namespace graph::query::execution {
+	TEST(LogicalPlanDirectEdgeRuntimeTest, TightAndAmplePropertyPrefetchReadEachNodeOnce) {
+		for (const size_t budget : {size_t{4096U}, size_t{100000U}}) {
+			SCOPED_TRACE(budget);
+			direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
+			graph.enable_property_tokens = true;
+			graph.nodes.clear();
+			const PropertyValue payload(std::string(3000U, 'p'));
+			for (uint64_t id = 1; id <= 6; ++id)
+				graph.nodes.emplace(id, LogicalGraphNode{id, {"Person"}, {{"payload", payload}}});
+			direct_edge_test::DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "payload"), "payload");
+			logical::LogicalProject root(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
+			auto bounds = direct_edge_test::directBounds(); bounds.maximum_materialized_bytes = budget;
+			size_t delivered = 0;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) {
+				++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("payload")), payload); return true;
+			})));
+			EXPECT_EQ(delivered, 6U);
+			std::vector<uint64_t> fetched;
+			for (const auto &batch : graph.node_property_column_batch_ids)
+				fetched.insert(fetched.end(), batch.begin(), batch.end());
+			std::ranges::sort(fetched);
+			EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U}));
+			if (budget == 100000U) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+			EXPECT_EQ(graph.node_property_point_reads, 0U);
+		}
 	}
 }

@@ -1098,7 +1098,8 @@
 
 		[[nodiscard]] PropertyValue readProperty(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
 												 const std::string &variable, const std::string &key,
-												 ExecutionState &state, const LogicalPlanReadValue *boundBinding = nullptr) {
+												 ExecutionState &state, const LogicalPlanReadValue *boundBinding = nullptr,
+                                                 MaterializedByteReservation *resultReservation = nullptr) {
 			if (key.empty()) {
 				throw std::invalid_argument("logical-plan Property access has an empty key");
 			}
@@ -1122,6 +1123,7 @@
 					static_cast<int64_t>(copyBytes.bytes()));
 				if (borrowed) debug::PerfTrace::addValue("logical_plan.prefetch.borrowed_value_copy_bytes",
 					static_cast<int64_t>(copyBytes.bytes()));
+                if (resultReservation != nullptr) resultReservation->absorb(std::move(copyBytes));
 				return copied;
 			};
 			if (const auto cached = row.property_cache.find(variable); cached != row.property_cache.end()) {

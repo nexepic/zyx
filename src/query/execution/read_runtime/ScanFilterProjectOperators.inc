@@ -540,7 +540,7 @@
 								} else if (value != nullptr && instruction->kind == detail::ProjectionReferenceKind::PRK_PROPERTY) {
 									debug::PerfTrace::addValue("logical_plan.bound_projection.property_reads", 1);
 									projected.values.emplace(item.alias, readProperty(state.shared.snapshot, row,
-										instruction->expression->getVariableName(), instruction->expression->getPropertyName(), state, value));
+										instruction->expression->getVariableName(), instruction->expression->getPropertyName(), state, value, &charge));
 								} else {
 									projected.values.emplace(item.alias, evaluateExpression(*item.expression, row, state));
 								}
