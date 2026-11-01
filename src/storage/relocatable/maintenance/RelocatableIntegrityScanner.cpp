@@ -593,8 +593,9 @@ namespace graph::storage {
 						}
 						const EntityPropertyKey key = entityPropertyKeyForRoot(root);
                         const auto route = metadata_.findEntityPropertyLocationOptional(snapshot, key);
-                        requireIntegrity(route && *route == EntityPropertyLocation{key, reference.page_id,
-                            reference.slot_id, reference.generation},
+                        requireIntegrity(route && route->key == key && route->page_id == reference.page_id &&
+                            route->slot_id == reference.slot_id && route->slot_generation == reference.generation &&
+                            route->owner_revision <= snapshot.superblock().graph_revision,
                             "relocatable integrity scan found an Entity Property root without its exact directory entry");
                         ++physicalPropertySlots;
 					}
