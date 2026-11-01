@@ -125,6 +125,14 @@ namespace graph::storage {
 			io.writeAt({offset, generation.value()}, bytes.data(), bytes.size());
 		}
 
+		void writeOwnerBeforeControl(StorageIO &io, uint64_t offset, Generation generation,
+									 const std::array<std::byte, RSS_PAGE_SIZE> &bytes) {
+			// Control records bypass the write-back cache. Make the owner visible to
+			// the OS first so a process killed before publication cannot leave an
+			// allocated bitmap pointing at an unwritten cached page.
+			io.writePagesThrough({offset, generation.value()}, bytes.data(), bytes.size());
+		}
+
 		[[nodiscard]] std::array<std::byte, RSS_PAGE_SIZE> makePoolControlPage(const SegmentEnvelope &envelope,
 																			   const SharedPagePoolHeader &header) {
 			std::array<std::byte, RSS_PAGE_SIZE> page{};
@@ -420,7 +428,7 @@ namespace graph::storage {
 												  "relocatable shared page batch append has inconsistent frame or payload metadata");
 			}
 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(*frame) * RSS_PAGE_SIZE;
-			writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
+			writeOwnerBeforeControl(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
 			// Persist the owner frame before switching the inactive control record so
 			// a failed write leaves only unreachable state for reconciliation.
 			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
@@ -538,12 +546,12 @@ namespace graph::storage {
 							   makeOwnedPage(pages[index].owner, pages[index].payload));
 			}
 		} else {
-			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
-											 "relocatable shared page-pool control page is truncated");
 			for (size_t index = 0U; index < pages.size(); ++index) {
 				const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(locations[index].page_index) * RSS_PAGE_SIZE;
-				writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
+				writeOwnerBeforeControl(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
 			}
+			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
+											 "relocatable shared page-pool control page is truncated");
 		}
 	}
 
@@ -1925,7 +1933,7 @@ namespace graph::storage {
 		}
 		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
 		const uint64_t pageOffset = offset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
-		writeTypedPage(*io_, pageOffset, entry.generation, makeOwnedPage(owner, payload));
+		writeOwnerBeforeControl(*io_, pageOffset, entry.generation, makeOwnedPage(owner, payload));
 		// The candidate must be complete before its allocation bit becomes durable.
 		// Otherwise a failed page write leaves recovery unable to distinguish a torn
 		// unpublished owner from corruption in a previously allocated frame.
@@ -1954,7 +1962,7 @@ namespace graph::storage {
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
 		const uint64_t newPageOffset = poolOffset + static_cast<uint64_t>(newFrame) * RSS_PAGE_SIZE;
-		writeTypedPage(*io_, newPageOffset, entry.generation, makeOwnedPage(newOwner, payload));
+		writeOwnerBeforeControl(*io_, newPageOffset, entry.generation, makeOwnedPage(newOwner, payload));
 		static_cast<void>(oldOwner);
 		static_cast<void>(oldFrame);
 		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, poolHeader,
@@ -1982,7 +1990,7 @@ namespace graph::storage {
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, destinationPool.physical_slot);
 		const uint64_t destinationPageOffset =
 				destinationOffset + static_cast<uint64_t>(destinationFrame) * RSS_PAGE_SIZE;
-		writeTypedPage(*io_, destinationPageOffset, destinationPool.generation,
+		writeOwnerBeforeControl(*io_, destinationPageOffset, destinationPool.generation,
 					   makeOwnedPage(destinationOwner, payload));
 		static_cast<void>(sourcePool);
 		static_cast<void>(sourceHeader);
