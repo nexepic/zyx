@@ -192,7 +192,7 @@ protected:
 	// exact vector image after building a completed image from real wide ROWs.
 	void expectIntegrityOnCompleteScanImage() {
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-        constexpr size_t seedCount = 512U, fieldCount = 32U;
+        constexpr size_t seedCount = 1024U, fieldCount = 32U;
         size_t existingNodes = 0;
         { auto pin = metadata_->openSnapshot();
           metadata_->visitNodePageLocations(pin, [&](const EntityPageLocation &) { ++existingNodes; }); }
