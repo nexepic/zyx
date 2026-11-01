@@ -1062,6 +1062,8 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryEdgeMetadataPageDiskFullRetainsOld
 TEST_F(RelocatableStorageBackendTest, OrdinaryEdgeFinalSyncFailureReopensAnOldOrNewCompleteGeneration) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
 	PhysicalPageRef baseEdgeDirectoryRoot;
+	uint64_t baseGraphRevision = 0U;
+	uint64_t baseSchemaRevision = 0U;
 	{
 		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
 		ASSERT_TRUE(data->is_open());
@@ -1069,6 +1071,8 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryEdgeFinalSyncFailureReopensAnOldOr
 		auto metadata = RelocatableMetadataStore::open(dataIo);
 		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
 		baseEdgeDirectoryRoot = snapshot.superblock().edge_entity_directory_root;
+		baseGraphRevision = snapshot.superblock().graph_revision;
+		baseSchemaRevision = snapshot.superblock().schema_revision;
 	}
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -1138,6 +1142,12 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryEdgeFinalSyncFailureReopensAnOldOr
 			return edge.target_node_id == fixture.unlabeled_node_id && edge.type == "FINAL_SYNC";
 		});
 	};
+	{
+		auto revisions = reopened.openSnapshot();
+		const bool published = findFinalSyncEdge() != outgoing.edges.end();
+		EXPECT_EQ(revisions.superblock().graph_revision, baseGraphRevision + (published ? 1U : 0U));
+		EXPECT_EQ(revisions.superblock().schema_revision, baseSchemaRevision + (published ? 1U : 0U));
+	}
 	if (findFinalSyncEdge() == outgoing.edges.end()) {
 		snapshot.reset();
 		const std::vector<uint64_t> retried =
