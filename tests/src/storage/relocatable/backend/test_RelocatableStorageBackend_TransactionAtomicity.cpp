@@ -504,6 +504,9 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeCommitPublishesInlinePrope
 	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
 	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);
 	transaction.reset();
+	auto revisionSnapshot = backend.openSnapshot();
+	const uint64_t streamedGraphRevision = revisionSnapshot.superblock().graph_revision;
+	revisionSnapshot.release();
 	const auto assertProperties = [&](LogicalGraphReadSnapshot &snapshot) {
 		for (const uint64_t edgeId: staged) {
 			EXPECT_EQ(snapshot.readEdge(edgeId), LogicalGraphEdge(edgeId, nodes[0], nodes[1], "BULK_PROPERTY_PAGES",
@@ -515,6 +518,18 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeCommitPublishesInlinePrope
 	snapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::openReadOnly(io);
+		auto pin = metadata->openSnapshot();
+		for (const auto edgeId : staged) {
+			const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId});
+			ASSERT_TRUE(owner.has_value());
+			EXPECT_EQ(owner->owner_revision, streamedGraphRevision);
+		}
+	}
 
 	RelocatableStorageBackend reopened(backendOptions());
 	reopened.open();
