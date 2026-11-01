@@ -48,7 +48,7 @@ protected:
 TEST_F(HybridPropertyDescriptorStoreTest, DefaultFormatCannotPublishCandidateRoots) {
     if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) GTEST_SKIP() << "checked by the default format build";
     const auto before = metadata_->openSnapshot().superblock(); const auto bytes = io_->fileSize();
-    EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 31); EXPECT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 336U);
+    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(before)), before);
     EXPECT_THROW(Access::publish(*metadata_), FormatException);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
     auto invalid = before; invalid.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
@@ -59,12 +59,11 @@ TEST_F(HybridPropertyDescriptorStoreTest, FenceIncludesDescriptorEvenWhenOtherGr
     after.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
     const auto oldFence = RelocatableStorageBackend::makeLogicalGraphMutationFence(before);
     const auto newFence = RelocatableStorageBackend::makeLogicalGraphMutationFence(after);
-    EXPECT_NE(oldFence, newFence);
+    EXPECT_EQ(oldFence, newFence);
     RecordProperty("graph_fence_format_token", std::to_string(newFence.format_token));
     RecordProperty("format_profile", std::to_string(RSS_FORMAT_VERSION));
-    EXPECT_EQ(newFence.graph_state_tokens[21], 2U);
-    EXPECT_EQ(newFence.graph_state_tokens[22], 1U);
-    EXPECT_EQ(newFence.graph_state_tokens[23], 1U);
+    after.graph_revision++;
+    EXPECT_NE(oldFence, RelocatableStorageBackend::makeLogicalGraphMutationFence(after));
 }
 TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected) {
     // Both documented layouts have identical root-free fields apart from

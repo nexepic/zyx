@@ -708,8 +708,12 @@ TEST_F(PropertyPagePoolPackingTest, ValueOverwriteKeepsRoutingIdentityWhileCowVe
 	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans,
 			*properties_, propertyOptions(), LogSequenceNumber(3U)));
 	auto current = metadata_->openSnapshot();
-	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, key), location);
-	EXPECT_EQ(current.superblock().entity_property_directory_root, directory);
+	const auto updatedLocation = metadata_->findEntityPropertyLocation(current, key);
+	EXPECT_EQ(updatedLocation.page_id, location.page_id);
+	EXPECT_EQ(updatedLocation.slot_id, location.slot_id);
+	EXPECT_EQ(updatedLocation.slot_generation, location.slot_generation);
+	EXPECT_GT(updatedLocation.owner_revision, location.owner_revision);
+	EXPECT_NE(current.superblock().entity_property_directory_root, directory);
 	EXPECT_NE(metadata_->findPageLocation(current, location.page_id), physical);
 	for (size_t i = 0; i < ids.size(); ++i) {
 		const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, ids[i]};
@@ -722,7 +726,7 @@ TEST_F(PropertyPagePoolPackingTest, ValueOverwriteKeepsRoutingIdentityWhileCowVe
 	pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
 	properties_ = std::make_unique<PropertyCollectionRootStore>(*pages_, *metadata_);
 	auto reopened = metadata_->openSnapshot();
-	EXPECT_EQ(metadata_->findEntityPropertyLocation(reopened, key), location);
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(reopened, key), updatedLocation);
 	EXPECT_EQ(properties_->readEntity(reopened, key), changed.front());
 }
 
@@ -744,7 +748,11 @@ TEST_F(PropertyPagePoolPackingTest, CombinedOwnerGrowthRelocatesOnlyOverflowAndP
 	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, plans,
 			*properties_, propertyOptions(), LogSequenceNumber(3U)));
 	auto current = metadata_->openSnapshot();
-	EXPECT_EQ(metadata_->findEntityPropertyLocation(current, first), location);
+	const auto updatedFirst = metadata_->findEntityPropertyLocation(current, first);
+	EXPECT_EQ(updatedFirst.page_id, location.page_id);
+	EXPECT_EQ(updatedFirst.slot_id, location.slot_id);
+	EXPECT_EQ(updatedFirst.slot_generation, location.slot_generation);
+	EXPECT_GT(updatedFirst.owner_revision, location.owner_revision);
 	bool relocated = false;
 	for (size_t i = 0; i < ids.size(); ++i) {
 		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, ids[i]};
@@ -769,7 +777,11 @@ TEST_F(PropertyPagePoolPackingTest, StableOverwriteIdentityDoesNotAllowStalePlan
 	static_cast<void>(entities_->applyNativeGraphBatchTransaction(old, {}, {}, {}, accepted,
 			*properties_, propertyOptions(), LogSequenceNumber(3U)));
 	auto updated = metadata_->openSnapshot();
-	EXPECT_EQ(metadata_->findEntityPropertyLocation(updated, key), location);
+	const auto updatedLocation = metadata_->findEntityPropertyLocation(updated, key);
+	EXPECT_EQ(updatedLocation.page_id, location.page_id);
+	EXPECT_EQ(updatedLocation.slot_id, location.slot_id);
+	EXPECT_EQ(updatedLocation.slot_generation, location.slot_generation);
+	EXPECT_GT(updatedLocation.owner_revision, location.owner_revision);
 	EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(updated, {}, {}, {}, stale,
 			*properties_, propertyOptions(), LogSequenceNumber(4U))), FormatException);
 	EXPECT_EQ(properties_->readEntity(updated, key), other.front());

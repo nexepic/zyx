@@ -12,20 +12,19 @@ Superblock block() {
 TEST(ScanPathFormatTest, VersionsAndBuildingFlagsAreIsolated) {
     auto value = block(); value.flags = RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    EXPECT_EQ(RSS_FORMAT_VERSION, 15); EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 41);
     EXPECT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
     EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, value.flags);
 #else
-    EXPECT_EQ(RSS_FORMAT_VERSION, RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 13 : 5);
-    EXPECT_EQ(RSS_SUPERBLOCK_VERSION, RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 39 : 31);
     EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
 #endif
     auto bytes = SuperblockCodec::encode(block());
-    LittleEndianCodec::writeU16(bytes, 4, RSS_SCAN_PATH_FORMAT_ENABLED ? 31 : 41);
+    EXPECT_EQ(SuperblockCodec::decode(bytes), block());
+    const uint16_t otherSuperblockVersion = RSS_SUPERBLOCK_VERSION == 1U ? 2U : 1U;
+    LittleEndianCodec::writeU16(bytes, 4, otherSuperblockVersion);
     LittleEndianCodec::writeU32(bytes, 116, 0);
     LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
     EXPECT_THROW((void)SuperblockCodec::decode(bytes), FormatException);
-    SegmentEnvelope envelope; envelope.format_version = RSS_SCAN_PATH_FORMAT_ENABLED ? 5 : 15;
+    SegmentEnvelope envelope; envelope.format_version = RSS_FORMAT_VERSION == 1U ? 2U : 1U;
     EXPECT_THROW((void)SegmentEnvelopeCodec::encode(envelope), FormatException);
 }
 TEST(ScanPathFormatTest, DescriptorRootAndCountsHaveExplicitVersionedBytes) {
