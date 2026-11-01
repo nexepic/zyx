@@ -50,7 +50,9 @@ namespace {
 	constexpr size_t SUPERBLOCK_RESERVED_HEADER_OFFSET = 12U;
 	constexpr size_t SUPERBLOCK_PAYLOAD_CRC_OFFSET = 112U;
 	constexpr size_t SUPERBLOCK_HEADER_CRC_OFFSET = 116U;
-	constexpr size_t SUPERBLOCK_PAYLOAD_RESERVED_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES + 32U;
+	// The payload begins with the emergency reserve and the graph/schema
+	// revisions; the first byte after these fields remains reserved.
+	constexpr size_t SUPERBLOCK_PAYLOAD_RESERVED_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES + 32U + 2U * sizeof(uint64_t);
 
 	void resealSuperblock(std::array<std::byte, RSS_SUPERBLOCK_BYTES> &bytes) {
 		LittleEndianCodec::writeU32(bytes, SUPERBLOCK_HEADER_CRC_OFFSET, 0U);
