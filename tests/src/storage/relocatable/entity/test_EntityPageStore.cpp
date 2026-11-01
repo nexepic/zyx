@@ -773,6 +773,9 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesEntityAndOwnerKeyedPr
 	ASSERT_EQ(created.properties.size(), 1U);
 	EXPECT_EQ(created.properties.front().key, propertyKey);
 	MetadataSnapshotPin original = metadata->openSnapshot();
+	EXPECT_EQ(original.superblock().graph_revision, beforeRetry.superblock().graph_revision + 1U);
+	EXPECT_EQ(metadata->findEntityPropertyLocation(original, propertyKey).owner_revision,
+			  original.superblock().graph_revision);
 	EXPECT_EQ(entities.readNode(original, 1001U), newNodePool.front().node_insertions.front().record);
 	EXPECT_EQ(properties.readEntity(original, propertyKey), initialRoot);
 	EXPECT_EQ(metadata->findEntityPropertyLocation(original, propertyKey), created.properties.front());
@@ -796,6 +799,9 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesEntityAndOwnerKeyedPr
 	ASSERT_EQ(replaced.properties.size(), 1U);
 	EXPECT_EQ(replaced.properties.front().key, propertyKey);
 	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(current.superblock().graph_revision, original.superblock().graph_revision + 1U);
+	EXPECT_EQ(metadata->findEntityPropertyLocation(current, propertyKey).owner_revision,
+			  current.superblock().graph_revision);
 	EXPECT_EQ(entities.readNode(original, 1001U), newNodePool.front().node_insertions.front().record);
 	EXPECT_EQ(properties.readEntity(original, propertyKey), initialRoot);
 	EXPECT_EQ(entities.readNode(current, 1001U), updatedNode);

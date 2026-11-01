@@ -720,6 +720,15 @@ namespace graph::storage {
 		}
 		PropertyLargeValueDerivedStatePlan derivedState = planPropertyLargeValueDerivedState(
 				snapshot, propertyPlans, propertyRoots, propertyOptions, checkpointLsn);
+		// This overload accepts logical Entity and Property operations directly,
+		// so carry their intent alongside any planned large-value derived state.
+		derivedState.state.graph_revision_change = !mutations.empty() || !appends.empty() || !newPools.empty();
+		for (const auto &plan : propertyPlans) {
+			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE) {
+				derivedState.state.graph_revision_change = true;
+				derivedState.state.changed_property_owners.push_back(plan.key);
+			}
+		}
 		return applyNativeGraphBatchTransaction(snapshot, mutations, appends, newPools, propertyPlans, propertyRoots,
 												propertyOptions, auxiliaryPages, derivedState.state, derivedState.preparer,
 												checkpointLsn, options);
