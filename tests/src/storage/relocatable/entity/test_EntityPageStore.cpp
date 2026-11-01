@@ -2231,7 +2231,7 @@ TEST_F(RelocatableEntityPageStoreTest, DirectEntityWritesAdvanceLogicalRevisionO
 	const auto inserted = store.insertNode(afterAllocate, PageId(101U), 1003U, node(31U, 32U), LogSequenceNumber(4U));
 	EXPECT_EQ(inserted.superblock.graph_revision, revision + 3U);
 	auto beforeUpdate = metadata->openSnapshot();
-	const auto replacement = node(41U, 42U);
+	const auto replacement = node(41U, 42U, 43U);
 	const auto updated = store.updateNode(beforeUpdate, 1001U, replacement, LogSequenceNumber(5U));
 	EXPECT_EQ(updated.superblock.graph_revision, revision + 4U);
 	auto afterUpdate = metadata->openSnapshot();
