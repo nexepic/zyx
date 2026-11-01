@@ -153,9 +153,15 @@ TEST_F(HybridPropertyQueryParityTest, JointPropertyPublicationCoordinatesNativeA
     RelocatableStorageBackend backend(options); backend.open();
     const auto ids = backend.createLogicalNodes({{{"Person"}, {{"age", PropertyValue(int64_t(75))}}}});
     ASSERT_EQ(ids.size(), 1U); auto old = backend.openLogicalGraphReadSnapshot();
+    auto revisionBefore = backend.openSnapshot();
+    const auto graphRevision = revisionBefore.superblock().graph_revision;
+    revisionBefore.release();
     const std::string native(70000, 'n'), row(70000, 'r');
     backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(100))}, {"joint_native", PropertyValue(native)}}},
         {ids.front(), {{"age", PropertyValue(int64_t(101))}, {"joint_row", PropertyValue(row)}}}});
+    auto revisionAfter = backend.openSnapshot();
+    EXPECT_EQ(revisionAfter.superblock().graph_revision, graphRevision + 1U);
+    revisionAfter.release();
     auto current = backend.openLogicalGraphReadSnapshot();
     EXPECT_EQ(current->readNodeProperty(1, "joint_native"), PropertyValue(native));
     EXPECT_EQ(current->readNodeProperty(ids.front(), "joint_row"), PropertyValue(row));
@@ -436,9 +442,15 @@ TEST_F(HybridPropertyQueryParityTest, PublicNativePropertyReplacementCoordinates
     seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend backend(options); backend.open(); auto old = backend.openLogicalGraphReadSnapshot();
+    auto versionBefore = backend.openSnapshot();
+    const auto graphRevision = versionBefore.superblock().graph_revision;
+    versionBefore.release();
     const PropertyValue previous(std::vector<PropertyValue>{PropertyValue(int64_t(0)), PropertyValue(int64_t(1))});
     backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(0))}, {"note", PropertyValue("person")},
         {"embedding", PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1000)), PropertyValue(int64_t(1))})}}}});
+    auto versionAfter = backend.openSnapshot();
+    EXPECT_EQ(versionAfter.superblock().graph_revision, graphRevision + 1U);
+    versionAfter.release();
     EXPECT_EQ(old->readNodeProperty(1, "embedding"), previous); old.reset(); backend.close();
     auto result = exactVectorSearch(); ASSERT_FALSE(result.empty()); EXPECT_EQ(result.front().first, 2U);
     backend.open(); backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(0))},

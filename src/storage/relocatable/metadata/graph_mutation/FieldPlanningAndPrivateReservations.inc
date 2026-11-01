@@ -106,6 +106,7 @@
             if (!prepareHybridPropertyColumns(batch, writer, *hybridSource, fields, fields.replacements,
                 *conversionPages, *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, hybridVectors))
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native Vector publication has no authoritative field transition");
+            batch.markGraphChanged();
         }
         std::unique_ptr<PreparedScanMembershipMutation> scanMembership;
         if (nativeScanWork) scanMembership = prepareScanMembershipMutation(batch, writer, *topologySource,
@@ -127,6 +128,7 @@
                 fieldPool.owner_id, nullptr, true, hybridTopology->owner_deletions_, std::span(pendingNativeOwners).first(pendingNativeOwnerCount)};
             nativeFieldsPrepared = prepareHybridPropertyColumns(batch, writer, *topologySource, fields, fields.replacements, *conversionPages,
                 *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, nullptr, hybridTopology, jointNativeContent ? largeValues : std::span<const NativeGraphLargeValueMutation>{});
+            if (nativeFieldsPrepared) batch.markGraphChanged();
             if (!nativeFieldsPrepared && pendingNativeOwnerCount)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native pending owner liveness did not prepare a transition");
         }
