@@ -1773,6 +1773,10 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacingVectorWithSameValueDoesNotAdv
 	// Content equality cannot hide an intervening change and restoration.
 	auto stale = planner.beginTransaction();
 	stale.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	auto mixedStale = planner.beginTransaction();
+	mixedStale.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	const std::array<uint64_t, 1U> otherLabels{9U};
+	mixedStale.replaceNodeLabels(nodeId, otherLabels);
 	const std::vector<std::byte> other{std::byte{0x20}, std::byte{0x40}, std::byte{0x60}, std::byte{0x70}};
 	auto changed = mutations;
 	changed[1].encoded_bfloat16 = other;
@@ -1783,6 +1787,11 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacingVectorWithSameValueDoesNotAdv
 	restore.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
 	ASSERT_TRUE(restore.commit().committed());
 	EXPECT_FALSE(stale.commit().committed());
+	EXPECT_FALSE(mixedStale.commit().committed());
+	auto leaseAndWrite = planner.beginTransaction();
+	leaseAndWrite.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), mutations, vectorDeltaOptions());
+	(void) leaseAndWrite.createNode({});
+	EXPECT_TRUE(leaseAndWrite.commit().committed());
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, SameValueVectorPairDoesNotHideAnotherNodeChange) {

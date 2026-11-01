@@ -35,12 +35,12 @@ namespace graph::storage {
         if (free_summary_checkpoint_) free_summary_checkpoint_();
 		// Empty-record Vector deltas are authenticated same-value pairs. They
 		// retain their staged identity until commit to reject duplicate requests.
-		const auto vectorNoops = std::erase_if(vector_deltas_, [](const StagedVectorDelta &delta) {
+		const auto vectorNoops = std::ranges::count_if(vector_deltas_, [](const StagedVectorDelta &delta) {
 			return delta.records.empty();
 		});
 		const bool hasGraphWork = rebuild_entity_free_summaries_ || !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
-								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
+								  !vector_bootstraps_.empty() || vector_deltas_.size() != static_cast<size_t>(vectorNoops);
 		if (!hasGraphWork && vectorNoops == 0U && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
 		}
@@ -88,7 +88,8 @@ namespace graph::storage {
 			// must not publish a second, empty metadata generation just to acknowledge
 			// IDs that are intentionally allowed to remain unused.
 			MetadataSnapshotPin current = context_->metadata->openSnapshot();
-			if (vectorNoops != 0U && current.superblock() != snapshot_.superblock()) {
+			if (vectorNoops != 0U && current.superblock() != snapshot_.superblock() &&
+				!isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
 				current.release();
 				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
 				snapshot_.release();
@@ -109,7 +110,16 @@ namespace graph::storage {
 		}
 		MetadataSnapshotPin current = context_->metadata->openSnapshot();
 		if (current.superblock() != snapshot_.superblock()) {
-			if (isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
+			if (vectorNoops != 0U &&
+				!isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
+				// The equality proof read the staged snapshot. Do not rebase an
+				// accompanying adjacency/graph mutation past a changed source.
+				current.release();
+				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
+				snapshot_.release();
+				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
+				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
+			} else if (isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
 				snapshot_.release();
 				snapshot_ = std::move(current);
 			} else if (!rebaseAdjacencyOnly(current)) {
@@ -122,6 +132,7 @@ namespace graph::storage {
 		} else {
 			current.release();
 		}
+		std::erase_if(vector_deltas_, [](const StagedVectorDelta &delta) { return delta.records.empty(); });
 		{
 			debug::ScopedPerfTimer adjacencyPlanTimer("native_graph.commit.adjacency_plan");
 			prepareGlobalAdjacencyMutationPlan();
