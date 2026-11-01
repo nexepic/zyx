@@ -539,6 +539,13 @@ TEST_F(ScanReadProofTest, PublicVectorClosurePreservesOldPinAndCoordinatesNative
         return graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(value)});
     };
     backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{1})}, {"list", vectorValue(8.0)}}}});
+	{
+		auto changed = backend.openSnapshot();
+		const auto revision = changed.superblock().graph_revision;
+		backend.replaceLogicalNodeProperties({{1, {{"number", graph::PropertyValue(int64_t{1})}, {"list", vectorValue(8.0)}}}});
+		auto noop = backend.openSnapshot();
+		EXPECT_EQ(noop.superblock().graph_revision, revision);
+	}
     request.query_vector = {8.0F};
     {
         auto current = backend.openLogicalGraphVectorSearchSnapshot();
