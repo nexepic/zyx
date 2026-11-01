@@ -2374,13 +2374,22 @@ namespace graph::storage {
                         metadata_->reclaimDeletedPropertyOwners();
                     } catch (const std::bad_alloc &) {
                         // Admission failure defers optional cleanup; the delete is durable.
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
                     } catch (const std::system_error &) {
                         if (metadata_->hasIndeterminatePublication())
                             requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
                     } catch (const FormatException &error) {
                         if (metadata_->hasIndeterminatePublication())
                             requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
-                        if (error.error() != FormatError::FERR_BUFFER_TOO_SMALL) throw;
+                        if (error.error() != FormatError::FERR_BUFFER_TOO_SMALL &&
+                            error.error() != FormatError::FERR_ARITHMETIC_OVERFLOW) throw;
+                    } catch (const std::runtime_error &error) {
+                        // Stream-backed StorageIO reports I/O failures as runtime_error.
+                        // Do not hide unrelated logic or integrity errors.
+                        if (!std::string_view(error.what()).starts_with("StorageIO::")) throw;
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
                     }
                 }
 				return execution.result;

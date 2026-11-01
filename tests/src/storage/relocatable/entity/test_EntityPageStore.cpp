@@ -2279,3 +2279,31 @@ TEST_F(RelocatableEntityPageStoreTest, DirectEdgeWritesPreserveNoopAndDeletedOwn
 	EXPECT_EQ(tombstone->owner_revision, erased.superblock.graph_revision);
 	EXPECT_EQ(store.readEdge(before, 2001U), original);
 }
+
+TEST_F(RelocatableEntityPageStoreTest, OwnerReclamationPreservesRecreatedNodeAndItsRevision) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	ASSERT_TRUE(store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, node(11U, 12U), LogSequenceNumber(2U)).has_value());
+	auto seed = metadata->openSnapshot();
+	static_cast<void>(store.insertNode(seed, PageId(101U), 1002U, node(21U, 22U), LogSequenceNumber(3U)));
+	seed.release();
+	auto original = metadata->openSnapshot();
+	static_cast<void>(store.eraseNode(original, 1001U, LogSequenceNumber(4U)));
+	original.release();
+	auto deleted = metadata->openSnapshot();
+	const auto oldRevision = metadata->findEntityPropertyRevision(deleted, {EntityPropertyOwnerKind::EPOK_NODE, 1001U});
+	ASSERT_TRUE(oldRevision.has_value());
+	const auto replacement = node(31U, 32U);
+	static_cast<void>(store.insertNode(deleted, PageId(101U), 1001U, replacement, LogSequenceNumber(5U)));
+	deleted.release();
+	auto recreated = metadata->openSnapshot();
+	const auto owner = metadata->findEntityPropertyRevision(recreated, {EntityPropertyOwnerKind::EPOK_NODE, 1001U});
+	ASSERT_TRUE(owner.has_value());
+	const auto graphRevision = recreated.superblock().graph_revision;
+	recreated.release();
+	metadata->reclaimDeletedPropertyOwners();
+	auto after = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findEntityPropertyRevision(after, {EntityPropertyOwnerKind::EPOK_NODE, 1001U}), owner);
+	EXPECT_EQ(after.superblock().graph_revision, graphRevision);
+	EXPECT_EQ(store.readNode(after, 1001U), replacement);
+}

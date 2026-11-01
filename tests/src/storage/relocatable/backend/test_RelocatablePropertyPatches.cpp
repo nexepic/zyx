@@ -662,20 +662,29 @@ TEST_F(RelocatableStorageBackendTest, OwnerReclamationMakesNodeAndEdgeProgressDu
 	// Seed more than one budget-sized range before the tombstones. Each later
 	// round appends more Nodes than the default whole sweep budget of 64.
 	std::vector<LogicalGraphNodeCreateRequest> initial(130U);
-	initial.front().properties = {{"temporary", PropertyValue(1)}};
+	for (auto &request : initial) request.properties = {{"temporary", PropertyValue(1)}};
 	const auto nodes = backend.createLogicalNodes(initial);
 	ASSERT_EQ(nodes.size(), initial.size());
-	backend.replaceLogicalNodeProperties({{nodes.front(), {}}});
+	std::vector<LogicalGraphPropertyReplaceRequest> clearInitial;
+	for (const auto id : nodes) clearInitial.push_back({id, {}});
+	backend.replaceLogicalNodeProperties(clearInitial);
 	const auto edge = backend.createLogicalEdges({{nodes[0], nodes[1], "RECLAIM_LINK", {{"weight", PropertyValue(1)}}}}).front();
 	const auto oldNode = nodes.back();
+	// Both tombstones must survive their first sweep while this old pin is live.
+	auto oldPin = backend.openLogicalGraphReadSnapshot();
 	backend.deleteLogicalEdges({{edge}});
 	backend.deleteLogicalNodes({{oldNode, false, 0U}});
+	oldPin.reset();
 	constexpr size_t halfBudget = 32U;
 	const size_t rounds = (initial.size() + halfBudget - 1U) / halfBudget + 3U;
 	for (size_t round = 0; round < rounds; ++round) {
 		std::vector<LogicalGraphNodeCreateRequest> additions(65U);
+		for (auto &request : additions) request.properties = {{"temporary", PropertyValue(1)}};
 		const auto added = backend.createLogicalNodes(additions);
 		ASSERT_EQ(added.size(), additions.size());
+		std::vector<LogicalGraphPropertyReplaceRequest> clearAdded;
+		for (const auto id : added) clearAdded.push_back({id, {}});
+		backend.replaceLogicalNodeProperties(clearAdded);
 		backend.deleteLogicalNodes({{added.back(), false, 0U}});
 	}
 	backend.close();
@@ -753,4 +762,54 @@ TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceDataSyncFailureDoesNotUndo
 	after.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})));
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceFinalSyncFailurePreservesDeleteAndRequiresReopen) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}}}}).front();
+	auto beforePin = backend.openSnapshot(); const auto before = beforePin.superblock(); beforePin.release();
+	std::atomic<uint64_t> graphGeneration{0};
+	std::atomic<bool> graphSynced{false}, maintenanceWritten{false}, failed{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting detectMaintenance([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+			if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+				try {
+					const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+					if (candidate.graph_revision > before.graph_revision) {
+						if (graphSynced.load() && candidate.generation.value() > graphGeneration.load()) maintenanceWritten.store(true);
+						else if (!graphSynced.load()) graphGeneration.store(candidate.generation.value());
+					}
+				} catch (const std::exception &) {}
+			}
+			return portable_pwrite(fd, bytes, count, offset);
+		});
+		StorageIO::ScopedNativeSyncHookForTesting failFinalMaintenance([&](file_handle_t fd) {
+			if (maintenanceWritten.load() && !failed.exchange(true)) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			const int result = portable_fsync(fd);
+			if (result == 0 && graphGeneration.load() != 0U) graphSynced.store(true);
+			return result;
+		});
+		EXPECT_NO_THROW(backend.deleteLogicalNodes({{node, false, 0U}}));
+	}
+	ASSERT_TRUE(failed.load());
+	EXPECT_TRUE(backend.hasIndeterminateWriteOutcome());
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})), std::logic_error);
+	backend.close();
+	auto reopenedOptions = backendOptions(); reopenedOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenedOptions)); reopened.open();
+	auto snapshot = reopened.openLogicalGraphReadSnapshot();
+	EXPECT_THROW(static_cast<void>(snapshot->readNode(node)), FormatException);
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.createLogicalNodes({{{}, {}}})));
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
 }
