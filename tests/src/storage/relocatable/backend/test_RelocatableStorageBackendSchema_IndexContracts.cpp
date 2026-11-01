@@ -1230,6 +1230,9 @@ TEST_F(RelocatableStorageBackendSchemaTest, ReusesCatalogDescriptorAcrossEntityP
 TEST_F(RelocatableStorageBackendSchemaTest, GroupsBulkNodeInsertionsByBoundedEntityPageTargets) {
 	RelocatableStorageBackend backend(options());
 	backend.open();
+	auto before = backend.openSnapshot();
+	const auto graphRevision = before.superblock().graph_revision;
+	const auto schemaRevision = before.superblock().schema_revision;
 	std::vector<LogicalGraphNodeCreateRequest> requests;
 	requests.reserve(600U);
 	for (size_t index = 0U; index < 600U; ++index) {
@@ -1239,6 +1242,10 @@ TEST_F(RelocatableStorageBackendSchemaTest, GroupsBulkNodeInsertionsByBoundedEnt
 	graph::debug::PerfTrace::reset();
 	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	ASSERT_EQ(backend.createLogicalNodes(requests).size(), requests.size());
+	auto after = backend.openSnapshot();
+	EXPECT_EQ(after.superblock().graph_revision, graphRevision + 1U);
+	EXPECT_EQ(after.superblock().schema_revision, schemaRevision + 1U);
+	EXPECT_EQ(before.superblock().graph_revision, graphRevision);
 	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
 	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 
@@ -1250,6 +1257,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, GroupsBulkNodeInsertionsByBoundedEnt
 	EXPECT_LT(trace.at("native_graph.commit.entity_insert_target_pages").totalValue,
 			trace.at("native_graph.commit.entity_insert_target_records").totalValue);
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	before.release(); after.release();
 	backend.close();
 }
 
