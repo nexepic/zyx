@@ -1284,6 +1284,8 @@ namespace graph::storage {
 		~RelocatableMetadataStore();
 
 		[[nodiscard]] MetadataSnapshotPin openSnapshot() const;
+		// Best-effort physical cleanup; caller serializes this with graph publication.
+		void reclaimDeletedPropertyOwners(size_t recordBudget = 64U);
 		// Set when a failed publication may have selected its complete candidate.
 		[[nodiscard]] bool hasIndeterminatePublication() const noexcept {
 			return indeterminate_publication_.load(std::memory_order_acquire);
@@ -2103,6 +2105,9 @@ namespace graph::storage {
 		std::pmr::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
 		bool read_only_ = false;
         Superblock synchronized_source_{};
+        struct OwnerSweepCursor { uint64_t after = 0; uint64_t high_water = 0; bool active = false; };
+        OwnerSweepCursor node_owner_sweep_{};
+        OwnerSweepCursor edge_owner_sweep_{};
 		std::atomic_bool indeterminate_publication_{false};
         // Writer-protected physical recovery state; never a permission for generic writes.
         friend class HybridPropertyPoolPlacement;

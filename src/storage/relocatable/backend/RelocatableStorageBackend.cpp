@@ -2369,6 +2369,20 @@ namespace graph::storage {
 						// A future writable open repeats the durable empty-pool scan.
 					}
 				}
+                if (!batch.node_deletes.empty() || !batch.edge_deletes.empty()) {
+                    try {
+                        metadata_->reclaimDeletedPropertyOwners();
+                    } catch (const std::bad_alloc &) {
+                        // Admission failure defers optional cleanup; the delete is durable.
+                    } catch (const std::system_error &) {
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+                    } catch (const FormatException &error) {
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+                        if (error.error() != FormatError::FERR_BUFFER_TOO_SMALL) throw;
+                    }
+                }
 				return execution.result;
 			}
 			if (expectedFence.has_value() && !rebaseValidation) {

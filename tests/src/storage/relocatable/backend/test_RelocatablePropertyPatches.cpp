@@ -688,3 +688,69 @@ TEST_F(RelocatableStorageBackendTest, OwnerReclamationMakesNodeAndEdgeProgressDu
 	// Empty properties are represented without a page too, but this owner lives.
 	EXPECT_TRUE(metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, nodes[0]}).has_value());
 }
+
+TEST_F(RelocatableStorageBackendTest, DeletedOwnerRevisionIsRetainedForOldPinThenReclaimedAfterRelease) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}}}}).front();
+	auto old = backend.openLogicalGraphReadSnapshot();
+	backend.deleteLogicalNodes({{node, false, 0U}});
+	const auto checkOwner = [&] {
+		auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+		auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::openReadOnly(io);
+		auto pin = metadata->openSnapshot();
+		return metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, node}).has_value();
+	};
+	EXPECT_TRUE(checkOwner());
+	EXPECT_EQ(old->readNodeShaped(node, {.all_properties = true}).properties.front().value, PropertyValue(1));
+	old.reset();
+	for (size_t i = 0; i < 3U; ++i) {
+		const auto trigger = backend.createLogicalNodes({{{}, {}}}).front();
+		backend.deleteLogicalNodes({{trigger, false, 0U}});
+	}
+	EXPECT_FALSE(checkOwner());
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceDataSyncFailureDoesNotUndoSuccessfulDelete) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}}}}).front();
+	auto beforePin = backend.openSnapshot(); const auto before = beforePin.superblock(); beforePin.release();
+	std::atomic<bool> graphWritten{false}, graphSynced{false}, failed{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting detectGraph([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+			if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+				try {
+					const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+					if (candidate.graph_revision > before.graph_revision) graphWritten.store(true);
+				} catch (const std::exception &) {}
+			}
+			return portable_pwrite(fd, bytes, count, offset);
+		});
+		StorageIO::ScopedNativeSyncHookForTesting failMaintenance([&](file_handle_t fd) {
+			if (graphSynced.load() && !failed.exchange(true)) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			const int result = portable_fsync(fd);
+			if (result == 0 && graphWritten.load()) graphSynced.store(true);
+			return result;
+		});
+		EXPECT_NO_THROW(backend.deleteLogicalNodes({{node, false, 0U}}));
+	}
+	ASSERT_TRUE(failed.load());
+	EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+	auto after = backend.openLogicalGraphReadSnapshot();
+	EXPECT_THROW(static_cast<void>(after->readNode(node)), FormatException);
+	after.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})));
+	backend.close();
+}

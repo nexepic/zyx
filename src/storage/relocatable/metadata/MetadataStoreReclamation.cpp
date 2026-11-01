@@ -2,6 +2,60 @@
 
 namespace graph::storage {
 
+
+    void RelocatableMetadataStore::reclaimDeletedPropertyOwners(size_t recordBudget) {
+        if (recordBudget < 2U || read_only_) return;
+        MetadataWriteGuard writer = beginWrite();
+        const Superblock current = bootstrap_.recover();
+        MetadataPageReadContext::Scope reads(snapshots_.createWriterReadContext(writer, current), *io_);
+        auto nodeSweep = node_owner_sweep_;
+        auto edgeSweep = edge_owner_sweep_;
+        std::vector<EntityPropertyKey> erased;
+        erased.reserve(recordBudget);
+        constexpr uint64_t maxId = (UINT64_C(1) << 63U) - 1U;
+        const auto sweep = [&](EntityPropertyOwnerKind kind, OwnerSweepCursor &state, size_t allowance,
+                               uint64_t nextId) {
+            if (!state.active) {
+                state.after = 0;
+                state.high_water = nextId == 0U ? maxId : std::min(maxId, nextId - 1U);
+                state.active = state.high_water != 0U;
+            }
+            if (!state.active) return;
+            const uint64_t prefix = kind == EntityPropertyOwnerKind::EPOK_EDGE ? UINT64_C(1) << 63U : 0U;
+            auto cursor = locations_.openRangeCursor(current, MetadataDirectoryType::MDT_ENTITY_PROPERTY,
+                prefix | (state.after + 1U), prefix | state.high_water);
+            size_t seen = 0;
+            while (seen < allowance) {
+                const auto raw = cursor.next();
+                if (!raw) { state.active = false; break; }
+                const auto item = decodeEntityPropertyLocation(*raw);
+                state.after = item.key.entity_id;
+                ++seen;
+                if (!item.isTombstone() || item.owner_revision == 0U) continue;
+                const bool live = kind == EntityPropertyOwnerKind::EPOK_NODE
+                    ? locations_.findNodePageLocationOptional(current, item.key.entity_id).has_value()
+                    : locations_.findEdgePageLocationOptional(current, item.key.entity_id).has_value();
+                if (live) continue;
+                const bool pinned = snapshots_.anyActiveSnapshot(writer, [&](const Superblock &snapshot) {
+                    return snapshot.graph_revision <= item.owner_revision;
+                });
+                if (!pinned) erased.push_back(item.key);
+            }
+            if (state.after >= state.high_water) state.active = false;
+        };
+        sweep(EntityPropertyOwnerKind::EPOK_NODE, nodeSweep, recordBudget / 2U, current.next_logical_node_id);
+        sweep(EntityPropertyOwnerKind::EPOK_EDGE, edgeSweep, recordBudget - recordBudget / 2U, current.next_logical_edge_id);
+        if (!erased.empty()) {
+            if (current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max())
+                throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "owner reclamation exhausted checkpoint LSN");
+            MetadataWriteBatch batch(metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
+            locations_.prepareReplaceEntityProperties(batch, {}, erased);
+            publishBatch(batch, writer, {});
+        }
+        node_owner_sweep_ = nodeSweep;
+        edge_owner_sweep_ = edgeSweep;
+    }
+
 	Superblock RelocatableMetadataStore::retireEntityPageInExistingPool(
 			const CatalogEntry &expectedPool, const PageLocation &expectedLocation,
 			std::span<const uint64_t> erasedNodeIds, std::span<const uint64_t> erasedEdgeIds,
