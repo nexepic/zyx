@@ -279,7 +279,7 @@ TEST_F(BuildingScanMembershipTest, BuilderCancellationAfterOnePublicationLeavesO
 }
 
 TEST_F(BuildingScanMembershipTest, OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose) {
-    insert(1, 0, {7}); const auto legacy = makeLegacyRowSource();
+    insert(1, 0, {7}); const auto sourceBytes = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     auto cache = std::make_shared<graph::query::execution::MaterializedByteBudget>(64U * 1024U * 1024U);
@@ -295,16 +295,16 @@ TEST_F(BuildingScanMembershipTest, OfflineRawPageCacheUsesGovernedCreditAndRefun
     }
     EXPECT_EQ(cache->used(), 0U); EXPECT_EQ(memory->used(), 0U);
     std::ifstream input(path, std::ios::binary);
-    std::vector<std::byte> unchanged(legacy.size());
+    std::vector<std::byte> unchanged(sourceBytes.size());
     input.read(reinterpret_cast<char *>(unchanged.data()), static_cast<std::streamsize>(unchanged.size()));
-    EXPECT_EQ(unchanged, legacy);
+    EXPECT_EQ(unchanged, sourceBytes);
     std::filesystem::remove(target);
 }
 
-TEST_F(BuildingScanMembershipTest, OfflineBuilderClonesRealPrimaryPagesFromReadOnlyLegacySource) {
+TEST_F(BuildingScanMembershipTest, OfflineBuilderClonesRealPrimaryPagesFromReadOnlyCurrentSource) {
     insert(65, 0, {11}); insert(1, 1, {7}); insert(64, 2, {});
     const auto sourceRoot = metadata->openSnapshot().superblock();
-    const auto legacy = makeLegacyRowSource();
+    const auto sourceBytes = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -332,18 +332,18 @@ TEST_F(BuildingScanMembershipTest, OfflineBuilderClonesRealPrimaryPagesFromReadO
     EXPECT_EQ(memory->used(), 0U);
     const std::filesystem::path tight(path.string() + ".tight");
     EXPECT_THROW(static_cast<void>(ScanBuildingImageBuilder::cloneWithPrimaryMembership(path, tight, memory,
-        2U * legacy.size(), 989)), StorageFileLimitExceeded);
+        2U * sourceBytes.size(), 989)), StorageFileLimitExceeded);
     EXPECT_EQ(memory->used(), 0U);
-    ASSERT_TRUE(std::filesystem::exists(tight)); EXPECT_LE(std::filesystem::file_size(tight), legacy.size());
+    ASSERT_TRUE(std::filesystem::exists(tight)); EXPECT_LE(std::filesystem::file_size(tight), sourceBytes.size());
     { std::ifstream partial(tight, std::ios::binary);
       std::array<std::byte, RSS_SUPERBLOCK_BYTES> bytes{};
       partial.read(reinterpret_cast<char *>(bytes.data()), bytes.size());
       ASSERT_TRUE(partial.good());
       EXPECT_NE(SuperblockCodec::decode(bytes).flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING, 0U); }
     std::ifstream input(path, std::ios::binary);
-    std::vector<std::byte> unchanged(legacy.size());
+    std::vector<std::byte> unchanged(sourceBytes.size());
     input.read(reinterpret_cast<char *>(unchanged.data()), static_cast<std::streamsize>(unchanged.size()));
-    EXPECT_EQ(unchanged, legacy);
+    EXPECT_EQ(unchanged, sourceBytes);
     std::error_code ignored; std::filesystem::remove(target, ignored); std::filesystem::remove(tight, ignored);
 }
 
@@ -473,7 +473,7 @@ TEST_F(BuildingScanMembershipTest, CancellationWithAnAdmissionExceptionIsNotMisc
     EXPECT_EQ(metadata->openSnapshot().superblock(), before); EXPECT_EQ(metadata->activeSnapshotCount(), 0U);
 }
 
-TEST_F(BuildingScanMembershipTest, RealLegacyCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication) {
+TEST_F(BuildingScanMembershipTest, RealCurrentCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication) {
     std::vector<PropertyCollectionRoot> expected;
     {
         LargeValueStore values(io, *metadata);
@@ -502,7 +502,7 @@ TEST_F(BuildingScanMembershipTest, RealLegacyCloneBuildsNodeFieldsAndPreservesEd
         }
         ASSERT_TRUE(tx.commit().committed());
     }
-    const auto source = makeLegacyRowSource();
+    const auto source = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".fields");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -655,7 +655,7 @@ TEST_F(BuildingScanMembershipTest, BuilderAuthenticatesAllRowSlotsBeforeFieldNor
     const auto sourceRoot = metadata->openSnapshot().superblock();
     static_cast<void>(metadata->upsertEntityPropertyLocations({}, std::span(&erased, 1),
         LogSequenceNumber(sourceRoot.checkpoint_lsn.value() + 1U)));
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -677,7 +677,7 @@ TEST_F(BuildingScanMembershipTest, BuilderAuthenticatesAllRowSlotsBeforeFieldNor
 
 TEST_F(BuildingScanMembershipTest, SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites) {
     insert(1, 0, {});
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -696,7 +696,7 @@ TEST_F(BuildingScanMembershipTest, SourceLengthChangeDiscardsThePrivateImageBefo
 
 TEST_F(BuildingScanMembershipTest, SourceChangeDuringCloneDeletesTheExclusivePrivateTarget) {
     insert(1, 0, {});
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     struct ChangeSource final : CancellationCheckpoint {
         std::filesystem::path source, target;
@@ -721,7 +721,7 @@ TEST_F(BuildingScanMembershipTest, SourceChangeDuringCloneDeletesTheExclusivePri
 #ifndef _WIN32
 TEST_F(BuildingScanMembershipTest, SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage) {
     insert(1, 0, {});
-    const auto legacy = makeLegacyRowSource();
+    const auto sourceBytes = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".scan"), moved(path.string() + ".moved");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -729,7 +729,7 @@ TEST_F(BuildingScanMembershipTest, SameBytesAtAReplacedSourcePathDoNotAuthorizeT
             UINT64_C(64) * 1024U * 1024U, 989);
         std::filesystem::rename(path, moved);
         { std::ofstream replacement(path, std::ios::binary); replacement.write(
-            reinterpret_cast<const char *>(legacy.data()), static_cast<std::streamsize>(legacy.size())); }
+            reinterpret_cast<const char *>(sourceBytes.data()), static_cast<std::streamsize>(sourceBytes.size())); }
         EXPECT_THROW(static_cast<void>(builder->constructFields()), FormatException);
         EXPECT_FALSE(std::filesystem::exists(target));
     }
@@ -876,7 +876,7 @@ TEST_F(BuildingScanMembershipTest, PrivateImageMovesTheOrdinaryAdjacencyPoolWith
         static_cast<void>(transaction.createEdge(first, second, 1U));
         ASSERT_TRUE(transaction.commit().committed());
     }
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     {
@@ -908,7 +908,7 @@ TEST_F(BuildingScanMembershipTest, PrivateImageMovesTheOrdinaryAdjacencyPoolWith
 
 TEST_F(BuildingScanMembershipTest, PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding) {
     insert(1, 0, {7});
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const auto originalBytes = std::filesystem::file_size(path) + 16U * RSS_SEGMENT_SIZE;
     std::filesystem::resize_file(path, originalBytes); // Valid allocator-free complete trailing slots.
     const std::filesystem::path target(path.string() + ".scan");
@@ -954,7 +954,7 @@ TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionEvacuatesOnePoolBelow
     initialize(true, true);
     MetadataSnapshotPin oldest; std::vector<MetadataSnapshotPin> history;
     ASSERT_NO_FATAL_FAILURE(seedPinnedNodeVersions(24U, oldest, history));
-    oldest.release(); history.clear(); static_cast<void>(makeLegacyRowSource());
+    oldest.release(); history.clear(); static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     auto maintenance = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
@@ -1016,7 +1016,7 @@ TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionEvacuatesOnePoolBelow
 
 
 TEST_F(BuildingScanMembershipTest, MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate) {
-    insert(1, 0, {7}); static_cast<void>(makeLegacyRowSource());
+    insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     auto maintenance = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
@@ -1050,7 +1050,7 @@ TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionABFaultsPreserveOldAn
         initialize(true, true);
         MetadataSnapshotPin oldest; std::vector<MetadataSnapshotPin> history;
         ASSERT_NO_FATAL_FAILURE(seedPinnedNodeVersions(24U, oldest, history));
-        oldest.release(); history.clear(); static_cast<void>(makeLegacyRowSource());
+        oldest.release(); history.clear(); static_cast<void>(closeCurrentRowSourceBytes());
         const std::filesystem::path target(path.string() + ".scan");
         auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
         auto maintenance = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
@@ -1114,7 +1114,7 @@ TEST_F(BuildingScanMembershipTest, ConsecutiveMembershipsShareACowPageAndPreserv
 }
 
 TEST_F(BuildingScanMembershipTest, CompletionRejectsUnconstructedAndUnsavedImages) {
-    insert(1, 0, {7}); static_cast<void>(makeLegacyRowSource());
+    insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     auto maintenance = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
@@ -1138,7 +1138,7 @@ TEST_F(BuildingScanMembershipTest, CompletionRejectsUnconstructedAndUnsavedImage
 
 
 TEST_F(BuildingScanMembershipTest, CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption) {
-    insert(1, 0, {7}); static_cast<void>(makeLegacyRowSource());
+    insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
@@ -1198,7 +1198,7 @@ TEST_F(BuildingScanMembershipTest, CompletionCancelsBeforeIoAndRejectsChecksumme
 
 
 TEST_F(BuildingScanMembershipTest, SourceChangeDuringPreparedCompletionDiscardsThePrivateImage) {
-    insert(1, 0, {7}); static_cast<void>(makeLegacyRowSource());
+    insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
@@ -1250,7 +1250,7 @@ TEST_F(BuildingScanMembershipTest, CompletionPublishesAtomicallyAndReadyOutlives
     for (const auto failpoint : {BootstrapPublishFailpoint::BPF_NONE,
             BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE,
             BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
-        initialize(true); insert(1, 0, {7}); static_cast<void>(makeLegacyRowSource());
+        initialize(true); insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
         std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
         const std::filesystem::path target(path.string() + ".scan");
         auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);

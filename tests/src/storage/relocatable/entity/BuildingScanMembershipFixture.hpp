@@ -8,7 +8,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "graph/storage/relocatable/entity/BuildingScanMembership.hpp"
 #include "graph/storage/relocatable/format/ScanBuildingImageBuilder.hpp"
-#include "graph/storage/relocatable/format/ScanFormatCloneCodec.hpp" // retained only by legacy fixture tests pending cleanup
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
@@ -94,35 +93,15 @@ protected:
             else history.push_back(std::move(snapshot));
         }
     }
-    std::vector<std::byte> makeLegacyRowSource() {
-        const auto sourceRoot = metadata->openSnapshot().superblock();
-        if (sourceRoot.hybrid_property_descriptor_root.isValid()) throw std::logic_error("legacy fixture cannot contain native fields");
-    std::vector<std::byte> legacy(io->fileSize());
-    if (io->readAt(0U, legacy.data(), legacy.size()) != legacy.size()) throw std::runtime_error("short legacy fixture read");
-    for (size_t slot = 0; slot < 2; ++slot) {
-        auto header = std::span(legacy).subspan(slot * RSS_SUPERBLOCK_BYTES, RSS_SUPERBLOCK_BYTES);
-        std::array<std::byte, 32> reserve{};
-        std::copy_n(header.begin() + RSS_SUPERBLOCK_HEADER_BYTES, reserve.size(), reserve.begin());
-        std::fill(header.begin() + 336, header.end(), std::byte{});
-        std::copy(reserve.begin(), reserve.end(), header.begin() + 336);
-        LittleEndianCodec::writeU16(header, 4, 31); LittleEndianCodec::writeU16(header, 6, 336);
-        LittleEndianCodec::writeU32(header, 8, LittleEndianCodec::readU32(header, 8) & ~RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
-        LittleEndianCodec::writeU32(header, 112, graph::utils::calculateCrc(header.data() + 336, header.size() - 336));
-        LittleEndianCodec::writeU32(header, 116, 0);
-        LittleEndianCodec::writeU32(header, 116, graph::utils::calculateCrc(header.data(), 336));
-        static_cast<void>(ScanFormatCloneCodec::legacySuperblockToBuilding(header));
-    }
-    for (uint64_t offset = sourceRoot.data_region_offset; offset < legacy.size(); offset += RSS_SEGMENT_SIZE) {
-        auto header = std::span(legacy).subspan(offset, RSS_ENVELOPE_BYTES);
-        if (LittleEndianCodec::readU32(header, 0) != RSS_SEGMENT_MAGIC) continue;
-        LittleEndianCodec::writeU16(header, 4, 5); LittleEndianCodec::writeU32(header, 52, 0);
-        LittleEndianCodec::writeU32(header, 52, graph::utils::calculateCrc(header.data(), header.size()));
-    }
-    labels.reset(); pages.reset(); entities.reset(); metadata.reset(); io.reset(); file.reset();
-    { std::ofstream output(path, std::ios::binary | std::ios::trunc);
-      output.write(reinterpret_cast<const char *>(legacy.data()), static_cast<std::streamsize>(legacy.size()));
-      if (!output.good()) throw std::runtime_error("cannot write legacy fixture"); }
-        return legacy;
+    std::vector<std::byte> closeCurrentRowSourceBytes() {
+        const auto root = metadata->openSnapshot().superblock();
+        if (root.hybrid_property_descriptor_root.isValid())
+            throw std::logic_error("current ROW fixture cannot contain native fields");
+        std::vector<std::byte> bytes(io->fileSize());
+        if (io->readAt(0U, bytes.data(), bytes.size()) != bytes.size())
+            throw std::runtime_error("short current ROW fixture read");
+        labels.reset(); pages.reset(); entities.reset(); metadata.reset(); io.reset(); file.reset();
+        return bytes;
     }
     void closeCurrentRowSource() {
         const auto root = metadata->openSnapshot().superblock();

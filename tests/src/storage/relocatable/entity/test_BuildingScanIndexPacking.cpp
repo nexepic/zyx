@@ -86,7 +86,7 @@ TEST_F(BuildingScanMembershipTest, DataCompactionSkipsAnOrdinaryMixedOwnerIndexP
     static_cast<void>(trees.append(other, leaf(PageId(102), 18, LogSequenceNumber(3)), LogSequenceNumber(3)));
     const std::array<IndexRootLocation, 2> roots{{{17, PageId(101), Generation(1)}, {18, PageId(102), Generation(1)}}};
     static_cast<void>(trees.publishRoots(roots, {}, LogSequenceNumber(4)));
-    static_cast<void>(makeLegacyRowSource());
+    static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".mixed-index");
     auto source = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     auto work = std::make_shared<graph::query::execution::MaterializedByteBudget>(7U * 1024U * 1024U);
