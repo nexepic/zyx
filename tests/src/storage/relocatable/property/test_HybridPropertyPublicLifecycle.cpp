@@ -438,6 +438,28 @@ TEST_F(HybridPropertyQueryParityTest, PublicNativePropertyReplacementMaintainsSc
     backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(0))}, {"note", PropertyValue("person")}}}});
     backend.close(); EXPECT_EQ(read(), baseline); inspectPublicNativeState();
 }
+TEST_F(HybridPropertyQueryParityTest, NativePropertyChangedThenRestoredRejectsStaleTransaction) {
+    seed(false); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    auto stale = backend.beginLogicalGraphTransaction(false);
+    LogicalGraphMutationBatch write;
+    write.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+        LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1U},
+        {{"age", PropertyValue(int64_t(200))}, {"note", PropertyValue("person")}}}};
+    (void)stale->stageMutationBatch(std::move(write));
+    backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(100))}, {"note", PropertyValue("person")}}}});
+    backend.replaceLogicalNodeProperties({{1, {{"age", PropertyValue(int64_t(0))}, {"note", PropertyValue("person")}}}});
+    EXPECT_THROW(static_cast<void>(stale->commit()), LogicalGraphMutationConflict);
+    EXPECT_EQ(old->readNodeProperty(1, "age"), PropertyValue(int64_t(0)));
+    auto current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodeProperty(1, "age"), PropertyValue(int64_t(0)));
+    current.reset(); old.reset(); stale.reset(); backend.close();
+    backend.open(); current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodeProperty(1, "age"), PropertyValue(int64_t(0)));
+    current.reset(); backend.close();
+}
 TEST_F(HybridPropertyQueryParityTest, PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot) {
     seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
