@@ -797,6 +797,49 @@ TEST_F(ScanReadProofTest, CompletedImageRejectsRestoredOwnerStalePublicTransacti
     EXPECT_EQ(current->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{1}));
     current.reset(); backend.close();
 }
+TEST_F(ScanReadProofTest, CompletedImageTracksOnlyChangedOwnerAcrossNoopAndReopen) {
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 64U));
+    builder.reset();
+    const auto revisions = [&]() {
+        auto file = std::make_shared<std::fstream>(target, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        const auto first = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 1U});
+        const auto second = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 2U});
+        return std::array<uint64_t, 3>{pin.superblock().graph_revision,
+            first ? first->owner_revision : 0U, second ? second->owner_revision : 0U};
+    };
+    const auto properties = [](uint64_t id, int64_t number) {
+        std::vector<LogicalGraphWriteProperty> values{{"number", graph::PropertyValue(number)},
+            {"text", graph::PropertyValue(int64_t(id + 1U))}, {"list", graph::PropertyValue(int64_t(id + 2U))}};
+        for (uint64_t token = 4; token <= 64; ++token)
+            values.push_back({"K" + std::to_string(token), graph::PropertyValue(int64_t(id + token - 1U))});
+        return values;
+    };
+    const auto before = revisions();
+    ASSERT_NE(before[1], 0U); ASSERT_NE(before[2], 0U);
+    RelocatableStorageBackendOptions options; options.data_path = target; options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto old = backend.openLogicalGraphReadSnapshot();
+    backend.replaceLogicalNodeProperties({{1U, properties(1U, 999)}});
+    const auto changed = revisions();
+    EXPECT_EQ(changed[0], before[0] + 1U);
+    EXPECT_EQ(changed[1], changed[0]); EXPECT_EQ(changed[2], before[2]);
+    backend.replaceLogicalNodeProperties({{1U, properties(1U, 999)}});
+    EXPECT_EQ(revisions(), changed);
+    backend.replaceLogicalNodeProperties({{2U, properties(2U, 888)}});
+    const auto other = revisions();
+    EXPECT_EQ(other[0], changed[0] + 1U);
+    EXPECT_EQ(other[1], changed[1]); EXPECT_EQ(other[2], other[0]);
+    EXPECT_EQ(old->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{1}));
+    old.reset(); backend.close();
+    EXPECT_EQ(revisions(), other);
+    backend.open(); auto current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->readNodeProperty(1U, "number"), graph::PropertyValue(int64_t{999}));
+    EXPECT_EQ(current->readNodeProperty(2U, "number"), graph::PropertyValue(int64_t{888}));
+    current.reset(); backend.close();
+}
 
 TEST_F(ScanReadProofTest, LogicalLabelMutationPublishesCompleteMembershipWithEntityAndCatalogRoots) {
     ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
