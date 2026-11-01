@@ -771,6 +771,7 @@ TEST_F(ScanReadProofTest, CompletedImageRejectsRestoredOwnerStalePublicTransacti
     ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 64U));
     builder.reset();
     RelocatableStorageBackendOptions options; options.data_path = target;
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend backend(options); backend.open();
     auto old = backend.openLogicalGraphReadSnapshot();
     auto transaction = backend.beginLogicalGraphTransaction(false);
