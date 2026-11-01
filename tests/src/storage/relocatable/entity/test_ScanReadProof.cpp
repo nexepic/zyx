@@ -768,16 +768,18 @@ TEST_F(ScanReadProofTest, CompletedImageFieldUpdatePreservesMembershipAndOldPinT
 }
 
 TEST_F(ScanReadProofTest, CompletedImageRejectsRestoredOwnerStalePublicTransaction) {
-    ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
+    ASSERT_NO_FATAL_FAILURE(makeImage(true, true, false, 64U));
     builder.reset();
     RelocatableStorageBackendOptions options; options.data_path = target;
     RelocatableStorageBackend backend(options); backend.open();
     auto old = backend.openLogicalGraphReadSnapshot();
     auto transaction = backend.beginLogicalGraphTransaction(false);
     const auto properties = [](int64_t number) {
-        return std::vector<LogicalGraphWriteProperty>{{"number", graph::PropertyValue(number)},
-            {"text", graph::PropertyValue("short")},
-            {"list", graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t{7})})}};
+        std::vector<LogicalGraphWriteProperty> values{{"number", graph::PropertyValue(number)},
+            {"text", graph::PropertyValue(int64_t{2})}, {"list", graph::PropertyValue(int64_t{3})}};
+        for (int64_t token = 4; token <= 64; ++token)
+            values.push_back({"K" + std::to_string(token), graph::PropertyValue(token)});
+        return values;
     };
     LogicalGraphMutationBatch staged;
     staged.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
