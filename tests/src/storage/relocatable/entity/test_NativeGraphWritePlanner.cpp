@@ -2095,6 +2095,7 @@ TEST_F(NativeGraphWritePlannerTest, MetadataPoolGrowthDoesNotConflictWithStagedP
 	};
 	const auto before = countPools(old);
 	bool grew = false;
+	std::vector<MetadataSnapshotPin> retainedGenerations;
 	for (size_t i = 0; i < 512U && !grew; ++i) {
 		auto source = metadata_->openSnapshot();
 		const auto lsn = LogSequenceNumber(source.superblock().checkpoint_lsn.value() + 1U);
@@ -2103,6 +2104,7 @@ TEST_F(NativeGraphWritePlannerTest, MetadataPoolGrowthDoesNotConflictWithStagedP
 		ASSERT_EQ(changed.graph_revision, revision);
 		auto current = metadata_->openSnapshot();
 		grew = countPools(current) > before;
+		retainedGenerations.push_back(std::move(current));
 	}
 	ASSERT_TRUE(grew) << "expected a real new metadata pool while the old snapshot remains pinned";
 	const auto committed = staged.commit();
