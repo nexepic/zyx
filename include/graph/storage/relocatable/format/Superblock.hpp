@@ -26,7 +26,7 @@ namespace graph::storage {
 	// Version 30 removes retired Property and direct Vector-adjacency roots.
 	// Earlier layouts are deliberately unsupported rather than silently
 	// migrated or reinterpreted.
-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 41 : RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 39 : 31;
+	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 42 : RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 40 : 32;
 	constexpr uint32_t RSS_SUPERBLOCK_BYTES = RSS_PAGE_SIZE;
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 352 : 336;
 	// Crash injection must leave this checksum untouched so a torn inactive
@@ -69,6 +69,9 @@ namespace graph::storage {
 		DatabaseId database_id{};
 		Generation generation{};
 		LogSequenceNumber checkpoint_lsn{};
+		// Logical revisions are durable and independent of physical COW generations.
+		uint64_t graph_revision = 1;
+		uint64_t schema_revision = 1;
 		uint32_t flags = 0;
 		uint64_t data_region_offset = RSS_FILE_BOOTSTRAP_BYTES;
 		PhysicalPageRef catalog_root{};

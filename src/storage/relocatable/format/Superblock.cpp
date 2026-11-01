@@ -58,7 +58,9 @@ namespace graph::storage {
         constexpr size_t HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET = 336;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_BYTES = 32;
-		constexpr size_t PAYLOAD_RESERVED_OFFSET = METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES;
+		constexpr size_t GRAPH_REVISION_OFFSET = METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES;
+		constexpr size_t SCHEMA_REVISION_OFFSET = GRAPH_REVISION_OFFSET + sizeof(uint64_t);
+		constexpr size_t PAYLOAD_RESERVED_OFFSET = SCHEMA_REVISION_OFFSET + sizeof(uint64_t);
 		constexpr uint64_t RSS_MAX_PHYSICAL_PAGE_GENERATION = std::numeric_limits<uint64_t>::max() >> 5U;
 		static_assert(METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES <= RSS_SUPERBLOCK_BYTES);
 
@@ -119,7 +121,8 @@ namespace graph::storage {
 		}
 
 		void validateSuperblock(const Superblock &superblock) {
-			if (!superblock.database_id.isValid() || !superblock.generation.isValid()) {
+			if (!superblock.database_id.isValid() || !superblock.generation.isValid() ||
+				superblock.graph_revision == 0U || superblock.schema_revision == 0U) {
 				throwSuperblockError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable superblock needs a database ID and generation");
 			}
@@ -200,6 +203,8 @@ namespace graph::storage {
 								 superblock.metadata_emergency_reserve.generation.value());
 			LittleEndianCodec::writeU64(bytes, METADATA_EMERGENCY_RESERVE_OFFSET + 24U,
 								 superblock.metadata_emergency_reserve.committed_lsn.value());
+			LittleEndianCodec::writeU64(bytes, GRAPH_REVISION_OFFSET, superblock.graph_revision);
+			LittleEndianCodec::writeU64(bytes, SCHEMA_REVISION_OFFSET, superblock.schema_revision);
 			LittleEndianCodec::writeU32(bytes, PAYLOAD_CRC_OFFSET, payloadCrc);
 			LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET, headerCrc);
 			LittleEndianCodec::writeU64(bytes, DATABASE_ID_OFFSET, superblock.database_id.value());
@@ -341,6 +346,8 @@ namespace graph::storage {
 				Generation(LittleEndianCodec::readU64(bytes, METADATA_EMERGENCY_RESERVE_OFFSET + 16U));
 		superblock.metadata_emergency_reserve.committed_lsn =
 				LogSequenceNumber(LittleEndianCodec::readU64(bytes, METADATA_EMERGENCY_RESERVE_OFFSET + 24U));
+		superblock.graph_revision = LittleEndianCodec::readU64(bytes, GRAPH_REVISION_OFFSET);
+		superblock.schema_revision = LittleEndianCodec::readU64(bytes, SCHEMA_REVISION_OFFSET);
 		validateSuperblock(superblock);
 		return superblock;
 	}

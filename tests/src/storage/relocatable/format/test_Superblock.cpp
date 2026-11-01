@@ -108,6 +108,20 @@ namespace {
 
 } // namespace
 
+TEST(RelocatableSuperblockTest, PersistsIndependentNonzeroLogicalRevisions) {
+	auto block = validSuperblock(4, 4);
+	block.graph_revision = 17U;
+	block.schema_revision = 9U;
+	const auto decoded = SuperblockCodec::decode(SuperblockCodec::encode(block));
+	EXPECT_EQ(decoded.graph_revision, 17U);
+	EXPECT_EQ(decoded.schema_revision, 9U);
+	block.graph_revision = 0U;
+	EXPECT_THROW(static_cast<void>(SuperblockCodec::encode(block)), FormatException);
+	block.graph_revision = 1U;
+	block.schema_revision = 0U;
+	EXPECT_THROW(static_cast<void>(SuperblockCodec::encode(block)), FormatException);
+}
+
 TEST(RelocatableSuperblockTest, RejectsAuthenticatedUnsupportedSlotInsteadOfFallingBack) {
 	auto current = SuperblockCodec::encode(validSuperblock(4, 4));
 	auto unknown = SuperblockCodec::encode(validSuperblock(5, 5));
