@@ -968,31 +968,37 @@
 		// Stamp semantic owner changes, not every owner sharing a rewritten page.
 		// Empty results retain a directory tombstone so absence cannot erase ABA
 		// evidence for a concurrently staged blind write.
+		auto changedOwners = derivedState.changed_property_owners;
+		std::ranges::sort(changedOwners);
+		changedOwners.erase(std::unique(changedOwners.begin(), changedOwners.end()), changedOwners.end());
+		std::ranges::sort(upsertedEntityProperties, {}, &EntityPropertyLocation::key);
+		const auto hybridOwners = std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count);
 		for (auto &location : upsertedEntityProperties) {
-			const bool changed = std::ranges::find(derivedState.changed_property_owners, location.key) !=
-				derivedState.changed_property_owners.end() ||
-				std::ranges::find(std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count), location.key) !=
-				std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count).end();
+			const bool changed = std::ranges::binary_search(changedOwners, location.key) ||
+				std::ranges::find(hybridOwners, location.key) != hybridOwners.end();
 			const auto previous = locations_.findEntityPropertyRevision(current, location.key);
 			location.owner_revision = changed ? batch.candidate().graph_revision :
 				(previous ? previous->owner_revision : 0U);
 		}
-		for (const auto &key : derivedState.changed_property_owners) {
-			const auto existing = std::ranges::find(upsertedEntityProperties, key, &EntityPropertyLocation::key);
-			if (existing == upsertedEntityProperties.end())
-				upsertedEntityProperties.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
-			std::erase(erasedProperties, key);
+		std::vector<EntityPropertyLocation> ownerTombstones;
+		for (const auto &key : changedOwners) {
+			if (!std::ranges::binary_search(upsertedEntityProperties, key, {}, &EntityPropertyLocation::key))
+				ownerTombstones.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
 		}
-		for (const auto &key : std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count)) {
-			const auto existing = std::ranges::find(upsertedEntityProperties, key, &EntityPropertyLocation::key);
-			if (existing == upsertedEntityProperties.end()) {
+		for (const auto &key : hybridOwners) {
+			if (!std::ranges::binary_search(changedOwners, key) &&
+				!std::ranges::binary_search(upsertedEntityProperties, key, {}, &EntityPropertyLocation::key)) {
 				const auto previous = locations_.findEntityPropertyRevision(current, key);
 				if (previous && !previous->isTombstone())
 					throw FormatException(FormatError::FERR_INVALID_STATE, "native field owner unexpectedly retains a ROW Property route");
-				upsertedEntityProperties.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+				ownerTombstones.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
 			}
-			std::erase(erasedProperties, key);
 		}
+		upsertedEntityProperties.insert(upsertedEntityProperties.end(), ownerTombstones.begin(), ownerTombstones.end());
+		std::erase_if(erasedProperties, [&](EntityPropertyKey key) {
+			return std::ranges::binary_search(changedOwners, key) ||
+				std::ranges::find(hybridOwners, key) != hybridOwners.end();
+		});
 		std::ranges::sort(upsertedEntityProperties, {},
 						  [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
 		std::ranges::sort(erasedProperties, {}, &EntityPropertyKey::directoryId);

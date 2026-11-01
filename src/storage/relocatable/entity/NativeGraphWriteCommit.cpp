@@ -1446,6 +1446,18 @@ namespace graph::storage {
 			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE)
 				derivedState.changed_property_owners.push_back(plan.key);
 		}
+		// Include deleted owners before sealing any hybrid proof: the proof binds
+		// this exact derived-state object to its metadata publication.
+		for (const auto &mutation : mutations) {
+			for (const auto id : mutation.erased_node_ids)
+				derivedState.changed_property_owners.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+			for (const auto id : mutation.erased_edge_ids)
+				derivedState.changed_property_owners.push_back({EntityPropertyOwnerKind::EPOK_EDGE, id});
+		}
+		std::ranges::sort(derivedState.changed_property_owners);
+		derivedState.changed_property_owners.erase(
+				std::unique(derivedState.changed_property_owners.begin(), derivedState.changed_property_owners.end()),
+				derivedState.changed_property_owners.end());
         derivedState.entity_free_summary_fences = std::move(freeSummaryFences);
         if (global_adjacency_images_) derivedState.index_images.push_back(global_adjacency_images_);
         for (const auto &staged : scalar_index_mutations_) if (staged.images) derivedState.index_images.push_back(staged.images);

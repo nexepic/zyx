@@ -1648,16 +1648,17 @@ namespace graph::storage {
 		std::optional<NativeGraphDerivedStateMutation> supplementedState;
 		const bool entityChange = !mutations.empty() || !appends.empty() || !newPools.empty();
 		bool needsSupplement = derivedState == nullptr || (entityChange && !derivedState->graph_revision_change);
-		for (const auto &plan : propertyPlans) {
-			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE &&
-				(derivedState == nullptr || !derivedState->graph_revision_change ||
-				 std::ranges::find(derivedState->changed_property_owners, plan.key) == derivedState->changed_property_owners.end()))
-				needsSupplement = true;
-		}
+		const bool ownersSorted = derivedState != nullptr && std::ranges::is_sorted(derivedState->changed_property_owners);
 		const auto lacksOwner = [&](EntityPropertyKey key) {
-			return derivedState == nullptr ||
+			if (derivedState == nullptr) return true;
+			return ownersSorted ? !std::ranges::binary_search(derivedState->changed_property_owners, key) :
 				std::ranges::find(derivedState->changed_property_owners, key) == derivedState->changed_property_owners.end();
 		};
+		for (const auto &plan : propertyPlans) {
+			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE &&
+				(derivedState == nullptr || !derivedState->graph_revision_change || lacksOwner(plan.key)))
+				needsSupplement = true;
+		}
 		for (const auto &mutation : mutations) {
 			for (const auto id : mutation.erased_node_ids)
 				if (lacksOwner({EntityPropertyOwnerKind::EPOK_NODE, id})) needsSupplement = true;
@@ -1669,8 +1670,7 @@ namespace graph::storage {
 		if (needsSupplement) {
 			intent.graph_revision_change = intent.graph_revision_change || entityChange;
 			const auto addOwner = [&](EntityPropertyKey key) {
-				if (std::ranges::find(intent.changed_property_owners, key) == intent.changed_property_owners.end())
-					intent.changed_property_owners.push_back(key);
+				intent.changed_property_owners.push_back(key);
 			};
 			for (const auto &mutation : mutations) {
 				for (const auto id : mutation.erased_node_ids) addOwner({EntityPropertyOwnerKind::EPOK_NODE, id});
@@ -1682,6 +1682,10 @@ namespace graph::storage {
 					addOwner(plan.key);
 				}
 			}
+			std::ranges::sort(intent.changed_property_owners);
+			intent.changed_property_owners.erase(
+					std::unique(intent.changed_property_owners.begin(), intent.changed_property_owners.end()),
+					intent.changed_property_owners.end());
 		}
 		const NativeGraphDerivedStatePreparer noDerivedStatePreparer{};
 		const NativeGraphVectorBootstrapPreparer noVectorBootstrapPreparer{};
