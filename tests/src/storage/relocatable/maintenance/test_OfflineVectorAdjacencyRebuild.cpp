@@ -215,11 +215,15 @@ TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, PublishesOneDeterministicAd
 	SlottedPagePool slotted(io, *metadata);
 	BTreePageStore trees(slotted, *metadata);
 	materializeRawAndManifest(*metadata, vectors, manifests);
+	auto beforeRebuild = metadata->openSnapshot();
+	const auto graphRevision = beforeRebuild.superblock().graph_revision;
+	beforeRebuild.release();
 
 	const OfflineVectorAdjacencyRebuildOptions rebuild = options();
 	const OfflineVectorAdjacencyRebuildResult first = OfflineVectorAdjacencyRebuild::run(
 			trees, vectors, adjacencies, manifests, *metadata, 17, canonicalRecords(), rebuild);
 	EXPECT_FALSE(first.reused_mapping);
+	EXPECT_EQ(first.superblock.graph_revision, graphRevision);
 	EXPECT_FALSE(first.already_published);
 	EXPECT_EQ(first.vector_count, 5U);
 	EXPECT_EQ(first.build_work.exact_pair_distance_evaluations, 20U);

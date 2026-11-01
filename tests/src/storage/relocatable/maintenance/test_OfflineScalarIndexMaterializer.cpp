@@ -247,6 +247,9 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest, MaterializesAndResumesLogi
 	publishPropertyTokens(catalog, planner, {"first", "last", "name", "weight"});
 
 	const std::vector<IndexDefinition> definitions = this->definitions();
+	auto beforeMaterialization = metadata->openSnapshot();
+	const auto graphRevision = beforeMaterialization.superblock().graph_revision;
+	beforeMaterialization.release();
 	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
 	graph::debug::PerfTrace::reset();
 	graph::debug::PerfTrace::setValueCollectionEnabled(true);
@@ -255,6 +258,9 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest, MaterializesAndResumesLogi
 	const graph::debug::PerfTrace::Snapshot materializationTrace = graph::debug::PerfTrace::snapshotAndReset();
 	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 	EXPECT_EQ(first.materialized_indexes, 7U);
+	auto afterMaterialization = metadata->openSnapshot();
+	EXPECT_EQ(afterMaterialization.superblock().graph_revision, graphRevision);
+	afterMaterialization.release();
 	EXPECT_EQ(first.verified_indexes, 0U);
 	EXPECT_EQ(first.deferred_vector_indexes, 1U);
 	EXPECT_EQ(first.empty_indexes_with_unassigned_property_keys, 1U);

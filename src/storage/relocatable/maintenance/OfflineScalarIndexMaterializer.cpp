@@ -330,8 +330,10 @@ namespace graph::storage {
 				addSemanticTree(result, definition.index_id, existing);
 				continue;
 			}
+			MetadataPublishOptions physicalPublication;
+			physicalPublication.logical_graph_change = false;
 			const BulkBTreeBuildResult built = BulkBTreeBuilder::build(pages, metadata, definition.index_id, source,
-																	   options.build, nextCheckpointLsn(metadata));
+																					   options.build, nextCheckpointLsn(metadata), physicalPublication);
 			result.indexed_entries += built.entry_count;
 			++result.materialized_indexes;
 			MetadataSnapshotPin verificationSnapshot = metadata.openSnapshot();

@@ -2191,4 +2191,17 @@ TEST_F(NativeGraphWritePlannerTest, ReplacingLabelsWithSameValueDoesNotAdvanceGr
 	const auto committed = noop.commit();
 	ASSERT_TRUE(committed.committed());
 	EXPECT_EQ(committed.superblock.graph_revision, before.superblock().graph_revision);
+	EXPECT_EQ(committed.superblock.generation, before.superblock().generation);
+	auto stale = planner.beginTransaction();
+	stale.replaceNodeLabels(id, labels);
+	const std::array<uint64_t, 1U> other{11U};
+	auto writer = planner.beginTransaction(); writer.replaceNodeLabels(id, other);
+	ASSERT_TRUE(writer.commit().committed());
+	auto restore = planner.beginTransaction(); restore.replaceNodeLabels(id, labels);
+	ASSERT_TRUE(restore.commit().committed());
+	EXPECT_FALSE(stale.commit().committed());
+	auto leaseAndWrite = planner.beginTransaction();
+	leaseAndWrite.replaceNodeLabels(id, labels);
+	(void) leaseAndWrite.createNode({});
+	EXPECT_TRUE(leaseAndWrite.commit().committed());
 }

@@ -491,10 +491,12 @@ namespace graph::storage {
 			result.reused_mapping = true;
 		} else {
 			mappingSnapshot.release();
+			MetadataPublishOptions physicalStage;
+			physicalStage.logical_graph_change = false;
 			const VectorAdjacencyMaterializationResult staged =
-					adjacencies.materialize(indexId, graph, options.pages, nextCheckpointLsn(metadata));
+					adjacencies.materialize(indexId, graph, options.pages, nextCheckpointLsn(metadata), physicalStage);
 			static_cast<void>(VectorAdjacencyMapping::build(trees, metadata, options.mapping_index_id, staged.mappings,
-															options.mapping, nextCheckpointLsn(metadata)));
+																			options.mapping, nextCheckpointLsn(metadata), physicalStage));
 		}
 
 		MetadataSnapshotPin finalSnapshot = metadata.openSnapshot();

@@ -38,10 +38,22 @@ namespace graph::storage {
 		const auto vectorNoops = std::ranges::count_if(vector_deltas_, [](const StagedVectorDelta &delta) {
 			return delta.records.empty();
 		});
-		const bool hasGraphWork = rebuild_entity_free_summaries_ || !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
+		std::vector<uint64_t> unchangedLabelNodes;
+		for (const auto &[nodeId, change] : nodes_) {
+			if (!change.inserted && !change.erased && change.labels &&
+				context_->labels->readNodeLabels(snapshot_, change.record) == *change.labels)
+				unchangedLabelNodes.push_back(nodeId);
+		}
+		const auto readNoops = static_cast<size_t>(vectorNoops) + unchangedLabelNodes.size();
+		const bool hasNodeWork = std::ranges::any_of(nodes_, [&](const auto &entry) {
+			const auto &[nodeId, change] = entry;
+			return change.inserted || change.erased ||
+				(change.labels && !std::ranges::binary_search(unchangedLabelNodes, nodeId));
+		});
+		const bool hasGraphWork = rebuild_entity_free_summaries_ || hasNodeWork || !edges_.empty() || !properties_.empty() ||
 								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 								  !vector_bootstraps_.empty() || vector_deltas_.size() != static_cast<size_t>(vectorNoops);
-		if (!hasGraphWork && vectorNoops == 0U && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
+		if (!hasGraphWork && readNoops == 0U && node_id_ranges_.empty() && edge_id_ranges_.empty() && !hybrid_conversion_ && !hybrid_columns_) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
 		}
         if (hybrid_conversion_ || (hybrid_columns_ && !hybrid_catalog_credit_ && (!hybrid_vectors_ || hybrid_vectors_->semantics.empty()))) {
@@ -88,7 +100,7 @@ namespace graph::storage {
 			// must not publish a second, empty metadata generation just to acknowledge
 			// IDs that are intentionally allowed to remain unused.
 			MetadataSnapshotPin current = context_->metadata->openSnapshot();
-			if (vectorNoops != 0U && current.superblock() != snapshot_.superblock() &&
+			if (readNoops != 0U && current.superblock() != snapshot_.superblock() &&
 				!isRevisionPreservingAdvance(snapshot_.superblock(), current.superblock())) {
 				current.release();
 				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
@@ -110,9 +122,9 @@ namespace graph::storage {
 		}
 		MetadataSnapshotPin current = context_->metadata->openSnapshot();
 		if (current.superblock() != snapshot_.superblock()) {
-			if (vectorNoops != 0U &&
+			if (readNoops != 0U &&
 				!isRevisionPreservingAdvance(snapshot_.superblock(), current.superblock())) {
-				// The equality proof read the staged snapshot. Do not rebase an
+				// Equality proofs read the staged snapshot. Do not rebase an
 				// accompanying adjacency/graph mutation past a changed source.
 				current.release();
 				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
@@ -133,6 +145,7 @@ namespace graph::storage {
 			current.release();
 		}
 		std::erase_if(vector_deltas_, [](const StagedVectorDelta &delta) { return delta.records.empty(); });
+		for (const auto nodeId : unchangedLabelNodes) nodes_.at(nodeId).labels.reset();
 		{
 			debug::ScopedPerfTimer adjacencyPlanTimer("native_graph.commit.adjacency_plan");
 			prepareGlobalAdjacencyMutationPlan();
