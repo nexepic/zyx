@@ -970,7 +970,9 @@
 		// evidence for a concurrently staged blind write.
 		for (auto &location : upsertedEntityProperties) {
 			const bool changed = std::ranges::find(derivedState.changed_property_owners, location.key) !=
-				derivedState.changed_property_owners.end();
+				derivedState.changed_property_owners.end() ||
+				std::ranges::find(std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count), location.key) !=
+				std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count).end();
 			const auto previous = locations_.findEntityPropertyRevision(current, location.key);
 			location.owner_revision = changed ? batch.candidate().graph_revision :
 				(previous ? previous->owner_revision : 0U);
@@ -979,6 +981,16 @@
 			const auto existing = std::ranges::find(upsertedEntityProperties, key, &EntityPropertyLocation::key);
 			if (existing == upsertedEntityProperties.end())
 				upsertedEntityProperties.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			std::erase(erasedProperties, key);
+		}
+		for (const auto &key : std::span(hybridChangedOwners.keys).first(hybridChangedOwners.count)) {
+			const auto existing = std::ranges::find(upsertedEntityProperties, key, &EntityPropertyLocation::key);
+			if (existing == upsertedEntityProperties.end()) {
+				const auto previous = locations_.findEntityPropertyRevision(current, key);
+				if (previous && !previous->isTombstone())
+					throw FormatException(FormatError::FERR_INVALID_STATE, "native field owner unexpectedly retains a ROW Property route");
+				upsertedEntityProperties.push_back({key, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+			}
 			std::erase(erasedProperties, key);
 		}
 		std::ranges::sort(upsertedEntityProperties, {},

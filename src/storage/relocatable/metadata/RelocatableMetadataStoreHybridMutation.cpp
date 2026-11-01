@@ -83,9 +83,22 @@ Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHyb
     auto source = snapshots_.pinCurrentUnderWrite(writer, current);
     MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn, request.memory);
     HybridPropertyPoolPlacement placement(*this, batch, writer, source, request.first_slot, request.last_slot, request.memory, check);
+    NativeHybridChangedOwners changedOwners;
     if (!prepareHybridPropertyColumns(batch, writer, source, request, replacements,
-        sourcePages, sourceTrees, sourceValues, sourceEntities, sourceLabels, placement)) return current;
+        sourcePages, sourceTrees, sourceValues, sourceEntities, sourceLabels, placement,
+        nullptr, nullptr, {}, nullptr, &changedOwners)) return current;
     batch.markGraphChanged();
+    std::array<EntityPropertyLocation, 192U> ownerVersions{};
+    for (size_t i = 0U; i < changedOwners.count; ++i) {
+        const auto key = changedOwners.keys[i];
+        const auto previous = locations_.findEntityPropertyRevision(current, key);
+        require(!previous || previous->isTombstone(), "native field owner unexpectedly retains a ROW Property route");
+        ownerVersions[i] = {key, PageId{}, 0U, 0U, batch.candidate().graph_revision};
+    }
+    std::sort(ownerVersions.begin(), ownerVersions.begin() + changedOwners.count,
+        [](const auto &a, const auto &b) { return a.key.directoryId() < b.key.directoryId(); });
+    if (changedOwners.count)
+        locations_.prepareReplaceEntityProperties(batch, std::span(ownerVersions).first(changedOwners.count), {});
     check(); publishBatch(batch, writer, options); placement.remember(); return batch.candidate();
 }
 
@@ -96,8 +109,18 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     EntityPageStore &sourceEntities, EntityLabelSetStore &sourceLabels, HybridPropertyPoolPlacement &placement,
     const NativeHybridVectorPublication *hybridVectors, const NativeHybridTopologyPublication *hybridTopology,
     std::span<const NativeGraphLargeValueMutation> jointValues,
-    HybridPropertyReadContext *preparationSource) {
+    HybridPropertyReadContext *preparationSource, NativeHybridChangedOwners *changedOwners) {
     const auto &current = source.superblock();
+    const auto noteChangedOwner = [&](EntityPropertyKey owner) {
+        if (!changedOwners) return;
+        for (size_t i = 0U; i < changedOwners->count; ++i)
+            if (changedOwners->keys[i] == owner) return;
+        if (changedOwners->count == changedOwners->keys.size())
+            throw FormatException(FormatError::FERR_INVALID_STATE, "native field changed-owner bound exceeded");
+        changedOwners->keys[changedOwners->count++] = owner;
+    };
+    for (const auto owner : request.owner_deletions) noteChangedOwner(owner);
+    for (const auto owner : request.pending_owner_additions) noteChangedOwner(owner);
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
     require(ownsSnapshot(source) && batch.current() == current &&
@@ -404,6 +427,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             auto insertion = HybridPropertyColumnDelta::planPendingOwnerColumnMember(context, source, replacement.owner,
                 replacement.token, batch.generation(), request.memory, value,
                 sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER);
+            noteChangedOwner(replacement.owner);
             if (insertion) deltas.push_back(std::move(*insertion));
             else inlineChanges.push_back({&replacement, {}, true});
             continue;
@@ -421,7 +445,11 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             replacement.token, batch.generation(), request.memory, replacement.erase ? nullptr : &value, false,
             RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, bool(preparationSource) ||
                 sourceGroup->mode == HybridPropertyGroupMode::HPGM_COLUMN_ROW_REMAINDER);
-        if (delta) { deltas.push_back(std::move(*delta)); continue; }
+        if (delta) {
+            if (delta->action() != HybridPropertyColumnDelta::Action::HCD_NO_CHANGE)
+                noteChangedOwner(replacement.owner);
+            deltas.push_back(std::move(*delta)); continue;
+        }
         require(request.field_lifecycle, "native column replacement does not name an existing column member");
         const auto route = context.visitField(replacement.owner, replacement.token, [](const auto &) {}, [](const auto &) {},
             std::ref(admit), std::ref(admitReference)); boundary.set(0); referenceCredit.set(0);
@@ -431,6 +459,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             if (replacement.erase) continue;
             auto insertion = HybridPropertyColumnDelta::planMissingColumnMember(context, source, replacement.owner,
                 replacement.token, batch.generation(), request.memory, value, bool(preparationSource));
+            noteChangedOwner(replacement.owner);
             if (insertion) deltas.push_back(std::move(*insertion));
             else inlineChanges.push_back({&replacement, {}, true});
             continue;
@@ -469,6 +498,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         }
         referenceCredit.set(0);
         if (unchanged) continue;
+        noteChangedOwner(replacement.owner);
         inlineChanges.push_back({&replacement, ref});
     }
     struct ColdSourceGroup { HybridPropertyGroupRecord source; SlottedSlotReference reference; };
@@ -687,7 +717,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                 auto found = std::lower_bound(entries.begin(), entries.end(), cell.token,
                     [](const auto &entry, uint32_t token) { return entry.key_token < token; });
                 if (cell.erase) {
-                    if (found != entries.end() && found->key_token == cell.token) { entries.erase(found); changed = true; }
+                    if (found != entries.end() && found->key_token == cell.token) { entries.erase(found); changed = true; noteChangedOwner(owner); }
                     continue;
                 }
                 scalars.emplace_back(); const auto &value = cell.propertyValue(scalars.back());
@@ -696,6 +726,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                     found->value = &value;
                 } else entries.insert(found, {cell.token, &value});
                 changed = true;
+                noteChangedOwner(owner);
             }
             if (deletedOwners & ownerBit) { entries.clear(); changed = true; }
             if (!changed || (entries.empty() && !(matrix.cold_rows.owners & ownerBit))) continue;

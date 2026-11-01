@@ -92,6 +92,7 @@
         // sets feed the metadata-owned content-index preparation below.
         const auto jointRowLargeFirst = jointNativeContent ? batch.allocateLargeValueIdRange(largeValues.size()) : LargeValueId{};
         std::optional<MetadataSnapshotPin> hybridSource;
+        NativeHybridChangedOwners hybridChangedOwners;
         std::unique_ptr<HybridPropertyPoolPlacement> hybridPlacement;
         std::unique_ptr<HybridPropertyPoolPlacement> streamedAdjacencyPlacement;
         std::unique_ptr<HybridPropertyPoolPlacement> streamedMembershipPlacement;
@@ -104,7 +105,8 @@
             hybridPlacement.reset(new HybridPropertyPoolPlacement(*this, batch, writer, *hybridSource,
                 fields.first_slot, fields.last_slot, fields.memory, [checkpoint = fields.cancellation] { if (checkpoint) checkpoint->check(); }));
             if (!prepareHybridPropertyColumns(batch, writer, *hybridSource, fields, fields.replacements,
-                *conversionPages, *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, hybridVectors))
+                *conversionPages, *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement,
+                hybridVectors, nullptr, {}, nullptr, &hybridChangedOwners))
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native Vector publication has no authoritative field transition");
             batch.markGraphChanged();
         }
@@ -127,7 +129,8 @@
                 current.hybrid_property_descriptor_root, hybridTopology->field_changes_, pendingNativeMemory, PhysicalSlotId(1), PhysicalSlotId(UINT64_MAX),
                 fieldPool.owner_id, nullptr, true, hybridTopology->owner_deletions_, std::span(pendingNativeOwners).first(pendingNativeOwnerCount)};
             nativeFieldsPrepared = prepareHybridPropertyColumns(batch, writer, *topologySource, fields, fields.replacements, *conversionPages,
-                *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, nullptr, hybridTopology, jointNativeContent ? largeValues : std::span<const NativeGraphLargeValueMutation>{});
+                *conversionIndexes, *conversionLargeValues, *conversionEntities, *hybridLabels, *hybridPlacement, nullptr, hybridTopology,
+                jointNativeContent ? largeValues : std::span<const NativeGraphLargeValueMutation>{}, nullptr, &hybridChangedOwners);
             if (nativeFieldsPrepared) batch.markGraphChanged();
             if (!nativeFieldsPrepared && pendingNativeOwnerCount)
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native pending owner liveness did not prepare a transition");

@@ -925,6 +925,12 @@ namespace graph::storage {
 		}
 	};
 
+	// Bounded scratch only; persistent owner state remains in the Property directory.
+	struct NativeHybridChangedOwners {
+		std::array<EntityPropertyKey, 192U> keys{};
+		size_t count = 0U;
+	};
+
 	// Offline Vector rebuild is not a sequence of independently visible derived
 	// writes. PQ-only callers leave the adjacency and delta-retirement fields
 	// empty. A base rebuild fills all fields so Codebook extents, PQ pages,
@@ -2054,7 +2060,8 @@ namespace graph::storage {
             const NativeHybridVectorPublication *hybridVectors = nullptr,
             const NativeHybridTopologyPublication *hybridTopology = nullptr,
             std::span<const NativeGraphLargeValueMutation> jointValues = {},
-            HybridPropertyReadContext *preparationSource = nullptr);
+            HybridPropertyReadContext *preparationSource = nullptr,
+            NativeHybridChangedOwners *changedOwners = nullptr);
         [[nodiscard]] Superblock publishHybridPropertyRows(MetadataWriteBatch &batch,
             const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
             const NativeGraphHybridPropertyConversion &conversion, EntityPageStore &entities,

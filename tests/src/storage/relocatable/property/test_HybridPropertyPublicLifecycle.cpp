@@ -161,13 +161,26 @@ TEST_F(HybridPropertyQueryParityTest, JointPropertyPublicationCoordinatesNativeA
         {ids.front(), {{"age", PropertyValue(int64_t(101))}, {"joint_row", PropertyValue(row)}}}});
     auto revisionAfter = backend.openSnapshot();
     EXPECT_EQ(revisionAfter.superblock().graph_revision, graphRevision + 1U);
+    const auto jointRevision = revisionAfter.superblock().graph_revision;
     revisionAfter.release();
     auto current = backend.openLogicalGraphReadSnapshot();
     EXPECT_EQ(current->readNodeProperty(1, "joint_native"), PropertyValue(native));
     EXPECT_EQ(current->readNodeProperty(ids.front(), "joint_row"), PropertyValue(row));
     EXPECT_EQ(old->readNodeProperty(1, "joint_native"), PropertyValue());
     EXPECT_EQ(old->readNodeProperty(ids.front(), "joint_row"), PropertyValue());
-    current.reset(); old.reset(); backend.close(); inspectPublicNativeState();
+    current.reset(); old.reset(); backend.close();
+    {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        for (const auto id : {uint64_t(1U), ids.front()}) {
+            const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, id});
+            ASSERT_TRUE(owner.has_value());
+            EXPECT_EQ(owner->owner_revision, jointRevision);
+        }
+    }
+    inspectPublicNativeState();
     backend.open(); current = backend.openLogicalGraphReadSnapshot();
     EXPECT_EQ(current->readNodeProperty(1, "joint_native"), PropertyValue(native));
     EXPECT_EQ(current->readNodeProperty(ids.front(), "joint_row"), PropertyValue(row));
