@@ -12,7 +12,7 @@ spec.loader.exec_module(tier)
 
 def test_tier_filters_form_complementary_exact_patterns():
     names = tier.STRESS_TESTS
-    assert len(names) == 4
+    assert len(names) == 6
     assert len(set(names)) == len(names)
     assert all('*' not in name and '?' not in name and ':' not in name for name in names)
     assert tier.tier_filter('stress') == ':'.join(names)

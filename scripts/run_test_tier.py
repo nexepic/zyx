@@ -16,6 +16,8 @@ STRESS_TESTS = (
     'RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce',
     'RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection',
     'RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories',
+    'RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages',
+    'RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication',
 )
 
 
