@@ -477,6 +477,32 @@ TEST_F(HybridPropertyQueryParityTest, RowColumnRoundTripPreservesOwnerAndGraphRe
     convert(EntityPropertyOwnerKind::EPOK_NODE, true);
     EXPECT_EQ(revisions(), before);
 }
+TEST_F(HybridPropertyQueryParityTest, NativeFieldChangeAdvancesOnlyChangedOwnerRevision) {
+    seed(false); convert(EntityPropertyOwnerKind::EPOK_NODE);
+    const auto revisions = [&]() {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        const auto first = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 1U});
+        const auto second = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, 2U});
+        return std::array<uint64_t, 3>{pin.superblock().graph_revision,
+            first ? first->owner_revision : 0U, second ? second->owner_revision : 0U};
+    };
+    const auto before = revisions();
+    ASSERT_NE(before[1], 0U); ASSERT_NE(before[2], 0U);
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const std::vector<LogicalGraphPropertyReplaceRequest> replacement{{1, {
+        {"age", PropertyValue(int64_t(100))}, {"note", PropertyValue("person")}}}};
+    backend.replaceLogicalNodeProperties(replacement); backend.close();
+    const auto changed = revisions();
+    EXPECT_EQ(changed[0], before[0] + 1U);
+    EXPECT_EQ(changed[1], changed[0]);
+    EXPECT_EQ(changed[2], before[2]);
+    backend.open(); backend.replaceLogicalNodeProperties(replacement); backend.close();
+    EXPECT_EQ(revisions(), changed);
+}
 TEST_F(HybridPropertyQueryParityTest, PublicNativePropertyReplacementCoordinatesVectorAndPreservesOldSnapshot) {
     seed(false, false, false, false, 64, false, false, true); convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
