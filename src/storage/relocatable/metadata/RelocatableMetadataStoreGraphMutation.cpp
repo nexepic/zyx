@@ -2554,7 +2554,9 @@ namespace graph::storage {
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge final coordinator materialized an unleased Property owner");
 													}
-													propertySession->append(property);
+															auto versionedProperty = property;
+															versionedProperty.owner_revision = context.metadata_batch.candidate().graph_revision;
+															propertySession->append(versionedProperty);
 												}
 											}
 											pendingPages.clear();
