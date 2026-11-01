@@ -1,6 +1,8 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
+#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include <atomic>
 #include <cerrno>
@@ -385,4 +387,60 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryDeletionImagesPreserveBothDirectio
     now = backend.openLogicalGraphReadSnapshot();
     EXPECT_TRUE(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1000).edges.empty());
     now.reset(); EXPECT_NO_THROW((void)backend.verifyIntegrity()); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedAdjacencySmallInternalRootPreservesOldAndNewEdges) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+    ASSERT_EQ(nodes.size(), 2U);
+    std::vector<uint64_t> sources(1024U, nodes[0]), targets(1024U, nodes[1]);
+    const auto initial = append(backend, sources, targets); ASSERT_EQ(initial.size(), 1024U);
+    {
+        auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto metadata = RelocatableMetadataStore::openReadOnly(io);
+        auto pin = metadata->openSnapshot();
+        const auto root = metadata->findIndexRootOptional(pin, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+        ASSERT_TRUE(root.has_value());
+        SlottedPagePool pages(io, *metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        BTreePageStore tree(pages, *metadata);
+        EXPECT_GT(tree.read(pin, root->root_page_id).header().level, 0U);
+    }
+    auto old = backend.openLogicalGraphReadSnapshot();
+    const std::array<uint64_t, 3U> nextSources{nodes[0], nodes[0], nodes[1]};
+    const std::array<uint64_t, 3U> nextTargets{nodes[1], nodes[0], nodes[0]};
+    const auto added = append(backend, nextSources, nextTargets); ASSERT_EQ(added.size(), 3U);
+    EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100U).edges.size(), 1024U);
+    auto now = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100U).edges.size(), 1026U);
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_INCOMING, {}, 1100U).edges.size(), 2U);
+    EXPECT_EQ(now->readEdge(added.front()).target_node_id, nodes[1]);
+    old.reset(); now.reset(); backend.close(); backend.open();
+    now = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(now->readEdge(added.front()).target_node_id, nodes[1]);
+    EXPECT_EQ(now->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 1100U).edges.size(), 1026U);
+    now.reset(); EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedAdjacencyPreservesReadsAcross517To519Entries) {
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+    ASSERT_EQ(nodes.size(), 2U);
+    std::vector<uint64_t> sources(517U, nodes[0]), targets(517U, nodes[1]);
+    const auto initial = append(backend, sources, targets); ASSERT_EQ(initial.size(), 517U);
+    auto old = backend.openLogicalGraphReadSnapshot();
+    for (size_t count : {size_t{518U}, size_t{519U}}) {
+        const std::array<uint64_t, 1U> source{nodes[0]}, target{nodes[1]};
+        const auto added = append(backend, source, target); ASSERT_EQ(added.size(), 1U);
+        auto current = backend.openLogicalGraphReadSnapshot();
+        EXPECT_EQ(current->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 600U).edges.size(), count);
+        EXPECT_EQ(current->readEdge(added.front()).target_node_id, nodes[1]);
+    }
+    EXPECT_EQ(old->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 600U).edges.size(), 517U);
+    old.reset(); backend.close(); backend.open();
+    auto current = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(current->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, {}, 600U).edges.size(), 519U);
+    current.reset(); EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
 }
