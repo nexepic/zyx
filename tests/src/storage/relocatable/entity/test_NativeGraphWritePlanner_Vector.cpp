@@ -861,6 +861,13 @@ TEST_F(NativeGraphWritePlannerVectorTest, PublishesLogicalCreateAndReplacementTh
 	const VectorPage secondPage = raw_pages_->read(after, secondLocation.page_id);
 	EXPECT_EQ(LittleEndianCodec::readU64(secondPage.read(secondLocation.slot_id, secondLocation.slot_generation), 0U),
 			  2U);
+	const uint64_t changedRevision = after.superblock().graph_revision;
+	const NativeGraphMutationExecutionResult repeated = executor.execute(replace);
+	ASSERT_TRUE(repeated.committed());
+	auto unchanged = metadata_->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().graph_revision, changedRevision);
+	EXPECT_EQ(mappings.find(unchanged, VectorSemanticCodec::nodeMappingKey(nodeId)), std::optional<uint64_t>(2U));
+	unchanged.release();
 	EXPECT_FALSE(metadata_->findNodePageLocationOptional(before, nodeId).has_value());
 	EXPECT_FALSE(metadata_->findVectorManifestOptional(before, vectorDefinition().index_id).has_value());
 	indexed.release();
