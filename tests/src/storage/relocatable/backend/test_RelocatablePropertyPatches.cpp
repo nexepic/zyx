@@ -145,7 +145,18 @@ TEST_F(RelocatableStorageBackendTest, ExplicitPropertyTransactionFinalSyncFailur
 	const auto nodes = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}, {"stamp", PropertyValue(1)}}}});
 	auto physical = backend.openSnapshot();
 	const auto oldBootstrap = physical.superblock().page_directory_root;
+	const uint64_t oldGraphRevision = physical.superblock().graph_revision;
 	physical.release();
+	uint64_t oldOwnerRevision = 0U;
+	{
+		auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+		auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::openReadOnly(io);
+		auto pin = metadata->openSnapshot();
+		const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, nodes.front()});
+		ASSERT_TRUE(owner.has_value()); oldOwnerRevision = owner->owner_revision;
+	}
+	ASSERT_NE(oldOwnerRevision, 0U);
 	std::atomic<bool> publicationWritten{false}, failedFinalSync{false};
 	{
 		auto transaction = backend.beginLogicalGraphTransaction(false);
@@ -196,9 +207,20 @@ TEST_F(RelocatableStorageBackendTest, ExplicitPropertyTransactionFinalSyncFailur
 	ASSERT_NE(stamp, node.properties.end());
 	EXPECT_EQ(rank->value, stamp->value);
 	EXPECT_TRUE(rank->value == PropertyValue(1) || rank->value == PropertyValue(2));
+	const bool published = rank->value == PropertyValue(2);
 	snapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
 	reopened.close();
+	{
+		auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+		auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::openReadOnly(io);
+		auto pin = metadata->openSnapshot();
+		const auto owner = metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, nodes.front()});
+		ASSERT_TRUE(owner.has_value());
+		EXPECT_EQ(pin.superblock().graph_revision, oldGraphRevision + (published ? 1U : 0U));
+		EXPECT_EQ(owner->owner_revision, published ? pin.superblock().graph_revision : oldOwnerRevision);
+	}
 }
 
 TEST_F(RelocatableStorageBackendTest, ExplicitCompleteReplacementRetainsItsStoredNullField) {
