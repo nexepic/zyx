@@ -53,7 +53,16 @@ namespace graph::storage {
             // This physical-only Property directory change preserves the
             // authenticated hybrid descriptor and all its native roots.
             batch.hybrid_property_publication_ = true;
-            publishBatch(batch, writer, {});
+            try {
+                publishBatch(batch, writer, {});
+            } catch (...) {
+                // Publication may already be durable even when subsequent
+                // allocator reconciliation fails. The owning backend must
+                // require reopen before it attempts another mutation.
+                if (batch.candidateMayBePublished())
+                    indeterminate_publication_.store(true, std::memory_order_release);
+                throw;
+            }
         }
         node_owner_sweep_ = nodeSweep;
         edge_owner_sweep_ = edgeSweep;
