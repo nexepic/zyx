@@ -102,7 +102,8 @@ namespace graph::storage {
 					static_cast<uint8_t>((isProperty || isState || isVectorLocation) &&
 										 (entry.page_count != 1U ||
 										  entry.first_page == std::numeric_limits<uint16_t>::max() ||
-										  entry.generation.value() > std::numeric_limits<uint32_t>::max())) |
+										  (!isProperty && entry.generation.value() > std::numeric_limits<uint32_t>::max()))) |
+					static_cast<uint8_t>(isProperty && static_cast<uint32_t>(entry.generation.value()) == 0U) |
 					static_cast<uint8_t>(
 							(isIndexRoot || isVectorManifest || isLargeValueManifest) &&
 							(entry.first_page != RSS_PAGE_POOL_FIRST_DATA_FRAME || entry.page_count != 1U)) |
@@ -112,8 +113,8 @@ namespace graph::storage {
 							 (entry.first_page != static_cast<uint16_t>(RetireQueueDisposition::RQD_RELOCATED_SOURCE) &&
 							  entry.first_page !=
 									  static_cast<uint16_t>(RetireQueueDisposition::RQD_RETIRED_SEGMENT)))) |
-					static_cast<uint8_t>(!isPage && entry.free_bytes != 0U) |
-					static_cast<uint8_t>(entry.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+					static_cast<uint8_t>(!isPage && !isProperty && entry.free_bytes != 0U) |
+					static_cast<uint8_t>(isPage && entry.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
 			if (invalid != 0U) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location directory entry is invalid");
@@ -1712,8 +1713,7 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
 										"relocatable Entity Property directory append session is not active");
 		}
-		implementation_->append({location.key.directoryId(), SegmentId(location.page_id.value()),
-								 Generation(location.slot_generation), location.slot_id, 1U});
+		implementation_->append(encodeEntityPropertyLocation(location));
 	}
 	void LocationDirectoryAppendSession::append(const LargeValueManifestLocation &location) {
 		if (implementation_ == nullptr ||
@@ -1956,8 +1956,7 @@ namespace graph::storage {
 		std::vector<LocationLeafEntry> converted;
 		converted.reserve(entries.size());
 		for (const EntityPropertyLocation &entry: entries) {
-			converted.push_back({entry.key.directoryId(), SegmentId(entry.page_id.value()),
-								 Generation(entry.slot_generation), entry.slot_id, 1});
+			converted.push_back(encodeEntityPropertyLocation(entry));
 		}
 		std::vector<uint64_t> erased;
 		erased.reserve(erasedKeys.size());
@@ -2720,9 +2719,7 @@ namespace graph::storage {
 			if (pending->logical_id != requested) {
 				continue;
 			}
-			results[index] = EntityPropertyLocation{
-					keys[index], PageId(pending->segment_id.value()), pending->first_page,
-					static_cast<uint32_t>(pending->generation.value())};
+			results[index] = decodeEntityPropertyLocation(*pending);
 			pending.reset();
 		}
 	}

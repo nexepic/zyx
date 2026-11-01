@@ -128,9 +128,23 @@ namespace graph::storage {
 		PageId page_id{};
 		uint16_t slot_id = 0;
 		uint32_t slot_generation = 0;
+		uint64_t owner_revision = 0;
 
 		constexpr bool operator==(const EntityPropertyLocation &) const = default;
 	};
+
+	// Property entries retain their 32-byte on-disk layout. The unused upper
+	// generation word and free-byte word jointly hold the owner revision.
+	[[nodiscard]] inline LocationLeafEntry encodeEntityPropertyLocation(const EntityPropertyLocation &location) {
+		return {location.key.directoryId(), SegmentId(location.page_id.value()),
+			Generation(uint64_t(location.slot_generation) | ((location.owner_revision & UINT64_C(0xffffffff)) << 32U)),
+			location.slot_id, 1U, static_cast<uint32_t>(location.owner_revision >> 32U)};
+	}
+	[[nodiscard]] inline EntityPropertyLocation decodeEntityPropertyLocation(const LocationLeafEntry &entry) {
+		return {EntityPropertyKey::fromDirectoryId(entry.logical_id), PageId(entry.segment_id.value()), entry.first_page,
+			static_cast<uint32_t>(entry.generation.value()),
+			(entry.generation.value() >> 32U) | (uint64_t(entry.free_bytes) << 32U)};
+	}
 
 	// State records use a separate logical namespace from graph Property roots.
 	struct StateLocation {

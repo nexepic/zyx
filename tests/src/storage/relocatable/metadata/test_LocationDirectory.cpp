@@ -242,6 +242,20 @@ TEST(RelocatableEntityPropertyKeyTest, EncodesNodeAndEdgeNamespacesWithoutProper
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableLocationLeafCodecTest, PropertyOwnerRevisionRoundTripsWithoutChangingRecordDensity) {
+	static_assert(RSS_LOCATION_ENTRY_BYTES == 32U);
+	static_assert(RSS_LOCATION_LEAF_MAX_ENTRIES == 126U);
+	const EntityPropertyLocation source{{EntityPropertyOwnerKind::EPOK_EDGE, 23U}, PageId(42U), 7U,
+		0xfedcba98U, UINT64_C(0x12345678abcdef01)};
+	LocationLeafPage page;
+	page.directory_type = MetadataDirectoryType::MDT_ENTITY_PROPERTY;
+	page.page_id = MetadataPageId(1U); page.generation = Generation(1U); page.committed_lsn = LogSequenceNumber(1U);
+	page.entries = {encodeEntityPropertyLocation(source)};
+	const auto decoded = LocationLeafPageCodec::decode(LocationLeafPageCodec::encode(page));
+	ASSERT_EQ(decoded.entries.size(), 1U);
+	EXPECT_EQ(decodeEntityPropertyLocation(decoded.entries.front()), source);
+}
+
 TEST(RelocatableLocationLeafCodecTest, SupportsEntityPropertyLocations) {
 	LocationLeafPage page;
 	page.directory_type = MetadataDirectoryType::MDT_ENTITY_PROPERTY;

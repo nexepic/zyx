@@ -99,8 +99,7 @@ namespace {
 	EntityPropertyLocation LocationDirectory::findEntityProperty(const Superblock &superblock,
 																 const EntityPropertyKey &key) const {
 		const LocationLeafEntry entry = find(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, key.directoryId());
-		return {key, PageId(entry.segment_id.value()), entry.first_page,
-				static_cast<uint32_t>(entry.generation.value())};
+		return decodeEntityPropertyLocation(entry);
 	}
 
 	std::optional<EntityPropertyLocation>
@@ -110,8 +109,7 @@ namespace {
 		if (!entry.has_value()) {
 			return std::nullopt;
 		}
-		return EntityPropertyLocation{key, PageId(entry->segment_id.value()), entry->first_page,
-									  static_cast<uint32_t>(entry->generation.value())};
+		return decodeEntityPropertyLocation(*entry);
 	}
 
 	StateLocation LocationDirectory::findState(const Superblock &superblock, uint64_t stateId) const {
@@ -333,8 +331,7 @@ namespace {
 										"relocatable Entity Property directory traversal requires a visitor");
 		}
 		visit(superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, [&visitor](const LocationLeafEntry &entry) {
-			visitor({EntityPropertyKey::fromDirectoryId(entry.logical_id), PageId(entry.segment_id.value()),
-					 entry.first_page, static_cast<uint32_t>(entry.generation.value())});
+			visitor(decodeEntityPropertyLocation(entry));
 		});
 	}
 
@@ -349,9 +346,7 @@ namespace {
 		return visitAfter(
 				superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, afterDirectoryId, maximumMetadataPages,
 				[&visitor](const LocationLeafEntry &entry) {
-					return visitor({EntityPropertyKey::fromDirectoryId(entry.logical_id),
-									PageId(entry.segment_id.value()), entry.first_page,
-									static_cast<uint32_t>(entry.generation.value())});
+					return visitor(decodeEntityPropertyLocation(entry));
 				},
 				visitedMetadataPages);
 	}
