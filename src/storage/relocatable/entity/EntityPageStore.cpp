@@ -1645,14 +1645,24 @@ namespace graph::storage {
 		std::vector<NativeGraphPropertyPageBatchMaterialization> publishedPropertyPageBatches;
 		std::set<SegmentId> preparedPropertyPageBatches;
 		NativeGraphDerivedStateMutation noDerivedState{};
-		// Direct graph-batch callers do not supply the planner's intent object.
-		// Preserve their semantic Entity/ROW changes in the same publication.
-		if (derivedState == nullptr) {
-			noDerivedState.graph_revision_change = !mutations.empty() || !appends.empty() || !newPools.empty();
+		std::optional<NativeGraphDerivedStateMutation> supplementedState;
+		const bool entityChange = !mutations.empty() || !appends.empty() || !newPools.empty();
+		bool needsSupplement = derivedState == nullptr || (entityChange && !derivedState->graph_revision_change);
+		for (const auto &plan : propertyPlans) {
+			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE &&
+				(derivedState == nullptr || !derivedState->graph_revision_change ||
+				 std::ranges::find(derivedState->changed_property_owners, plan.key) == derivedState->changed_property_owners.end()))
+				needsSupplement = true;
+		}
+		if (needsSupplement && derivedState != nullptr) supplementedState.emplace(*derivedState);
+		NativeGraphDerivedStateMutation &intent = supplementedState ? *supplementedState : noDerivedState;
+		if (needsSupplement) {
+			intent.graph_revision_change = intent.graph_revision_change || entityChange;
 			for (const auto &plan : propertyPlans) {
 				if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE) {
-					noDerivedState.graph_revision_change = true;
-					noDerivedState.changed_property_owners.push_back(plan.key);
+					intent.graph_revision_change = true;
+					if (std::ranges::find(intent.changed_property_owners, plan.key) == intent.changed_property_owners.end())
+						intent.changed_property_owners.push_back(plan.key);
 				}
 			}
 		}
@@ -1663,7 +1673,7 @@ namespace graph::storage {
 		const NativeGraphPrivateSegmentPreparer noPrivateSegmentPreparer{};
 		const NativeGraphEarlyPublicationPlanner noEarlyPublicationPlanner{};
 		const NativeGraphDeferredIndexPlanner noDeferredIndexPlanner{};
-		const NativeGraphDerivedStateMutation &activeDerivedState = derivedState != nullptr ? *derivedState : noDerivedState;
+		const NativeGraphDerivedStateMutation &activeDerivedState = needsSupplement ? intent : *derivedState;
 		const NativeGraphDerivedStatePreparer &activeDerivedStatePreparer =
 				hasDerivedState ? *derivedStatePreparer : noDerivedStatePreparer;
 		const NativeGraphVectorBootstrapPreparer &activeVectorBootstrapPreparer =

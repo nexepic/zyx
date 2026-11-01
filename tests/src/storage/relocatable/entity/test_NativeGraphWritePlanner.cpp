@@ -1244,6 +1244,7 @@ TEST_F(NativeGraphWritePlannerTest, PublishesEntityAndDerivedIndexInOneSnapshotG
 			},
 			LogSequenceNumber(4U));
 	EXPECT_EQ(published.superblock.generation, Generation(4U));
+	EXPECT_EQ(published.superblock.graph_revision, before.superblock().graph_revision + 1U);
 
 	BTreeIndex index(root.index_id, indexes, *metadata_);
 	EXPECT_THROW(static_cast<void>(entities_->readNode(before, 1001U)), FormatException);
@@ -2074,6 +2075,33 @@ TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexWritesAdvanceGraphRevisionA
 	EXPECT_FALSE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(secondLsn + 2U)));
 	auto absent = metadata_->openSnapshot();
 	EXPECT_EQ(absent.superblock().graph_revision, initial + 2U);
+}
+
+TEST_F(NativeGraphWritePlannerTest, DirectDerivedBatchMarksChangedPropertyOwner) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode({});
+	create.replaceNodeProperty(propertyRoot(id, Node::typeId, 1));
+	ASSERT_TRUE(create.commit().committed());
+	auto before = metadata_->openSnapshot();
+	const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, id};
+	const auto previous = metadata_->findEntityPropertyRevision(before, owner);
+	ASSERT_TRUE(previous.has_value());
+	const auto revision = before.superblock().graph_revision;
+	const auto nextLsn = LogSequenceNumber(before.superblock().checkpoint_lsn.value() + 1U);
+	const std::array<PropertyCollectionRoot, 1U> roots{propertyRoot(id, Node::typeId, 2)};
+	const auto plans = properties_->planEntityRootReplacements(before, roots, plannerOptions().property_roots);
+	const NativeGraphDerivedStateMutation emptyDerived;
+	const NativeGraphDerivedStatePreparer noPreparer;
+	const EntityPageAuxiliaryMutationBatch noAuxiliary;
+	const auto published = entities_->applyNativeGraphBatchTransaction(before, {}, {}, {}, plans, *properties_,
+		plannerOptions().property_roots, noAuxiliary, emptyDerived, noPreparer, nextLsn);
+	EXPECT_EQ(published.superblock.graph_revision, revision + 1U);
+	auto current = metadata_->openSnapshot();
+	const auto changed = metadata_->findEntityPropertyRevision(current, owner);
+	ASSERT_TRUE(changed.has_value());
+	EXPECT_EQ(changed->owner_revision, revision + 1U);
+	EXPECT_EQ(previous->owner_revision, revision);
 }
 
 TEST_F(NativeGraphWritePlannerTest, MetadataPoolGrowthDoesNotConflictWithStagedPropertyWrite) {
