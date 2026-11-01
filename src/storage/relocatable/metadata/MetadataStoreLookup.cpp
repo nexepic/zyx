@@ -912,7 +912,7 @@ namespace graph::storage {
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		batch.reserveMetadataFrames(requiredFrames);
 		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
         pages_.rebindSuperblock(batch.candidate());
         // Migration already validates the complete graph. Establish retirement
@@ -968,7 +968,7 @@ namespace graph::storage {
 		}
 		batch.reserveMetadataFrames(routes.initialBootstrapFrameCount(batch));
 		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
 		pages_.rebindSuperblock(batch.candidate());
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());

@@ -10,6 +10,7 @@
 
 #include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
 #include <array>
+#include <atomic>
 #include "graph/core/OwnedPropertyValue.hpp"
 #include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
 #include <cstddef>
@@ -1283,6 +1284,10 @@ namespace graph::storage {
 		~RelocatableMetadataStore();
 
 		[[nodiscard]] MetadataSnapshotPin openSnapshot() const;
+		// Set when a failed publication may have selected its complete candidate.
+		[[nodiscard]] bool hasIndeterminatePublication() const noexcept {
+			return indeterminate_publication_.load(std::memory_order_acquire);
+		}
 		// A sequential writer using another database handle may advance the durable
 		// root. Rebuild local metadata-pool ownership before this handle publishes
 		// more storage. Local snapshots would protect the old pool map, so callers
@@ -1937,6 +1942,7 @@ namespace graph::storage {
 		// then performs pool ownership publication and snapshot reclamation.
 		void prepareBootstrapRoutes(MetadataWriteBatch &batch);
         void prepareBatchPublication(MetadataWriteBatch &batch);
+		void publishTrackedBatch(MetadataWriteBatch &batch, BootstrapPublishFailpoint failpoint = BootstrapPublishFailpoint::BPF_NONE);
 		void publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
 						  const MetadataPublishOptions &options);
 		[[nodiscard]] std::optional<CatalogSlotReservations> reserveFirstFreeAndUpsertCatalogImpl(
@@ -2097,6 +2103,7 @@ namespace graph::storage {
 		std::pmr::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
 		bool read_only_ = false;
         Superblock synchronized_source_{};
+		std::atomic_bool indeterminate_publication_{false};
         // Writer-protected physical recovery state; never a permission for generic writes.
         friend class HybridPropertyPoolPlacement;
         std::array<CatalogEntry, 12> native_pool_placement_hints_{};

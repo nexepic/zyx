@@ -1406,7 +1406,7 @@ namespace graph::storage {
 		locations_.prepareLogicalRootChildren(batch);
 		prepareBootstrapRoutes(batch);
 		try {
-			batch.publish(bootstrap_, options.bootstrap_failpoint);
+			publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
 		} catch (...) {
 			// A final durable fence can report an uncertain outcome after its complete
@@ -1493,7 +1493,7 @@ namespace graph::storage {
 			// normal Catalog-owned pool in this same COW generation.
 			pool_ownership_.preparePublication(batch);
 			prepareBootstrapRoutes(batch);
-			batch.publish(bootstrap_, options.bootstrap_failpoint);
+			publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
 		} catch (const BootstrapPublishInterrupted &) {
 			if (bootstrap_.recover() != batch.candidate()) {

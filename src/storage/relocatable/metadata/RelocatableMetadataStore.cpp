@@ -180,7 +180,7 @@ namespace graph::storage {
 		// bootstrap header still advances so the candidate generation retains a
 		// same-generation route context for the next graph publication.
 		prepareBootstrapRoutes(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
         // Optional diagnostics cannot turn an acknowledged publication into failure.
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
@@ -272,7 +272,7 @@ namespace graph::storage {
         if (remainingEdges != 0U) take(nextAvailableEdges, remainingEdges, result.edge_ranges);
         auto prepared = prepareOutstanding(result);
         prepareBootstrapRoutes(batch);
-        batch.publish(bootstrap_);
+        publishTrackedBatch(batch);
         synchronized_source_ = batch.candidate();
         // Optional diagnostics cannot turn an acknowledged publication into failure.
         try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
@@ -443,11 +443,23 @@ namespace graph::storage {
         batch.publication_prepared_ = true;
     }
 
+	void RelocatableMetadataStore::publishTrackedBatch(MetadataWriteBatch &batch, BootstrapPublishFailpoint failpoint) {
+		try {
+			batch.publish(bootstrap_, failpoint);
+		} catch (...) {
+			// MetadataWriteBatch compares the complete recovered superblock against
+			// this batch candidate; a failed recovery is conservatively uncertain.
+			if (batch.candidateMayBePublished())
+				indeterminate_publication_.store(true, std::memory_order_release);
+			throw;
+		}
+	}
+
 	void RelocatableMetadataStore::publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
 												const MetadataPublishOptions &options) {
 		if (options.logical_graph_change) batch.markGraphChanged();
         prepareBatchPublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
 		pages_.rebindSuperblock(batch.candidate());
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);

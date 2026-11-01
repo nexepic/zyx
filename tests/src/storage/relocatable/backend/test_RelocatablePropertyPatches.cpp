@@ -556,3 +556,53 @@ TEST_F(RelocatableStorageBackendTest, PropertyPatchUniqueFailureRollsBackAllTarg
 	before.reset();
 	backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, NodeLeaseFinalSyncFailureRequiresReopenEvenWithoutGraphRevisionChange) {
+	materializeNativeDatabase();
+	auto options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	auto pin = backend.openSnapshot();
+	const auto before = pin.superblock();
+	pin.release();
+	std::atomic<bool> leaseWritten{false}, failed{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting detectLease([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+			if (count == RSS_PAGE_SIZE && (offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+				try {
+					const auto candidate = SuperblockCodec::decode(std::span(static_cast<const std::byte *>(bytes), count));
+					if (candidate.graph_revision == before.graph_revision && candidate.next_logical_node_id > before.next_logical_node_id)
+						leaseWritten.store(true);
+				} catch (const std::exception &) {}
+			}
+			return portable_pwrite(fd, bytes, count, offset);
+		});
+		StorageIO::ScopedNativeSyncHookForTesting failLeaseSync([&](file_handle_t fd) {
+			if (leaseWritten.load() && !failed.exchange(true)) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})), std::runtime_error);
+	}
+	ASSERT_TRUE(failed.load());
+	EXPECT_TRUE(backend.hasIndeterminateWriteOutcome());
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{}, {}}})), std::logic_error);
+	backend.close();
+	auto reopenedOptions = backendOptions();
+	reopenedOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenedOptions));
+	reopened.open();
+	auto after = reopened.openSnapshot();
+	EXPECT_EQ(after.superblock().graph_revision, before.graph_revision);
+	after.release();
+	EXPECT_NO_THROW(static_cast<void>(reopened.createLogicalNodes({{{}, {}}})));
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}

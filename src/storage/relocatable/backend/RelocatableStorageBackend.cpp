@@ -2337,7 +2337,7 @@ namespace graph::storage {
 					const bool graphStateChanged =
 							resolvedLogicalGraphMutationFence(afterFailure.superblock()) != graphFenceBeforeExecution;
 					afterFailure.release();
-					if (graphStateChanged) {
+					if (graphStateChanged || metadata_->hasIndeterminatePublication()) {
 						requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
 					}
 				} catch (...) {

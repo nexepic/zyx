@@ -95,6 +95,7 @@ namespace graph::storage {
 		// A publication helper may materialize the bootstrap route/header once per
 		// batch. This prevents independent metadata writers from publishing a
 		// second header after a data-directory writer already updated it.
+		[[nodiscard]] bool candidateMayBePublished() const noexcept { return published_; }
 		[[nodiscard]] bool bootstrapRoutePublished() const noexcept { return bootstrap_route_published_; }
 		void markBootstrapRoutePublished() noexcept { bootstrap_route_published_ = true; }
 		// A physical route-branch source can be evacuated without changing a typed
