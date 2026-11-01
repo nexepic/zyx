@@ -2010,6 +2010,13 @@ TEST_F(NativeGraphWritePlannerTest, StagedScalarIndexUpsertRejectsChangedThenRes
 		initial.stageScalarIndexUpsert(indexes, root.index_id, key, 1U);
 		ASSERT_TRUE(initial.commit().committed());
 	}
+	const auto revision = metadata_->openSnapshot().superblock().graph_revision;
+	{
+		auto noop = planner.beginTransaction();
+		noop.stageScalarIndexUpsert(indexes, root.index_id, key, 1U);
+		ASSERT_TRUE(noop.commit().committed());
+	}
+	EXPECT_EQ(metadata_->openSnapshot().superblock().graph_revision, revision);
 	auto stale = planner.beginTransaction();
 	stale.stageScalarIndexUpsert(indexes, root.index_id, key, 3U);
 	for (const uint64_t value : {2U, 1U}) {
@@ -2017,6 +2024,7 @@ TEST_F(NativeGraphWritePlannerTest, StagedScalarIndexUpsertRejectsChangedThenRes
 		change.stageScalarIndexUpsert(indexes, root.index_id, key, value);
 		ASSERT_TRUE(change.commit().committed());
 	}
+	EXPECT_EQ(metadata_->openSnapshot().superblock().graph_revision, revision + 2U);
 	EXPECT_EQ(stale.commit().outcome, NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED);
 	auto current = metadata_->openSnapshot();
 	EXPECT_EQ(index.find(current, key), std::optional<uint64_t>(1U));

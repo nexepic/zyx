@@ -153,6 +153,9 @@ namespace graph::storage {
 		// that require root absence can use this verified terminal-state signal to
 		// substitute a bounded whole-tree retirement in their enclosing commit.
 		bool final_tree_empty = false;
+		// Present when the transaction overlay has compared each operation with
+		// its staged predecessor. It is not a conflict/ABA test.
+		std::optional<bool> logical_change;
 	};
 
 	// An explicit whole-tree retirement plan. The plan is generated from one

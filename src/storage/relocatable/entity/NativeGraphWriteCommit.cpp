@@ -1429,6 +1429,17 @@ namespace graph::storage {
 			std::ranges::any_of(propertyPlans, [](const auto &plan) {
 			return plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE;
 		});
+		const auto isGraphIndex = [](uint64_t id) {
+			return id != RSS_SYSTEM_CATALOG_INDEX_ID && !isReservedInternalIndexId(id);
+		};
+		derivedState.graph_revision_change = derivedState.graph_revision_change ||
+			std::ranges::any_of(scalar_index_mutations_, [&](const auto &staged) {
+				return isGraphIndex(staged.index_id) &&
+					(staged.retirement_plan.has_value() || staged.images ||
+					 (staged.plan && staged.plan->logical_change.value_or(true)));
+			}) || std::ranges::any_of(initial_scalar_index_mutations_, [&](const auto &staged) {
+				return isGraphIndex(staged.index_id);
+			});
 		derivedState.schema_revision_change = schema_revision_change_;
 		for (const auto &plan : propertyPlans) {
 			if (plan.kind != EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE)

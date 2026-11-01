@@ -798,7 +798,7 @@
 				}
 			};
 			return {expectedRoot,		   std::move(requests), newPool, std::move(additionalNewPools), replacementRoot,
-					stableReplacementRoot, std::move(preparer), finalTreeEmpty};
+					stableReplacementRoot, std::move(preparer), finalTreeEmpty, logical_change_};
 		}
 
 	private:
@@ -1283,6 +1283,7 @@
                 utils::OwnedStdVector<BTreePageEntry> merged;
                 merged.reserve(leaf.leaf_entries.size() + count);
                 size_t old = 0U, next = 0U;
+                bool changed = false;
                 while (old < leaf.leaf_entries.size() || next < count) {
                     checkNative();
                     if (next == count || (old < leaf.leaf_entries.size() &&
@@ -1294,7 +1295,10 @@
                     const auto *operation = operations[next++];
                     while (next < count && std::ranges::equal(operation->key, operations[next]->key))
                         operation = operations[next++]; // Original equal-key order: last write wins.
-                    if (old < leaf.leaf_entries.size() && std::ranges::equal(leaf.leaf_entries[old].key, operation->key)) ++old;
+                    if (old < leaf.leaf_entries.size() && std::ranges::equal(leaf.leaf_entries[old].key, operation->key)) {
+                        changed = changed || leaf.leaf_entries[old].value_or_child != operation->value;
+                        ++old;
+                    } else changed = true;
                     merged.push_back({operation->key, operation->value});
                 }
                 const auto bytes = PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF, merged, leaf_value_layout_);
@@ -1308,6 +1312,7 @@
                     continue;
                 }
                 leaf_append_size_.reset();
+                logical_change_ = logical_change_ || changed;
                 leaf.leaf_entries = std::move(merged);
                 leaf.dirty = true;
                 debug::PerfTrace::addValue("native_btree.plan.leaf_batch_merges", 1);
@@ -1346,6 +1351,8 @@
 					return lessKey(entry.key, value);
 				});
 			const bool append = position == leaf.leaf_entries.end();
+			logical_change_ = logical_change_ || position == leaf.leaf_entries.end() ||
+				!std::ranges::equal(position->key, key) || position->value_or_child != value;
 			std::optional<size_t> appendedSize;
 			BTreePageEntry next{std::vector<std::byte>(key.begin(), key.end()), value};
 			if (append && leaf_append_size_ && leaf_append_size_->page == path.back() &&
@@ -1515,6 +1522,7 @@
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable transaction-local B+Tree overlay cannot erase an absent scalar key");
 			}
+			logical_change_ = true;
 			const bool erasedFirst = erased == leaf.leaf_entries.begin();
 			leaf.leaf_entries.erase(erased);
 			leaf.dirty = true;
@@ -1798,6 +1806,7 @@
         std::function<void(BTreePage)> native_sink_;
         const CancellationCheckpoint *native_cancellation_ = nullptr;
         bool native_schema_keys_ = false;
+		bool logical_change_ = false;
         void checkNative() const { if (native_cancellation_) native_cancellation_->check(); }
         [[nodiscard]] size_t nativeKeyWidth() const {
             if (native_schema_keys_) return RSS_INDEX_KEY_MAX_BYTES;
