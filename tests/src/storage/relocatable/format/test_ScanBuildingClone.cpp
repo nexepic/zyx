@@ -145,4 +145,29 @@ TEST(ScanBuildingCloneTest, CorruptSegmentPayloadIsNotCopiedOrPromoted) {
     ASSERT_EQ(source.io->readAt(RSS_SEGMENT_SIZE + RSS_ENVELOPE_BYTES, &retained, 1), 1U);
     EXPECT_EQ(retained, corrupt);
 }
+TEST(ScanBuildingCloneTest, RejectsCorruptCurrentImmutablePayloadBeforeCopy) {
+    PrivateCloneFile source, target; initializeSource(*source.io);
+    SegmentEnvelope envelope;
+    envelope.kind = SegmentKind::SGK_CODEBOOK_EXTENT;
+    envelope.state = SegmentState::SGS_SEALED; envelope.segment_id = SegmentId(1);
+    envelope.owner_id = 9U; envelope.generation = Generation(2); envelope.committed_lsn = LogSequenceNumber(2);
+    const std::array<std::byte, 3U> expected{std::byte{1}, std::byte{2}, std::byte{3}};
+    const std::array<std::byte, 3U> damaged{std::byte{1}, std::byte{2}, std::byte{4}};
+    envelope.payload_bytes = expected.size();
+    envelope.payload_crc = graph::utils::calculateCrc(expected.data(), expected.size());
+    const auto header = SegmentEnvelopeCodec::encode(envelope);
+    source.io->writeAt(RSS_SEGMENT_SIZE, header.data(), header.size());
+    source.io->writeAt(RSS_SEGMENT_SIZE + RSS_ENVELOPE_BYTES, damaged.data(), damaged.size());
+    source.io->sync();
+    graph::query::execution::MaterializedByteBudget budget(1024U * 1024U);
+    try {
+        (void)scan_candidate_detail::cloneUnverifiedBuildingImage(*source.io, *target.io, budget, 1024U * 1024U, [] {});
+        FAIL() << "corrupt current-format payload was accepted";
+    } catch (const FormatException &error) {
+        EXPECT_EQ(error.error(), FormatError::FERR_CHECKSUM_MISMATCH);
+    }
+    EXPECT_EQ(targetHeader(*target.io).flags, RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+    EXPECT_EQ(target.io->fileSize(), RSS_SEGMENT_SIZE);
+    EXPECT_EQ(budget.used(), 0U);
+}
 #endif
