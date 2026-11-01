@@ -69,6 +69,21 @@ TEST_F(RelocatableStorageBackendTest, BlindPropertyRebaseRejectsChangedThenResto
 	EXPECT_THROW(static_cast<void>(txn->commit()),LogicalGraphMutationConflict);
 	EXPECT_EQ(txn->state(),LogicalGraphTransactionState::LGTTS_CONFLICTED);backend.close();
 }
+TEST_F(RelocatableStorageBackendTest, BlindPropertyRebaseRejectsEmptyOwnerChangedThenEmptied) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto id = backend.createLogicalNodes({{{"Rebase"}, {}}}).front();
+	auto old = backend.openLogicalGraphReadSnapshot();
+	auto transaction = backend.beginLogicalGraphTransaction(false);
+	(void) transaction->stageMutationBatch(replace(id, 9));
+	backend.replaceLogicalNodeProperties({{id, {{"value", PropertyValue(7)}}}});
+	backend.replaceLogicalNodeProperties({{id, {}}});
+	EXPECT_THROW(static_cast<void>(transaction->commit()), LogicalGraphMutationConflict);
+	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_CONFLICTED);
+	EXPECT_TRUE(old->readNodeShaped(id, {.all_properties = true}).properties.empty());
+	old.reset(); backend.close();
+}
 TEST_F(RelocatableStorageBackendTest, BlindPropertyRebaseFallsBackWithoutDiscardingOverCapDependencies) {
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;RelocatableStorageBackend backend(options);backend.open();
 	std::vector<LogicalGraphNodeCreateRequest> creates(66,{{"Rebase"},{{"value",PropertyValue(0)}}});const auto ids=backend.createLogicalNodes(creates);auto txn=backend.beginLogicalGraphTransaction(false);LogicalGraphMutationBatch batch;

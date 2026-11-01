@@ -183,3 +183,43 @@ TEST_F(RelocatableStorageBackendTest, LogicalIdLeaseDoesNotChangeGraphFence) {
     backend.abandonLogicalGraphCreationIds(reservation);
     backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, LogicalFenceIgnoresNoOpRollbackAndConfiguration) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto id = backend.createLogicalNodes({{{"Revision"}, {{"value", PropertyValue(1)}}}}).front();
+	const auto before = backend.currentNativeLogicalGraphMutationFence();
+	backend.replaceLogicalNodeProperties({{id, {{"value", PropertyValue(1)}}}});
+	EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), before);
+	{
+		auto txn = backend.beginLogicalGraphTransaction(false);
+		(void) txn->stageMutationBatch(isolationSet(id, "value", PropertyValue(2)));
+		txn->rollback();
+	}
+	EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), before);
+	backend.setConfiguration("storage.compaction.enabled", PropertyValue(false));
+	EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), before);
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, SchemaIdentitySurvivesValueOnlyChangeAndReopen) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	const auto id = backend.createLogicalNodes({{{"Revision"}, {{"value", PropertyValue(1)}}}}).front();
+	auto before = backend.openLogicalGraphReadSnapshot();
+	const auto schema = before->bindingSchemaIdentity();
+	const auto fence = before->mutationFence();
+	ASSERT_TRUE(schema); ASSERT_TRUE(fence);
+	backend.replaceLogicalNodeProperties({{id, {{"value", PropertyValue(2)}}}});
+	auto after = backend.openLogicalGraphReadSnapshot();
+	EXPECT_NE(after->mutationFence(), fence);
+	EXPECT_EQ(after->bindingSchemaIdentity(), schema);
+	EXPECT_EQ(before->readNodeProperty(id, "value"), PropertyValue(1));
+	before.reset(); after.reset(); backend.close(); backend.open();
+	auto reopened = backend.openLogicalGraphReadSnapshot();
+	EXPECT_EQ(reopened->bindingSchemaIdentity(), schema);
+	EXPECT_EQ(reopened->readNodeProperty(id, "value"), PropertyValue(2));
+	reopened.reset(); backend.close();
+}

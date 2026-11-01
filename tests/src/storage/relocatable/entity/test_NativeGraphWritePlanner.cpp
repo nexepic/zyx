@@ -1998,3 +1998,27 @@ TEST_F(NativeGraphWritePlannerTest, PublishesStructuralScalarIndexSplitThroughNa
 	EXPECT_FALSE(index.find(collapsed, keys.front()).has_value());
 	collapsed.release();
 }
+
+TEST_F(NativeGraphWritePlannerTest, StagedScalarIndexUpsertRejectsChangedThenRestoredIndex) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	const IndexRootLocation root = allocateEmptyIndexRoot(indexes);
+	BTreeIndex index(root.index_id, indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const std::array<std::byte, 1U> key = {std::byte{'a'}};
+	{
+		auto initial = planner.beginTransaction();
+		initial.stageScalarIndexUpsert(indexes, root.index_id, key, 1U);
+		ASSERT_TRUE(initial.commit().committed());
+	}
+	auto stale = planner.beginTransaction();
+	stale.stageScalarIndexUpsert(indexes, root.index_id, key, 3U);
+	for (const uint64_t value : {2U, 1U}) {
+		auto change = planner.beginTransaction();
+		change.stageScalarIndexUpsert(indexes, root.index_id, key, value);
+		ASSERT_TRUE(change.commit().committed());
+	}
+	EXPECT_EQ(stale.commit().outcome, NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED);
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(index.find(current, key), std::optional<uint64_t>(1U));
+	current.release();
+}

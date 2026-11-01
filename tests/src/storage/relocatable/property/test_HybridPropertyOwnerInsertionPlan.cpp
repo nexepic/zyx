@@ -72,7 +72,7 @@ TEST_F(HybridPropertyOwnerInsertionPlanTest, IncompatiblePendingValueDemotesOnly
     const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
     {
         const auto source = metadata_->openSnapshot(); HybridPropertyReadContext context(io_, *slotted_pages_, *metadata_, source);
-        const auto next = Generation(before.generation.value() + 1); const PropertyValue value("pending"), changed(int64_t(999));
+        const auto next = Generation(before.generation.value() + 1); const PropertyValue value(std::string(64U, 'p')), changed(int64_t(999));
         auto inserted = HybridPropertyColumnDelta::planPendingOwnerColumnMember(context, source, {NODE, 64}, 1, next, memory, value);
         auto updated = HybridPropertyColumnDelta::planExistingColumn(context, source, {NODE, 1}, 1, next, memory, &changed);
         ASSERT_TRUE(inserted); ASSERT_TRUE(updated);

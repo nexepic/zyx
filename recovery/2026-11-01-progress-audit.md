@@ -63,3 +63,30 @@ The restored `BoundedBatchTest.ChargedAppendTransfersAnExistingRowWithoutDoubleC
 
 A closer reclamation check found the LargeValue ownership scanner uses one encoded `afterLocationId` across Node IDs and high-bit Edge IDs, including ROW and hybrid owners (`LargeValueReachabilityReclaimer.cpp` around 270–335). This is a concrete existing cursor, so the earlier broad search statement must not be read as absence of all cursors. It does not establish the reported final independent Node/Edge per-round high-water fairness design; identify the exact affected reclamation path from further final records before modifying it.
 The same independently built executable subsequently ran the entire `BoundedBatchTest.*` selection: 25/25 passed. This does not cover the surrounding prefetch operator or replace the required repository-wide run.
+
+## Revision contract baseline, pending execution
+
+- Graph fence must remain stable for same-value replacement, rollback, configuration-only changes and ID leases; a graph value change must change it. Existing `LogicalIdLeaseDoesNotChangeGraphFence` covers one lease case. New `LogicalFenceIgnoresNoOpRollbackAndConfiguration` covers the first three.
+- Schema identity must stay stable for value-only graph changes, while graph fence changes, and persist across reopen; schema-name change must alter schema identity. New `SchemaIdentitySurvivesValueOnlyChangeAndReopen` covers the former; existing `SchemaBindingObservationUsesCatalogAndPageDirectoryVersions` covers name change and pinned identity, but currently permits conservative invalidation on values.
+- Existing `BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage` covers distinct owners sharing a page, old snapshot and reopen. Existing `BlindPropertyRebaseRejectsChangedThenRestoredOwnerVersion` covers value ABA. New `BlindPropertyRebaseRejectsEmptyOwnerChangedThenEmptied` covers absent-property ABA and old snapshot. Deletion/recreation, tombstone persistence/reopen, both conversion directions, version/data atomic publication, schema-only changes, capacity expansion and fixed-high-water fairness still require precise additional coverage.
+- New tests have not run and may intentionally expose current baseline failures. Do not weaken them merely to pass. Only behavior exposed by existing public APIs is asserted; actual durable revision serialization needs separate codec and recovery tests once final layout/version is established.
+
+## Shell authentication observation
+
+`gh auth status --hostname github.com` produced exactly:
+
+```text
+github.com
+  X Failed to log in to github.com using token (GH_TOKEN)
+  - Active account: true
+  - The token in GH_TOKEN is invalid.
+```
+
+The command returned exit code 0 despite that diagnostic. No Git credential helper or URL rewrite was returned by read-only Git configuration queries. The environment networking reference describes inherited HTTP proxy transport and potential credential injection, with no instruction to inspect secrets. It does not establish that `gh` and Git's proxy use the same authentication mechanism. Public fetch succeeded and the push dry-run was accepted; neither identifies the actual Git transport actor or proves real write authorization. A supported identity binding remains unverified, and no credentials were read, changed, or generated.
+
+## Further final-design and authorization record
+
+The delegating thread provided user authorization to push reviewed checkpoints to a unique dedicated recovery branch, conditional on first confirming the cloud Git transport identity is `nexepic`. It excludes main/work writes, force pushes, history deletion, merge and deploy. This condition remains unmet; no real push has been attempted. No supported tool discovered so far binds the transport actor to a GitHub identity without exposing credentials; connector identity and gh's separate diagnostic are insufficient.
+
+Index ABA must not be decided by content equality: `stageScalarIndexUpsert` uses the existing graph revision, without a separate index revision. The final fairness regression uses the default budget of 64 and continuously adds 65 nodes per round to exercise starvation; the exact asserted target requires the detailed record. It requires independent Node/Edge cursors and a fixed high-water for each round. Locate the relevant concrete reclaimer and its existing test fixture before asserting implementation coverage. Owner revision must retain the 32-byte record and existing density, without a new index.
+- New `StagedScalarIndexUpsertRejectsChangedThenRestoredIndex` checks a staged index write is rejected after another writer changes and restores the value; final value remains intact. This tests the externally observable ABA contract, not which persisted revision mechanism implements it. All four new contract tests passed compiler syntax checks and have not yet run.
