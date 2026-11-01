@@ -210,11 +210,20 @@ namespace graph::storage {
 			entry = found->second.get();
 		} else {
 			++misses_;
-			ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-			auto fresh = allocateEntryLocked();
-			Entry &stored = *fresh;
-			static_cast<void>(storeEntryLocked(key, std::move(fresh)));
-			entry = &stored;
+            try {
+                ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+                auto fresh = allocateEntryLocked();
+                Entry &stored = *fresh;
+                static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+                entry = &stored;
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                // No resident entry exists for this key; stale generations have
+                // already been checked and invalidated under the cache lock.
+                try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
+                io_.writeAtUncached(key.page_offset, input.data(), input.size());
+                disk_write_bytes_ += input.size();
+                return;
+            }
 		}
 
 		std::copy(input.begin(), input.end(), entry->bytes.begin());
@@ -334,11 +343,21 @@ namespace graph::storage {
 				entry = found->second.get();
 			} else {
 				++misses_;
-				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-				auto fresh = allocateEntryLocked();
-				Entry &stored = *fresh;
-				static_cast<void>(storeEntryLocked(key, std::move(fresh)));
-				entry = &stored;
+                try {
+                    ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+                    auto fresh = allocateEntryLocked();
+                    Entry &stored = *fresh;
+                    static_cast<void>(storeEntryLocked(key, std::move(fresh)));
+                    entry = &stored;
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    // Whole-range pin checks and stale-generation invalidation
+                    // have completed before writing any page in this batch.
+                    try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
+                    io_.writeAtUncached(key.page_offset,
+                        input.data() + page * RSS_BUFFER_POOL_PAGE_BYTES, RSS_BUFFER_POOL_PAGE_BYTES);
+                    disk_write_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+                    continue;
+                }
 			}
 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
 						RSS_BUFFER_POOL_PAGE_BYTES, entry->bytes.begin());

@@ -755,6 +755,67 @@ TEST_F(BufferPoolTest, CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyP
 	pool_.reset(); EXPECT_EQ(memory->used(), 0U);
 }
 
+TEST_F(BufferPoolTest, ExhaustedCacheCreditWritesTypedPagesWithoutAdmission) {
+    open(2U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
+    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> one{}; one.fill(std::byte{42});
+    pool_->writePage({0U, 1U}, one);
+    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> both{}; both.fill(std::byte{73});
+    pool_->writePages({0U, 2U}, both);
+    std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> actual{};
+    EXPECT_EQ(pool_->readPages({0U, 2U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
+    EXPECT_EQ(actual, both);
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(BufferPoolTest, ExhaustedCacheCreditPropagatesShortWriteAndAllowsExactRetry) {
+    open(1U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
+    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x5a});
+    bool faulted = false;
+    {
+        StorageIO::ScopedNativeWriteHookForTesting shortWrite([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+            faulted = true;
+            return portable_pwrite(fd, bytes, count / 2U, offset);
+        });
+        EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::system_error);
+    }
+    EXPECT_TRUE(faulted);
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+    EXPECT_NO_THROW(pool_->writePage({0U, 1U}, page));
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> actual{};
+    EXPECT_EQ(pool_->readPage({0U, 1U}, actual, BufferPoolReadHint::BPRH_SEQUENTIAL), actual.size());
+    EXPECT_EQ(actual, page);
+}
+#endif
+
+TEST_F(BufferPoolTest, CacheWriteAdmissionFallbackDoesNotHideAllocatorFailure) {
+    open(1U);
+    auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
+    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    memory->fail_at = 1U;
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x52});
+    EXPECT_THROW(pool_->writePage({0U, 1U}, page), std::bad_alloc);
+    EXPECT_EQ(diskByte(0U), std::byte{1});
+    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+    EXPECT_EQ(memory->grant->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, CachePressureNeverBypassesPinnedGeneration) {
+    open(2U); auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
+    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    auto pin = pool_->pin({0U, 1U});
+    graph::query::execution::detail::PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - memory->used());
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{}; page.fill(std::byte{0x77});
+    EXPECT_THROW(pool_->writePage({0U, 2U}, page), std::logic_error);
+    EXPECT_THROW(pool_->writePages({0U, 2U}, page), std::logic_error);
+    EXPECT_EQ(pin.bytes()[0], std::byte{1});
+    EXPECT_EQ(diskByte(0U), std::byte{1});
+}
+
 TEST_F(BufferPoolTest, EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache) {
 	open(1U); auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
 	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);

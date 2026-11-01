@@ -1398,6 +1398,8 @@ TEST_F(RelocatableStorageBackendTest, NativeCowWriteAdmissionRejectsBeforePublic
     const auto kind = static_cast<size_t>(ResourceClass::RCK_WRITE);
     const auto baseline = domain->usage().classes[kind];
     auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, domain->classMaximum(ResourceClass::RCK_WRITE));
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    PrepaidMemoryResource::ExternalReservation cachePressure(cache, cache->capacity() - cache->used());
     ResourceLease pressure(account); pressure.set(account->available());
     const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
     EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}})), ResourceAdmissionDenied);
@@ -1405,6 +1407,7 @@ TEST_F(RelocatableStorageBackendTest, NativeCowWriteAdmissionRejectsBeforePublic
     EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
     EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
     pressure.reset();
+    cachePressure.set(0U);
     const auto created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
     EXPECT_EQ(created.size(), 1U); EXPECT_EQ(domain->usage().classes[kind], baseline);
     backend.close();
@@ -1439,6 +1442,48 @@ TEST_F(RelocatableStorageBackendTest, NativeEdgeOverlayResolvesAnUnseenTypeUnder
     EXPECT_EQ(edge.source_node_id, nodes[0]); EXPECT_EQ(edge.target_node_id, nodes[1]);
     EXPECT_EQ(edge.properties.front().value, PropertyValue(7));
     snapshot.reset(); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, CacheWriteFallbackPreservesForeignPinnedSnapshotAcrossReopen) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend writer(options); writer.open();
+    const auto nodes = writer.createLogicalNodes({{{"Fallback"}, {}}, {{"Fallback"}, {}}});
+    RelocatableStorageBackend reader(options); reader.open();
+    auto old = reader.openLogicalGraphReadSnapshot();
+    const auto outgoing = [&](auto &snapshot) {
+        return snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 8U).edges;
+    };
+    EXPECT_TRUE(outgoing(old).empty());
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(writer.queryResourceDomain());
+    std::vector<uint64_t> edges;
+    auto transaction = writer.beginLogicalGraphTransaction(false);
+    LogicalGraphTransactionOverlay overlay(*transaction);
+    const bool oldTrace = debug::PerfTrace::areValuesEnabled();
+    debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true);
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        edges = overlay.createLogicalEdges({{nodes[0], nodes[1], "FallbackType", {}}});
+        EXPECT_EQ(transaction->commit().created_edge_ids, edges);
+    }
+    transaction.reset();
+    const auto trace = debug::PerfTrace::snapshotAndReset(); debug::PerfTrace::setValueCollectionEnabled(oldTrace);
+    ASSERT_TRUE(trace.contains("storage.buffer_pool.write_admission_fallback"));
+    EXPECT_GT(trace.at("storage.buffer_pool.write_admission_fallback").totalValue, 0);
+    ASSERT_EQ(edges.size(), 1U);
+    EXPECT_TRUE(outgoing(old).empty());
+    auto current = writer.openLogicalGraphReadSnapshot();
+    ASSERT_EQ(outgoing(current).size(), 1U);
+    EXPECT_EQ(outgoing(current).front().edge_id, edges.front());
+    current.reset(); writer.close();
+    EXPECT_TRUE(outgoing(old).empty());
+    old.reset(); reader.close();
+    RelocatableStorageBackend reopened(options); reopened.open();
+    auto fresh = reopened.openLogicalGraphReadSnapshot();
+    ASSERT_EQ(outgoing(fresh).size(), 1U);
+    EXPECT_EQ(outgoing(fresh).front().edge_id, edges.front());
+    fresh.reset(); reopened.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit) {

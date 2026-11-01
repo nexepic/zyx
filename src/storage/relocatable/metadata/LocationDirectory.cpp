@@ -23,6 +23,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 #include <memory_resource>
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
@@ -458,7 +459,7 @@ namespace graph::storage {
 						}
 						++count;
 					}
-					std::vector<std::byte> buffer(count * RSS_PAGE_SIZE);
+					utils::OwnedStdVector<std::byte> buffer(count * RSS_PAGE_SIZE);
 					for (size_t index = 0U; index < count; ++index) {
 						std::memcpy(buffer.data() + index * RSS_PAGE_SIZE, pending_pages_[offset + index].bytes.data(), RSS_PAGE_SIZE);
 					}
@@ -477,7 +478,7 @@ namespace graph::storage {
 
 			MetadataPageFile &pageFile_;
 			MetadataWriteBatch &batch_;
-			std::vector<PendingPage> pending_pages_;
+			utils::OwnedStdVector<PendingPage> pending_pages_;
 		};
 
 		[[nodiscard]] size_t writePageCount(const MutableNode &node) {
