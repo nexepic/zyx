@@ -448,10 +448,18 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainCountsForeignPin
     MetadataSnapshotRegistry first(firstBootstrap, {}, {}, {}, domain), second(secondBootstrap, {}, {}, {}, domain);
     auto pin = first.openSnapshot();
     EXPECT_EQ(second.activeSnapshotCount(), 1U);
+    EXPECT_EQ(first.ownedSnapshotCount(), 1U);
+    EXPECT_EQ(second.ownedSnapshotCount(), 0U);
+    auto other = second.openSnapshot();
+    EXPECT_EQ(first.activeSnapshotCount(), 2U);
+    EXPECT_EQ(first.ownedSnapshotCount(), 1U);
+    EXPECT_EQ(second.ownedSnapshotCount(), 1U);
+    other.release();
     auto writer = second.beginWrite();
     EXPECT_TRUE(second.anyActiveSnapshot(writer, [](const auto &root) { return root.generation == Generation(1); }));
     EXPECT_THROW((void)first.anyActiveSnapshot(writer, [](const auto &) { return true; }), FormatException);
     writer.release(); pin.release(); EXPECT_EQ(first.activeSnapshotCount(), 0U); EXPECT_EQ(second.activeSnapshotCount(), 0U);
+    EXPECT_EQ(first.ownedSnapshotCount(), 0U); EXPECT_EQ(second.ownedSnapshotCount(), 0U);
 }
 TEST_F(RelocatableMetadataSnapshotRegistryTest, SharedFileDomainSerializesWritersAcrossRegistryInstances) {
     SuperblockFile bootstrap(io); bootstrap.initializeNew(superblock(1, 1));

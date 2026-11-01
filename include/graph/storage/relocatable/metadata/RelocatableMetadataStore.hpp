@@ -1905,6 +1905,7 @@ namespace graph::storage {
 		[[nodiscard]] Superblock migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
 																 const MetadataPublishOptions &options = {});
 		[[nodiscard]] uint64_t activeSnapshotCount() const;
+		[[nodiscard]] uint64_t ownedSnapshotCount() const;
 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
 
 	private:

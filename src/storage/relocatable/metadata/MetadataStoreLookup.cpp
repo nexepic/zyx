@@ -976,6 +976,7 @@ namespace graph::storage {
 	}
 
 	uint64_t RelocatableMetadataStore::activeSnapshotCount() const { return snapshots_.activeSnapshotCount(); }
+	uint64_t RelocatableMetadataStore::ownedSnapshotCount() const { return snapshots_.ownedSnapshotCount(); }
 
 
 } // namespace graph::storage

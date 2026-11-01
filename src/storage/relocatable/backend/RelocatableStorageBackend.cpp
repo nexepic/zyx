@@ -1586,7 +1586,7 @@ namespace graph::storage {
 				}
 			}
 		}
-		if (metadata_->activeSnapshotCount() != 0U) {
+		if (metadata_->ownedSnapshotCount() != 0U) {
 			if (maintenancePausedForClose) {
 				maintenance_->resume();
 			}

@@ -424,6 +424,22 @@ TEST_F(RelocatableStorageBackendTest, CloseRejectsPinnedSnapshotUntilItIsRelease
 	reopened.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, ClosingAnotherHandleDoesNotInvalidateOwnedSnapshot) {
+	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+	RelocatableStorageBackend first(backendOptions());
+	first.open();
+	auto readOptions = backendOptions();
+	readOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+	RelocatableStorageBackend second(readOptions);
+	second.open();
+	auto pin = first.openSnapshot();
+	EXPECT_NO_THROW(second.close());
+	EXPECT_EQ(first.readNode(pin, fixture.person_node_id).node_id, fixture.person_node_id);
+	EXPECT_THROW(first.close(), std::logic_error);
+	pin.release();
+	EXPECT_NO_THROW(first.close());
+}
+
 TEST_F(RelocatableStorageBackendTest, DirectReadRejectsSnapshotOwnedByAnotherDatabase) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
 	RelocatableStorageBackend first(backendOptions());

@@ -38,6 +38,7 @@ namespace graph::storage {
         std::shared_ptr<MetadataSnapshotCoordination> coordination;
 		SuperblockFile *bootstrap = nullptr;
 		MetadataSnapshotRegistryLimits limits;
+		uint64_t owned_snapshot_count = 0U; // guarded by coordination->snapshots_mutex
 		std::shared_ptr<std::pmr::memory_resource> memory_owner;
         std::shared_ptr<std::pmr::memory_resource> control_owner;
 
@@ -54,6 +55,7 @@ namespace graph::storage {
 		void releaseSnapshot(const std::shared_ptr<MetadataSnapshotRegistryState> &state,
 							 const Superblock &superblock) {
 			std::lock_guard lock(state->coordination->snapshots_mutex);
+			--state->owned_snapshot_count;
 			auto &snapshot = state->coordination->snapshots.at(superblock.generation.value());
 			if (--snapshot.second == 0U) {
 				state->coordination->snapshots.erase(superblock.generation.value());
@@ -158,6 +160,8 @@ namespace graph::storage {
 		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), snapshot, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{
 			std::lock_guard snapshotsLock(state_->coordination->snapshots_mutex);
+			if (state_->owned_snapshot_count == std::numeric_limits<uint64_t>::max())
+				throwSnapshotRegistryError(FormatError::FERR_ARITHMETIC_OVERFLOW, "owned snapshot count overflows");
 			auto [position, inserted] =
 					state_->coordination->snapshots.emplace(snapshot.generation.value(), std::make_pair(snapshot, 0U));
 			static_cast<void>(inserted);
@@ -166,6 +170,7 @@ namespace graph::storage {
 										   "relocatable metadata snapshot reference count overflows");
 			}
 			++position->second.second;
+			++state_->owned_snapshot_count;
 		}
 		return MetadataSnapshotPin(state_, snapshot, std::move(readContext));
 	}
@@ -200,6 +205,8 @@ namespace graph::storage {
         auto readContext = createWriterReadContext(guard, current);
 		{
 			std::lock_guard snapshotsLock(state_->coordination->snapshots_mutex);
+			if (state_->owned_snapshot_count == std::numeric_limits<uint64_t>::max())
+				throwSnapshotRegistryError(FormatError::FERR_ARITHMETIC_OVERFLOW, "owned snapshot count overflows");
 			auto [position, inserted] =
 					state_->coordination->snapshots.emplace(current.generation.value(), std::make_pair(current, 0U));
 			static_cast<void>(inserted);
@@ -208,6 +215,7 @@ namespace graph::storage {
 										   "relocatable metadata snapshot reference count overflows");
 			}
 			++position->second.second;
+			++state_->owned_snapshot_count;
 		}
 		return MetadataSnapshotPin(state_, current, std::move(readContext));
 	}
@@ -246,6 +254,11 @@ namespace graph::storage {
 	uint64_t MetadataSnapshotRegistry::activeSnapshotCount() const {
         return snapshotPressure().active_snapshot_count;
     }
+
+	uint64_t MetadataSnapshotRegistry::ownedSnapshotCount() const {
+		std::lock_guard lock(state_->coordination->snapshots_mutex);
+		return state_->owned_snapshot_count;
+	}
 
     MetadataSnapshotPressure MetadataSnapshotRegistry::snapshotPressure(const MetadataSnapshotPin *exclude) const {
         if (exclude && !owns(*exclude))

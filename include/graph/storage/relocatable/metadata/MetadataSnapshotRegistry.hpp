@@ -134,6 +134,8 @@ namespace graph::storage {
 										 const std::function<bool(const Superblock &)> &predicate) const;
 
 		[[nodiscard]] uint64_t activeSnapshotCount() const;
+		// Pins owned by this registry; shared-domain counts remain the reclamation barrier.
+		[[nodiscard]] uint64_t ownedSnapshotCount() const;
 		// One registry-lock sample, optionally excluding the observer's own pin.
 		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
 
