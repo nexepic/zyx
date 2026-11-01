@@ -2075,3 +2075,41 @@ TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexWritesAdvanceGraphRevisionA
 	auto absent = metadata_->openSnapshot();
 	EXPECT_EQ(absent.superblock().graph_revision, initial + 2U);
 }
+
+TEST_F(NativeGraphWritePlannerTest, MetadataPoolGrowthDoesNotConflictWithStagedPropertyWrite) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode({});
+	create.replaceNodeProperty(propertyRoot(id, Node::typeId, 1));
+	ASSERT_TRUE(create.commit().committed());
+	auto staged = planner.beginTransaction();
+	staged.replaceNodeProperty(propertyRoot(id, Node::typeId, 2));
+	auto old = metadata_->openSnapshot();
+	const auto revision = old.superblock().graph_revision;
+	const auto countPools = [&](const MetadataSnapshotPin &snapshot) {
+		size_t count = 0;
+		metadata_->visitCatalogEntries(snapshot, [&](const CatalogEntry &entry) {
+			if (entry.kind == SegmentKind::SGK_METADATA_PAGE_POOL && entry.state == SegmentState::SGS_SEALED) ++count;
+		});
+		return count;
+	};
+	const auto before = countPools(old);
+	bool grew = false;
+	for (size_t i = 0; i < 512U && !grew; ++i) {
+		auto source = metadata_->openSnapshot();
+		const auto lsn = LogSequenceNumber(source.superblock().checkpoint_lsn.value() + 1U);
+		source.release();
+		const auto changed = metadata_->setPhysicalSlotAllocated(PhysicalSlotId(79U), (i % 2U) == 0U, lsn);
+		ASSERT_EQ(changed.graph_revision, revision);
+		auto current = metadata_->openSnapshot();
+		grew = countPools(current) > before;
+	}
+	ASSERT_TRUE(grew) << "expected a real new metadata pool while the old snapshot remains pinned";
+	const auto committed = staged.commit();
+	ASSERT_TRUE(committed.committed());
+	EXPECT_EQ(committed.superblock.graph_revision, revision + 1U);
+	EXPECT_EQ(properties_->readEntity(old, {EntityPropertyOwnerKind::EPOK_NODE, id}), propertyRoot(id, Node::typeId, 1));
+	old.release();
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, id}), propertyRoot(id, Node::typeId, 2));
+}
