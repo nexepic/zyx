@@ -2371,7 +2371,19 @@ namespace graph::storage {
 				}
                 if (!batch.node_deletes.empty() || !batch.edge_deletes.empty()) {
                     try {
+                        const size_t bytes = options_.maximum_reclaim_workspace_bytes;
+                        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+                            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, bytes);
+                        auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+                            std::move(account), bytes, std::pmr::new_delete_resource());
+                        utils::OwnedAllocationScope allocationScope(workspace);
                         metadata_->reclaimDeletedPropertyOwners();
+                    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
+                    } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                        if (metadata_->hasIndeterminatePublication())
+                            requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);
                     } catch (const std::bad_alloc &) {
                         // Admission failure defers optional cleanup; the delete is durable.
                         if (metadata_->hasIndeterminatePublication())

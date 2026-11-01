@@ -817,3 +817,28 @@ TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceFinalSyncFailurePreservesD
 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
 	reopened.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceBudgetDenialDefersCleanupWithoutFailingDelete) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	options.maximum_reclaim_workspace_bytes = 1U;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(1)}}}}).front();
+	EXPECT_NO_THROW(backend.deleteLogicalNodes({{node, false, 0U}}));
+	EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+	backend.close();
+	const auto ownerExists = [&] {
+		auto file = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+		auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::openReadOnly(io);
+		auto pin = metadata->openSnapshot();
+		return metadata->findEntityPropertyRevision(pin, {EntityPropertyOwnerKind::EPOK_NODE, node}).has_value();
+	};
+	EXPECT_TRUE(ownerExists());
+	auto retryOptions = backendOptions(); retryOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend retry(std::move(retryOptions)); retry.open();
+	const auto trigger = retry.createLogicalNodes({{{}, {}}}).front();
+	EXPECT_NO_THROW(retry.deleteLogicalNodes({{trigger, false, 0U}}));
+	retry.close();
+	EXPECT_FALSE(ownerExists());
+}

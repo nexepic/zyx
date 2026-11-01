@@ -5,12 +5,12 @@ namespace graph::storage {
 
     void RelocatableMetadataStore::reclaimDeletedPropertyOwners(size_t recordBudget) {
         if (recordBudget < 2U || read_only_) return;
-        MetadataWriteGuard writer = beginWrite();
+        MetadataWriteGuard writer = beginWrite(true);
         const Superblock current = bootstrap_.recover();
         MetadataPageReadContext::Scope reads(snapshots_.createWriterReadContext(writer, current), *io_);
         auto nodeSweep = node_owner_sweep_;
         auto edgeSweep = edge_owner_sweep_;
-        std::vector<EntityPropertyKey> erased;
+        utils::OwnedVector<EntityPropertyKey> erased;
         erased.reserve(recordBudget);
         constexpr uint64_t maxId = (UINT64_C(1) << 63U) - 1U;
         const auto sweep = [&](EntityPropertyOwnerKind kind, OwnerSweepCursor &state, size_t allowance,
@@ -50,6 +50,9 @@ namespace graph::storage {
                 throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "owner reclamation exhausted checkpoint LSN");
             MetadataWriteBatch batch(metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
             locations_.prepareReplaceEntityProperties(batch, {}, erased);
+            // This physical-only Property directory change preserves the
+            // authenticated hybrid descriptor and all its native roots.
+            batch.hybrid_property_publication_ = true;
             publishBatch(batch, writer, {});
         }
         node_owner_sweep_ = nodeSweep;

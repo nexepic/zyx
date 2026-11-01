@@ -1878,3 +1878,40 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, GenericMapPropertyCopiesAreOwnedAndReport
 	EXPECT_EQ(map.getMap().at("payload"), payload);
 }
 } // namespace graph::query::execution
+
+namespace graph::query::execution {
+	TEST(LogicalPlanDirectEdgeRuntimeTest, TwoLiveProjectedPayloadsShareOneMaterializationBudget) {
+		DirectEdgeGraph graph = direct_edge_test::directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.clear();
+		const PropertyValue first(std::string(3000U, 'a'));
+		const PropertyValue second(std::string(3000U, 'b'));
+		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"first", first}, {"second", second}}});
+		direct_edge_test::DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		const auto project = [](bool two) {
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "first"), "a");
+			if (two) items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "second"), "b");
+			return std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
+		};
+		auto bounds = direct_edge_test::directBounds();
+		bounds.maximum_materialized_bytes = 4096U;
+		size_t delivered = 0;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*project(false), bounds, [&](const LogicalPlanReadRow &row) {
+			++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("a")), first); return true;
+		})));
+		EXPECT_EQ(delivered, 1U);
+		delivered = 0;
+		EXPECT_THROW(static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::runtime_error);
+		EXPECT_EQ(delivered, 0U);
+		bounds.maximum_materialized_bytes = 20000U;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &row) {
+			++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("a")), first);
+			EXPECT_EQ(std::get<PropertyValue>(row.values.at("b")), second); return true;
+		})));
+		EXPECT_EQ(delivered, 1U);
+	}
+}
