@@ -290,13 +290,18 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageRetirementRejectsStaleOrForeignMa
 	EXPECT_EQ(store->findNodePageLocation(afterInterrupted, node.entity_id), node);
 	EXPECT_EQ(store->findPageLocation(afterInterrupted, node.page_id), currentPage);
 
-	static_cast<void>(store->retireEntityPageInExistingPool(reservation->entries.front(), currentPage, erased, {},
-															LogSequenceNumber(4U),
-															[](const CatalogEntry &, const PageLocation &) {}));
+	const auto retired = store->retireEntityPageInExistingPool(reservation->entries.front(), currentPage, erased, {},
+			LogSequenceNumber(4U), [](const CatalogEntry &, const PageLocation &) {});
+	EXPECT_EQ(retired.graph_revision, original.superblock().graph_revision + 1U);
 	MetadataSnapshotPin current = store->openSnapshot();
 	EXPECT_EQ(store->findNodePageLocation(original, node.entity_id), node);
 	EXPECT_FALSE(store->findNodePageLocationOptional(current, node.entity_id).has_value());
 	EXPECT_FALSE(store->findPageLocationOptional(current, node.page_id).has_value());
+	const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, node.entity_id};
+	const auto tombstone = store->findEntityPropertyRevision(current, owner);
+	ASSERT_TRUE(tombstone.has_value());
+	EXPECT_TRUE(tombstone->isTombstone());
+	EXPECT_EQ(tombstone->owner_revision, retired.graph_revision);
 	original.release();
 	afterInterrupted.release();
 	current.release();
@@ -305,6 +310,7 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageRetirementRejectsStaleOrForeignMa
 	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
 	EXPECT_FALSE(reopened->findNodePageLocationOptional(reopenedSnapshot, node.entity_id).has_value());
 	EXPECT_FALSE(reopened->findPageLocationOptional(reopenedSnapshot, node.page_id).has_value());
+	EXPECT_EQ(reopened->findEntityPropertyRevision(reopenedSnapshot, owner), tombstone);
 }
 
 TEST_F(RelocatableMetadataStoreTest, EntityPageBatchReplacementPublishesSeveralPagesAndMapsAtomically) {

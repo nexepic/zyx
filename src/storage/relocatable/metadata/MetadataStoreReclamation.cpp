@@ -63,9 +63,20 @@ namespace graph::storage {
 		};
 		validateCurrentMappings(erasedNodeIds, true);
 		validateCurrentMappings(erasedEdgeIds, false);
+		const auto ownerKind = erasedNodeIds.empty() ? EntityPropertyOwnerKind::EPOK_EDGE : EntityPropertyOwnerKind::EPOK_NODE;
+		const auto removedIds = erasedNodeIds.empty() ? erasedEdgeIds : erasedNodeIds;
+		for (const auto id : removedIds)
+			if (!EntityPropertyKey{ownerKind, id}.isValid())
+				throw FormatException(FormatError::FERR_INVALID_HEADER, "retired Entity cannot be represented by a Property owner key");
 		preparer(visible, expectedLocation);
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		batch.markGraphChanged();
+		std::vector<EntityPropertyLocation> ownerTombstones;
+		ownerTombstones.reserve(removedIds.size());
+		for (const auto id : removedIds)
+			ownerTombstones.push_back({{ownerKind, id}, PageId{}, 0U, 0U, batch.candidate().graph_revision});
+		locations_.prepareReplaceEntityProperties(batch, ownerTombstones, {});
 		const std::array<PageLocation, 0> noPages{};
 		const std::array<uint64_t, 1> erasedPageIds{{expectedLocation.page_id.value()}};
 		locations_.prepareReplacePages(batch, noPages, erasedPageIds);
