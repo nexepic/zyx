@@ -1450,7 +1450,8 @@ TEST_F(RelocatableStorageBackendTest, CacheWriteFallbackPreservesForeignPinnedSn
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend writer(options); writer.open();
     const auto nodes = writer.createLogicalNodes({{{"Fallback"}, {}}, {{"Fallback"}, {}}});
-    RelocatableStorageBackend reader(options); reader.open();
+    auto readerOptions = options; readerOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+    RelocatableStorageBackend reader(readerOptions); reader.open();
     auto old = reader.openLogicalGraphReadSnapshot();
     const auto outgoing = [&](auto &snapshot) {
         return snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 8U).edges;
