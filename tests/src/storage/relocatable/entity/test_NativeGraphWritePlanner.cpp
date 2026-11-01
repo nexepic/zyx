@@ -2143,3 +2143,38 @@ TEST_F(NativeGraphWritePlannerTest, MetadataPoolGrowthDoesNotConflictWithStagedP
 	auto current = metadata_->openSnapshot();
 	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, id}), propertyRoot(id, Node::typeId, 2));
 }
+
+TEST_F(NativeGraphWritePlannerTest, DirectEntityChangedThenRestoredRejectsStaleGraphWrite) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode({});
+	create.replaceNodeProperty(propertyRoot(id, Node::typeId, 1));
+	ASSERT_TRUE(create.commit().committed());
+	auto stale = planner.beginTransaction();
+	stale.replaceNodeProperty(propertyRoot(id, Node::typeId, 2));
+	auto before = metadata_->openSnapshot();
+	const auto original = entities_->readNode(before, id);
+	auto changed = original; changed.inline_label_count = 1U; changed.inline_label_ids[0] = 7U;
+	const auto lsn = before.superblock().checkpoint_lsn.value() + 1U;
+	static_cast<void>(entities_->updateNode(before, id, changed, LogSequenceNumber(lsn)));
+	auto middle = metadata_->openSnapshot();
+	static_cast<void>(entities_->updateNode(middle, id, original, LogSequenceNumber(lsn + 1U)));
+	EXPECT_FALSE(stale.commit().committed());
+}
+
+TEST_F(NativeGraphWritePlannerTest, DirectScalarIndexChangedThenRestoredRejectsStaleGraphWrite) {
+	const auto root = allocateEmptyIndexRoot(*btree_pages_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto create = planner.beginTransaction();
+	const auto id = create.createNode({});
+	create.replaceNodeProperty(propertyRoot(id, Node::typeId, 1));
+	ASSERT_TRUE(create.commit().committed());
+	auto stale = planner.beginTransaction();
+	stale.replaceNodeProperty(propertyRoot(id, Node::typeId, 2));
+	auto before = metadata_->openSnapshot();
+	const auto lsn = before.superblock().checkpoint_lsn.value() + 1U;
+	const std::array<std::byte, 1U> key{std::byte{0x48}};
+	static_cast<void>(btree_pages_->upsert(root.index_id, key, 7U, LogSequenceNumber(lsn)));
+	ASSERT_TRUE(btree_pages_->erase(root.index_id, key, LogSequenceNumber(lsn + 1U)));
+	EXPECT_FALSE(stale.commit().committed());
+}

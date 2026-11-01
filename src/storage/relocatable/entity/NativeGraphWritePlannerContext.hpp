@@ -166,56 +166,17 @@ namespace graph::storage {
 			return fragment;
 		}
 
-		[[nodiscard]] bool isLogicalIdLeaseOnlyAdvance(const RelocatableMetadataStore &metadata,
-													 const Superblock &base, const Superblock &current) {
+		[[nodiscard]] bool isRevisionPreservingAdvance(const Superblock &base, const Superblock &current) {
 			const auto advancedOrExhausted = [](uint64_t before, uint64_t after) {
-				const uint8_t valid = static_cast<uint8_t>(before != 0U) &
-									  (static_cast<uint8_t>(after == before) | static_cast<uint8_t>(after == 0U) |
-									   static_cast<uint8_t>(after > before));
-				return valid != 0U;
+				return before == 0U ? after == 0U : after == 0U || after >= before;
 			};
-			const uint8_t advanced =
-					static_cast<uint8_t>(current.generation > base.generation) &
-					static_cast<uint8_t>(current.checkpoint_lsn > base.checkpoint_lsn) &
-					static_cast<uint8_t>(advancedOrExhausted(base.next_logical_node_id, current.next_logical_node_id)) &
-					static_cast<uint8_t>(advancedOrExhausted(base.next_logical_edge_id, current.next_logical_edge_id));
-		const bool identityOnlyBootstrap =
-				(!base.usesPageDirectoryBootstrap() && !current.usesPageDirectoryBootstrap())
-						? current.page_directory_root == base.page_directory_root
-						: metadata.isIdentityOnlyBootstrapAdvance(base, current);
-		const uint8_t unchanged =
-				static_cast<uint8_t>(current.database_id == base.database_id) &
-				static_cast<uint8_t>(current.graph_revision == base.graph_revision) &
-				static_cast<uint8_t>(current.schema_revision == base.schema_revision) &
-				static_cast<uint8_t>(current.flags == base.flags) &
-				static_cast<uint8_t>(current.data_region_offset == base.data_region_offset) &
-				static_cast<uint8_t>(current.catalog_root == base.catalog_root) &
-				static_cast<uint8_t>(identityOnlyBootstrap) &
-				static_cast<uint8_t>(current.extent_directory_root == base.extent_directory_root) &
-				// Allocation bookkeeping can advance without changing graph data.
-				// Planning resumes from the current snapshot after all graph roots
-				// and logical high-water marks below have been checked.
-				static_cast<uint8_t>(current.node_entity_directory_root == base.node_entity_directory_root) &
-				static_cast<uint8_t>(current.edge_entity_directory_root == base.edge_entity_directory_root) &
-				static_cast<uint8_t>(current.entity_property_directory_root == base.entity_property_directory_root) &
-                static_cast<uint8_t>(current.hybrid_property_descriptor_root == base.hybrid_property_descriptor_root) &
-				static_cast<uint8_t>(current.index_root_directory_root == base.index_root_directory_root) &
-				static_cast<uint8_t>(current.vector_location_directory_root == base.vector_location_directory_root) &
-				static_cast<uint8_t>(current.vector_manifest_directory_root == base.vector_manifest_directory_root) &
-				static_cast<uint8_t>(current.large_value_manifest_directory_root == base.large_value_manifest_directory_root) &
-				static_cast<uint8_t>(current.state_directory_root == base.state_directory_root) &
-				static_cast<uint8_t>(current.retire_queue_root == base.retire_queue_root) &
-				static_cast<uint8_t>(current.metadata_emergency_reserve == base.metadata_emergency_reserve) &
-				static_cast<uint8_t>(current.next_logical_page_id == base.next_logical_page_id) &
-				static_cast<uint8_t>(current.next_logical_segment_id == base.next_logical_segment_id) &
-				static_cast<uint8_t>(current.next_logical_vector_id == base.next_logical_vector_id) &
-				static_cast<uint8_t>(current.next_large_value_id == base.next_large_value_id) &
-				static_cast<uint8_t>(current.next_property_key_token == base.next_property_key_token) &
-				static_cast<uint8_t>(current.next_schema_token_id == base.next_schema_token_id);
-			if ((advanced & unchanged) == 0U) {
-				return false;
-			}
-			return true;
+			return current.generation > base.generation && current.checkpoint_lsn > base.checkpoint_lsn &&
+				current.database_id == base.database_id && current.flags == base.flags &&
+				current.data_region_offset == base.data_region_offset && base.graph_revision != 0U &&
+				base.schema_revision != 0U && current.graph_revision == base.graph_revision &&
+				current.schema_revision == base.schema_revision &&
+				advancedOrExhausted(base.next_logical_node_id, current.next_logical_node_id) &&
+				advancedOrExhausted(base.next_logical_edge_id, current.next_logical_edge_id);
 		}
 
 		void validateLabels(std::span<const uint64_t> labels) {

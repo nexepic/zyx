@@ -315,14 +315,6 @@ namespace graph::storage {
 
 		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = RSS_HYBRID_PROPERTY_FORMAT_ENABLED
             ? UINT64_C(0x564E4558544C4749) : UINT64_C(0x564E4558544C4748);
-		using LogicalGraphFenceRootMember = PhysicalPageRef Superblock::*;
-		constexpr std::array<LogicalGraphFenceRootMember, LogicalGraphMutationFence::GRAPH_STATE_ROOT_COUNT>
-				RSS_LOGICAL_GRAPH_FENCE_ROOT_MEMBERS = {
-						&Superblock::node_entity_directory_root,	 &Superblock::edge_entity_directory_root,
-						&Superblock::entity_property_directory_root, &Superblock::large_value_manifest_directory_root,
-						&Superblock::vector_location_directory_root, &Superblock::vector_manifest_directory_root,
-						&Superblock::state_directory_root, &Superblock::hybrid_property_descriptor_root,
-		};
 
 		[[noreturn]] void failVectorTraining(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -742,15 +734,6 @@ namespace graph::storage {
 
 #include "backend_runtime/LogicalTransaction.inc"
 
-		void appendLogicalGraphRootTokens(LogicalGraphMutationFence &fence, size_t &offset,
-										  const PhysicalPageRef &root) {
-			if (offset > fence.graph_state_tokens.size() - LogicalGraphMutationFence::GRAPH_STATE_TOKENS_PER_ROOT) {
-				throw std::logic_error("relocatable logical graph fence root layout exceeds its fixed token capacity");
-			}
-			fence.graph_state_tokens[offset++] = root.physical_slot.value();
-			fence.graph_state_tokens[offset++] = static_cast<uint64_t>(root.frame_index);
-			fence.graph_state_tokens[offset++] = root.generation.value();
-		}
 
 		void requireExistingRegularFile(const std::filesystem::path &path, const char *purpose) {
 			std::error_code error;
@@ -1615,35 +1598,19 @@ namespace graph::storage {
 	}
 
 	LogicalGraphMutationFence RelocatableStorageBackend::makeLogicalGraphMutationFence(const Superblock &superblock) {
-		if (!superblock.database_id.isValid()) {
+		if (!superblock.database_id.isValid() || superblock.graph_revision == 0U || superblock.schema_revision == 0U)
 			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable logical graph fence requires a valid database identity");
-		}
+								  "relocatable logical graph fence requires a valid identity and revisions");
 		LogicalGraphMutationFence fence;
 		fence.backend_token = superblock.database_id.value();
 		fence.format_token = RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN;
-		size_t offset = 0U;
-		for (const LogicalGraphFenceRootMember member: RSS_LOGICAL_GRAPH_FENCE_ROOT_MEMBERS) {
-			appendLogicalGraphRootTokens(fence, offset, superblock.*member);
-		}
-		if (offset != fence.graph_state_tokens.size()) {
-			throw std::logic_error("relocatable logical graph fence root layout is incomplete");
-		}
+		fence.graph_state_tokens[0] = superblock.graph_revision;
+		fence.graph_state_tokens[1] = superblock.schema_revision;
 		return fence;
 	}
 
 	LogicalGraphMutationFence RelocatableStorageBackend::resolvedLogicalGraphMutationFence(const Superblock &superblock) const {
-		auto fence = makeLogicalGraphMutationFence(superblock);
-		PhysicalPageRef dataRoot = superblock.page_directory_root;
-		if (superblock.usesPageDirectoryBootstrap() && dataRoot.isValid()) {
-			MetadataPageFile pages(data_file_->io(), superblock);
-			const auto header = pages.readPageDirectoryBootstrap(dataRoot);
-			if (header.generation > superblock.generation || header.committed_lsn > superblock.checkpoint_lsn)
-				throw FormatException(FormatError::FERR_INVALID_STATE, "Page Directory bootstrap is newer than its Superblock");
-			dataRoot = header.data_page_directory_root;
-		}
-		fence.data_page_root_tokens = {dataRoot.physical_slot.value(), dataRoot.frame_index, dataRoot.generation.value()};
-		return fence;
+		return makeLogicalGraphMutationFence(superblock);
 	}
 
 	LogicalGraphSchemaIdentity RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(const Superblock &superblock) {

@@ -25,7 +25,11 @@ namespace graph::storage {
 
 	struct MetadataPublishOptions {
 		BootstrapPublishFailpoint bootstrap_failpoint = BootstrapPublishFailpoint::BPF_NONE;
-		// Set only by a publisher that has established a semantic graph change.
+		// Raw page, route, and derived-index APIs are physical primitives; false
+		// promises that they preserve graph semantics. A caller publishing a
+		// logical change through such a primitive must set this in the same batch.
+		// Property-directory callers must also supply exactly the changed owners.
+		// Normal graph/entity/index writers establish this intent themselves.
 		bool logical_graph_change = false;
 	};
 

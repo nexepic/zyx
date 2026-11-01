@@ -89,7 +89,7 @@ namespace graph::storage {
 			// IDs that are intentionally allowed to remain unused.
 			MetadataSnapshotPin current = context_->metadata->openSnapshot();
 			if (vectorNoops != 0U && current.superblock() != snapshot_.superblock() &&
-				!isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
+				!isRevisionPreservingAdvance(snapshot_.superblock(), current.superblock())) {
 				current.release();
 				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
 				snapshot_.release();
@@ -111,7 +111,7 @@ namespace graph::storage {
 		MetadataSnapshotPin current = context_->metadata->openSnapshot();
 		if (current.superblock() != snapshot_.superblock()) {
 			if (vectorNoops != 0U &&
-				!isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
+				!isRevisionPreservingAdvance(snapshot_.superblock(), current.superblock())) {
 				// The equality proof read the staged snapshot. Do not rebase an
 				// accompanying adjacency/graph mutation past a changed source.
 				current.release();
@@ -119,7 +119,7 @@ namespace graph::storage {
 				snapshot_.release();
 				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
 				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
-			} else if (isLogicalIdLeaseOnlyAdvance(*context_->metadata, snapshot_.superblock(), current.superblock())) {
+			} else if (isRevisionPreservingAdvance(snapshot_.superblock(), current.superblock())) {
 				snapshot_.release();
 				snapshot_ = std::move(current);
 			} else if (!rebaseAdjacencyOnly(current)) {

@@ -190,7 +190,9 @@ namespace graph::storage {
 		bool hasPublished = false;
 		for (const RetiredManifestPlan &manifest: retirementPlan) {
 			const LogSequenceNumber publicationLsn = hasPublished ? nextCheckpointLsn() : checkpointLsn;
-			published = manifests_.retire(manifest.index_id, manifest.owner_lsn, publicationLsn, publishOptions);
+			auto physicalPublication = publishOptions;
+			physicalPublication.logical_graph_change = false;
+			published = manifests_.retire(manifest.index_id, manifest.owner_lsn, publicationLsn, physicalPublication);
 			hasPublished = true;
 			++report.dropped_manifests_retired;
 		}

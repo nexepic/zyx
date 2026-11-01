@@ -543,8 +543,10 @@ namespace graph::storage {
 									candidate.generation,
 									checkpointLsn};
 		const VectorManifestPage page = VectorManifestPage::create(owner, candidate);
+		auto physicalPublication = options.manifest_publish_options;
+		physicalPublication.logical_graph_change = false;
 		const SharedPagePoolAllocation published = manifests.replace(
-				page, manifestLocation.segment_id, base.committed_lsn, checkpointLsn, options.manifest_publish_options);
+				page, manifestLocation.segment_id, base.committed_lsn, checkpointLsn, physicalPublication);
 		result.superblock = published.superblock;
 		result.manifest = candidate;
 		return result;
