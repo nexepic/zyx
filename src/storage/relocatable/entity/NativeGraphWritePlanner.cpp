@@ -11,9 +11,14 @@ namespace graph::storage {
 
 	NativeGraphWriteTransaction::~NativeGraphWriteTransaction() { rollback(); }
 
+	void NativeGraphWriteTransaction::markSchemaChanged() {
+		requireActive("mark a schema change");
+		schema_revision_change_ = true;
+	}
+
 	NativeGraphWriteTransaction::NativeGraphWriteTransaction(NativeGraphWriteTransaction &&other) noexcept :
 		context_(std::move(other.context_)), snapshot_(std::move(other.snapshot_)), state_(other.state_),
-		next_vector_id_(other.next_vector_id_), native_graph_coordinated_(other.native_graph_coordinated_), native_schema_coordinated_(other.native_schema_coordinated_), node_id_ranges_(std::move(other.node_id_ranges_)),
+		next_vector_id_(other.next_vector_id_), native_graph_coordinated_(other.native_graph_coordinated_), native_schema_coordinated_(other.native_schema_coordinated_), schema_revision_change_(other.schema_revision_change_), node_id_ranges_(std::move(other.node_id_ranges_)),
 		edge_id_ranges_(std::move(other.edge_id_ranges_)), nodes_(std::move(other.nodes_)),
 		edges_(std::move(other.edges_)), global_adjacency_operations_(std::move(other.global_adjacency_operations_)),
 		global_adjacency_operations_canonical_(other.global_adjacency_operations_canonical_),
@@ -51,6 +56,7 @@ namespace graph::storage {
 		next_vector_id_ = other.next_vector_id_;
         native_graph_coordinated_ = other.native_graph_coordinated_;
         native_schema_coordinated_ = other.native_schema_coordinated_;
+		schema_revision_change_ = other.schema_revision_change_;
 		node_id_ranges_ = std::move(other.node_id_ranges_);
 		edge_id_ranges_ = std::move(other.edge_id_ranges_);
 		nodes_ = std::move(other.nodes_);

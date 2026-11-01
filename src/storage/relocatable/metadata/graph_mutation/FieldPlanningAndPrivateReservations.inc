@@ -79,6 +79,7 @@
             pendingNativeMemory ? pendingNativeMemory : hybridVectors ? hybridVectors->fields_.memory : hybridPropertyRootMutation && hybridPropertyRootMutation->conversion ?
                 hybridPropertyRootMutation->conversion->memory : std::shared_ptr<std::pmr::memory_resource>{});
         if (derivedState.graph_revision_change) batch.markGraphChanged();
+        if (derivedState.schema_revision_change) batch.markSchemaChanged();
         // Caller-assigned logical identities must precede every private image
         // allocation, even though their physical pools are materialized later.
         for (const auto pageId : pageIds) batch.observeLogicalPageId(PageId(pageId));

@@ -789,6 +789,7 @@ namespace graph::storage {
 		stageUpsert(propertyNameKey(name), token);
 		stageUpsert(propertyTokenKey(token, name), token);
 		staged_property_tokens_.emplace(utils::OwnedStdString(name), token);
+		transaction_->markSchemaChanged();
 		return token;
 	}
 
@@ -813,6 +814,7 @@ namespace graph::storage {
 		stageUpsert(schemaNameKey(kind, name), token);
 		stageUpsert(schemaTokenKey(kind, token, name), token);
 		staged_schema_tokens_.emplace(std::make_pair(kind, utils::OwnedStdString(name)), token);
+		transaction_->markSchemaChanged();
 		return token;
 	}
 
@@ -847,6 +849,7 @@ namespace graph::storage {
 		stageUpsert(namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name), definition.index_id);
 		stageUpsert(indexSemanticKey(definition), definition.index_id);
 		staged_index_definitions_.emplace(definition.index_id, definition);
+		transaction_->markSchemaChanged();
 		return definition;
 	}
 
@@ -882,6 +885,7 @@ namespace graph::storage {
 		stageUpsert(namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name), definition.constraint_id);
 		stageUpsert(constraintSemanticKey(definition), definition.constraint_id);
 		staged_constraint_definitions_.emplace(definition.constraint_id, definition);
+		transaction_->markSchemaChanged();
 		return definition;
 	}
 
@@ -950,6 +954,7 @@ namespace graph::storage {
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
 											indexSemanticKey(definition));
 		changed_ = true;
+		transaction_->markSchemaChanged();
 	}
 
 	void SystemCatalogWriteSession::dropConstraintDefinition(const ConstraintDefinition &definition) {
@@ -970,6 +975,7 @@ namespace graph::storage {
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
 											constraintSemanticKey(definition));
 		changed_ = true;
+		transaction_->markSchemaChanged();
 	}
 
 	void SystemCatalogWriteSession::finish() {

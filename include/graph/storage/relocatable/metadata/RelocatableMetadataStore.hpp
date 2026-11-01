@@ -886,6 +886,7 @@ namespace graph::storage {
 	struct NativeGraphDerivedStateMutation {
 		// Explicit logical intent; physical metadata work alone does not advance it.
 		bool graph_revision_change = false;
+		bool schema_revision_change = false;
 		// Sorted by IndexId and free of duplicates. This gives one native graph
 		// generation a deterministic, fail-closed derived-state publication order.
 		std::vector<NativeGraphIndexTreeMutation> index_tree_mutations;

@@ -150,6 +150,8 @@ namespace graph::storage {
 
 		[[nodiscard]] bool isActive() const;
 		[[nodiscard]] NativeGraphWriteTransactionState state() const { return state_; }
+		// Called by the System Catalog only after staging a binding change.
+		void markSchemaChanged();
 		[[nodiscard]] const Superblock &baseSuperblock() const;
 		// Native derived-state planners must read exactly the snapshot fenced by
 		// this transaction, otherwise a support tree could describe a different
@@ -362,6 +364,7 @@ namespace graph::storage {
         // ordinary graph work while native groups are active.
         bool native_graph_coordinated_ = false;
         bool native_schema_coordinated_ = false;
+		bool schema_revision_change_ = false;
         bool rebuild_entity_free_summaries_ = false;
         std::function<void()> free_summary_checkpoint_;
 		std::vector<NativeGraphLogicalIdLeaseRange> node_id_ranges_;

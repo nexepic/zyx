@@ -223,6 +223,26 @@ TEST_F(RelocatableStorageBackendTest, RowPropertyPublicationPersistsLogicalRevis
 	reopened.release(); backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, SchemaRevisionTracksNewBindingsButNotConfigurationOrExistingValues) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options); backend.open();
+	auto initial = backend.openSnapshot();
+	const auto schema = initial.superblock().schema_revision;
+	const auto id = backend.createLogicalNodes({{{"RevisionNewLabel"}, {{"revision_new_key", PropertyValue(1)}}}}).front();
+	auto created = backend.openSnapshot();
+	EXPECT_EQ(created.superblock().schema_revision, schema + 1U);
+	backend.replaceLogicalNodeProperties({{id, {{"revision_new_key", PropertyValue(2)}}}});
+	backend.setConfiguration("storage.compaction.enabled", PropertyValue(false));
+	auto unchanged = backend.openSnapshot();
+	EXPECT_EQ(unchanged.superblock().schema_revision, schema + 1U);
+	EXPECT_EQ(initial.superblock().schema_revision, schema);
+	initial.release(); created.release(); unchanged.release(); backend.close(); backend.open();
+	auto reopened = backend.openSnapshot();
+	EXPECT_EQ(reopened.superblock().schema_revision, schema + 1U);
+	reopened.release(); backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, SchemaIdentitySurvivesValueOnlyChangeAndReopen) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
