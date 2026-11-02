@@ -405,6 +405,7 @@ namespace graph::storage {
 		// If the priority pass finds nothing (or I/O changes), retain the full
 		// search. BUILDING keeps its global best-fit space policy unchanged.
 		if (RSS_SCAN_PATH_FORMAT_ENABLED && ownerKind == PageOwnerKind::POK_PROPERTY &&
+			(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) &&
 			snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
 			!(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING)) {
 			const uint64_t epoch = metadata_.dataMutationEpoch();
