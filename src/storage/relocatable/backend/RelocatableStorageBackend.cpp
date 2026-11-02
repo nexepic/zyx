@@ -1088,9 +1088,6 @@ namespace graph::storage {
 
 	std::shared_ptr<RelocatableStorageBackend>
 	RelocatableStorageBackend::initializeNew(RelocatableStorageBackendOptions options) {
-        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                "scan images require explicit offline construction and whole-file admission");
 		if (options.open_mode != OpenMode::OPEN_CREATE_NEW_FILE &&
 			options.open_mode != OpenMode::OPEN_CREATE_OR_OPEN_FILE) {
 			throw std::invalid_argument("relocatable native initialization requires a create-capable open mode");
@@ -1211,7 +1208,7 @@ namespace graph::storage {
         auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
             std::to_string(recovered.database_id.value()), controlMemory);
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-        if (writable) {
+        if (writable && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) {
             // Authenticate complete semantics before writable recovery can
             // change any allocator control record. The writer is verified again
             // below after recovery, against its own store and final I/O epoch.
@@ -1391,13 +1388,15 @@ namespace graph::storage {
 						nativeMutationOptions, system_catalog_.get());
 			}
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-            const size_t scanWorkspaceBytes = (std::min)(options_.maximum_integrity_workspace_bytes, size_t{7U * 1024U * 1024U});
-            auto scanAccount = std::make_shared<query::execution::detail::ResourceAccount>(resource_domain_,
-                query::execution::detail::ResourceClass::RCK_MAINTENANCE, scanWorkspaceBytes);
-            auto scanWorkspace = std::make_shared<query::execution::MaterializedByteBudget>(scanWorkspaceBytes, scanAccount);
-            data_file_->installVerifiedScanRoot(VerifiedScanRoot::verifyComplete(data_file_->io(), *metadata_,
-                scanWorkspace, controlMemory));
-            verifyConstraintSupportTrees(metadata_->openSnapshot());
+            if (metadata_->openSnapshot().superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) {
+                const size_t scanWorkspaceBytes = (std::min)(options_.maximum_integrity_workspace_bytes, size_t{7U * 1024U * 1024U});
+                auto scanAccount = std::make_shared<query::execution::detail::ResourceAccount>(resource_domain_,
+                    query::execution::detail::ResourceClass::RCK_MAINTENANCE, scanWorkspaceBytes);
+                auto scanWorkspace = std::make_shared<query::execution::MaterializedByteBudget>(scanWorkspaceBytes, scanAccount);
+                data_file_->installVerifiedScanRoot(VerifiedScanRoot::verifyComplete(data_file_->io(), *metadata_,
+                    scanWorkspace, controlMemory));
+                verifyConstraintSupportTrees(metadata_->openSnapshot());
+            }
             if (options_.verify_integrity_on_open) static_cast<void>(verifyIntegrity());
 #else
 			if (options_.verify_integrity_on_open) {

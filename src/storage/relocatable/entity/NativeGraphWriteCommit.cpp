@@ -2079,7 +2079,8 @@ namespace graph::storage {
                 std::optional<NativeHybridTopologyPublication> topologyProof;
                 utils::OwnedVector<scan_candidate_detail::ScanNodeChange> scanChanges;
                 if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
-                    if (native_graph_coordinated_ && snapshot_.superblock().hybrid_property_descriptor_root.isValid()) {
+                    if (native_graph_coordinated_ &&
+                        (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) {
                     for (const auto &[id, node] : nodes_) {
                         if (node.inserted && node.erased) continue;
                         using Kind = scan_candidate_detail::ScanNodeChangeKind;
