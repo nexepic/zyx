@@ -65,9 +65,15 @@ TEST(ScanPathFormatTest, AuthorityStatesRequireConsistentFlagsAndDescriptor) {
     value.flags = RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE;
     EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
     value.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1U, Generation(1)};
-    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, value.flags);
+    auto bytes = SuperblockCodec::encode(value);
+    EXPECT_EQ(SuperblockCodec::decode(bytes).flags, value.flags);
     value.flags |= RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
     EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
+    // A checksum-valid invalid state must also be rejected during recovery.
+    LittleEndianCodec::writeU32(bytes, 8, value.flags);
+    LittleEndianCodec::writeU32(bytes, 116, 0U);
+    LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
+    EXPECT_THROW((void)SuperblockCodec::decode(bytes), FormatException);
 #else
     GTEST_SKIP() << "Reconstructed SCAN layout is not yet unified in this build";
 #endif
