@@ -205,3 +205,5 @@ Candidate 3ae5b42f extracts the optional bounded owner cache for direct contract
 3ae5b42f standard same-tree Ninja build exited 0. Targeted 20/20 (unified-3ae-targeted.xml): 2 cache identity/capacity/admission/bad_alloc contracts, 2 native reopen and late-corruption-before-cleanup, 16 shared-pool fault tests. Full ordinary/stress and arbitrary-scale/performance remain pending.
 
 Local 57fa8e07 adds an explicit page-ID equality assertion on cache hit; standalone cache contracts remain 2/2 (cache-contract-57fa.xml). The ongoing full run is still the earlier 3ae5b42f tree.
+
+3ae5b42f same-tree standard build exit 0; unit 10991/10991, stress 6/6. Discovery enabled 10997, disabled 20, executed distinct 10997, missing/extra/duplicates/failures all 0, skip 0. Individual gzip unit XML and stress XML plus exact-once log are in recovery/evidence/2026-11-02/3ae-full. XML received a limited common credential-pattern scan. Latest 57fa test-only page-ID assertion is not in this full tree. Migration compatibility cleanup, cross-platform CI and performance remain outstanding.
