@@ -457,6 +457,7 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationPartialInactiveWri
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
 	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
 	io->sync();
 	store.reset();
@@ -476,15 +477,15 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWrite
 					}
 					return portable_pwrite(fd, bytes, byteCount, offset);
 				});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
 					 std::system_error);
 	}
 	EXPECT_TRUE(interrupted);
 	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
+	EXPECT_EQ(beforeRetry.superblock().generation, validSource.generation);
 	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
 	beforeRetry.release();
-	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
 	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
 	store.reset();
 	io.reset();
@@ -494,6 +495,7 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWrite
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
 	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
 	io->sync();
 	store.reset();
@@ -518,15 +520,15 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeep
 					}
 					return portable_pwrite(fd, bytes, byteCount, offset);
 				});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
 					 std::system_error);
 	}
 	EXPECT_TRUE(interrupted);
 	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
+	EXPECT_EQ(beforeRetry.superblock().generation, validSource.generation);
 	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
 	beforeRetry.release();
-	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
 	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
 	store.reset();
 	io.reset();
