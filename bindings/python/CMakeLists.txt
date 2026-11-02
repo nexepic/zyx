@@ -15,7 +15,7 @@ target_include_directories(zyxdb_core PRIVATE
 target_link_libraries(zyxdb_core PRIVATE zyx::core)
 
 if(MSVC)
-    target_compile_options(zyxdb_core PRIVATE /FI"${CMAKE_CURRENT_SOURCE_DIR}/undef_python_tokens.h")
+    target_compile_options(zyxdb_core PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/undef_python_tokens.h")
 else()
     target_compile_options(zyxdb_core PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/undef_python_tokens.h")
 endif()

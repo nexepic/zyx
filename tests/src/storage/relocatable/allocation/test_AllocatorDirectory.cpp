@@ -914,7 +914,7 @@ TEST_F(RelocatableAllocatorDirectoryTest, RejectsCorruptDirectoryAndLeafRoutesBe
 
 TEST_F(RelocatableAllocatorDirectoryTest, BoundedAllocatedSlotWalkPreservesOldLogicalRootsAndNeverClaimsPartialCompletion) {
     auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
-    auto old = metadata->openSnapshot(); const PhysicalSlotId far(uint64_t(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY) * RSS_CATALOG_RADIX_FANOUT + 17U);
+    auto old = metadata->openSnapshot(); const PhysicalSlotId far{static_cast<uint64_t>(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY) * RSS_CATALOG_RADIX_FANOUT + 17U};
     (void)metadata->setPhysicalSlotAllocated(far, true, LogSequenceNumber(old.superblock().checkpoint_lsn.value() + 1U));
     auto current = metadata->openSnapshot(); MetadataPageFile pages(io, current.superblock());
     MetadataPagePoolAllocator pools(io, current.superblock(), MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
