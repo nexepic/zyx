@@ -234,11 +234,13 @@ TEST_F(HybridPropertyMatureShapeCostsTest, CohortSavingDoesNotAuthorizeItsFirstG
     ASSERT_TRUE(retry.commit().committed());
     EXPECT_EQ(properties_->readEntity(metadata_->openSnapshot(), {NODE, 1}), changed);
     EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), expected(1));
-    // This unchanged one-MiB conversion grant cannot also hold the generic
-    // integrity scanner's32K ROW-field ledger. Preserve its explicit refusal;
-    // complete owner values and both publication roots were checked above.
-    EXPECT_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan(),
+    // The existing grant can now run the scanner; a genuinely tiny grant
+    // must still refuse and return all reservations.
+    auto tiny = std::make_shared<MaterializedByteBudget>(1U);
+    EXPECT_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, tiny).scan(),
         graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(tiny->used(), 0U);
+    EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
     EXPECT_EQ(memory->used(), 0U);
 }
 #endif
