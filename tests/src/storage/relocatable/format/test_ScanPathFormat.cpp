@@ -24,6 +24,10 @@ TEST(ScanPathFormatTest, VersionsAndBuildingFlagsAreIsolated) {
     LittleEndianCodec::writeU32(bytes, 116, 0);
     LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
     EXPECT_THROW((void)SuperblockCodec::decode(bytes), FormatException);
+    LittleEndianCodec::writeU32(bytes, 8, 1U << 4U);
+    LittleEndianCodec::writeU32(bytes, 116, 0U);
+    LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
+    EXPECT_THROW((void)SuperblockCodec::decode(bytes), FormatException);
     SegmentEnvelope envelope; envelope.format_version = RSS_FORMAT_VERSION == 1U ? 2U : 1U;
     EXPECT_THROW((void)SegmentEnvelopeCodec::encode(envelope), FormatException);
 }
