@@ -1,12 +1,20 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 #include <set>
+#include <cerrno>
+#include <system_error>
+#include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/relocatable/metadata/CatalogPage.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace {
 void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
- BootstrapPublishFailpoint failpoint, bool committed) {
+ BootstrapPublishFailpoint failpoint, bool committed, int nativeFault = 0) {
  auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
  std::vector<CatalogSlotReservationRequest> requests;
  for (uint64_t i = 0; i < 30U; ++i) {
@@ -33,8 +41,35 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  const auto oldGeneration = old.superblock().generation.value();
  const auto oldRoute = old.superblock().page_directory_root;
  MetadataPublishOptions options; options.bootstrap_failpoint = failpoint;
- EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
-  RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
+ if (nativeFault) {
+  bool injected = false;
+  {
+   StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+    bool catalogLeaf = false;
+    if (!injected && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES && count == RSS_PAGE_SIZE) {
+     try { static_cast<void>(CatalogLeafPageCodec::decode(std::span(static_cast<const std::byte *>(bytes), count))); catalogLeaf = true; }
+     catch (const FormatException &) {}
+    }
+    if (catalogLeaf) {
+     injected = true;
+     if (nativeFault == 1) return portable_pwrite(fd, bytes, count - 1U, offset);
+#ifdef _WIN32
+     SetLastError(ERROR_DISK_FULL);
+#else
+     errno = ENOSPC;
+#endif
+     return static_cast<pwrite_ssize_t>(-1);
+    }
+    return portable_pwrite(fd, bytes, count, offset);
+   });
+   EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
+    RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::system_error);
+  }
+  EXPECT_TRUE(injected);
+ } else {
+  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
+   RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
+ }
  EXPECT_EQ(store->findCatalog(old, expected.front().segment_id).physical_slot, expected.front().physical_slot);
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
@@ -69,6 +104,18 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationBeforePublicationRetainsRootAndRetries) {
  checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE, false);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationShortWriteRetainsRootAndRetries) {
+ const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 1);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationEnospcRetainsRootAndRetries) {
+ const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 2);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
