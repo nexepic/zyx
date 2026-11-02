@@ -389,6 +389,11 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	// open, then conservatively count all native reads intersecting their bodies.
 	uint64_t bodyIntersectionBytes = 0;
 	uint64_t discoveredDataFrames = 0;
+	uint64_t nativeReadBytes = 0;
+	for (const auto &[start, count] : nativeReadRanges) {
+		static_cast<void>(start);
+		nativeReadBytes += count;
+	}
 	std::ifstream raw(data_path_, std::ios::binary);
 	ASSERT_TRUE(raw.is_open());
 	for (uint64_t offset = 0; offset + RSS_PAGE_SIZE <= fileBytes; offset += RSS_PAGE_SIZE) {
@@ -415,6 +420,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
     RecordProperty("observed_reopen_large_value_body_bytes", std::to_string(largeValueBodyBytes));
     RecordProperty("discovered_large_value_frames", std::to_string(discoveredDataFrames));
     RecordProperty("reopen_native_body_intersection_bytes", std::to_string(bodyIntersectionBytes));
+    RecordProperty("reopen_native_read_bytes", std::to_string(nativeReadBytes));
 	// A normal open follows the A/B Superblock roots; it must not read the raw
 	// LargeValue payload merely to reconstruct the storage graph.
 	// Root-anchored Catalog/allocator validation has a fixed metadata cost, but
