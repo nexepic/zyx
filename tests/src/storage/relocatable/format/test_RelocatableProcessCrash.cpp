@@ -897,126 +897,98 @@ namespace graph::test {
 				static_cast<void>(metadata->truncateReleasedTail());
 				return 26;
 			}
-			if (mode == CRASH_CHILD_EMERGENCY_RESERVE_ROTATION_CANDIDATE_SHORT_WRITE) {
-				const file_handle_t handle = portable_open_rw(databasePath.string().c_str());
-				if (handle == INVALID_FILE_HANDLE) {
-					return 27;
-				}
-				auto io = std::make_shared<StorageIO>(file, handle, handle);
-				Superblock initial;
-				initial.database_id = DatabaseId(0x1020304050607080ULL);
-				initial.generation = Generation(1U);
-				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
-				MetadataSnapshotPin bootstrap = metadata->openSnapshot();
-				const uint64_t ordinaryPoolOffset = PhysicalSegmentAllocator::checkedSlotOffset(
-						bootstrap.superblock().data_region_offset, PhysicalSlotId(3U));
-				bootstrap.release();
-				std::vector<CatalogEntry> entries;
-				entries.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
-				for (uint64_t ordinal = 0U; ordinal < RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U; ++ordinal) {
-					entries.push_back(
-							{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
-							 PhysicalSlotId(1000U + ordinal), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U),
-							 SegmentState::SGS_SEALED, LogSequenceNumber(2U)});
-				}
-				{
-					StorageIO::ScopedNativeWriteHookForTesting consumeReserve(
-							[ordinaryPoolOffset](file_handle_t fd, const void *bytes, size_t byteCount,
-												 pwrite_off_t offset) {
-								if (offset >= static_cast<pwrite_off_t>(ordinaryPoolOffset) &&
-									offset < static_cast<pwrite_off_t>(ordinaryPoolOffset + RSS_SEGMENT_SIZE)) {
+            if (mode == CRASH_CHILD_EMERGENCY_RESERVE_ROTATION_CANDIDATE_SHORT_WRITE ||
+                mode == CRASH_CHILD_EMERGENCY_RESERVE_ROTATION_CLEANUP) {
+                const file_handle_t handle = portable_open_rw(databasePath.string().c_str());
+                if (handle == INVALID_FILE_HANDLE) return 27;
+                auto io = std::make_shared<StorageIO>(file, handle, handle);
+                Superblock initial; initial.database_id = DatabaseId(0x1020304050607080ULL);
+                initial.generation = Generation(1U); initial.checkpoint_lsn = LogSequenceNumber(1U);
+                auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
+                std::vector<CatalogSlotReservationRequest> requests;
+                for (uint64_t ordinal = 0; ordinal < RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U; ++ordinal)
+                    requests.push_back({SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
+                        SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U), SegmentState::SGS_SEALED, true});
+                const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+                    LogSequenceNumber(2U), [&](std::span<const CatalogEntry> entries) {
+                        for (const auto &entry : entries) prepareEmptyCrashPool(*io, initial.data_region_offset, entry);
+                    });
+                if (!prepared) return 27;
+                std::vector<MetadataSnapshotPin> retainedRoots;
+                uint64_t nextLsn = 3U;
+                for (size_t round = 0; metadata->pagePoolStats().free_pages > RSS_PAGE_POOL_DATA_FRAME_COUNT + 4U && round < 32U; ++round) {
+                    retainedRoots.emplace_back(metadata->openSnapshot());
+                    static_cast<void>(metadata->upsertCatalog(prepared->entries, LogSequenceNumber(nextLsn++)));
+                }
+                if (metadata->pagePoolStats().free_pages > RSS_PAGE_POOL_DATA_FRAME_COUNT + 4U)
+                    throw std::runtime_error("could not prepare a nearly full ordinary metadata pool");
+                auto beforeConsume = metadata->openSnapshot();
+                PhysicalSlotId ordinarySlot{};
+                for (uint64_t slot = 3U; slot < 40U; ++slot) {
+                    if (!metadata->isPhysicalSlotAllocated(beforeConsume, PhysicalSlotId(slot))) { ordinarySlot = PhysicalSlotId(slot); break; }
+                }
+                beforeConsume.release();
+                if (!ordinarySlot.isValid()) return 27;
+                const auto ordinaryOffset = PhysicalSegmentAllocator::checkedSlotOffset(initial.data_region_offset, ordinarySlot);
+                retainedRoots.emplace_back(metadata->openSnapshot());
+                bool denied = false;
+                {
+                    StorageIO::ScopedNativeWriteHookForTesting consumeReserve([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+                        if (offset >= static_cast<pwrite_off_t>(ordinaryOffset) && offset < static_cast<pwrite_off_t>(ordinaryOffset + RSS_SEGMENT_SIZE)) {
+                            denied = true;
 #ifdef _WIN32
-									SetLastError(ERROR_DISK_FULL);
+                            SetLastError(ERROR_DISK_FULL);
 #else
-									errno = ENOSPC;
+                            errno = ENOSPC;
 #endif
-									return static_cast<pwrite_ssize_t>(-1);
-								}
-								return portable_pwrite(fd, bytes, byteCount, offset);
-							});
-					static_cast<void>(metadata->upsertCatalog(entries, LogSequenceNumber(2U)));
-				}
-				StorageIO::ScopedNativeWriteHookForTesting shortSuccessor(
-						[ordinaryPoolOffset, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount,
-														  pwrite_off_t offset) {
-							if (static_cast<uint64_t>(offset) == ordinaryPoolOffset && byteCount == RSS_PAGE_SIZE) {
-								const pwrite_ssize_t partial = portable_pwrite(fd, bytes, 16U, offset);
-								if (partial != 16) {
-									return partial;
-								}
-								writeMarker(markerPath);
-								waitToBeKilled();
-							}
-							return portable_pwrite(fd, bytes, byteCount, offset);
-						});
-				static_cast<void>(metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(3U)));
-				return 28;
-			}
-			if (mode == CRASH_CHILD_EMERGENCY_RESERVE_ROTATION_CLEANUP) {
-				const file_handle_t handle = portable_open_rw(databasePath.string().c_str());
-				if (handle == INVALID_FILE_HANDLE) {
-					return 31;
-				}
-				auto io = std::make_shared<StorageIO>(file, handle, handle);
-				Superblock initial;
-				initial.database_id = DatabaseId(0x1020304050607080ULL);
-				initial.generation = Generation(1U);
-				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
-				MetadataSnapshotPin bootstrap = metadata->openSnapshot();
-				const Superblock published = bootstrap.superblock();
-				const uint64_t firstOrdinaryPoolOffset =
-						PhysicalSegmentAllocator::checkedSlotOffset(published.data_region_offset, PhysicalSlotId(3U));
-				bootstrap.release();
-				std::vector<CatalogEntry> entries;
-				entries.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
-				for (uint64_t ordinal = 0U; ordinal < RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U; ++ordinal) {
-					entries.push_back(
-							{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
-							 PhysicalSlotId(1000U + ordinal), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U),
-							 SegmentState::SGS_SEALED, LogSequenceNumber(2U)});
-				}
-				{
-					StorageIO::ScopedNativeWriteHookForTesting consumeReserve(
-							[firstOrdinaryPoolOffset](file_handle_t fd, const void *bytes, size_t byteCount,
-													  pwrite_off_t offset) {
-								if (static_cast<uint64_t>(offset) >= firstOrdinaryPoolOffset) {
+                            return static_cast<pwrite_ssize_t>(-1);
+                        }
+                        return portable_pwrite(fd, bytes, count, offset);
+                    });
+                    static_cast<void>(metadata->upsertCatalog(prepared->entries, LogSequenceNumber(nextLsn++)));
+                }
+                for (auto &pin : retainedRoots) pin.release();
+                if (!denied) throw std::runtime_error("ordinary metadata pool ENOSPC hook was not reached");
+                const uint64_t initialFileSize = io->fileSize();
+                if (initialFileSize < initial.data_region_offset || (initialFileSize - initial.data_region_offset) % RSS_SEGMENT_SIZE) return 28;
+                const auto tail = (initialFileSize - initial.data_region_offset) / RSS_SEGMENT_SIZE;
+                auto snapshot = metadata->openSnapshot();
+                const bool tailFree = !metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(tail));
+                snapshot.release();
+                const auto successor = PhysicalSlotId(tailFree ? tail : tail + 1U);
+                const auto successorOffset = PhysicalSegmentAllocator::checkedSlotOffset(initial.data_region_offset, successor);
+                if (mode == CRASH_CHILD_EMERGENCY_RESERVE_ROTATION_CANDIDATE_SHORT_WRITE) {
+                    StorageIO::ScopedNativeWriteHookForTesting shortSuccessor([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+                        if (offset >= 0 && static_cast<uint64_t>(offset) == successorOffset && count == RSS_PAGE_SIZE) {
+                            const auto partial = portable_pwrite(fd, bytes, 16U, offset);
+                            if (partial != 16) return partial;
+                            writeMarker(markerPath); waitToBeKilled();
+                        }
+                        return portable_pwrite(fd, bytes, count, offset);
+                    });
+                    static_cast<void>(metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(nextLsn)));
+                    return 28;
+                }
+                std::atomic<uint32_t> syncCalls{0U};
+                StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&](file_handle_t fd) {
+                    if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
 #ifdef _WIN32
-									SetLastError(ERROR_DISK_FULL);
+                        SetLastError(ERROR_DISK_FULL);
 #else
-									errno = ENOSPC;
+                        errno = ENOSPC;
 #endif
-									return static_cast<pwrite_ssize_t>(-1);
-								}
-								return portable_pwrite(fd, bytes, byteCount, offset);
-							});
-					static_cast<void>(metadata->upsertCatalog(entries, LogSequenceNumber(2U)));
-				}
-				const uint64_t initialFileSize = io->fileSize();
-				std::atomic<uint32_t> syncCalls{0U};
-				StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
-					if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
-#ifdef _WIN32
-						SetLastError(ERROR_DISK_FULL);
-#else
-						errno = ENOSPC;
-#endif
-						return -1;
-					}
-					return portable_fsync(fd);
-				});
-				StorageIO::ScopedNativeTruncateHookForTesting killBeforeUnpublishedTailCleanup(
-						[initialFileSize, &markerPath](file_handle_t fd, uint64_t size) {
-							if (size == initialFileSize) {
-								writeMarker(markerPath);
-								waitToBeKilled();
-							}
-							return portable_ftruncate(fd, size);
-						});
-				static_cast<void>(metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(3U)));
-				return 32;
-			}
+                        return -1;
+                    }
+                    return portable_fsync(fd);
+                });
+                StorageIO::ScopedNativeTruncateHookForTesting killBeforeCleanup([&](file_handle_t fd, uint64_t size) {
+                    if (size == initialFileSize) { writeMarker(markerPath); waitToBeKilled(); }
+                    return portable_ftruncate(fd, size);
+                });
+                static_cast<void>(metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(nextLsn)));
+                return 32;
+            }
+
 			if (mode == CRASH_CHILD_METADATA_POOL_CANDIDATE_SHORT_WRITE) {
 				const file_handle_t handle = portable_open_rw(databasePath.string().c_str());
 				if (handle == INVALID_FILE_HANDLE) {
@@ -2352,14 +2324,20 @@ TEST_F(RelocatableProcessCrashTest, KillDuringEmergencyReserveRotationCandidateR
 	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	auto metadata = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(2U));
+	const Superblock published = recovered.superblock();
+    EXPECT_GT(published.generation.value(), 2U);
 	EXPECT_EQ(recovered.superblock().metadata_emergency_reserve.physical_slot, PhysicalSlotId(2U));
 	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(2U)));
-	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(3U)));
+	const uint64_t size = io->fileSize();
+    const uint64_t relative = size - recovered.superblock().data_region_offset;
+    const uint64_t tail = (relative + RSS_SEGMENT_SIZE - 1U) / RSS_SEGMENT_SIZE;
+    const PhysicalSlotId candidate(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(tail)) ? tail + 1U : tail);
+    EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, candidate));
+    EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(40U));
 	recovered.release();
-	const MetadataEmergencyReserveRotation rotation = metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(3U));
+	const MetadataEmergencyReserveRotation rotation = metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(published.checkpoint_lsn.value() + 1U));
 	ASSERT_TRUE(rotation.rotated);
-	EXPECT_EQ(rotation.current_reserve.physical_slot, PhysicalSlotId(3U));
+	EXPECT_EQ(rotation.current_reserve.physical_slot, candidate);
 }
 
 TEST_F(RelocatableProcessCrashTest,
@@ -2374,21 +2352,26 @@ TEST_F(RelocatableProcessCrashTest,
 	auto metadata = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
 	const Superblock published = recovered.superblock();
-	EXPECT_EQ(published.generation, Generation(2U));
+	EXPECT_GT(published.generation.value(), 2U);
 	EXPECT_EQ(published.metadata_emergency_reserve.physical_slot, PhysicalSlotId(2U));
 	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(2U)));
-	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(3U)));
+	const uint64_t size = io->fileSize();
+    const uint64_t relative = size - recovered.superblock().data_region_offset;
+    const uint64_t tail = (relative + RSS_SEGMENT_SIZE - 1U) / RSS_SEGMENT_SIZE;
+    const PhysicalSlotId candidate(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(tail)) ? tail + 1U : tail);
+    EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, candidate));
+    EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(40U));
 	const uint64_t candidateOffset =
-			PhysicalSegmentAllocator::checkedSlotOffset(published.data_region_offset, PhysicalSlotId(3U));
+			PhysicalSegmentAllocator::checkedSlotOffset(published.data_region_offset, candidate);
 	recovered.release();
 
-	const MetadataEmergencyReserveRotation rotation = metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(3U));
+	const MetadataEmergencyReserveRotation rotation = metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(published.checkpoint_lsn.value() + 1U));
 	ASSERT_TRUE(rotation.rotated);
-	EXPECT_EQ(rotation.current_reserve.physical_slot, PhysicalSlotId(3U));
+	EXPECT_EQ(rotation.current_reserve.physical_slot, candidate);
 	EXPECT_EQ(io->fileSize(), candidateOffset + RSS_SEGMENT_SIZE);
 	MetadataSnapshotPin retried = metadata->openSnapshot();
-	EXPECT_EQ(retried.superblock().generation, Generation(3U));
-	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(retried, PhysicalSlotId(3U)));
+	EXPECT_EQ(retried.superblock().generation.value(), published.generation.value() + 1U);
+	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(retried, candidate));
 }
 
 TEST_F(RelocatableProcessCrashTest, KillDuringMetadataPageCandidateShortWriteRetainsThePublishedGeneration) {
