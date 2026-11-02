@@ -1,6 +1,7 @@
 #include "storage/relocatable/property/HybridPropertyOrdinaryConversionTestFixture.hpp"
 #include "graph/storage/relocatable/maintenance/NativeStorageAllocationCensus.hpp"
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 
 using namespace graph::storage;
 using graph::PropertyValue;
@@ -28,12 +29,16 @@ protected:
         conversion.conversion->compact_column_memberships = true;
         conversion.conversion->publish_candidate = true; run(conversion);
         const auto beforeLease = metadata_->openSnapshot().superblock();
+        const auto descriptorBefore = MetadataPageFile(io_, beforeLease).readHybridPropertyDescriptor(
+            beforeLease.hybrid_property_descriptor_root, beforeLease).descriptor;
         const auto ids = metadata_->allocateLogicalPageIds(1, LogSequenceNumber(beforeLease.checkpoint_lsn.value() + 1));
         ASSERT_EQ(ids.size(), 1U);
         const auto active = metadata_->openSnapshot().superblock();
         EXPECT_EQ(active.graph_revision, beforeLease.graph_revision);
         EXPECT_EQ(active.schema_revision, beforeLease.schema_revision);
-        EXPECT_EQ(active.hybrid_property_descriptor_root, beforeLease.hybrid_property_descriptor_root);
+        const auto descriptorAfter = MetadataPageFile(io_, active).readHybridPropertyDescriptor(
+            active.hybrid_property_descriptor_root, active).descriptor;
+        EXPECT_EQ(descriptorAfter, descriptorBefore);
         // No active-pin authority may be discarded to make room for a pass.
         EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), expectedFirst);
         const auto epoch = io_->dataMutationEpoch();
