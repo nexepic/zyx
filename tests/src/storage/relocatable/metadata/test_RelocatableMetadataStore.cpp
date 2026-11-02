@@ -2095,66 +2095,6 @@ TEST_F(RelocatableMetadataStoreTest,
 			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
 }
 
-TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	prepareRoutedMetadataPoolForEvacuation(*store);
-
-	constexpr uint64_t CHURN_ROUNDS = 32U;
-	constexpr uint64_t REQUIRED_STABLE_ROUNDS = 8U;
-	uint64_t previousFileBytes = 0U;
-	uint64_t convergedFileBytes = 0U;
-	uint64_t roundsAfterConvergence = 0U;
-	bool converged = false;
-	for (uint64_t round = 0U; round < CHURN_ROUNDS; ++round) {
-		const uint64_t evacuationLsn = 10U + round * 4U;
-		const MetadataPagePoolEvacuation evacuation =
-				store->evacuateSparseMetadataPagePool(LogSequenceNumber(evacuationLsn), RSS_PAGE_POOL_DATA_FRAME_COUNT);
-		ASSERT_TRUE(evacuation.source_pool_slot.isValid()) << "round " << round;
-		ASSERT_GT(evacuation.relocated_metadata_pages, 0U) << "round " << round;
-
-		store->collectMetadataGarbage();
-		const MetadataPagePoolReclamation reclamation =
-				store->reclaimEmptyMetadataPagePools(LogSequenceNumber(evacuationLsn + 1U));
-		EXPECT_NE(std::find(reclamation.released_pool_slots.begin(), reclamation.released_pool_slots.end(),
-							evacuation.source_pool_slot),
-				  reclamation.released_pool_slots.end())
-				<< "round " << round;
-
-		CatalogEntry catalog = entry(200U + round, 2U + round, evacuationLsn + 2U);
-		catalog.segment_id = SegmentId(200U);
-		catalog.owner_id = 77U;
-		static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(evacuationLsn + 2U)));
-		const ExtentLocation extent{ExtentId(1U), SegmentId(20U + round), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
-									Generation(1U)};
-		static_cast<void>(store->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(evacuationLsn + 3U)));
-
-		const uint64_t fileBytes = io->fileSize();
-		if (converged) {
-			// A released source slot is eligible for the next COW pool, so later
-			// churn must converge instead of extending the physical metadata tail.
-			EXPECT_EQ(fileBytes, convergedFileBytes) << "round " << round;
-			++roundsAfterConvergence;
-		} else if (round != 0U && fileBytes == previousFileBytes) {
-			converged = true;
-			convergedFileBytes = fileBytes;
-		}
-		previousFileBytes = fileBytes;
-
-		store.reset();
-		store = RelocatableMetadataStore::open(io);
-		MetadataSnapshotPin reopened = store->openSnapshot();
-		EXPECT_EQ(store->findCatalog(reopened, catalog.segment_id).physical_slot, catalog.physical_slot);
-		EXPECT_EQ(store->findExtentLocation(reopened, extent.extent_id), extent);
-		reopened.release();
-	}
-	EXPECT_TRUE(converged);
-	EXPECT_GE(roundsAfterConvergence, REQUIRED_STABLE_ROUNDS);
-}
-
-
-
-
-
 
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication) {
     auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));

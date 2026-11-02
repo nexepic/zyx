@@ -524,3 +524,64 @@ TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationDataFence
 TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute) {
  checkRoutedSyncFault(testFilePath, file, 2);
 }
+
+TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen) {
+ auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+ const auto entries = prepareCurrentEvacuationFixture(io, *store);
+ VectorCodebookWriteRequest request;
+ request.codebook_id = 17U; request.manifest_segment_id = SegmentId(1000000U);
+ request.generation = Generation(1U); request.element_type = VectorCodebookElementType::VCET_FLOAT32;
+ request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
+ const std::array<std::byte, 24U> payload{};
+ {
+  PhysicalSegmentAllocator segments(io, *store); VectorCodebookStore codebooks(segments, *store);
+  static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(100U), PhysicalSlotId(100U), LogSequenceNumber(8U)));
+ }
+ const auto extentId = VectorCodebookExtentIdCodec::manifestExtentId(request.codebook_id);
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
+ constexpr uint64_t rounds = 32U, stableRounds = 8U;
+ uint64_t previousBytes = 0U, stableBytes = 0U, stableCount = 0U;
+ uint64_t reusedRounds = 0U; bool converged = false;
+ std::vector<PhysicalSlotId> released;
+ for (uint64_t round = 0; round < rounds; ++round) {
+  const uint64_t lsn = 9U + round * 4U;
+  const auto evacuation = store->evacuateSparseMetadataPagePool(LogSequenceNumber(lsn), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+  ASSERT_TRUE(evacuation.source_pool_slot.isValid()) << round;
+  ASSERT_GT(evacuation.relocated_metadata_pages, 0U) << round;
+  if (std::ranges::find(released, evacuation.source_pool_slot) != released.end()) ++reusedRounds;
+  store->collectMetadataGarbage();
+  const auto reclamation = store->reclaimEmptyMetadataPagePools(LogSequenceNumber(lsn + 1U));
+  EXPECT_NE(std::find(reclamation.released_pool_slots.begin(), reclamation.released_pool_slots.end(), evacuation.source_pool_slot), reclamation.released_pool_slots.end()) << round;
+  released.insert(released.end(), reclamation.released_pool_slots.begin(), reclamation.released_pool_slots.end());
+  ExtentLocation newExtent{}; CatalogEntry newCatalog{};
+  {
+   PhysicalSegmentAllocator segments(io, *store); VectorCodebookStore codebooks(segments, *store);
+   auto old = store->openSnapshot();
+   const auto oldExtent = store->findExtentLocation(old, extentId);
+   const auto oldCatalog = store->findCatalog(old, request.manifest_segment_id);
+   const PhysicalSlotId target(round % 2U ? 100U : 101U);
+   const auto moved = codebooks.relocateExtent(request.codebook_id, extentId, target, target, LogSequenceNumber(lsn + 2U));
+   ASSERT_TRUE(moved) << round;
+   EXPECT_NE(moved->destination.physical_slot, oldCatalog.physical_slot);
+   EXPECT_GT(moved->destination.generation.value(), oldCatalog.generation.value());
+   EXPECT_EQ(store->findExtentLocation(old, extentId), oldExtent);
+   EXPECT_EQ(store->findCatalog(old, request.manifest_segment_id).physical_slot, oldCatalog.physical_slot);
+   old.release();
+   static_cast<void>(segments.releaseRelocatedSource(request.manifest_segment_id, moved->destination.generation, LogSequenceNumber(lsn + 3U)));
+   auto current = store->openSnapshot();
+   newExtent = store->findExtentLocation(current, extentId);
+   newCatalog = store->findCatalog(current, request.manifest_segment_id);
+   EXPECT_NE(newExtent, oldExtent); EXPECT_EQ(newCatalog.physical_slot, target);
+  }
+  const auto bytes = io->fileSize();
+  if (converged) { EXPECT_EQ(bytes, stableBytes) << round; ++stableCount; }
+  else if (round && bytes == previousBytes) { converged = true; stableBytes = bytes; }
+  previousBytes = bytes;
+  store.reset(); store = RelocatableMetadataStore::open(io); auto reopened = store->openSnapshot();
+  EXPECT_EQ(store->findCatalog(reopened, entries.front().segment_id).physical_slot, entries.front().physical_slot);
+  EXPECT_EQ(store->findCatalog(reopened, request.manifest_segment_id).physical_slot, newCatalog.physical_slot);
+  EXPECT_EQ(store->findExtentLocation(reopened, extentId), newExtent); reopened.release();
+  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
+ }
+ EXPECT_TRUE(converged); EXPECT_GE(stableCount, stableRounds); EXPECT_GE(reusedRounds, stableRounds);
+}
