@@ -450,3 +450,77 @@ TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationSuperbloc
 TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationSuperblockEnospcKeepsTheOldGenerationAndCanRetry) {
  checkRoutedCatalogWriteFault(testFilePath, file, 8);
 }
+
+namespace {
+void checkRoutedSyncFault(const std::filesystem::path &path, const std::shared_ptr<std::fstream> &file, int fault) {
+ const auto handle = portable_open_rw(path.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ auto store = RelocatableMetadataStore::initializeNewComplete(nativeIo, superblock(1U, 1U));
+ const auto entries = prepareCurrentEvacuationFixture(nativeIo, *store);
+ VectorCodebookWriteRequest request;
+ request.codebook_id = 17U; request.manifest_segment_id = SegmentId(1000000U);
+ request.generation = Generation(1U); request.element_type = VectorCodebookElementType::VCET_FLOAT32;
+ request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
+ const std::array<std::byte, 24U> payload{};
+ {
+  PhysicalSegmentAllocator segments(nativeIo, *store);
+  VectorCodebookStore codebooks(segments, *store);
+  static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(80U), PhysicalSlotId(80U), LogSequenceNumber(8U)));
+ }
+ auto old = store->openSnapshot(); const auto before = old.superblock();
+ const auto extentId = VectorCodebookExtentIdCodec::manifestExtentId(request.codebook_id);
+ const auto extent = store->findExtentLocation(old, extentId);
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *store).scan()));
+ std::atomic<uint32_t> syncCalls{0U};
+ {
+  StorageIO::ScopedNativeSyncHookForTesting hook([&](file_handle_t fd) {
+   if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == (fault == 0 ? 0U : 1U)) {
+#ifdef _WIN32
+    SetLastError(fault == 2 ? ERROR_DISK_FULL : ERROR_WRITE_FAULT);
+#else
+    errno = fault == 2 ? ENOSPC : EIO;
+#endif
+    return -1;
+   }
+   return portable_fsync(fd);
+  });
+  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(9U), RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::runtime_error);
+ }
+ EXPECT_GE(syncCalls.load(std::memory_order_relaxed), fault == 0 ? 1U : 2U);
+ EXPECT_EQ(store->findExtentLocation(old, extentId), extent);
+ EXPECT_EQ(store->findCatalog(old, entries.front().segment_id).physical_slot, entries.front().physical_slot);
+ old.release(); store.reset();
+ auto reopened = RelocatableMetadataStore::open(nativeIo); auto recovered = reopened->openSnapshot();
+ const auto generation = recovered.superblock().generation.value();
+ ASSERT_TRUE(generation == before.generation.value() || (fault != 0 && generation == before.generation.value() + 1U));
+ if (generation == before.generation.value()) EXPECT_EQ(recovered.superblock().page_directory_root, before.page_directory_root);
+ else EXPECT_NE(recovered.superblock().page_directory_root, before.page_directory_root);
+ EXPECT_EQ(recovered.superblock().graph_revision, before.graph_revision);
+ EXPECT_EQ(recovered.superblock().schema_revision, before.schema_revision);
+ for (const auto &entry : entries) {
+  EXPECT_EQ(reopened->findCatalog(recovered, entry.segment_id).physical_slot, entry.physical_slot);
+  EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
+ }
+ EXPECT_EQ(reopened->findExtentLocation(recovered, extentId), extent);
+ recovered.release();
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
+ if (generation == before.generation.value()) {
+  const auto retried = reopened->evacuateSparseMetadataPagePool(LogSequenceNumber(9U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+  EXPECT_GT(retried.relocated_metadata_pages, 0U);
+  EXPECT_NE(retried.superblock.page_directory_root, before.page_directory_root);
+  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
+ }
+ reopened.reset(); nativeIo.reset();
+ EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+}
+} // namespace
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute) {
+ checkRoutedSyncFault(testFilePath, file, 1);
+}
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen) {
+ checkRoutedSyncFault(testFilePath, file, 0);
+}
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute) {
+ checkRoutedSyncFault(testFilePath, file, 2);
+}
