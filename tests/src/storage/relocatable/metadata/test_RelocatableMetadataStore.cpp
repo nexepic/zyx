@@ -436,6 +436,14 @@ TEST_F(RelocatableMetadataStoreTest, ReclaimsSupersededTypedRouteBranchAfterSnap
 	EXPECT_TRUE(current.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(store->findCatalog(current, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
 			  PhysicalSlotId(41));
+	current.release();
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	auto recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(recovered, request.segment_id).physical_slot, PhysicalSlotId(41U));
+	recovered.release();
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry) {
