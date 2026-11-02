@@ -115,6 +115,7 @@ TEST(RelocatableFormatTest, EnvelopeCodecMatchesGoldenLittleEndianBytes) {
 		case 5: expectedCrc = 0x54A243A3U; break;
 		case 13: expectedCrc = 0xB48B289EU; break;
 		case 15: expectedCrc = 0xFA5D33C1U; break;
+		case 0xF100: expectedCrc = 0x4D003B21U; break;
 		default: FAIL() << "Add independent envelope golden bytes for the current format";
 	}
 	expected[4] = static_cast<uint8_t>(RSS_FORMAT_VERSION & 0xffU);
