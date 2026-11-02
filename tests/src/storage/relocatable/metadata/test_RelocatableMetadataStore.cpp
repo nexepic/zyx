@@ -277,9 +277,13 @@ TEST_F(RelocatableMetadataStoreTest, AllocatorLogicalizesOwnedInternalChildrenAf
 		EXPECT_EQ(internal.kind, CatalogRadixPageKind::CRPK_INTERNAL);
 		foundLogicalInternal |= internal.logical_children_enabled;
 		foundPhysicalInternal |= !internal.logical_children_enabled;
+		for (size_t i = 0; i < internal.children.size(); ++i)
+			if (internal.children[i].isValid()) EXPECT_TRUE(internal.logical_children[i].isValid());
 	}
 	EXPECT_TRUE(foundLogicalInternal);
-	EXPECT_TRUE(foundPhysicalInternal);
+	// The current-format tree is built logically from the outset; it must not
+	// retain the mixed physical child encoding produced by the legacy migration.
+	EXPECT_FALSE(foundPhysicalInternal);
 
 	MetadataSnapshotPin current = store->openSnapshot();
 	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, firstSlot));
