@@ -113,7 +113,8 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 TEST_F(RelocatableMetadataStoreValidationTest,
 	   DistinguishesIdentityOnlyBootstrapAdvancesFromDirectoryMutations) {
 	auto store = RelocatableMetadataStore::initializeNewComplete(io, initialSuperblock());
-	const Superblock routed = store->openSnapshot().superblock();
+	auto originalPin = store->openSnapshot();
+	const Superblock routed = originalPin.superblock();
 	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
 
 	const NativeGraphLogicalIdLease lease = store->reserveNativeGraphLogicalIds(1U, 0U);
@@ -123,6 +124,7 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 			store->setPhysicalSlotAllocated(PhysicalSlotId(40U), true, LogSequenceNumber(4U));
 	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(lease.superblock, directoryMutation));
 	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(routed, directoryMutation));
+	originalPin.release();
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, ReadOnlyStoreRejectsMetadataMutationAndMaintenanceEntrypoints) {
