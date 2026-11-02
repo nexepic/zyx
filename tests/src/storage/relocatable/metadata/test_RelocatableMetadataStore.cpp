@@ -2151,62 +2151,6 @@ TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationChurnReclaimsAn
 	EXPECT_GE(roundsAfterConvergence, REQUIRED_STABLE_ROUNDS);
 }
 
-TEST_F(RelocatableMetadataStoreTest,
-	   NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	prepareRoutedMetadataPoolForEvacuation(*store);
-	store.reset();
-
-	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
-	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
-	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
-	store = RelocatableMetadataStore::open(io);
-	bool interrupted = false;
-	{
-		StorageIO::ScopedNativeWriteHookForTesting shortRelocatedCatalogTarget(
-				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
-					bool catalogLeaf = false;
-					if (!interrupted && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES &&
-						byteCount == RSS_PAGE_SIZE) {
-						try {
-							static_cast<void>(CatalogLeafPageCodec::decode(
-									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount)));
-							catalogLeaf = true;
-						} catch (const FormatException &) {
-							// Route and other metadata candidates have distinct typed codecs.
-						}
-					}
-					if (catalogLeaf) {
-						interrupted = true;
-						return portable_pwrite(fd, bytes, byteCount - 1U, offset);
-					}
-					return portable_pwrite(fd, bytes, byteCount, offset);
-				});
-		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
-																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
-					 std::system_error);
-	}
-	EXPECT_TRUE(interrupted);
-	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, Generation(9U));
-	EXPECT_EQ(store->findCatalog(beforeRetry, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
-	EXPECT_EQ(store->findExtentLocation(beforeRetry, ExtentId(1U)),
-			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
-	beforeRetry.release();
-
-	const MetadataPagePoolEvacuation retried =
-			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
-	EXPECT_EQ(retried.superblock.generation, Generation(10U));
-	EXPECT_GT(retried.relocated_metadata_pages, 0U);
-	store.reset();
-
-	auto reopened = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin persisted = reopened->openSnapshot();
-	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
-	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
-	io.reset();
-	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
-}
 
 TEST_F(RelocatableMetadataStoreTest,
 	   NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry) {

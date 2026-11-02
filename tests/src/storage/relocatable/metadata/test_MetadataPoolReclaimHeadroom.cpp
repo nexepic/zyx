@@ -11,6 +11,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
+#include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -333,6 +334,62 @@ TEST_F(RelocatableMetadataStoreTest, NativeSparseMetadataPoolEvacuationFinalFenc
   EXPECT_GT(retried.relocated_metadata_pages, 0U);
  }
  EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(9U)).reclaimed_pool_slots, 0U);
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
+ reopened.reset(); nativeIo.reset();
+ EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+}
+
+// Current-format native recovery fixture retains a real codebook extent route.
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
+ const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ auto store = RelocatableMetadataStore::initializeNewComplete(nativeIo, superblock(1U, 1U));
+ const auto entries = prepareCurrentEvacuationFixture(nativeIo, *store);
+ VectorCodebookWriteRequest request;
+ request.codebook_id = 17U; request.manifest_segment_id = SegmentId(1000000U);
+ request.generation = Generation(1U); request.element_type = VectorCodebookElementType::VCET_FLOAT32;
+ request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
+ const std::array<std::byte, 24U> payload{};
+ {
+  PhysicalSegmentAllocator segments(nativeIo, *store);
+  VectorCodebookStore codebooks(segments, *store);
+  static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(80U), PhysicalSlotId(80U), LogSequenceNumber(8U)));
+ }
+ auto old = store->openSnapshot();
+ const auto before = old.superblock();
+ const auto extentId = VectorCodebookExtentIdCodec::manifestExtentId(request.codebook_id);
+ const auto extent = store->findExtentLocation(old, extentId);
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *store).scan()));
+ bool interrupted = false;
+ {
+  StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
+   bool catalogLeaf = false;
+   if (!interrupted && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES && count == RSS_PAGE_SIZE) {
+    try { static_cast<void>(CatalogLeafPageCodec::decode(std::span<const std::byte>(static_cast<const std::byte *>(bytes), count))); catalogLeaf = true; }
+    catch (const FormatException &) {}
+   }
+   if (catalogLeaf) { interrupted = true; return portable_pwrite(fd, bytes, count - 1U, offset); }
+   return portable_pwrite(fd, bytes, count, offset);
+  });
+  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(9U), RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::system_error);
+ }
+ ASSERT_TRUE(interrupted);
+ auto unchanged = store->openSnapshot();
+ EXPECT_EQ(unchanged.superblock(), before);
+ EXPECT_EQ(store->findCatalog(unchanged, entries.front().segment_id).physical_slot, entries.front().physical_slot);
+ EXPECT_EQ(store->findExtentLocation(unchanged, extentId), extent);
+ unchanged.release();
+ const auto retried = store->evacuateSparseMetadataPagePool(LogSequenceNumber(9U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+ EXPECT_EQ(retried.superblock.generation.value(), before.generation.value() + 1U);
+ EXPECT_GT(retried.relocated_metadata_pages, 0U);
+ EXPECT_EQ(store->findExtentLocation(old, extentId), extent);
+ old.release(); store.reset();
+ auto reopened = RelocatableMetadataStore::open(nativeIo); auto persisted = reopened->openSnapshot();
+ EXPECT_EQ(persisted.superblock(), retried.superblock);
+ EXPECT_EQ(reopened->findCatalog(persisted, entries.front().segment_id).physical_slot, entries.front().physical_slot);
+ EXPECT_EQ(reopened->findExtentLocation(persisted, extentId), extent);
+ persisted.release();
  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
  reopened.reset(); nativeIo.reset();
  EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
