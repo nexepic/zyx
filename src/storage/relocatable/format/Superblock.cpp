@@ -239,12 +239,14 @@ namespace graph::storage {
 			try {
 				return SuperblockCodec::decode(bytes);
 			} catch (const FormatException &error) {
-				// A checksum-valid slot in an unsupported format is not a torn
+				// An authenticated unsupported version or authority state is not a torn
 				// write. Falling back to the other slot could open stale state and
 				// later overwrite a newer publication. Only trust the version error
 				// after authenticating the payload as well as the header checked by
 				// decode; damaged slots still permit the normal recovery fallback.
-				if (error.error() == FormatError::FERR_UNSUPPORTED_VERSION &&
+				if ((error.error() == FormatError::FERR_UNSUPPORTED_VERSION ||
+                     error.error() == FormatError::FERR_RESERVED_BITS ||
+                     error.error() == FormatError::FERR_INVALID_STATE) &&
 					bytes.size() == RSS_SUPERBLOCK_BYTES &&
 					LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET) == RSS_SUPERBLOCK_HEADER_BYTES &&
 					calculateCrc(bytes.subspan(RSS_SUPERBLOCK_HEADER_BYTES)) ==
