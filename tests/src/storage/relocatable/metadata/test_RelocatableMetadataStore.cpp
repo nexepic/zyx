@@ -24,6 +24,7 @@
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -670,10 +671,19 @@ TEST_F(RelocatableMetadataStoreTest, BootstrapReservationExhaustionDoesNotPublis
 }
 
 TEST_F(RelocatableMetadataStoreTest, BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	const CatalogEntry expected = entry(100U, 1U, 2U);
-	static_cast<void>(store->upsertCatalog(std::span(&expected, 1U), LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+	auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.require_absent = true;
+	const auto reserved = store->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1U),
+		PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(3U), [&](std::span<const CatalogEntry> pools) {
+			for (const auto &pool : pools) initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+			const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, PhysicalSlotId(40U)) + RSS_SEGMENT_SIZE;
+			const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+		});
+	ASSERT_TRUE(reserved);
+	ASSERT_EQ(reserved->entries.size(), 1U);
+	const CatalogEntry expected = reserved->entries.front();
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	Superblock routed = snapshot.superblock();
 	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
@@ -695,8 +705,7 @@ TEST_F(RelocatableMetadataStoreTest, BootstrapCatalogReaderResolvesTheLogicalRoo
 }
 
 TEST_F(RelocatableMetadataStoreTest, BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	Superblock routed = snapshot.superblock();
 	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
