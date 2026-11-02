@@ -2445,50 +2445,6 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationRecoversTheDura
     EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
-TEST_F(RelocatableMetadataStoreTest,
-	   NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot) {
-	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
-	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
-	{
-		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
-		auto store = RelocatableMetadataStore::initializeNew(nativeIo, superblock(1, 1));
-		const std::vector<CatalogEntry> entries = entriesThatRequireAnotherMetadataPool();
-		static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
-
-		std::atomic<uint32_t> syncCalls{0U};
-		{
-			StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
-				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
-#ifdef _WIN32
-					SetLastError(ERROR_WRITE_FAULT);
-#else
-					errno = EIO;
-#endif
-					return -1;
-				}
-				return portable_fsync(fd);
-			});
-			EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(3), 8U)),
-						 std::runtime_error);
-		}
-		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
-
-		MetadataSnapshotPin current = store->openSnapshot();
-		EXPECT_EQ(current.superblock().generation, Generation(3));
-		EXPECT_EQ(store->findCatalog(current, entries.front().segment_id).physical_slot, entries.front().physical_slot);
-		current.release();
-
-		store.reset();
-		auto reopened = RelocatableMetadataStore::open(nativeIo);
-		MetadataSnapshotPin recovered = reopened->openSnapshot();
-		EXPECT_EQ(recovered.superblock().generation, Generation(3));
-		EXPECT_EQ(reopened->findCatalog(recovered, entries.back().segment_id).physical_slot,
-				  entries.back().physical_slot);
-		recovered.release();
-		EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(4)).reclaimed_pool_slots, 0U);
-	}
-	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
-}
 
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));

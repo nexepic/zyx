@@ -1,5 +1,6 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 #include <set>
+#include <atomic>
 #include <cerrno>
 #include <system_error>
 #include "graph/storage/PreadHelper.hpp"
@@ -287,4 +288,52 @@ TEST_F(RelocatableMetadataStoreTest, InterruptedPruningBeforeInactivePublication
 }
 TEST_F(RelocatableMetadataStoreTest, InterruptedPruningAfterInactivePublicationRecoversThePrunedRouteBranch) {
  checkPruningInterruption(io, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE, true);
+}
+
+// This test was moved from the large metadata fixture. It uses real pools and
+// accepts either complete root after the final sync error, never a mixed root.
+TEST_F(RelocatableMetadataStoreTest, NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot) {
+ const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ auto store = RelocatableMetadataStore::initializeNewComplete(nativeIo, superblock(1U, 1U));
+ const auto entries = prepareCurrentEvacuationFixture(nativeIo, *store);
+ const auto before = store->openSnapshot().superblock();
+ std::atomic<uint32_t> syncCalls{0U};
+ {
+  StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&](file_handle_t fd) {
+   if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+    SetLastError(ERROR_WRITE_FAULT);
+#else
+    errno = EIO;
+#endif
+    return -1;
+   }
+   return portable_fsync(fd);
+  });
+  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U), RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::runtime_error);
+ }
+ EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+ store.reset();
+ auto reopened = RelocatableMetadataStore::open(nativeIo);
+ auto recovered = reopened->openSnapshot();
+ const auto generation = recovered.superblock().generation.value();
+ ASSERT_TRUE(generation == before.generation.value() || generation == before.generation.value() + 1U);
+ if (generation == before.generation.value()) EXPECT_EQ(recovered.superblock().page_directory_root, before.page_directory_root);
+ else EXPECT_NE(recovered.superblock().page_directory_root, before.page_directory_root);
+ for (const auto &entry : entries) {
+  EXPECT_EQ(reopened->findCatalog(recovered, entry.segment_id).physical_slot, entry.physical_slot);
+  EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
+ }
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
+ recovered.release();
+ if (generation == before.generation.value()) {
+  const auto retried = reopened->evacuateSparseMetadataPagePool(LogSequenceNumber(8U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+  EXPECT_GT(retried.relocated_metadata_pages, 0U);
+ }
+ EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(9U)).reclaimed_pool_slots, 0U);
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
+ reopened.reset(); nativeIo.reset();
+ EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
 }
