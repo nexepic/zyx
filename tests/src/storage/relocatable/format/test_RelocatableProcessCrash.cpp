@@ -2338,6 +2338,7 @@ TEST_F(RelocatableProcessCrashTest, KillDuringEmergencyReserveRotationCandidateR
 	const MetadataEmergencyReserveRotation rotation = metadata->rotateMetadataEmergencyReserve(LogSequenceNumber(published.checkpoint_lsn.value() + 1U));
 	ASSERT_TRUE(rotation.rotated);
 	EXPECT_EQ(rotation.current_reserve.physical_slot, candidate);
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest,
@@ -2372,6 +2373,8 @@ TEST_F(RelocatableProcessCrashTest,
 	MetadataSnapshotPin retried = metadata->openSnapshot();
 	EXPECT_EQ(retried.superblock().generation.value(), published.generation.value() + 1U);
 	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(retried, candidate));
+	retried.release();
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest, KillDuringMetadataPageCandidateShortWriteRetainsThePublishedGeneration) {
