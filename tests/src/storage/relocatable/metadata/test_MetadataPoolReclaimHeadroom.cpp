@@ -5,6 +5,8 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/metadata/CatalogPage.hpp"
+#include "graph/storage/relocatable/metadata/CatalogRadix.hpp"
+#include "graph/storage/relocatable/metadata/PageDirectoryBootstrap.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
@@ -45,15 +47,15 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  const auto oldGeneration = old.superblock().generation.value();
  const auto oldRoute = old.superblock().page_directory_root;
  MetadataPublishOptions options; options.bootstrap_failpoint = failpoint;
- if (nativeFault == 3) {
+ if (nativeFault == 3 || nativeFault == 11 || nativeFault == 10) {
   uint32_t syncCalls = 0U;
   {
    StorageIO::ScopedNativeSyncHookForTesting hook([&](file_handle_t fd) {
-    if (syncCalls++ == 1U) {
+    if (syncCalls++ == (nativeFault == 10 ? 0U : 1U)) {
 #ifdef _WIN32
-     SetLastError(ERROR_WRITE_FAULT);
+     SetLastError(nativeFault == 11 ? ERROR_DISK_FULL : ERROR_WRITE_FAULT);
 #else
-     errno = EIO;
+     errno = nativeFault == 11 ? ENOSPC : EIO;
 #endif
      return -1;
     }
@@ -62,19 +64,34 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
    EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
     RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::runtime_error);
   }
-  EXPECT_GE(syncCalls, 2U);
+  EXPECT_GE(syncCalls, nativeFault == 10 ? 1U : 2U);
  } else if (nativeFault) {
   bool injected = false;
   {
    StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
-    bool catalogLeaf = false;
-    if (!injected && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES && count == RSS_PAGE_SIZE) {
-     try { static_cast<void>(CatalogLeafPageCodec::decode(std::span(static_cast<const std::byte *>(bytes), count))); catalogLeaf = true; }
-     catch (const FormatException &) {}
+    bool target = false;
+    if (!injected && offset >= 0 && count == RSS_PAGE_SIZE) {
+     if ((nativeFault == 8 || nativeFault == 9) && static_cast<uint64_t>(offset) < RSS_FILE_BOOTSTRAP_BYTES)
+      target = true;
+     else if (static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
+      const auto page = std::span(static_cast<const std::byte *>(bytes), count);
+      try {
+       if (nativeFault == 1 || nativeFault == 2) { static_cast<void>(CatalogLeafPageCodec::decode(page)); target = true; }
+       else if (nativeFault == 4 || nativeFault == 5) {
+        const auto header = PageDirectoryBootstrapCodec::decode(page);
+        target = header.generation.value() == oldGeneration + 1U && header.metadata_page_directory_root.isValid();
+       } else if (nativeFault == 6 || nativeFault == 7) {
+        const auto radix = MetadataRadixPageCodec::decode(page);
+        target = radix.directory_type == MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE &&
+         radix.generation.value() == oldGeneration + 1U && !radix.logical_children_enabled;
+       }
+      } catch (const FormatException &) {}
+     }
     }
-    if (catalogLeaf) {
+    if (target) {
      injected = true;
-     if (nativeFault == 1) return portable_pwrite(fd, bytes, count - 1U, offset);
+     if (nativeFault % 2 == 1) return portable_pwrite(fd, bytes,
+      nativeFault == 9 ? RSS_SUPERBLOCK_HEADER_CRC_OFFSET - 1U : count - 1U, offset);
 #ifdef _WIN32
      SetLastError(ERROR_DISK_FULL);
 #else
@@ -96,7 +113,7 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
  auto recovered = reopened->openSnapshot();
- if (nativeFault == 3) {
+ if (nativeFault == 3 || nativeFault == 11) {
   const auto generation = recovered.superblock().generation.value();
   ASSERT_TRUE(generation == oldGeneration || generation == oldGeneration + 1U);
   committed = generation == oldGeneration + 1U;
@@ -124,6 +141,14 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
   EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
  }
 }
+void checkNativeEvacuationFault(const std::filesystem::path &path,
+ const std::shared_ptr<std::fstream> &file, int fault) {
+ const auto handle = portable_open_rw(path.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, fault);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+}
 }
 
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalogAcrossPublicationFault) {
@@ -133,25 +158,37 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationBeforePublicationRet
  checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE, false);
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationShortWriteRetainsRootAndRetries) {
- const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
- ScopedTestNativeHandle guard{handle};
- auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
- checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 1);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+ checkNativeEvacuationFault(testFilePath, file, 1);
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationEnospcRetainsRootAndRetries) {
- const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
- ScopedTestNativeHandle guard{handle};
- auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
- checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 2);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+ checkNativeEvacuationFault(testFilePath, file, 2);
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncReopensWholeRoute) {
- const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
- ScopedTestNativeHandle guard{handle};
- auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
- checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 3);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+ checkNativeEvacuationFault(testFilePath, file, 3);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationHeaderShortWriteRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 5);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationHeaderEnospcRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 4);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRouteRadixShortWriteRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 7);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRouteRadixEnospcRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 6);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationSuperblockShortWriteRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 9);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationSuperblockEnospcRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 8);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationDataSyncFailureRetainsRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 10);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncEnospcReopensWholeRoute) {
+ checkNativeEvacuationFault(testFilePath, file, 11);
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
