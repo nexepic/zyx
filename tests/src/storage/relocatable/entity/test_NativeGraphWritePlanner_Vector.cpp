@@ -258,27 +258,40 @@ protected:
             backend.open();
             auto old = backend.openLogicalGraphReadSnapshot();
             auto staged = backend.beginLogicalGraphTransaction(false);
-            const auto values = [&](int64_t first) {
+            const auto values = [&](uint64_t id, int64_t first) {
                 std::vector<LogicalGraphWriteProperty> result;
                 for (size_t i = 0; i < fieldCount; ++i)
                     result.push_back({"scan_fixture_" + std::to_string(i),
-                        PropertyValue(i ? int64_t(firstSeed + tokens[i]) : first)});
+                        PropertyValue(i ? int64_t(id + tokens[i]) : first)});
                 return result;
             };
             const int64_t original = int64_t(firstSeed + tokens.front());
+            const auto graphRevision = [&]() {
+                auto file = std::make_shared<std::fstream>(target, std::ios::in | std::ios::binary);
+                auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+                auto metadata = RelocatableMetadataStore::openReadOnly(io);
+                return metadata->openSnapshot().superblock().graph_revision;
+            };
             LogicalGraphMutationBatch mutation;
             mutation.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
-                LogicalGraphMutationReferenceKind::LGRK_PERSISTED, firstSeed}, values(original + 9)}};
+                LogicalGraphMutationReferenceKind::LGRK_PERSISTED, firstSeed}, values(firstSeed, original + 9)}};
             (void)staged->stageMutationBatch(std::move(mutation));
-            backend.replaceLogicalNodeProperties({{firstSeed, values(original)}}); // no-op
-            backend.replaceLogicalNodeProperties({{firstSeed, values(original + 1)}});
-            backend.replaceLogicalNodeProperties({{firstSeed, values(original)}});
+            const auto beforeNoop = graphRevision();
+            backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original)}}); // no-op
+            EXPECT_EQ(graphRevision(), beforeNoop);
+            const auto neighbor = firstSeed + 1U;
+            const int64_t neighborOriginal = int64_t(neighbor + tokens.front());
+            backend.replaceLogicalNodeProperties({{neighbor, values(neighbor, neighborOriginal + 2)}});
+            EXPECT_EQ(old->readNodeProperty(neighbor, "scan_fixture_0"), PropertyValue(neighborOriginal));
+            backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original + 1)}});
+            backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original)}});
             EXPECT_THROW(static_cast<void>(staged->commit()), LogicalGraphMutationConflict);
             EXPECT_EQ(old->readNodeProperty(firstSeed, "scan_fixture_0"), PropertyValue(original));
             staged.reset(); old.reset(); backend.close();
             backend.open();
             auto reopened = backend.openLogicalGraphReadSnapshot();
             EXPECT_EQ(reopened->readNodeProperty(firstSeed, "scan_fixture_0"), PropertyValue(original));
+            EXPECT_EQ(reopened->readNodeProperty(neighbor, "scan_fixture_0"), PropertyValue(neighborOriginal + 2));
             reopened.reset(); backend.close();
         }
         std::error_code ignored; std::filesystem::remove(target, ignored);
