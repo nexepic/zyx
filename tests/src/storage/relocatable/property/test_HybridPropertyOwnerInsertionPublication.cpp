@@ -175,8 +175,12 @@ protected:
             {kind == NODE ? LogicalGraphMutationEntityKind::LGMK_NODE : LogicalGraphMutationEntityKind::LGMK_EDGE,
                 LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1}, {{"p", testCase.existingValue}}});
         const uint32_t birthToken = extensionField ? 2U : 1U;
+        const auto execute = [&] {
+            graph::utils::OwnedAllocationScope scope(memory);
+            return executor.execute(batch);
+        };
         if (testCase.expectFailure) {
-            try { (void)executor.execute(batch); FAIL() << "invalid constrained native creation committed"; }
+            try { (void)execute(); FAIL() << "invalid constrained native creation committed"; }
             catch (const std::exception &error) { EXPECT_NE(std::string(error.what()).find("Constraint violation"), std::string::npos) << error.what(); }
             const auto after = metadata_->openSnapshot();
             EXPECT_FALSE(properties_->isHybridPropertyOwner(after, {kind, birthOwner}));
@@ -199,7 +203,7 @@ protected:
                     }
                     return portable_pwrite(fd, bytes, count, offset);
                 });
-                EXPECT_THROW((void)executor.execute(batch), std::runtime_error);
+                EXPECT_THROW((void)execute(), std::runtime_error);
             }
             ASSERT_TRUE(injected); EXPECT_FALSE(properties_->isHybridPropertyOwner(old, {kind, birthOwner}));
             auto reopened = RelocatableMetadataStore::openReadOnly(io_);
@@ -248,11 +252,11 @@ protected:
             for (auto &node : batch.node_creates) node.properties.clear();
             for (auto &edge : batch.edge_creates) edge.properties.clear();
             if (testCase.deleteExisting) { batch.node_deletes.clear(); batch.edge_deletes.clear(); }
-            EXPECT_TRUE(executor.execute(batch).committed());
+            EXPECT_TRUE(execute().committed());
             EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
             return;
         }
-        const auto created = executor.execute(batch); ASSERT_TRUE(created.committed());
+        const auto created = execute(); ASSERT_TRUE(created.committed());
         const auto &ids = kind == NODE ? created.result.created_node_ids : created.result.created_edge_ids;
         ASSERT_EQ(ids.size(), birthOwner - owners); ASSERT_EQ(ids.front(), owners + 1U); ASSERT_EQ(ids.back(), birthOwner);
         const auto born = metadata_->openSnapshot(); HybridPropertyReadContext context(io_, *slotted_pages_, *metadata_, born);

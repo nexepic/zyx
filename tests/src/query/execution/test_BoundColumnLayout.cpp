@@ -180,3 +180,24 @@ TEST(MaterializedByteBudgetParentTest, ChildRetainsParentAndReleasesCreditOnDest
     child.reset();
     EXPECT_TRUE(weak.expired());
 }
+
+TEST(MaterializedByteBudgetParentTest, ChildPreservesSharedAccountAdmissionAndRefunds) {
+    using namespace graph::query::execution;
+    using namespace graph::query::execution::detail;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8192U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8192U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+    auto parent = std::make_shared<MaterializedByteBudget>(8192U, account);
+    auto child = std::make_shared<MaterializedByteBudget>(4096U, parent, MaterializedByteBudget::OwnedParentTag{});
+    parent->reserveUnmanaged(1000U);
+    child->reserveUnmanaged(2000U);
+    EXPECT_EQ(account->used(), 3000U);
+    EXPECT_THROW(child->reserveUnmanaged(2000U), ResourceAdmissionDenied);
+    EXPECT_EQ(child->used(), 2000U);
+    EXPECT_EQ(parent->used(), 3000U);
+    EXPECT_EQ(account->used(), 3000U);
+    child->releaseUnmanaged(2000U);
+    parent->releaseUnmanaged(1000U);
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(process->usage().total, 0U);
+}

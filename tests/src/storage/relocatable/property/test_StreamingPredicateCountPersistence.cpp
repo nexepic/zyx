@@ -4,7 +4,6 @@ namespace graph::query::execution { extern thread_local bool test_enable_streami
 struct EnableStreamingPersistence { EnableStreamingPersistence() { graph::query::execution::test_enable_streaming_count = true; } ~EnableStreamingPersistence() { graph::query::execution::test_enable_streaming_count = false; } };
 
 TEST_F(HybridPropertyQueryParityTest, StreamingCountPreservesPersistentLayoutUpdatesAndReopenedResults) {
-    if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) GTEST_SKIP() << "ROW fixture requires native initialization; SCAN uses its offline image fixture";
     EnableStreamingPersistence enable;
     seed(false);
     const auto check = [&](int64_t expected) {
@@ -42,7 +41,6 @@ TEST_F(HybridPropertyQueryParityTest, StreamingCountPreservesPersistentLayoutUpd
 }
 
 TEST_F(HybridPropertyQueryParityTest, StreamingCountKeepsOldSnapshotAcrossTypeNullRemovalAndDeletion) {
-    if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) GTEST_SKIP() << "ROW fixture requires native initialization; SCAN uses its offline image fixture";
     EnableStreamingPersistence enable;
     seed(false);
     if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) convert(EntityPropertyOwnerKind::EPOK_NODE);
