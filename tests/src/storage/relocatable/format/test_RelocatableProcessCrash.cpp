@@ -213,6 +213,22 @@ namespace {
 	}
 
 
+    void prepareEmptyCrashPool(StorageIO &io, uint64_t dataOffset, const CatalogEntry &pool) {
+        const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(dataOffset, pool.physical_slot);
+        std::array<std::byte, RSS_PAGE_SIZE> control{};
+        SegmentEnvelope envelope; envelope.header_bytes = RSS_PAGE_SIZE; envelope.kind = pool.kind;
+        envelope.state = pool.state; envelope.segment_id = pool.segment_id; envelope.owner_id = pool.owner_id;
+        envelope.generation = pool.generation; envelope.committed_lsn = pool.committed_lsn;
+        const auto encoded = SegmentEnvelopeCodec::encode(envelope);
+        std::copy(encoded.begin(), encoded.end(), control.begin());
+        const auto active = SharedPagePoolHeaderCodec::encode({pool.segment_id, 0U, pool.generation, pool.committed_lsn, 1U});
+        const auto inactive = SharedPagePoolHeaderCodec::encode({pool.segment_id, 0U, pool.generation, pool.committed_lsn, 0U});
+        std::copy(active.begin(), active.end(), control.begin() + RSS_ENVELOPE_BYTES);
+        std::copy(inactive.begin(), inactive.end(), control.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES);
+        io.writeAt(offset, control.data(), control.size());
+        const std::byte zero{}; io.writeAt(offset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
+    }
+
 	using CrashChild = graph::test::relocatable_crash::CrashChild;
 	using graph::test::relocatable_crash::waitToBeKilled;
 	using graph::test::relocatable_crash::writeFailureMarker;
@@ -709,48 +725,23 @@ namespace graph::test {
 				initial.database_id = DatabaseId(0x1020304050607080ULL);
 				initial.generation = Generation(1U);
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
-
-				// Reproduce the bounded COW churn used by the metadata reclaimer
-				// tests, leaving several old metadata pools empty after snapshots
-				// drain. Keeping this setup in the child makes the kill boundary a
-				// real publication/reopen test rather than a direct file mutation.
-				std::vector<CatalogEntry> original;
-				original.reserve(30U);
-				for (uint64_t ordinal = 0U; ordinal < 30U; ++ordinal) {
-					CatalogEntry entry;
-					entry.segment_id =
-							SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES);
-					entry.physical_slot = PhysicalSlotId(1000U + ordinal);
-					entry.kind = SegmentKind::SGK_ENTITY_PAGE_POOL;
-					entry.owner_id = 19U;
-					entry.generation = Generation(1U);
-					entry.state = SegmentState::SGS_SEALED;
-					entry.committed_lsn = LogSequenceNumber(2U);
-					original.push_back(entry);
-				}
-				static_cast<void>(metadata->upsertCatalog(original, LogSequenceNumber(2U)));
-				std::vector<MetadataSnapshotPin> retained;
-				retained.emplace_back(metadata->openSnapshot());
-				static_cast<void>(metadata->setPhysicalSlotAllocated(PhysicalSlotId(40U), true,
-						LogSequenceNumber(3U)));
-				retained.emplace_back(metadata->openSnapshot());
-				for (uint64_t checkpoint = 4U; checkpoint <= 6U; ++checkpoint) {
-					std::vector<CatalogEntry> replacement = original;
-					for (size_t index = 0U; index < replacement.size(); ++index) {
-						replacement[index].physical_slot =
-								PhysicalSlotId(2000U + checkpoint * 100U + index);
-						replacement[index].generation = Generation(2U);
-						replacement[index].committed_lsn = LogSequenceNumber(checkpoint);
-					}
-					static_cast<void>(metadata->upsertCatalog(replacement, LogSequenceNumber(checkpoint)));
-					if (checkpoint != 6U) {
-						retained.emplace_back(metadata->openSnapshot());
-					}
-				}
-				for (MetadataSnapshotPin &snapshot: retained) {
-					snapshot.release();
-				}
+				auto metadata = RelocatableMetadataStore::initializeNewComplete(io, initial);
+                std::vector<CatalogSlotReservationRequest> requests;
+                for (uint64_t ordinal = 0; ordinal < 30U; ++ordinal)
+                    requests.push_back({SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
+                        SegmentKind::SGK_ENTITY_PAGE_POOL, 19U, Generation(1U), SegmentState::SGS_SEALED, true});
+                const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+                    LogSequenceNumber(3U), [&](std::span<const CatalogEntry> entries) {
+                        for (const auto &entry : entries) prepareEmptyCrashPool(*io, initial.data_region_offset, entry);
+                    });
+                if (!prepared) return 25;
+                const auto original = prepared->entries;
+                std::vector<MetadataSnapshotPin> retained;
+                for (uint64_t checkpoint = 4U; checkpoint <= 6U; ++checkpoint) {
+                    retained.emplace_back(metadata->openSnapshot());
+                    static_cast<void>(metadata->upsertCatalog(original, LogSequenceNumber(checkpoint)));
+                }
+                for (auto &snapshot : retained) snapshot.release();
 
 				StorageIO::ScopedNativeWriteHookForTesting pauseAfterPublication(
 						[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
@@ -1759,16 +1750,19 @@ TEST_F(RelocatableProcessCrashTest,
 	request.owner_id = 19U;
 	request.segment_generation = Generation(1U);
 	request.state = SegmentState::SGS_SEALED;
-	const std::optional<CatalogSlotReservation> reused = metadata->reserveFirstFreeAndUpsertCatalog(
-			request, slot, slot, LogSequenceNumber(8U));
-	ASSERT_TRUE(reused.has_value());
-	EXPECT_EQ(reused->entry.physical_slot, slot);
+    const std::array requests{request};
+    const auto reused = metadata->reserveFirstFreeAndUpsertCatalog(requests, slot, slot, LogSequenceNumber(8U),
+        [&](std::span<const CatalogEntry> entries) { prepareEmptyCrashPool(*io, RSS_FILE_BOOTSTRAP_BYTES, entries.front()); });
+    ASSERT_TRUE(reused.has_value()); ASSERT_EQ(reused->entries.size(), 1U);
+    EXPECT_EQ(reused->entries.front().physical_slot, slot);
 
 	metadata.reset();
 	auto reopened = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin persisted = reopened->openSnapshot();
 	EXPECT_EQ(reopened->findCatalog(persisted, request.segment_id).physical_slot, slot);
 	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(persisted, slot));
+    persisted.release();
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest,
