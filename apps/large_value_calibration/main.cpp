@@ -401,7 +401,13 @@ namespace {
 			unique.file_bytes_before = fileBytes(options.data_path);
 			io->resetStats();
 			LargeValueStore store(io, *metadata);
-			uint64_t checkpoint = 2U;
+			auto initialSnapshot = metadata->openSnapshot();
+			const auto initialCheckpoint = initialSnapshot.superblock().checkpoint_lsn.value();
+			initialSnapshot.release();
+			if (initialCheckpoint == std::numeric_limits<uint64_t>::max()) {
+				throw std::overflow_error("LargeValue calibration checkpoint LSN space is exhausted");
+			}
+			uint64_t checkpoint = initialCheckpoint + 1U;
 			const auto started = std::chrono::steady_clock::now();
 			for (size_t ordinal = 0U; ordinal < options.unique_values; ++ordinal) {
 				if (checkpoint == std::numeric_limits<uint64_t>::max()) {
