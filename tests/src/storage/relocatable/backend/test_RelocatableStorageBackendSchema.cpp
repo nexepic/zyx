@@ -1223,3 +1223,43 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableVariableLengthDepthAsA
 	EXPECT_EQ(engine.execute(query, callerLimit).rowCount(), 1U);
 	backend->close();
 }
+
+TEST_F(RelocatableStorageBackendSchemaTest, NativeRecoveryLateCorruptOwnerFailsBeforePhysicalCleanup) {
+    auto rawOptions = options(); rawOptions.adaptive_property_row_chunks = false;
+    RelocatableStorageBackend writer(rawOptions);
+    writer.open();
+    const auto nodes = writer.createLogicalNodes({{{"Document"}, {{"body", graph::PropertyValue(std::string(2U * 1024U * 1024U, 'x'))}}}});
+    ASSERT_EQ(nodes.size(), 1U);
+    writer.close();
+    const auto bytesOnDisk = [&] {
+        std::ifstream input(data_path_, std::ios::binary);
+        return std::vector<char>(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    };
+    const auto before = bytesOnDisk();
+    ASSERT_FALSE(before.empty());
+    size_t ownerReads = 0; bool injected = false;
+    {
+        StorageIO::ScopedNativeReadHookForTesting corruptLateOwner(
+            [&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
+                const auto result = portable_pread(fd, buffer, size, offset);
+                if (result == static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
+                    try {
+                        const auto owner = PageOwnerHeaderCodec::decode(std::span(static_cast<const std::byte *>(buffer), RSS_PAGE_OWNER_HEADER_BYTES));
+                        if (owner.kind == PageOwnerKind::POK_LARGE_VALUE_DATA && ++ownerReads == 500U) {
+                            static_cast<std::byte *>(buffer)[0] ^= std::byte{1}; injected = true;
+                        }
+                    } catch (const FormatException &) {}
+                }
+                return result;
+            });
+        RelocatableStorageBackend reopened(rawOptions);
+        EXPECT_THROW(reopened.open(), FormatException);
+    }
+    ASSERT_TRUE(injected);
+    EXPECT_EQ(bytesOnDisk(), before);
+    RelocatableStorageBackend retried(rawOptions);
+    ASSERT_NO_THROW(retried.open());
+    auto snapshot = retried.openSnapshot();
+    EXPECT_EQ(retried.readNode(snapshot, nodes.front()).node_id, nodes.front());
+    snapshot.release(); retried.close();
+}

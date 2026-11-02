@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.001" timestamp="2026-11-02T06:14:18.866" name="AllTests">
+  <testsuite name="NativeRecoveryOwnerCacheTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-02T06:14:18.867">
+    <testcase name="IdentityAndCapacityBoundReuse" file="/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/metadata/test_NativeRecoveryOwnerCache.cpp" line="27" status="run" result="completed" time="0." timestamp="2026-11-02T06:14:18.867" classname="NativeRecoveryOwnerCacheTest" />
+    <testcase name="DeniedAndAllocationFailureFallBackAndRefund" file="/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/metadata/test_NativeRecoveryOwnerCache.cpp" line="45" status="run" result="completed" time="0." timestamp="2026-11-02T06:14:18.868" classname="NativeRecoveryOwnerCacheTest" />
+  </testsuite>
+</testsuites>

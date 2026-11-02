@@ -11,8 +11,7 @@
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyPoolRoutes.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
-#include "graph/utils/OwnedStdVector.hpp"
-#include "graph/query/execution/ResourceCoordinator.hpp"
+#include "graph/storage/relocatable/metadata/NativeRecoveryOwnerCache.hpp"
 
 namespace graph::storage {
 void RelocatableMetadataStore::recoverNativePoolFrames(const MetadataWriteGuard &writer, const Superblock &current) {
@@ -29,27 +28,10 @@ void RelocatableMetadataStore::recoverNativePoolFrames(const MetadataWriteGuard 
     const auto admitFrontier = [&] {
         if (!frontier) if (const auto memory = utils::OwnedAllocationScope::owner()) frontier.emplace(memory, 32U * 1024U);
     };
-    // Optional bounded, query-accounted reuse lasts only under this writer and
-    // this immutable root. A miss or admission denial keeps the original read.
-    struct ValidatedOwner {
-        SegmentId segment; Generation generation; PhysicalSlotId slot;
-        uint8_t frame; PageOwnerHeader owner;
-    };
-    std::optional<utils::OwnedStdVector<ValidatedOwner>> validatedOwners;
-    try {
-        validatedOwners.emplace();
-        validatedOwners->reserve(1024U);
-    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
-        validatedOwners.reset();
-    } catch (const std::bad_alloc &) {
-        validatedOwners.reset();
-    }
-    const auto lookupOwner = [&](const CatalogEntry &pool, uint8_t frame) -> std::optional<PageOwnerHeader> {
-        if (!validatedOwners) return std::nullopt;
-        for (const auto &entry : *validatedOwners)
-            if (entry.segment == pool.segment_id && entry.generation == pool.generation &&
-                entry.slot == pool.physical_slot && entry.frame == frame) return entry.owner;
-        return std::nullopt;
+    // Reuse is scoped to this writer and immutable root; misses reread disk.
+    detail::NativeRecoveryOwnerCache validatedOwners;
+    const auto lookupOwner = [&](const CatalogEntry &pool, uint8_t frame) {
+        return validatedOwners.find(pool.segment_id, pool.generation, pool.physical_slot, frame);
     };
     const auto findPage = [&](PageId id) { return locations_.findPageOptional(current, id); };
     const auto findCatalog = [&](SegmentId id) { return catalog_.find(current, id); };
@@ -109,8 +91,7 @@ void RelocatableMetadataStore::recoverNativePoolFrames(const MetadataWriteGuard 
         const auto owner = pools.readRecoveryPageOwner(pool, uint8_t(route.page_index), fileBytes);
         require(owner.page_id == route.page_id && owner.generation == route.generation,
             "native recovery found a mismatched current page identity");
-        if (validatedOwners && validatedOwners->size() < 1024U)
-            validatedOwners->push_back({pool.segment_id, pool.generation, pool.physical_slot, uint8_t(route.page_index), owner});
+        validatedOwners.remember(pool.segment_id, pool.generation, pool.physical_slot, uint8_t(route.page_index), owner);
     });
     // Validate free positions too: they may contain stale bytes, but no active
     // pin can select one. Finish this read-only pass before physical cleanup.
