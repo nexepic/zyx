@@ -27,8 +27,13 @@ protected:
         auto conversion = request(NODE, memory);
         conversion.conversion->compact_column_memberships = true;
         conversion.conversion->publish_candidate = true; run(conversion);
+        const auto beforeLease = metadata_->openSnapshot().superblock();
+        const auto ids = metadata_->allocateLogicalPageIds(1, LogSequenceNumber(beforeLease.checkpoint_lsn.value() + 1));
+        ASSERT_EQ(ids.size(), 1U);
         const auto active = metadata_->openSnapshot().superblock();
-        EXPECT_THROW((void)metadata_->allocateLogicalPageIds(1, LogSequenceNumber(active.checkpoint_lsn.value() + 1)), FormatException);
+        EXPECT_EQ(active.graph_revision, beforeLease.graph_revision);
+        EXPECT_EQ(active.schema_revision, beforeLease.schema_revision);
+        EXPECT_EQ(active.hybrid_property_descriptor_root, beforeLease.hybrid_property_descriptor_root);
         // No active-pin authority may be discarded to make room for a pass.
         EXPECT_EQ(properties_->readEntity(old, {NODE, 1}), expectedFirst);
         const auto epoch = io_->dataMutationEpoch();
