@@ -1731,7 +1731,9 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const Nativ
             [&](PageId id) { return locations_.findPageOptional(current, id); });
         if (!currentOwner) continue; const auto owner = *currentOwner;
         require(!owner.flags && (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY ||
-            (RSS_SCAN_PATH_FORMAT_ENABLED && owner.kind == PageOwnerKind::POK_PROPERTY)),
+            (RSS_SCAN_PATH_FORMAT_ENABLED &&
+                (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
+                owner.kind == PageOwnerKind::POK_PROPERTY)),
             "field relocation found an unsupported current page owner");
         if (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
             images.push_back({owner.kind, fields.cloneForMutation(source, owner.page_id, batch.generation(), request.memory)});
