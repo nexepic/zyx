@@ -204,7 +204,7 @@ TEST(RelocatableMaintenanceLoopTest, SplitsTasksAcrossCyclesWhenTheCombinedReser
 		return RelocatableMaintenanceTaskResult{};
 	}));
 	loop.resume();
-	ASSERT_TRUE(waitUntil([&] { return loop.metrics().completed_tasks == 2U; }));
+	ASSERT_TRUE(waitUntil([&] { const auto metrics = loop.metrics(); return metrics.completed_tasks == 2U && metrics.attempted_cycles >= 2U; }));
 	EXPECT_EQ(executions.load(), 2U);
 	EXPECT_GE(loop.metrics().attempted_cycles, 2U);
 	loop.stop();
