@@ -214,6 +214,16 @@ TEST_F(HybridPropertyColdPublicConversionTest, ActualConvertedPartialGroupSuppor
 }
 TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether) {
     prepare(); catalog();
+    struct AdmissionObservation { int64_t row = 0, candidate = 0, accepted = 0, rejected = 0, unknown = 0, resource = 0; } observation;
+    graph::debug::PerfTrace::ScopedObserver observe(&observation, [](void *p, std::string_view key, int64_t value, bool) noexcept {
+        auto &v = *static_cast<AdmissionObservation *>(p);
+        if (key == "native_graph.hybrid.allocation_row_bytes") v.row = value;
+        if (key == "native_graph.hybrid.allocation_candidate_bytes") v.candidate = value;
+        if (key == "native_graph.hybrid.allocation_admission_passed") v.accepted += value;
+        if (key == "native_graph.hybrid.allocation_admission_insufficient_saving") v.rejected += value;
+        if (key == "native_graph.hybrid.allocation_admission_unknown") v.unknown += value;
+        if (key == "native_graph.hybrid.allocation_admission_resource_refusal") v.resource += value;
+    });
     {
         LargeValueStore values(io_, *metadata_); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
         NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, roots, *btree_pages_, placement());
@@ -221,6 +231,12 @@ TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesIts
         auto tx = writer.beginTransaction(); tx.replaceNodeProperty(std::move(row)); ASSERT_TRUE(tx.commit().committed());
     }
     auto old = metadata_->openSnapshot(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); convert(memory);
+    RecordProperty("conversion_row_bytes", std::to_string(observation.row));
+    RecordProperty("conversion_candidate_bytes", std::to_string(observation.candidate));
+    RecordProperty("conversion_admission_passed", std::to_string(observation.accepted));
+    RecordProperty("conversion_admission_saving_refused", std::to_string(observation.rejected));
+    RecordProperty("conversion_admission_unknown", std::to_string(observation.unknown));
+    RecordProperty("conversion_admission_resource_refused", std::to_string(observation.resource));
     {
         graph::utils::OwnedAllocationScope scope(memory); auto current = metadata_->openSnapshot();
         LargeValueStore values(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
