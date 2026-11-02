@@ -1050,7 +1050,15 @@ namespace graph::test {
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
 				const bool routeRadixFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE;
                 const bool routeReclaimFixture = mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM;
-				auto metadata = (routeRadixFixture || routeReclaimFixture) ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
+                const bool currentRouteFixture = routeRadixFixture ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE;
+				auto metadata = (currentRouteFixture || routeReclaimFixture) ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
 					RelocatableMetadataStore::initializeNew(io, initial);
 				const CatalogEntry catalog{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
 										   PhysicalSlotId(100U),
@@ -1094,7 +1102,7 @@ namespace graph::test {
 								SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U), SegmentState::SGS_SEALED, true});
 					}
 					const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests,
-						catalog.physical_slot, PhysicalSlotId(99U + requests.size()), LogSequenceNumber(routeRadixFixture ? 3U : 2U),
+						catalog.physical_slot, PhysicalSlotId(99U + requests.size()), LogSequenceNumber(currentRouteFixture ? 3U : 2U),
 						[&](std::span<const CatalogEntry> entries) {
 							if (entries.size() != requests.size()) throw std::runtime_error("unexpected crash fixture segments");
 							if (routeRadixFixture) { prepareDistinctRoutePages(*io, initial.data_region_offset, entries); return; }
@@ -1150,7 +1158,6 @@ namespace graph::test {
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE) {
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 					const uint32_t candidateMagic = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE
 														 ? RSS_METADATA_PAGE_ROUTE_LEAF_MAGIC
 														 : RSS_PAGE_DIRECTORY_BOOTSTRAP_MAGIC;
@@ -1207,7 +1214,6 @@ namespace graph::test {
 					return 67;
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE) {
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtCatalogCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool catalogLeaf = false;
@@ -1238,7 +1244,6 @@ namespace graph::test {
 					return 68;
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE) {
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtAllocatorLeafCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool allocatorLeaf = false;
@@ -1268,8 +1273,7 @@ namespace graph::test {
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE) {
 					const PhysicalSlotId firstSlot(
 							RSS_ALLOCATOR_PAGE_SLOT_CAPACITY * RSS_CATALOG_RADIX_FANOUT + 1U);
-					static_cast<void>(metadata->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(3U)));
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
+					static_cast<void>(metadata->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(4U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtLogicalAllocatorInternalCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool logicalAllocatorRadix = false;
@@ -1302,8 +1306,7 @@ namespace graph::test {
 					const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
 					const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 														  Generation(1U)};
-					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(3U)));
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
+					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(4U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtLogicalLocationInternalCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool logicalExtentRadix = false;
@@ -1336,8 +1339,7 @@ namespace graph::test {
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE) {
 					const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 												  Generation(1U)};
-					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(3U)));
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
+					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(4U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtLocationLeafCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool locationLeaf = false;
