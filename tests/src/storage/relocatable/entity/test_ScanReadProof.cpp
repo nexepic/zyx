@@ -1156,7 +1156,7 @@ TEST_F(ScanReadProofTest, CompletePropertyReplacementAddsThe65thFieldThroughGene
     EXPECT_EQ(desc.scan_live_node_count, 64U);
 }
 
-TEST_F(ScanReadProofTest, PublicBackendRejectsBuildingBeforeReadAuthorityAndCreatesNoScanFile) {
+TEST_F(ScanReadProofTest, PublicBackendRejectsBuildingAndCreatesWritableRow) {
     ASSERT_NO_FATAL_FAILURE(makeImage(false));
     RelocatableStorageBackendOptions options;
     options.data_path = target;
@@ -1164,8 +1164,14 @@ TEST_F(ScanReadProofTest, PublicBackendRejectsBuildingBeforeReadAuthorityAndCrea
     EXPECT_THROW(backend.open(), FormatException);
     options.data_path = target.string() + ".new";
     options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
-    EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(options)), FormatException);
-    EXPECT_FALSE(std::filesystem::exists(options.data_path));
+    auto row = RelocatableStorageBackend::initializeNew(options);
+    row->open();
+    const auto ids = row->createLogicalNodes({{{"Person"}, {}}});
+    ASSERT_EQ(ids.size(), 1U);
+    EXPECT_NO_THROW(static_cast<void>(row->verifyIntegrity()));
+    row->close();
+    std::error_code ignored;
+    std::filesystem::remove(options.data_path, ignored);
 }
 
 TEST_F(ScanReadProofTest, BuildingAndInvalidAccountsCannotMintCompleteAuthority) {
