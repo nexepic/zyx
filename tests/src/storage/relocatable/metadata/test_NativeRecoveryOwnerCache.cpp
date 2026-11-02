@@ -32,7 +32,9 @@ TEST(NativeRecoveryOwnerCacheTest, IdentityAndCapacityBoundReuse) {
         PageOwnerHeader owner{}; owner.page_id = PageId(123U);
         for (size_t i = 0; i < detail::NativeRecoveryOwnerCache::capacity; ++i)
             cache.remember(SegmentId(i + 1U), Generation(3U), PhysicalSlotId(i + 11U), 1U, owner);
-        ASSERT_TRUE(cache.find(SegmentId(1U), Generation(3U), PhysicalSlotId(11U), 1U));
+        const auto matched = cache.find(SegmentId(1U), Generation(3U), PhysicalSlotId(11U), 1U);
+        ASSERT_TRUE(matched);
+        EXPECT_EQ(matched->page_id, PageId(123U));
         EXPECT_FALSE(cache.find(SegmentId(1U), Generation(4U), PhysicalSlotId(11U), 1U));
         EXPECT_FALSE(cache.find(SegmentId(1U), Generation(3U), PhysicalSlotId(12U), 1U));
         EXPECT_FALSE(cache.find(SegmentId(1U), Generation(3U), PhysicalSlotId(11U), 2U));
