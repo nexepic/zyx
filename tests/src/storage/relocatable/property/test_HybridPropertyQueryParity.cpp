@@ -1171,6 +1171,9 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
                 };
                 observeColumn(*age, ageColumns); observeColumn(*note, noteColumns);
                 SCOPED_TRACE("age_columns=" + std::to_string(ageColumns) + " note_columns=" + std::to_string(noteColumns));
+                std::cout << "LIFECYCLE_TRACE cycle=" << cycle << " index=" << (valueIndex - 1)
+                          << " age_columns=" << ageColumns << " note_columns=" << noteColumns
+                          << " columns=" << directory.columns << " extensions=" << directory.extensions << '\n';
                 EXPECT_EQ(directory.columns, 0U); EXPECT_EQ(directory.memberships, 128U);
                 EXPECT_EQ(directory.extensions, 128U);
                 EXPECT_EQ(roots.readEntityPropertyOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1}, *age)->value, PropertyValue(int64_t(0)));
