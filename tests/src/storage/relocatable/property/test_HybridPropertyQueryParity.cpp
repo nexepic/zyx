@@ -1165,8 +1165,9 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
                 const auto directory = HybridPropertyDirectoryIntegrity::verify(context, current, memory, &large);
                 size_t ageColumns = 0, noteColumns = 0;
                 const auto observeColumn = [&](uint32_t token, size_t &count) {
+                    graph::utils::OwnedHeapReservation referenceCredit(memory);
                     static_cast<void>(context.visitField({EntityPropertyOwnerKind::EPOK_NODE, 1}, token,
-                        [](const auto &) {}, [](const auto &) {}, {}, {},
+                        [](const auto &) {}, [](const auto &) {}, {}, [&](size_t bytes) { referenceCredit.set(bytes); },
                         [&](const auto &, const auto &, const auto &, const auto &) { ++count; }));
                 };
                 observeColumn(*age, ageColumns); observeColumn(*note, noteColumns);
