@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
@@ -190,7 +191,7 @@ protected:
 
 	// The raw planner fixture does not maintain SCAN membership. Validate the
 	// exact vector image after building a completed image from real wide ROWs.
-	void expectIntegrityOnCompleteScanImage() {
+	void expectIntegrityOnCompleteScanImage(bool exercisePublic = false) {
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         constexpr size_t seedCount = 1024U, fieldCount = 32U;
         size_t existingNodes = 0;
@@ -206,8 +207,10 @@ protected:
         std::vector<uint32_t> tokens;
         for (size_t i = 0; i < fieldCount; ++i)
             tokens.push_back(schema.ensurePropertyToken("scan_fixture_" + std::to_string(i)));
+        uint64_t firstSeed = 0;
         for (size_t i = 0; i < seedCount; ++i) {
             const uint64_t id = tx.createNode({});
+            if (!i) firstSeed = id;
             PropertyCollectionRoot row{id, graph::Node::typeId, {}};
             for (const auto token : tokens)
                 row.entries.push_back({token, PropertyValue(int64_t(id + token))});
@@ -247,6 +250,37 @@ protected:
         auto targetMetadata = RelocatableMetadataStore::openReadOnly(targetIo);
         EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo, *targetMetadata).scan()));
         targetMetadata.reset(); targetIo.reset(); targetFile.reset();
+        if (exercisePublic) {
+            RelocatableStorageBackendOptions openOptions;
+            openOptions.data_path = target;
+            openOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+            RelocatableStorageBackend backend(openOptions);
+            backend.open();
+            auto old = backend.openLogicalGraphReadSnapshot();
+            auto staged = backend.beginLogicalGraphTransaction(false);
+            const auto values = [&](int64_t first) {
+                std::vector<LogicalGraphWriteProperty> result;
+                for (size_t i = 0; i < fieldCount; ++i)
+                    result.push_back({"scan_fixture_" + std::to_string(i),
+                        PropertyValue(i ? int64_t(firstSeed + tokens[i]) : first)});
+                return result;
+            };
+            const int64_t original = int64_t(firstSeed + tokens.front());
+            LogicalGraphMutationBatch mutation;
+            mutation.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+                LogicalGraphMutationReferenceKind::LGRK_PERSISTED, firstSeed}, values(original + 9)}};
+            (void)staged->stageMutationBatch(std::move(mutation));
+            backend.replaceLogicalNodeProperties({{firstSeed, values(original)}}); // no-op
+            backend.replaceLogicalNodeProperties({{firstSeed, values(original + 1)}});
+            backend.replaceLogicalNodeProperties({{firstSeed, values(original)}});
+            EXPECT_THROW(static_cast<void>(staged->commit()), LogicalGraphMutationConflict);
+            EXPECT_EQ(old->readNodeProperty(firstSeed, "scan_fixture_0"), PropertyValue(original));
+            staged.reset(); old.reset(); backend.close();
+            backend.open();
+            auto reopened = backend.openLogicalGraphReadSnapshot();
+            EXPECT_EQ(reopened->readNodeProperty(firstSeed, "scan_fixture_0"), PropertyValue(original));
+            reopened.reset(); backend.close();
+        }
         std::error_code ignored; std::filesystem::remove(target, ignored);
         file_ = std::make_shared<std::fstream>(path_, std::ios::in | std::ios::out | std::ios::binary);
         ASSERT_TRUE(file_->is_open());
@@ -1135,7 +1169,7 @@ TEST_F(NativeGraphWritePlannerVectorTest, ReplacesMappingsRawLocationAndManifest
 	EXPECT_EQ(rawEntry->record_count, page.header().live_count);
 	after.release();
 	before.release();
-	ASSERT_NO_FATAL_FAILURE(expectIntegrityOnCompleteScanImage());
+	ASSERT_NO_FATAL_FAILURE(expectIntegrityOnCompleteScanImage(true));
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, PublishesAdditionalRawPagesWhenDeltaOutgrowsAFullTail) {
