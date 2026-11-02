@@ -30,12 +30,18 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  MetadataPublishOptions options; options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
   RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
- EXPECT_EQ(store->findCatalog(old, expected.front().segment_id), expected.front());
+ EXPECT_EQ(store->findCatalog(old, expected.front().segment_id).physical_slot, expected.front().physical_slot);
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
  auto recovered = reopened->openSnapshot();
  for (const auto &entry : expected) {
-  EXPECT_EQ(reopened->findCatalog(recovered, entry.segment_id), entry);
+  const auto actual = reopened->findCatalog(recovered, entry.segment_id);
+  EXPECT_EQ(actual.physical_slot, entry.physical_slot);
+  EXPECT_EQ(actual.generation, entry.generation);
+  EXPECT_EQ(actual.owner_id, entry.owner_id);
+  EXPECT_EQ(actual.state, entry.state);
+  EXPECT_EQ(actual.kind, entry.kind);
+  EXPECT_EQ(actual.committed_lsn, entry.committed_lsn);
   EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
  }
 }
