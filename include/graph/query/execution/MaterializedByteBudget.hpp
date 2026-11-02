@@ -63,7 +63,12 @@ namespace graph::query::execution {
 		// Global headroom is advisory: other queries can consume it before this
 		// budget reserves. Keep available() local for existing kernel contracts.
 		[[nodiscard]] size_t availableWithParent() const {
-			return parent_ ? (std::min)(available(), parent_->available()) : available();
+            size_t headroom = parent_ ? (std::min)(available(), parent_->available()) : available();
+            if (owned_parent_) {
+                const auto *outer = dynamic_cast<const MaterializedByteBudget *>(owned_parent_->owner().get());
+                if (outer) headroom = (std::min)(headroom, outer->availableWithParent());
+            }
+            return headroom;
 		}
 		[[nodiscard]] size_t used() const noexcept { return used_bytes_; }
 

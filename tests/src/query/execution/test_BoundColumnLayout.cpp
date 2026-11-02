@@ -159,6 +159,7 @@ TEST(MaterializedByteBudgetParentTest, ChildChargesOnlyRetainedBytesAndRejectsSh
     first->reserveUnmanaged(3000U);
     second->reserveUnmanaged(3000U);
     EXPECT_EQ(parent->used(), 10096U);
+    EXPECT_EQ(first->availableWithParent(), limit - 10096U);
     EXPECT_THROW(second->reserveUnmanaged(1040000U), MaterializedByteLimitExceeded);
     EXPECT_EQ(second->used(), 3000U);
     EXPECT_EQ(parent->used(), 10096U);
@@ -192,6 +193,7 @@ TEST(MaterializedByteBudgetParentTest, ChildPreservesSharedAccountAdmissionAndRe
     parent->reserveUnmanaged(1000U);
     child->reserveUnmanaged(2000U);
     EXPECT_EQ(account->used(), 3000U);
+    EXPECT_EQ(child->availableWithParent(), 1096U);
     EXPECT_THROW(child->reserveUnmanaged(2000U), ResourceAdmissionDenied);
     EXPECT_EQ(child->used(), 2000U);
     EXPECT_EQ(parent->used(), 3000U);
