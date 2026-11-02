@@ -22,9 +22,9 @@ namespace graph::storage {
 // This is not a generic State record or a routed radix root.
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC = 0x4858595AU; // ZYXH
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC = 0x4458595AU; // ZYXD
-constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 2 : 1;
+constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = 2;
 constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES = 32;
-constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = RSS_SCAN_PATH_FORMAT_ENABLED ? 208 : 192;
+constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = 208;
 struct HybridPropertyTreeRoot {
     PageId page_id{};
     Generation generation{}; // shared-pool physical epoch, not semantic commit generation
@@ -132,7 +132,7 @@ public:
         if (LittleEndianCodec::readU16(body, 4) != RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION)
             fail(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported hybrid descriptor payload version");
         if (LittleEndianCodec::readU16(body, 6) != 0 ||
-            !std::all_of(body.begin() + (RSS_SCAN_PATH_FORMAT_ENABLED ? 40 : 24), body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
+            !std::all_of(body.begin() + 40, body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
             !std::all_of(bytes.begin() + header.size() + body.size(), bytes.end(),
                 [](std::byte value) { return value == std::byte{}; }))
             fail(FormatError::FERR_RESERVED_BITS, "hybrid descriptor has nonzero reserved bytes");

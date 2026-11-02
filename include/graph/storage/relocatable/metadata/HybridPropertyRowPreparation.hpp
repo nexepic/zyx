@@ -27,8 +27,6 @@ public:
         EntityPropertyOwnerKind kind, uint64_t groupId, std::shared_ptr<std::pmr::memory_resource> memory,
         LargeValueStore *largeValues = nullptr, const CancellationCheckpoint *cancellation = nullptr)
         : decoded_credit_(memory), rows_(utils::OwnedPmrAllocator<PropertyCollectionRoot>(memory)) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native inverse property conversion is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t cap = 1024U * 1024U;
         hybrid_property_detail::require(account && account->used() <= cap && account->available() <= cap - account->used() &&

@@ -131,8 +131,6 @@ namespace graph::storage {
     void NativeGraphWriteTransaction::stageHybridPropertyMaps(std::span<const PropertyCollectionRoot> roots,
         NativeHybridPropertyMapMode mode, std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
         requireActive("stage native property maps");
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native map staging is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
         if (!account || account->used() > maximumBytes || account->available() > maximumBytes - account->used() ||
@@ -219,8 +217,6 @@ namespace graph::storage {
         std::span<const NativeHybridPropertyColumnReplacement> replacements, std::span<const EntityPropertyKey> deletions,
         std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation, bool fieldLifecycle) {
         requireActive("stage native field or owner mutations");
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native column publication is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
         if (!account || account->used() > maximumBytes || account->available() > maximumBytes - account->used() ||
@@ -434,12 +430,9 @@ namespace graph::storage {
             std::optional<NativeHybridPropertyAllocationAdmission> allocationAdmission, uint8_t groupCount,
             bool coldRowRemainder) {
         requireActive("stage a native property group conversion");
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            fail(FormatError::FERR_UNSUPPORTED_VERSION, "native property group conversion is disabled");
         const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
         constexpr size_t maximumBytes = 1024U * 1024U;
-        const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED &&
-            (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) != 0;
+        const bool privateBuilding = (snapshot_.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) != 0;
         if (coldRowRemainder && (!compactColumnMemberships ||
             direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID ||
             (publishCandidate && !allocationAdmission && !privateBuilding)))

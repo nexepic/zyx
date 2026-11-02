@@ -89,8 +89,6 @@ public:
         const MetadataSnapshotPin &snapshot) : pages_(std::move(io), metadata, snapshot), metadata_(metadata) {}
     [[nodiscard]] HybridPropertyFieldPage read(const MetadataSnapshotPin &snapshot, PageId page,
         BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid field page reading is disabled");
         hybrid_property_detail::require(metadata_.ownsSnapshot(snapshot) && page.isValid(),
             "hybrid field page read requires its own live snapshot and a logical page");
         const auto location = metadata_.findPageLocation(snapshot, page);

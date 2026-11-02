@@ -53,8 +53,6 @@ class HybridPropertyConversionPreparation final {
           columns_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
           extensions_(utils::OwnedPmrAllocator<HybridPropertyFieldDirectoryMap::Entry>(plan.memoryOwner())),
           groups_(utils::OwnedPmrAllocator<HybridPropertyGroupDirectoryMap::Entry>(plan.memoryOwner())) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native field preparation is disabled");
         auto group = plan.group();
         hybrid_property_detail::require(group.semantic_generation == batch.generation() &&
             batch.candidate().database_id.isValid(), "native field preparation has a stale publication generation");

@@ -34,7 +34,7 @@
         const auto releaseRow = [&] { current_page_.reset(); current_page_id_ = PageId{}; };
         const std::function<void()> beforeCold = std::ref(releaseRow);
         const auto readHybrid = [&] {
-            if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+            {
                 if (snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
                     !(hybrid_context_ && hybrid_context_->active)) {
                     if (!hybrid_context_ || !hybrid_context_->reader.usesSnapshot(snapshot) ||

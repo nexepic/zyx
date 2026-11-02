@@ -25,7 +25,7 @@ protected:
         io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
         Superblock root; root.database_id = DatabaseId(71); root.generation = Generation(1);
         root.checkpoint_lsn = LogSequenceNumber(1);
-        if (RSS_SCAN_PATH_FORMAT_ENABLED) root.flags |= RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
+        root.flags |= RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
         metadata = RelocatableMetadataStore::initializeNew(io, root);
         memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
     }

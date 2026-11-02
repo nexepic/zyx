@@ -65,8 +65,6 @@ namespace graph::storage::scan_candidate_detail {
     [[nodiscard]] inline Superblock cloneUnverifiedBuildingImage(StorageIO &source, StorageIO &target,
         query::execution::MaterializedByteBudget &workspace, uint64_t maximumTotalFileBytes,
         const std::function<void()> &checkpoint) {
-        if (!RSS_SCAN_PATH_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan clone requires the isolated format");
         if (!checkpoint || &source == &target || target.fileSize() != 0 ||
             !maximumTotalFileBytes || maximumTotalFileBytes > UINT64_C(2) * 1024U * 1024U * 1024U ||
             workspace.used() > 1024U * 1024U || workspace.available() > 1024U * 1024U - workspace.used())

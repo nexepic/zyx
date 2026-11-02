@@ -404,7 +404,7 @@ namespace graph::storage {
 		// still goes through the complete existing placement validation below.
 		// If the priority pass finds nothing (or I/O changes), retain the full
 		// search. BUILDING keeps its global best-fit space policy unchanged.
-		if (RSS_SCAN_PATH_FORMAT_ENABLED && ownerKind == PageOwnerKind::POK_PROPERTY &&
+		if (ownerKind == PageOwnerKind::POK_PROPERTY &&
 			(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) &&
 			snapshot.superblock().hybrid_property_descriptor_root.isValid() &&
 			!(snapshot.superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING)) {
@@ -679,8 +679,7 @@ namespace graph::storage {
 			// Numeric owners are shared by ROW and native fields. Authenticate
             // the native page through its private read route, but never offer it
             // as ordinary slotted allocation capacity.
-            const bool native = RSS_HYBRID_PROPERTY_FORMAT_ENABLED &&
-                pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+            const bool native = pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
                 (authenticatedOwners ? ownerKinds[location.page_index] : pool_.readPageOwner(pool, location.page_index).kind)
 						== PageOwnerKind::POK_HYBRID_PROPERTY;
             const SharedPagePoolContents contents = pool_.readKnownLocation(

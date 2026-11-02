@@ -24,8 +24,6 @@
 
 namespace graph::storage {
 
-    constexpr bool RSS_SCAN_PATH_FORMAT_ENABLED = true;
-    constexpr bool RSS_HYBRID_PROPERTY_FORMAT_ENABLED = true;
 
 	constexpr uint32_t RSS_SEGMENT_SIZE = 128U * 1024U;
 	constexpr uint32_t RSS_PAGE_SIZE = 4U * 1024U;

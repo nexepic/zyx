@@ -28,7 +28,7 @@ class HybridPropertyContentIndexPreparation final {
           superseded_(utils::OwnedPmrAllocator<uint64_t>(conversion.memory)),
           erased_(utils::OwnedPmrAllocator<uint64_t>(conversion.memory)) {
         const auto &current = batch.current();
-        hybrid_property_detail::require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && conversion.memory &&
+        hybrid_property_detail::require(conversion.memory &&
             metadata.ownsSnapshot(source) && source.superblock() == current && trees.usesMetadataStore(metadata) &&
             values.usesMetadataStore(metadata) && largeFields.size() <= 4096U && jointValues.size() <= 64U,
             "native content preparation requires one metadata-owned source and bounded proposals");

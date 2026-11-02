@@ -45,8 +45,6 @@ namespace graph::storage {
 
         std::shared_ptr<query::execution::MaterializedByteBudget> nativeFieldWorkspace() {
             constexpr size_t bytes = 1024U * 1024U;
-            if (!RSS_SCAN_PATH_FORMAT_ENABLED)
-                return std::make_shared<query::execution::MaterializedByteBudget>(bytes);
             auto parent = utils::OwnedAllocationScope::owner();
             if (!parent) throw query::execution::MaterializedByteLimitExceeded();
             return std::make_shared<query::execution::MaterializedByteBudget>(

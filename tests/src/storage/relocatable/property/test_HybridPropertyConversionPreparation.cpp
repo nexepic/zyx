@@ -39,15 +39,11 @@ TEST(HybridPropertyConversionPreparationTest, FormatFlagControlsPrivatePreparati
     MetadataWriteBatch batch(allocator, current, LogSequenceNumber(9));
     const auto roots = inputRows(1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     Plan plan(memory, roots, NODE, 1, batch.generation(), 3952);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    {
         const auto prepared = Access::prepare(batch, plan);
         ASSERT_EQ(prepared->pages().size(), 1U); EXPECT_EQ(prepared->pages()[0].pageId(), PageId(100));
         EXPECT_EQ(batch.candidate().next_logical_page_id, 101U);
         EXPECT_EQ(prepared->owners().size(), 64U); EXPECT_EQ(prepared->columns().size(), 1U);
-    } else {
-        try { static_cast<void>(Access::prepare(batch, plan)); FAIL() << "default format accepted native fields"; }
-        catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_UNSUPPORTED_VERSION); }
-        EXPECT_EQ(batch.candidate().next_logical_page_id, 100U);
     }
     EXPECT_EQ(batch.current(), current); EXPECT_EQ(current.next_logical_page_id, 100U);
     EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);

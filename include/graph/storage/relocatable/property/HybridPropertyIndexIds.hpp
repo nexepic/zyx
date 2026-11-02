@@ -9,7 +9,7 @@
 #include "graph/storage/relocatable/format/Format.hpp"
 
 namespace graph::storage {
-constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT = RSS_SCAN_PATH_FORMAT_ENABLED ? 9 : 8;
+constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT = 9;
 enum class HybridPropertyRootOrdinal : uint8_t {
     HPRO_NODE_OWNER = 0, HPRO_NODE_COLUMN, HPRO_NODE_EXTENSION, HPRO_NODE_GROUP,
     HPRO_EDGE_OWNER, HPRO_EDGE_COLUMN, HPRO_EDGE_EXTENSION, HPRO_EDGE_GROUP,

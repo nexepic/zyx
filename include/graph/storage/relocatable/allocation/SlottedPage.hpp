@@ -124,7 +124,7 @@ namespace graph::storage {
 				case PageOwnerKind::POK_ENTITY_LABEL:
 					return true;
                 case PageOwnerKind::POK_HYBRID_PROPERTY:
-                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+                    return true;
 				default:
 					return false;
 			}

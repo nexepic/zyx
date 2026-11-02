@@ -57,8 +57,6 @@ namespace graph::storage {
             uint64_t maximumTotalFileBytes, uint64_t fieldPoolOwner,
             const CancellationCheckpoint *cancellation = nullptr,
             const std::shared_ptr<std::pmr::memory_resource> &rawCacheMemory = {}) {
-            if (!RSS_SCAN_PATH_FORMAT_ENABLED)
-                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan image builder requires the isolated format");
             constexpr size_t limit = 1024U * 1024U;
             if (!memory || memory->used() > limit || memory->available() > limit - memory->used() ||
                 !fieldPoolOwner || !maximumTotalFileBytes || maximumTotalFileBytes > UINT64_C(2) * 1024U * 1024U * 1024U)

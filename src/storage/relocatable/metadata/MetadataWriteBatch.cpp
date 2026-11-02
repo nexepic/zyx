@@ -651,16 +651,12 @@ namespace graph::storage {
 	}
 
     void MetadataWriteBatch::enableHybridColumnMembership() {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "compact column membership requires the isolated native format");
         candidate_.flags |= RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP;
     }
 
     void MetadataWriteBatch::setHybridPropertyDescriptorRoot(PhysicalPageRef root) {
         if (root != PhysicalPageRef{})
             validateOwnedRoot(root, "hybrid property descriptor root is not owned by its metadata batch");
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && root.isValid())
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid property format is disabled");
         candidate_.hybrid_property_descriptor_root = root;
         if (!root.isValid()) candidate_.flags &= ~RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP;
     }

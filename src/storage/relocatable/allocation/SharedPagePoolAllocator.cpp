@@ -504,7 +504,7 @@ namespace graph::storage {
 									static_cast<uint8_t>(prepared.owner.payload_bytes != prepared.payload.size()) |
 									static_cast<uint8_t>(prepared.free_bytes > prepared.owner.payload_bytes) |
 									static_cast<uint8_t>(nativeHybridFields
-                                    ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                                    ? !(pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
                                         prepared.owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
                                     : !matchesPoolAndOwnerKind(pool.kind, prepared.owner.kind));
 			// ZYX_COV_EXCL_START: the enclosing Metadata batch allocates unique logical Page IDs and their owners
@@ -1319,7 +1319,7 @@ namespace graph::storage {
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
 		if (owner.page_id != location.page_id || owner.generation != location.generation ||
 			(hybridFieldOnly
-                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                ? !(pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
                     owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
                 : !matchesPoolAndOwnerKind(pool.kind, owner.kind))) {
 			throwSharedPagePoolAllocatorError(
@@ -1436,7 +1436,7 @@ namespace graph::storage {
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(pageBytes.first(RSS_PAGE_OWNER_HEADER_BYTES));
 		if (owner.page_id != location.page_id || owner.generation != location.generation ||
 			(hybridFieldOnly
-                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+                ? !(pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
                     owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
                 : !matchesPoolAndOwnerKind(pool.kind, owner.kind))) {
 			throwSharedPagePoolAllocatorError(

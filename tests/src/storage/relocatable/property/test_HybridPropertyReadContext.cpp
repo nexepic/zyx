@@ -247,11 +247,10 @@ TEST_F(HybridPropertyReadContextTest, ColumnDeltaRequiresTheExperimentalFormatAn
     HybridPropertyReadContext context(io_, *slotted_pages_, *metadata_, pin);
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
     const auto next = Generation(pin.superblock().generation.value() + 1);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    {
         EXPECT_FALSE(HybridPropertyColumnDelta::planExistingColumn(context, pin,
             {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr));
-    } else EXPECT_THROW(HybridPropertyColumnDelta::planExistingColumn(context, pin,
-        {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr), FormatException);
+    }
     EXPECT_EQ(memory->used(), 0U);
 }
 TEST_F(HybridPropertyReadContextTest, CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions) {

@@ -1,0 +1,61 @@
+src/storage/relocatable/backend/RelocatableStorageBackend.cpp:312:		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = RSS_HYBRID_PROPERTY_FORMAT_ENABLED
+src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1188:        if (RSS_SCAN_PATH_FORMAT_ENABLED && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING))
+include/graph/storage/relocatable/metadata/HybridPropertyContentIndexPreparation.hpp:31:        hybrid_property_detail::require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && conversion.memory &&
+src/storage/relocatable/entity/ScanReadProof.cpp:94:    return RSS_SCAN_PATH_FORMAT_ENABLED && state_ && state_->metadata == &metadata && state_->io.get() == &io &&
+include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:25:constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 2 : 1;
+include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:27:constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = RSS_SCAN_PATH_FORMAT_ENABLED ? 208 : 192;
+include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp:135:            !std::all_of(body.begin() + (RSS_SCAN_PATH_FORMAT_ENABLED ? 40 : 24), body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
+include/graph/storage/relocatable/property/HybridPropertyIndexIds.hpp:12:constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT = RSS_SCAN_PATH_FORMAT_ENABLED ? 9 : 8;
+src/storage/relocatable/entity/NativeGraphWritePlanner.cpp:435:        const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED &&
+src/storage/relocatable/entity/NativeGraphWriteCommit.cpp:1176:            const bool retainStale = RSS_SCAN_PATH_FORMAT_ENABLED &&
+include/graph/storage/relocatable/property/HybridPropertyFieldView.hpp:39:        hybrid_property_detail::require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() &&
+include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp:69:        require(RSS_SCAN_PATH_FORMAT_ENABLED && value.semantic_generation <= visible_generation_,
+include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp:77:        require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() && descriptorGeneration <= visible_generation_,
+include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp:271:            require(RSS_SCAN_PATH_FORMAT_ENABLED && bytes.size() >= ScanBlockMembership::HEADER_BYTES,
+include/graph/storage/relocatable/format/Format.hpp:27:    constexpr bool RSS_SCAN_PATH_FORMAT_ENABLED = true;
+include/graph/storage/relocatable/format/Format.hpp:28:    constexpr bool RSS_HYBRID_PROPERTY_FORMAT_ENABLED = true;
+include/graph/storage/relocatable/format/Superblock.hpp:44:        (RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP : 0U) |
+include/graph/storage/relocatable/format/Superblock.hpp:45:        (RSS_SCAN_PATH_FORMAT_ENABLED ? RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE : 0U);
+include/graph/storage/relocatable/allocation/SlottedPage.hpp:127:                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+src/storage/relocatable/metadata/graph_mutation/FieldPlanningAndPrivateReservations.inc:63:        const bool nativeScanWork = RSS_SCAN_PATH_FORMAT_ENABLED && hybridTopology && !hybridTopology->scan_changes_.empty();
+src/storage/relocatable/metadata/graph_mutation/FieldPlanningAndPrivateReservations.inc:217:            const bool fieldMajorCohort = RSS_SCAN_PATH_FORMAT_ENABLED && conversion.cold_row_remainder &&
+src/storage/relocatable/metadata/graph_mutation/PublicationAndRetirement.inc:947:                if (RSS_SCAN_PATH_FORMAT_ENABLED &&
+src/storage/relocatable/metadata/MetadataWriteBatch.cpp:660:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && root.isValid())
+src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1722:            (RSS_SCAN_PATH_FORMAT_ENABLED &&
+src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:1828:    const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED && (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp:2079:    require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && source.superblock() == current && snapshots_.owns(source) &&
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:288:        if (hybridTopology && (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || hybridVectors || reclamationEvidence || hybridPropertyRootMutation ||
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:309:            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || hybridVectors->metadata_ != this || hybridVectors->derived_ != &derivedState ||
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:345:            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !request.expected_database_id.isValid() ||
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:364:                    !RSS_SCAN_PATH_FORMAT_ENABLED)
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:378:                        (!conversion.allocation_admission && !RSS_SCAN_PATH_FORMAT_ENABLED) ||
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:949:            (RSS_SCAN_PATH_FORMAT_ENABLED && !derivedState.entity_free_summary_fences.empty())) {
+src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:974:            if (!RSS_SCAN_PATH_FORMAT_ENABLED || !(root.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) ||
+src/storage/relocatable/metadata/MetadataStoreReclamation.cpp:670:        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+src/storage/relocatable/metadata/MetadataStoreReclamation.cpp:678:        const bool scanCowPool = RSS_SCAN_PATH_FORMAT_ENABLED &&
+src/storage/relocatable/metadata/MetadataStoreReclamation.cpp:942:		const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+src/storage/relocatable/metadata/MetadataStoreReclamation.cpp:1039:        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+src/storage/relocatable/metadata/RelocatableMetadataStore.cpp:33:        native_pool_recovery_required_ = !readOnly && RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+src/storage/relocatable/metadata/MetadataPageFile.cpp:671:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != database_id_ ||
+src/storage/relocatable/metadata/MetadataPageFile.cpp:704:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != database_id_ ||
+src/storage/relocatable/metadata/MetadataPageFile.cpp:722:        if (!RSS_SCAN_PATH_FORMAT_ENABLED || reference == batch.current().hybrid_property_descriptor_root ||
+src/storage/relocatable/index/BTreePageStore.cpp:1293:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || (!isHybridPropertyIndexId(indexId) && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
+src/storage/relocatable/index/BTreePageStore.cpp:1295:            (!RSS_SCAN_PATH_FORMAT_ENABLED && indexId == RSS_HYBRID_PROPERTY_INDEX_ID_FIRST +
+src/storage/relocatable/index/BTreePageStore.cpp:1367:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+src/storage/relocatable/index/BTreePageStore.cpp:1391:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+src/storage/relocatable/format/Superblock.cpp:155:            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && superblock.hybrid_property_descriptor_root.isValid()) {
+src/storage/relocatable/allocation/SharedPagePool.cpp:70:                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp:507:                                    ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp:1322:                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp:1439:                ? !(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+src/storage/relocatable/allocation/SlottedPagePool.cpp:407:		if (RSS_SCAN_PATH_FORMAT_ENABLED && ownerKind == PageOwnerKind::POK_PROPERTY &&
+src/storage/relocatable/allocation/SlottedPagePool.cpp:682:            const bool native = RSS_HYBRID_PROPERTY_FORMAT_ENABLED &&
+tests/src/storage/relocatable/property/test_HybridPropertyLargeFieldPreparation.cpp:43:    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+tests/src/storage/relocatable/property/test_HybridPropertyLargeFieldPreparation.cpp:75:    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+tests/src/storage/relocatable/property/test_HybridPropertyLargeFieldPreparation.cpp:176:    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp:486:            if (RSS_HYBRID_PROPERTY_FORMAT_ENABLED && catalogEntry->second.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+tests/src/storage/relocatable/entity/test_StoredScanMembership.cpp:28:        if (RSS_SCAN_PATH_FORMAT_ENABLED) root.flags |= RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
+tests/src/storage/relocatable/property/test_HybridPropertyColdConversionProbe.cpp:43:        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp:79:    const uint16_t foreignVersion = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 31 : 32;
+tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp:80:    const uint16_t foreignHeader = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 336 : 352;
+tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:44:    EXPECT_EQ(SlottedPage::supportsOwnerKind(PageOwnerKind::POK_HYBRID_PROPERTY), RSS_HYBRID_PROPERTY_FORMAT_ENABLED);

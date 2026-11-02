@@ -26,8 +26,6 @@ namespace graph::storage {
         }
         [[nodiscard]] static BTreeRootReadBinding bind(const HybridPropertyDescriptor &descriptor,
             const MetadataSnapshotPin &snapshot) {
-            if (!RSS_SCAN_PATH_FORMAT_ENABLED)
-                throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan directory requires its isolated format");
             return HybridPropertyDirectoryCodec::bindRoot(descriptor, snapshot, HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
         }
     };

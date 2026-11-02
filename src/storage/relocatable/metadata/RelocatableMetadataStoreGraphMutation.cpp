@@ -285,7 +285,7 @@ namespace graph::storage {
             const NativeHybridVectorPublication *hybridVectors,
             const NativeHybridTopologyPublication *hybridTopology) {
 		debug::ScopedPerfTimer timer("native_graph.metadata_publish");
-        if (hybridTopology && (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || hybridVectors || reclamationEvidence || hybridPropertyRootMutation ||
+        if (hybridTopology && (hybridVectors || reclamationEvidence || hybridPropertyRootMutation ||
             hybridTopology->metadata_ != this || hybridTopology->derived_ != &derivedState ||
             hybridTopology->field_changes_.size() > 64U || hybridTopology->owner_deletions_.size() > 64U || hybridTopology->new_property_tokens_.size() > 64U ||
             !std::ranges::is_sorted(hybridTopology->new_property_tokens_) ||
@@ -306,7 +306,7 @@ namespace graph::storage {
             const auto &fields = hybridVectors->fields_;
             const auto memory = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(fields.memory);
             constexpr size_t limit = 1024U * 1024U;
-            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || hybridVectors->metadata_ != this || hybridVectors->derived_ != &derivedState ||
+            if (hybridVectors->metadata_ != this || hybridVectors->derived_ != &derivedState ||
                 (!hybridVectors->catalog_tokens_ && hybridVectors->semantics_.empty()) || hybridVectors->semantics_.size() > 128 || !memory ||
                 hybridVectors->catalog_tokens_ != !hybridVectors->new_property_tokens_.empty() || hybridVectors->new_property_tokens_.size() > 64U ||
                 !std::ranges::is_sorted(hybridVectors->new_property_tokens_) ||
@@ -342,7 +342,7 @@ namespace graph::storage {
         }
         if (hybridPropertyRootMutation) {
             const auto &request = *hybridPropertyRootMutation;
-            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !request.expected_database_id.isValid() ||
+            if (!request.expected_database_id.isValid() ||
                 (request.expected_root != PhysicalPageRef{} && !request.expected_root.isValid()) ||
                 (request.mode != NativeHybridPropertyRootMode::NHPRM_REPLACE &&
                     request.mode != NativeHybridPropertyRootMode::NHPRM_CLEAR) ||
@@ -360,10 +360,6 @@ namespace graph::storage {
             }
             if (request.conversion) {
                 const auto &conversion = *request.conversion;
-                if (conversion.cold_row_remainder && conversion.publish_candidate && !conversion.allocation_admission &&
-                    !RSS_SCAN_PATH_FORMAT_ENABLED)
-                    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                        "native cold ROW publication requires whole-database allocation admission");
                 deferredBuildingAdmission = conversion.publish_candidate && !conversion.allocation_admission &&
                     (conversion.cold_row_remainder || conversion.group_count > 1U);
                 if (conversion.cold_row_remainder && (!conversion.compact_column_memberships ||
@@ -375,7 +371,6 @@ namespace graph::storage {
                 if (!conversion.group_count || conversion.group_count > 8U ||
                     conversion.group_id > RSS_HYBRID_MAX_GROUP_ID - (conversion.group_count - 1U) ||
                     (conversion.group_count > 1U && (!conversion.compact_column_memberships ||
-                        (!conversion.allocation_admission && !RSS_SCAN_PATH_FORMAT_ENABLED) ||
                         !conversion.publish_candidate || conversion.direction != NativeHybridPropertyConversionDirection::NHPCD_ROW_TO_HYBRID)))
                     throw FormatException(FormatError::FERR_INVALID_HEADER, "native hybrid cohort requires1..8groups and explicit gated compact forward publication");
                 if (conversion.allocation_admission && (!conversion.publish_candidate ||
@@ -946,7 +941,7 @@ namespace graph::storage {
 		// use the writer-fenced pin, so no stale schema is accepted.
 		std::unique_ptr<SlottedPagePool> deferredSchemaPool;
 		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner || !derivedState.index_images.empty() ||
-            (RSS_SCAN_PATH_FORMAT_ENABLED && !derivedState.entity_free_summary_fences.empty())) {
+            (!derivedState.entity_free_summary_fences.empty())) {
 			deferredSchemaPool = std::make_unique<SlottedPagePool>(
 					io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 		}
@@ -971,7 +966,7 @@ namespace graph::storage {
         }
         const auto requirePrivateBuilding = [&](const Superblock &root) {
             if (!deferredBuildingAdmission) return;
-            if (!RSS_SCAN_PATH_FORMAT_ENABLED || !(root.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) ||
+            if (!(root.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) ||
                 !hybridPropertyRootMutation || root.database_id != hybridPropertyRootMutation->expected_database_id ||
                 root.hybrid_property_descriptor_root != hybridPropertyRootMutation->expected_root ||
                 expectedMetadataGeneration != std::optional(root.generation))

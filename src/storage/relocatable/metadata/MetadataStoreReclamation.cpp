@@ -667,7 +667,7 @@ namespace graph::storage {
 		const Superblock current = bootstrap_.recover();
         MetadataPageReadContext::Scope recoveryReads(snapshots_.createWriterReadContext(writer, current), *io_);
 		const CatalogEntry visible = catalog_.find(current, segmentId);
-        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+        const bool nativeActive = current.hybrid_property_descriptor_root.isValid() &&
             std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
                 [](const auto &root) { return root.page_id.isValid(); });
         // Complete scan writes retain the ordinary immutable Entity/Index
@@ -675,8 +675,7 @@ namespace graph::storage {
         // directory and every active pin before reusing a frame. These pools
         // contain no native field pages, which require their separate joined
         // reconciliation path.
-        const bool scanCowPool = RSS_SCAN_PATH_FORMAT_ENABLED &&
-            (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
+        const bool scanCowPool = (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
             (visible.kind == SegmentKind::SGK_ENTITY_PAGE_POOL || visible.kind == SegmentKind::SGK_INDEX_PAGE_POOL);
         if (nativeActive && !isLargeValueMaintenancePool(visible) && !scanCowPool)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
@@ -939,7 +938,7 @@ namespace graph::storage {
 		}
 		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
-		const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+		const bool nativeActive = current.hybrid_property_descriptor_root.isValid() &&
             std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
                 [](const auto &root) { return root.page_id.isValid(); });
         if (nativeActive) {
@@ -1036,7 +1035,7 @@ namespace graph::storage {
 				"relocatable retired slot release requires a nonempty batch and checkpoint LSN");
 		MetadataWriteGuard writer = beginWrite(true);
 		const Superblock current = bootstrap_.recover();
-        const bool nativeActive = RSS_HYBRID_PROPERTY_FORMAT_ENABLED && current.hybrid_property_descriptor_root.isValid() &&
+        const bool nativeActive = current.hybrid_property_descriptor_root.isValid() &&
             std::ranges::any_of(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor.roots,
                 [](const auto &root) { return root.page_id.isValid(); });
         if (nativeActive && requests.size() > 64U)
@@ -1189,7 +1188,7 @@ namespace graph::storage {
 																	   LogSequenceNumber checkpointLsn,
 																	   const MetadataPublishOptions &options) {
         std::optional<Superblock> privateSource;
-        if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+        {
             const auto observed = bootstrap_.recover();
             if (observed.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) privateSource = observed;
         }

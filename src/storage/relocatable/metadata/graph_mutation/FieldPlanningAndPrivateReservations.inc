@@ -60,7 +60,7 @@
             // list even when they do not create a ROW directory entry.
             for (const auto key : touchedPropertyKeys) independent(EntityPropertyKey::fromDirectoryId(key));
         }
-        const bool nativeScanWork = RSS_SCAN_PATH_FORMAT_ENABLED && hybridTopology && !hybridTopology->scan_changes_.empty();
+        const bool nativeScanWork = hybridTopology && !hybridTopology->scan_changes_.empty();
         const bool nativeFieldWork = pendingNativeOwnerCount || (hybridTopology &&
             (!hybridTopology->field_changes_.empty() || !hybridTopology->owner_deletions_.empty()));
         // A Node-only scan transition creates its source account here. Prepay
@@ -214,7 +214,7 @@
             auto largeFields = utils::OwnedVector<HybridPropertyLargeFieldPreparation>(
                 utils::OwnedPmrAllocator<HybridPropertyLargeFieldPreparation>(conversion.memory));
             std::shared_ptr<HybridPropertyConversionPreparation> fields;
-            const bool fieldMajorCohort = RSS_SCAN_PATH_FORMAT_ENABLED && conversion.cold_row_remainder &&
+            const bool fieldMajorCohort = conversion.cold_row_remainder &&
                 conversion.group_count > 1U && (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
             for (uint64_t groupOffset = 0; groupOffset < conversion.group_count; ++groupOffset) {
             const auto groupId = conversion.group_id + groupOffset;

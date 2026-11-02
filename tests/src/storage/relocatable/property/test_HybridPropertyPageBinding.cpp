@@ -41,24 +41,18 @@ TEST(HybridPropertyPageBindingTest, OwnerCodecRecognizesSixteenOnlyInTheIsolated
     LittleEndianCodec::writeU16(encoded, 24, uint16_t(PageOwnerKind::POK_HYBRID_PROPERTY));
     LittleEndianCodec::writeU32(encoded, 48, 0);
     LittleEndianCodec::writeU32(encoded, 48, graph::utils::calculateCrc(encoded.data(), encoded.size()));
-    EXPECT_EQ(SlottedPage::supportsOwnerKind(PageOwnerKind::POK_HYBRID_PROPERTY), RSS_HYBRID_PROPERTY_FORMAT_ENABLED);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    EXPECT_TRUE(SlottedPage::supportsOwnerKind(PageOwnerKind::POK_HYBRID_PROPERTY));
+    {
         const auto decoded = PageOwnerHeaderCodec::decode(encoded);
         EXPECT_EQ(decoded.kind, PageOwnerKind::POK_HYBRID_PROPERTY); EXPECT_EQ(decoded.page_id, PageId(41));
         EXPECT_EQ(PageOwnerHeaderCodec::encode(decoded), encoded);
-    } else {
-        EXPECT_THROW(PageOwnerHeaderCodec::encode(owner()), FormatException);
-        EXPECT_THROW(PageOwnerHeaderCodec::decode(encoded), FormatException);
     }
 }
 TEST(HybridPropertyPageBindingTest, FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal) {
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
     image.appendGroup(group()); const auto before = image.serialize();
-    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        expectError([&] { std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)); }, FormatError::FERR_UNSUPPORTED_VERSION);
-        EXPECT_EQ(image.serialize(), before);
-    }
+
     auto ordinary = SlottedPage::create(PageId(1), Generation(1)); const std::array value{std::byte{1}};
     const auto first = ordinary.insert(value); const auto second = ordinary.insert(value); ordinary.erase(first);
     auto tiny = std::make_shared<MaterializedByteBudget>(1);
@@ -273,9 +267,7 @@ TEST_F(HybridPropertyPhysicalReaderTest, FeatureAndRowBoundariesRemainExplicit) 
     seedRowPool();
     HybridPropertyFieldPageStore reader(io_, *metadata_);
     const auto pin = metadata_->openSnapshot();
-    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        expectError([&] { reader.read(pin, PageId(41)); }, FormatError::FERR_UNSUPPORTED_VERSION);
-    } else {
+    {
         EXPECT_THROW(reader.read(pin, PageId(41)), FormatException);
     }
     SharedPagePoolAllocator ordinary(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
@@ -357,7 +349,7 @@ TEST_F(HybridPropertyPhysicalReaderTest, ValidChecksumsDoNotAuthorizeForeignOwne
 }
 
 TEST(HybridPropertyPageBindingTest, RowRemainderGroupUsesAuthenticatedSamePageMembershipInBorrowedView) {
-    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
     HybridPropertyGroupRecord g{EntityPropertyOwnerKind::EPOK_NODE,
@@ -381,7 +373,7 @@ TEST(HybridPropertyPageBindingTest, RowRemainderGroupUsesAuthenticatedSamePageMe
 }
 
 TEST(HybridPropertyPageBindingTest, ColdRowsValidateGroupOwnedMaskGlobalHotAuthorityAndAccountBeforeExposure) {
-    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     auto image = HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), memory);
     auto g = group(); auto c = column();

@@ -47,8 +47,6 @@ class HybridPropertyLargeFieldPreparation final {
         LargeValueId proposedId, std::shared_ptr<std::pmr::memory_resource> memory,
         const LargeValueCompressionOptions &compression, LargeValueExtentClass extentClass,
         size_t maximumCandidates, const CancellationCheckpoint *cancellation, Encoder &&encode) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native large-field preparation is disabled");
         const bool admitted = bool(std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory)) ||
             bool(std::dynamic_pointer_cast<query::execution::detail::PrepaidMemoryResource>(memory));
         hybrid_property_detail::require(metadata.ownsSnapshot(snapshot) && store.usesMetadataStore(metadata) &&
@@ -100,8 +98,6 @@ public:
         LargeValueExtentClass extentClass = LargeValueExtentClass::LVEC_32K,
         size_t maximumCandidates = RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES,
         const CancellationCheckpoint *cancellation = nullptr) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native large-field preparation is disabled");
         hybrid_property_detail::require(token != 0, "native large field requires a nonzero token");
         return prepareEncoded(metadata, snapshot, store, owner, token, proposedId, std::move(memory), compression,
             extentClass, maximumCandidates, cancellation, [&](std::pmr::memory_resource &resource) {
@@ -114,8 +110,6 @@ public:
         const MetadataSnapshotPin &snapshot, LargeValueStore &store, EntityPropertyKey owner,
         const PropertyCollectionRoot &row, LargeValueId proposedId, std::shared_ptr<std::pmr::memory_resource> memory,
         const CancellationCheckpoint *cancellation = nullptr) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native ROW carrier preparation is disabled");
         hybrid_property_detail::require(owner.isValid() && owner.entity_id == row.owner_entity_id &&
             row.owner_entity_type == (owner.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? graph::Node::typeId : graph::Edge::typeId),
             "native ROW carrier has a mismatched logical owner");
@@ -132,8 +126,6 @@ public:
         const MetadataSnapshotPin &snapshot, LargeValueStore &store, EntityPropertyKey owner,
         std::span<const BorrowedPropertyCollectionRootEntry> entries, LargeValueId proposedId,
         std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native borrowed ROW preparation is disabled");
         hybrid_property_detail::require(owner.isValid() && !entries.empty(), "native borrowed ROW requires its logical owner and fields");
         return prepareEncoded(metadata, snapshot, store, owner, 0, proposedId, std::move(memory), {},
             LargeValueExtentClass::LVEC_32K, RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES, cancellation,

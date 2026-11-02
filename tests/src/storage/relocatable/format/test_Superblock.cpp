@@ -596,14 +596,14 @@ TEST(RelocatableSuperblockTest, CompactColumnMembershipFeatureRequiresNativeForm
     superblock.flags |= RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP;
     EXPECT_THROW(SuperblockCodec::validate(superblock), FormatException);
     superblock.hybrid_property_descriptor_root = pageRef(25, 1, 7);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    {
         EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(superblock)), superblock);
         auto raw = SuperblockCodec::encode(superblock);
         LittleEndianCodec::writeU64(raw, RSS_SUPERBLOCK_HEADER_BYTES - 16U, 0);
         LittleEndianCodec::writeU64(raw, RSS_SUPERBLOCK_HEADER_BYTES - 8U, 0);
         recalculateCrc(raw);
         EXPECT_THROW(SuperblockCodec::decode(raw), FormatException);
-    } else EXPECT_THROW(SuperblockCodec::encode(superblock), FormatException);
+    }
 }
 
 TEST(RelocatableSuperblockTest, CurrentFormatRejectsChecksumValidOtherVersionsWithoutFallback) {

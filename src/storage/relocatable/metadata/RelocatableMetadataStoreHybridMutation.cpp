@@ -40,8 +40,6 @@
 namespace graph::storage {
 Superblock RelocatableMetadataStore::mutateHybridPropertyColumns(const NativeHybridPropertyColumnWrite &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column publication is disabled");
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
     require(request.memory && request.pending_owner_additions.empty() && (request.replacements.empty() != request.owner_deletions.empty()) &&
@@ -176,7 +174,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
     utils::OwnedVector<const HybridPropertyColumnDelta *> changes{utils::OwnedPmrAllocator<const HybridPropertyColumnDelta *>(request.memory)};
     auto descriptor = *context.descriptor_;
     std::unique_ptr<PreparedScanMembershipMutation> scanDeletion;
-    if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+    {
         if ((current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
             !hybridTopology && !request.owner_deletions.empty()) {
             utils::OwnedVector<scan_candidate_detail::ScanNodeChange> nodes{
@@ -1691,8 +1689,6 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
 
 Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const NativeHybridPropertyPoolRelocation &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native field relocation is disabled");
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
     const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(request.memory);
@@ -1723,8 +1719,7 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const Nativ
             [&](PageId id) { return locations_.findPageOptional(current, id); });
         if (!currentOwner) continue; const auto owner = *currentOwner;
         require(!owner.flags && (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY ||
-            (RSS_SCAN_PATH_FORMAT_ENABLED &&
-                (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
+            ((current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
                 owner.kind == PageOwnerKind::POK_PROPERTY)),
             "field relocation found an unsupported current page owner");
         if (owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY)
@@ -1816,8 +1811,6 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyFieldPool(const Nativ
 
 Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const NativeHybridPropertyPoolRelocation &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native index relocation is disabled");
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
     const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(request.memory);
@@ -1831,7 +1824,7 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
     auto writer = beginWrite(true); const auto current = bootstrap_.recover();
     // Private scan construction also compacts registered ordinary trees, such
     // as global adjacency. Ordinary roots retain the existing namespace guard.
-    const bool privateBuilding = RSS_SCAN_PATH_FORMAT_ENABLED && (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
+    const bool privateBuilding = (current.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
     require(current.database_id == request.expected_database_id && current.generation == request.expected_generation &&
         (current.hybrid_property_descriptor_root.isValid() || privateBuilding) &&
         current.hybrid_property_descriptor_root == request.expected_descriptor,
@@ -1973,8 +1966,6 @@ Superblock RelocatableMetadataStore::relocateHybridPropertyIndexPool(const Nativ
 
 Superblock RelocatableMetadataStore::relocateHybridPropertyEntityPool(const NativeHybridPropertyPoolRelocation &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native Entity relocation is disabled");
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto check = [&] { if (request.cancellation) request.cancellation->check(); };
     const auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(request.memory);
@@ -2084,7 +2075,7 @@ Superblock RelocatableMetadataStore::publishHybridPropertyRows(MetadataWriteBatc
     const MetadataPublishOptions &options, HybridPropertyReadContext *preparationSource) {
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     const auto &current = batch.current();
-    require(RSS_HYBRID_PROPERTY_FORMAT_ENABLED && source.superblock() == current && snapshots_.owns(source) &&
+    require(source.superblock() == current && snapshots_.owns(source) &&
         current.hybrid_property_descriptor_root.isValid() && entities.usesMetadataStore(*this) &&
         sourcePages.usesMetadataStore(*this) && sourceTrees.usesMetadataStore(*this) && largeValues.usesMetadataStore(*this),
         "inverse native conversion requires its exact writer source and typed stores");

@@ -18,7 +18,6 @@ namespace graph::storage {
 std::optional<StateLocation> RelocatableMetadataStore::upsertNativeMaintenanceJournal(
     const LargeValueMaintenanceJournal &journal, const LargeValueMaintenanceJournalStoreOptions &placement,
     const MetadataPublishOptions &options, const NativeJournalProgressEvidence *evidence) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return {};
     {
         const auto probe = openSnapshot();
         if (!probe.superblock().hybrid_property_descriptor_root.isValid()) return {};

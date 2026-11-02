@@ -30,7 +30,7 @@ namespace graph::storage {
         // A rejected private candidate can leave appends behind a ROW root.
         // Every writable candidate-profile reopen must therefore recover before
         // its first publication, including metadata-only publications.
-        native_pool_recovery_required_ = !readOnly && RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
+        native_pool_recovery_required_ = !readOnly;
 	}
 
 	RelocatableMetadataStore::~RelocatableMetadataStore() = default;
@@ -42,7 +42,6 @@ namespace graph::storage {
 		}
 
         return snapshots_.beginWriteWithAdmission([this, allowHybridMutation](const Superblock &current) {
-            if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
             if (!current.hybrid_property_descriptor_root.isValid()) return;
             const auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current);
             if (!allowHybridMutation && std::ranges::any_of(descriptor.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
@@ -62,7 +61,6 @@ namespace graph::storage {
                 synchronized_source_ = current;
                 debug::PerfTrace::addValue("native_metadata.external_source_refresh", 1);
             }
-            if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
             // An optional admission can abandon private appends while its
             // durable source still uses ROW. Clean them before ANY next write.
             if (native_pool_recovery_required_) recoverNativePoolFrames(writer, current);

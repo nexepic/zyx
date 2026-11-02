@@ -32,8 +32,8 @@ TEST_F(HybridPropertyQueryParityTest, StreamingCountPreservesPersistentLayoutUpd
         backend.close();
     };
     check(44);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) convert(EntityPropertyOwnerKind::EPOK_NODE);
-    if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
+
     check(44);
     setAge(100); check(45);
     setAge(0); check(44);
@@ -43,7 +43,7 @@ TEST_F(HybridPropertyQueryParityTest, StreamingCountPreservesPersistentLayoutUpd
 TEST_F(HybridPropertyQueryParityTest, StreamingCountKeepsOldSnapshotAcrossTypeNullRemovalAndDeletion) {
     EnableStreamingPersistence enable;
     seed(false);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) convert(EntityPropertyOwnerKind::EPOK_NODE);
+    convert(EntityPropertyOwnerKind::EPOK_NODE);
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend backend(options); backend.open();
     auto old = backend.openLogicalGraphReadSnapshot();

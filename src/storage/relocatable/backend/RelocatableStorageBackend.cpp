@@ -309,8 +309,7 @@ namespace graph::storage {
 
 	namespace {
 
-		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = RSS_HYBRID_PROPERTY_FORMAT_ENABLED
-            ? UINT64_C(0x564E4558544C4749) : UINT64_C(0x564E4558544C4748);
+		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = UINT64_C(0x564E4558544C4749);
 
 		[[noreturn]] void failVectorTraining(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -1185,7 +1184,7 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable backend refuses a non-complete relocatable database file");
 		}
 		const Superblock recovered = SuperblockFile(data->io()).recover();
-        if (RSS_SCAN_PATH_FORMAT_ENABLED && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING))
+        if ((recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING))
             throw FormatException(FormatError::FERR_INVALID_STATE, "cannot open an unfinished scan image");
 		const auto identityHandle = data->io()->getWriteFd() != INVALID_FILE_HANDLE
 			? data->io()->getWriteFd() : data->io()->readFd_;

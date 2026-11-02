@@ -300,7 +300,7 @@ namespace graph::storage {
         std::span<std::optional<PropertyCollectionRootEntry>> values, std::span<std::optional<size_t>> counts,
         const CancellationCheckpoint *cancellation, const SelectedPropertyReadAdmission *admission,
         const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink, const PropertyScalarReadSink *scalars, const PropertyTextReadSink *texts, const PropertyColumnBatchReadSinks *batches, const std::function<void()> *beforeColdRead) const {
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
                 const auto representation = context.borrowColdRowRepresentation(beforeColdRead);
@@ -317,7 +317,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property read requires a valid logical owner key");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 auto root = readEntityOptional(snapshot, key, admission, slotsAdmission);
                 if (!root) throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property read requires a present Property root");
@@ -337,7 +337,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property read requires a valid logical owner key");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
                 auto root = HybridPropertyValueReader::readCollection(context, snapshot, key,
@@ -365,7 +365,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"selective Entity Property read requires a valid owner key and nonzero token");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
                 auto result = HybridPropertyValueReader::read(context, snapshot, key, keyToken, large_values_);
@@ -397,7 +397,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property presence read requires a valid owner key and nonzero token");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
                 if (const auto result = HybridPropertyValueReader::exists(context, snapshot, key, keyToken, requireNonNull, large_values_))
@@ -772,7 +772,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"Entity Property count read requires a valid logical owner key");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot);
                 if (const auto count = context.count(key)) return *count;
@@ -799,7 +799,6 @@ namespace graph::storage {
         if (!metadata_.ownsSnapshot(snapshot) || !key.isValid())
             throwRootStoreError(FormatError::FERR_INVALID_HEADER, "hybrid group probe requires its registered source and valid owner");
         if (cancellation) cancellation->check();
-        if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return false;
         if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) return false;
         HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
         return context.ownerLiveness(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{}).has_value();
@@ -810,7 +809,6 @@ namespace graph::storage {
         if (!metadata_.ownsSnapshot(snapshot) || !key.isValid())
             throwRootStoreError(FormatError::FERR_INVALID_HEADER, "hybrid owner probe requires its registered source and valid owner");
         if (cancellation) cancellation->check();
-        if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return false;
         if (!snapshot.superblock().hybrid_property_descriptor_root.isValid()) return false;
         HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
         return context.ownerLiveness(key, transientAdmission ? *transientAdmission : SelectedPropertyReadAdmission{}).value_or(false);
@@ -825,7 +823,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 				"Entity Property token read requires an owned snapshot, valid owner and admissions");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 HybridPropertyReadContext context(metadata_.io_, pages_, metadata_, snapshot, cancellation);
                 if (auto tokens = context.tokens(key, tokenAdmission, transientAdmission)) return std::move(*tokens);
@@ -1404,7 +1402,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property scan read requires a valid logical owner key");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 if (cancellation_) cancellation_->check();
                 auto result = readEntityOptional(snapshot, key, admission, slotsAdmission);
@@ -1430,7 +1428,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property scan read requires a valid logical owner key");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 if (cancellation_) cancellation_->check();
                 const auto pointRead = [&] {
@@ -1473,7 +1471,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"selective Entity Property scan read requires a valid owner key and nonzero token");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 current_page_.reset(); current_page_id_ = PageId{};
                 if (cancellation_) cancellation_->check();
@@ -1493,7 +1491,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property presence scan requires a valid owner key and nonzero token");
 		}
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+        {
             if (snapshot.superblock().hybrid_property_descriptor_root.isValid()) {
                 current_page_.reset(); current_page_id_ = PageId{};
                 if (cancellation_) cancellation_->check();

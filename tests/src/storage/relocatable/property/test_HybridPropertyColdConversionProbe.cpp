@@ -40,9 +40,7 @@ protected:
         auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
         auto conversion = request(kind, memory); conversion.conversion->compact_column_memberships = true;
         conversion.conversion->cold_row_remainder = true;
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-            EXPECT_THROW(run(conversion), FormatException);
-        } else {
+        {
             const auto work = probe(conversion);
             EXPECT_EQ(work.fields, 1); EXPECT_EQ(work.indexes, 1); // Group directory only; no per-field cold index.
             EXPECT_EQ(work.values, large ? 1 : 0); EXPECT_EQ(work.new_values, large ? 1 : 0);

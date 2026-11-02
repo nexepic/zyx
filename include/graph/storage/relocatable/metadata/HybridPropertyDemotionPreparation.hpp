@@ -451,8 +451,6 @@ private:
         std::span<const HybridPropertyLargeFieldPreparation> newRoots,
         std::span<const uint32_t> removedTokens = {}, uint64_t pendingMask = 0) {
         using hybrid_property_detail::require;
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "cold block preparation is disabled");
         require(memory && !changes.empty() && changes.size() <= 64 &&
             (coldReference.isValid() || coldReference == SlottedSlotReference{}) && context.snapshot_.superblock() == batch.current(),
             "cold block preparation requires one source batch and bounded changes");
@@ -644,8 +642,6 @@ private:
         const CancellationCheckpoint *cancellation, const LargeFieldResolver &largeField, bool wholeOwner,
         std::span<const EntityPropertyKey> pendingOwners = {}, bool allowMultipleGroups = false, bool prepareColdPending = false)
         : HybridPropertyDemotionPreparation(memory) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native field demotion is disabled");
         const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
         require(bool(memory) && snapshot.superblock() == batch.current() && !changes.empty() && changes.size() <= (wholeOwner ? 4096U / 48U : 64U),
             "native mixed group preparation exceeds its exact batch or final column work bound");
@@ -894,8 +890,6 @@ public:
         const HybridPropertyFieldPageStore &fields, std::span<const HybridPropertyColumnDelta *const> changes,
         std::span<const EntityPropertyKey> owners, std::shared_ptr<std::pmr::memory_resource> memory,
         const CancellationCheckpoint *cancellation = nullptr, const LargeFieldResolver &largeField = {}, bool prepareColdPending = false) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "pending native owner preparation is disabled");
         const auto require = [](bool value, const char *message) { hybrid_property_detail::require(value, message); };
         require(memory && context.usesSnapshot(snapshot) && snapshot.superblock() == batch.current() &&
             !owners.empty() && owners.size() <= 64U && changes.size() <= 64U,
@@ -959,8 +953,6 @@ public:
         HybridPropertyFieldPageStore &fields, std::span<const EntityPropertyKey> owners,
         std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr,
         std::span<const HybridPropertyColumnDelta *const> additionalChanges = {}, const LargeFieldResolver &largeField = {}, std::span<const EntityPropertyKey> pendingOwners = {}) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native owner deletion preparation is disabled");
         const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
         require(memory && context.usesSnapshot(snapshot) && snapshot.superblock() == batch.current() &&
             !owners.empty() && owners.size() <= RSS_HYBRID_GROUP_CAPACITY && additionalChanges.size() <= 64U && pendingOwners.size() <= 64U,

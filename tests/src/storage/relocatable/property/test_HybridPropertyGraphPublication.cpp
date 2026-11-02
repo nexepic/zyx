@@ -68,7 +68,7 @@ protected:
 };
 TEST_F(HybridPropertyGraphPublicationTest, FormatFlagGovernsTheBoundedRootRequestWithoutAnExtraPublication) {
     const auto before = metadata_->openSnapshot().superblock(); const auto size = io_->fileSize(); const auto root = request();
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    {
         const auto after = publish(root);
         EXPECT_EQ(after.generation.value(), before.generation.value() + 1);
         EXPECT_TRUE(after.hybrid_property_descriptor_root.isValid());
@@ -105,9 +105,6 @@ TEST_F(HybridPropertyGraphPublicationTest, FormatFlagGovernsTheBoundedRootReques
 
 
 
-    } else {
-        EXPECT_THROW(publish(root), FormatException);
-        EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), size);
     }
 }
 TEST_F(HybridPropertyGraphPublicationTest, InvalidRequestsRejectBeforeAnyDerivedPagePreparation) {

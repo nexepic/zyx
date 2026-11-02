@@ -26,7 +26,7 @@ TEST_F(HybridPropertyOrdinaryConversionTest, FormatFlagControlsTheTypedOrdinaryR
     seed(NODE, 2); const auto before = metadata_->openSnapshot().superblock();
     const auto bytes = io_->fileSize(); const auto epoch = io_->dataMutationEpoch();
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); const auto conversion = request(NODE, memory);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) expectPreparedRefusal(conversion);
+    expectPreparedRefusal(conversion);
     else EXPECT_THROW(run(conversion), FormatException);
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
@@ -40,7 +40,7 @@ TEST_F(HybridPropertyOrdinaryConversionTest, NativeTransactionStagesConversionWi
     NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
     auto transaction = planner.beginTransaction();
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
+    {
         transaction.stageHybridPropertyConversion(NODE, 1, memory);
         EXPECT_EQ(transaction.baseSuperblock(), before);
         EXPECT_EQ(transaction.baseSnapshot().superblock(), before);
@@ -53,10 +53,6 @@ TEST_F(HybridPropertyOrdinaryConversionTest, NativeTransactionStagesConversionWi
             EXPECT_NE(std::string(error.what()).find("physical publication is not installed"), std::string::npos);
         }
         EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
-    } else {
-        EXPECT_THROW(transaction.stageHybridPropertyConversion(NODE, 1, memory), FormatException);
-        EXPECT_THROW(transaction.stageHybridPropertyColumns({}, memory), FormatException);
-        EXPECT_TRUE(transaction.isActive()); transaction.rollback();
     }
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);

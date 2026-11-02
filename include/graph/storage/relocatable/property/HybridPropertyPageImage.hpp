@@ -66,7 +66,7 @@ public:
         return page_.readOwned(reference, memory_);
     }
     [[nodiscard]] SlottedSlotReference appendScanMembership(const ScanBlockMembership &value) {
-        require(RSS_SCAN_PATH_FORMAT_ENABLED && value.semantic_generation <= visible_generation_,
+        require(value.semantic_generation <= visible_generation_,
             "scan membership requires its isolated visible format");
         std::array<std::byte, ScanBlockMembership::MAX_BYTES> encoded{};
         const auto bytes = std::span(encoded).first(value.wireSize()); value.encodeInto(bytes);
@@ -74,7 +74,7 @@ public:
     }
     [[nodiscard]] ScanBlockMembership readScanMembership(const SlottedSlotReference &reference,
         DatabaseId database, uint64_t group, Generation descriptorGeneration) const {
-        require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() && descriptorGeneration <= visible_generation_,
+        require(descriptorGeneration.isValid() && descriptorGeneration <= visible_generation_,
             "scan membership has an unsupported or future descriptor");
         return ScanBlockMembership::decode(readRecord(reference), database, descriptorGeneration, group);
     }
@@ -203,8 +203,6 @@ public:
     [[nodiscard]] SlottedPage bindPrivateOwner(const PageOwnerHeader &owner, const CatalogEntry &pool,
         LogSequenceNumber expectedLsn,
         const HybridPropertyExtensionView::ReferenceAdmission &referenceAdmission = {}) && {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid private owner binding is disabled");
         require(pool.segment_id.isValid() && pool.physical_slot.isValid() &&
             pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL && pool.state == SegmentState::SGS_SEALED &&
             pool.owner_id && owner.owner_id == pool.owner_id && pool.generation.isValid() &&
@@ -270,7 +268,7 @@ private:
         require(bytes.size() >= sizeof(uint32_t), "hybrid private slot has no typed record envelope");
         const auto magic = LittleEndianCodec::readU32(bytes, 0);
         if (magic == ScanBlockMembership::MAGIC) {
-            require(RSS_SCAN_PATH_FORMAT_ENABLED && bytes.size() >= ScanBlockMembership::HEADER_BYTES,
+            require(bytes.size() >= ScanBlockMembership::HEADER_BYTES,
                 "scan membership is unsupported or truncated");
             static_cast<void>(ScanBlockMembership::decode(bytes, DatabaseId(LittleEndianCodec::readU64(bytes, 8)),
                 visible_generation_, LittleEndianCodec::readU64(bytes, 24)));

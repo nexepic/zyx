@@ -1290,10 +1290,9 @@ namespace graph::storage {
         const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
         std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
         const CancellationCheckpoint *cancellation) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || (!isHybridPropertyIndexId(indexId) && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
+        if ((!isHybridPropertyIndexId(indexId) && indexId != RSS_GLOBAL_ADJACENCY_INDEX_ID &&
             indexId != RSS_LARGE_VALUE_CONTENT_INDEX_ID) ||
-            (!RSS_SCAN_PATH_FORMAT_ENABLED && indexId == RSS_HYBRID_PROPERTY_INDEX_ID_FIRST +
-                static_cast<uint8_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN)) || !snapshot.isValid() ||
+            !snapshot.isValid() ||
             !metadata_.ownsSnapshot(snapshot) || !memory || !sink || !source || !operationCount || operationCount > 8192U)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native map image planning requires bounded metadata-owned inputs");
         utils::OwnedAllocationScope scope(memory);
@@ -1364,7 +1363,7 @@ namespace graph::storage {
         const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
         std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
         const CancellationCheckpoint *cancellation) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+        if (!metadata_.ownsSnapshot(snapshot) ||
             !isSystemCatalogIndexDefinitionId(definition.index_id) ||
             (definition.kind != IndexDefinitionKind::IDK_LABEL && definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE) ||
             !source || !memory || !sink || !operationCount || operationCount > 8192U)
@@ -1388,7 +1387,7 @@ namespace graph::storage {
         const std::function<void(const std::function<void(const BTreeScalarIndexOperation &)> &)> &source,
         std::shared_ptr<std::pmr::memory_resource> memory, std::function<void(BTreePage)> sink,
         const CancellationCheckpoint *cancellation) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || !metadata_.ownsSnapshot(snapshot) ||
+        if (!metadata_.ownsSnapshot(snapshot) ||
             (!isSystemCatalogIndexDefinitionId(indexId) && !isSystemCatalogConstraintDefinitionId(indexId) && indexId != RSS_SYSTEM_CATALOG_INDEX_ID && !isEntityFreeSpaceIndexId(indexId)) ||
             !source || !memory || !sink || !operationCount || operationCount > 8192U)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native derived images require an owned pin and bounded operation source");

@@ -40,11 +40,7 @@ TEST_F(HybridPropertyLargeFieldPreparationTest, ProposalOwnsPayloadWithoutPublis
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     PropertyValue value(std::string(8192, 'x'));
     const EntityPropertyKey owner{EntityPropertyOwnerKind::EPOK_NODE, 1};
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        EXPECT_THROW(HybridPropertyLargeFieldPreparation::prepare(*metadata_, pin, store, owner, 7, value,
-            LargeValueId(source.next_large_value_id), memory), FormatException);
-        EXPECT_EQ(memory->used(), 0U); return;
-    }
+
     {
         auto proposal = HybridPropertyLargeFieldPreparation::prepare(*metadata_, pin, store, owner, 7, value,
             LargeValueId(source.next_large_value_id), memory);
@@ -72,7 +68,7 @@ TEST_F(HybridPropertyLargeFieldPreparationTest, ProposalOwnsPayloadWithoutPublis
 }
 
 TEST_F(HybridPropertyLargeFieldPreparationTest, SharedContentReusesIdentityAndDifferentTokenDoesNot) {
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;
+
     LargeValueStore store(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
     const PropertyValue value(std::string(8192, 'x'));
     const std::array<PropertyCollectionRootEntry, 1> entries{{{7, value}}};
@@ -173,12 +169,7 @@ TEST_F(HybridPropertyLargeFieldPreparationTest, BorrowedWholeRootProposalAndCold
     PropertyCollectionRoot row{1, graph::Node::typeId, {{2, PropertyValue("user-000000")}, {4, PropertyValue(std::string(8193, 'x'))}}};
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     const std::array<BorrowedPropertyCollectionRootEntry, 2> entries{{{2, &row.entries[0].value}, {4, &row.entries[1].value}}};
-    if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) {
-        const auto pin = metadata_->openSnapshot();
-        EXPECT_THROW(HybridPropertyLargeFieldPreparation::prepareRootBorrowed(*metadata_, pin, store, owner, entries,
-            LargeValueId(pin.superblock().next_large_value_id), memory), FormatException);
-        EXPECT_EQ(memory->used(), 0U); return;
-    }
+
     NativeGraphWritePlannerOptions options; options.first_slot = PhysicalSlotId(40); options.last_slot = PhysicalSlotId(80);
     options.entity_pool_owner_id = 901; options.logical_id_lease_block_size = 1;
     options.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};

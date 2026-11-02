@@ -32,8 +32,6 @@ public:
         std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation = nullptr)
         : pages_(utils::OwnedPmrAllocator<HybridPropertyPageImage>(memory)),
           source_generation_(snapshot.superblock().generation) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column COW preparation is disabled");
         hybrid_property_detail::require(bool(memory) && source_generation_.value() < (std::numeric_limits<uint64_t>::max)(),
             "native column COW preparation requires a bounded owner and next generation");
         next_generation_ = Generation(source_generation_.value() + 1);

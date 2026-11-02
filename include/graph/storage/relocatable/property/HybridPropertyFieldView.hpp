@@ -28,8 +28,6 @@ public:
     };
     [[nodiscard]] static HybridPropertyFieldView open(const PageOwnerHeader &owner,
         std::span<const std::byte> payload, Generation visibleGeneration, LogSequenceNumber visibleLsn) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid field reading is disabled");
         hybrid_property_detail::require(owner.kind == PageOwnerKind::POK_HYBRID_PROPERTY &&
             (owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) == 0 && owner.owner_id && visibleGeneration.isValid() && visibleLsn.isValid() &&
             owner.committed_lsn.isValid() && owner.committed_lsn <= visibleLsn,
@@ -38,7 +36,7 @@ public:
     }
     [[nodiscard]] ScanBlockMembership readScanMembership(const SlottedSlotReference &reference,
         DatabaseId database, uint64_t group, Generation descriptorGeneration) const {
-        hybrid_property_detail::require(RSS_SCAN_PATH_FORMAT_ENABLED && descriptorGeneration.isValid() &&
+        hybrid_property_detail::require(descriptorGeneration.isValid() &&
             descriptorGeneration <= visible_generation_, "scan membership has an unsupported or future descriptor");
         return ScanBlockMembership::decode(page_.read(reference), database, descriptorGeneration, group);
     }

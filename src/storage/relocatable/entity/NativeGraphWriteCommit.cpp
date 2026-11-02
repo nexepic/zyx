@@ -1173,8 +1173,7 @@ namespace graph::storage {
             // changing the summary's contents. Complete scan writes must still
             // maintain its changed entries; retaining the old marker does not
             // certify unvisited pages or enable the insertion fast path.
-            const bool retainStale = RSS_SCAN_PATH_FORMAT_ENABLED &&
-                (snapshot_.superblock().flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
+            const bool retainStale = (snapshot_.superblock().flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
                 !managed && freeSummaryProofs[type].has_value();
             if (!managed && !retainStale) return;
             const uint64_t id = EntityFreeSpaceIndex::indexId(kind);
@@ -2080,7 +2079,7 @@ namespace graph::storage {
                 std::vector<EntityPropertyKey, utils::OwnedPmrAllocator<EntityPropertyKey>> topologyPropertyOwners;
                 std::optional<NativeHybridTopologyPublication> topologyProof;
                 utils::OwnedVector<scan_candidate_detail::ScanNodeChange> scanChanges;
-                if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
+                {
                     if (native_graph_coordinated_ &&
                         (snapshot_.superblock().flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE))) {
                     for (const auto &[id, node] : nodes_) {

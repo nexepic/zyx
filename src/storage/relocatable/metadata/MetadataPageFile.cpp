@@ -668,7 +668,7 @@ namespace graph::storage {
     HybridPropertyDescriptorPage MetadataPageFile::readHybridPropertyDescriptor(PhysicalPageRef reference,
         const Superblock &snapshot, BufferPoolReadHint hint) const {
         validateReadHint(hint);
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != database_id_ ||
+        if (snapshot.database_id != database_id_ ||
             snapshot.data_region_offset != data_region_offset_ || reference != snapshot.hybrid_property_descriptor_root)
             throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor snapshot belongs to another format or file");
         const auto bytes = readPage(reference, hint);
@@ -701,7 +701,7 @@ namespace graph::storage {
 
     void MetadataPageFile::prepareHybridPropertyDescriptorImpl(MetadataWriteBatch &batch,
         const HybridPropertyDescriptor &descriptor, bool nativeCandidate) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != database_id_ ||
+        if (batch.candidate().database_id != database_id_ ||
             batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
             descriptor.semantic_generation != batch.generation() ||
             batch.candidate().hybrid_property_descriptor_root != batch.current().hybrid_property_descriptor_root)
@@ -719,7 +719,7 @@ namespace graph::storage {
     void MetadataPageFile::amendPreparedHybridPropertyDescriptor(MetadataWriteBatch &batch,
         const HybridPropertyDescriptor &descriptor) const {
         const auto reference = batch.candidate().hybrid_property_descriptor_root;
-        if (!RSS_SCAN_PATH_FORMAT_ENABLED || reference == batch.current().hybrid_property_descriptor_root ||
+        if (reference == batch.current().hybrid_property_descriptor_root ||
             !batch.ownsAllocatedPage(reference) || batch.candidate().database_id != database_id_ ||
             batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
             descriptor.semantic_generation != batch.generation())

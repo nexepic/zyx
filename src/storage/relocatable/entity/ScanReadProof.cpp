@@ -91,7 +91,7 @@ VerifiedScanRoot VerifiedScanRoot::verifyComplete(std::shared_ptr<StorageIO> io,
 
 bool VerifiedScanRoot::matches(const RelocatableMetadataStore &metadata, const StorageIO &io,
     const MetadataSnapshotPin &snapshot, const HybridPropertyDescriptor *descriptor) const {
-    return RSS_SCAN_PATH_FORMAT_ENABLED && state_ && state_->metadata == &metadata && state_->io.get() == &io &&
+    return state_ && state_->metadata == &metadata && state_->io.get() == &io &&
         metadata.ownsSnapshot(snapshot) && snapshot.superblock() == state_->root &&
         state_->io_epoch != UINT64_MAX && io.dataMutationEpoch() == state_->io_epoch &&
         (!descriptor || (state_->descriptor && *state_->descriptor == *descriptor));

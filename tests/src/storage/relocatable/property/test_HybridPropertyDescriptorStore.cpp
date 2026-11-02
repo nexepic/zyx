@@ -76,8 +76,8 @@ TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChe
     Superblock current; current.database_id = DatabaseId(9);
     current.generation = Generation(1); current.checkpoint_lsn = LogSequenceNumber(1);
     auto bytes = SuperblockCodec::encode(current);
-    const uint16_t foreignVersion = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 31 : 32;
-    const uint16_t foreignHeader = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 336 : 352;
+    const uint16_t foreignVersion = 31;
+    const uint16_t foreignHeader = 336;
     LittleEndianCodec::writeU16(bytes, 4, foreignVersion);
     LittleEndianCodec::writeU16(bytes, 6, foreignHeader);
     LittleEndianCodec::writeU32(bytes, 112, graph::utils::calculateCrc(bytes.data() + foreignHeader, bytes.size() - foreignHeader));

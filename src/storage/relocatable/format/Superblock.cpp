@@ -152,10 +152,6 @@ namespace graph::storage {
             if ((superblock.flags & RSS_SUPERBLOCK_FLAG_HYBRID_COLUMN_MEMBERSHIP) &&
                 !superblock.hybrid_property_descriptor_root.isValid())
                 throwSuperblockError(FormatError::FERR_INVALID_HEADER, "compact column membership feature has no native descriptor root");
-            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && superblock.hybrid_property_descriptor_root.isValid()) {
-                throwSuperblockError(FormatError::FERR_UNSUPPORTED_VERSION,
-                    "hybrid property descriptor requires the isolated candidate format");
-            }
 			validatePageRef(superblock.index_root_directory_root);
 			validatePageRef(superblock.vector_location_directory_root);
 			validatePageRef(superblock.vector_manifest_directory_root);
@@ -184,8 +180,7 @@ namespace graph::storage {
 			writePageRef(bytes, NODE_ENTITY_DIRECTORY_ROOT_OFFSET, superblock.node_entity_directory_root);
 			writePageRef(bytes, EDGE_ENTITY_DIRECTORY_ROOT_OFFSET, superblock.edge_entity_directory_root);
 			writePageRef(bytes, ENTITY_PROPERTY_DIRECTORY_ROOT_OFFSET, superblock.entity_property_directory_root);
-            if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-                writePageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET, superblock.hybrid_property_descriptor_root);
+            writePageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET, superblock.hybrid_property_descriptor_root);
 			writePageRef(bytes, INDEX_ROOT_DIRECTORY_ROOT_OFFSET, superblock.index_root_directory_root);
 			LittleEndianCodec::writeU64(bytes, NEXT_LOGICAL_PAGE_ID_OFFSET, superblock.next_logical_page_id);
 			LittleEndianCodec::writeU64(bytes, NEXT_LOGICAL_SEGMENT_ID_OFFSET, superblock.next_logical_segment_id);
@@ -330,8 +325,7 @@ namespace graph::storage {
 		superblock.node_entity_directory_root = readPageRef(bytes, NODE_ENTITY_DIRECTORY_ROOT_OFFSET);
 		superblock.edge_entity_directory_root = readPageRef(bytes, EDGE_ENTITY_DIRECTORY_ROOT_OFFSET);
 		superblock.entity_property_directory_root = readPageRef(bytes, ENTITY_PROPERTY_DIRECTORY_ROOT_OFFSET);
-        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            superblock.hybrid_property_descriptor_root = readPageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET);
+        superblock.hybrid_property_descriptor_root = readPageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET);
 		superblock.index_root_directory_root = readPageRef(bytes, INDEX_ROOT_DIRECTORY_ROOT_OFFSET);
 		superblock.next_logical_page_id = LittleEndianCodec::readU64(bytes, NEXT_LOGICAL_PAGE_ID_OFFSET);
 		superblock.next_logical_segment_id = LittleEndianCodec::readU64(bytes, NEXT_LOGICAL_SEGMENT_ID_OFFSET);

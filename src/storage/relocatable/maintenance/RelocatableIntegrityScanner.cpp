@@ -483,7 +483,7 @@ namespace graph::storage {
 				throwIntegrityError(
 						"relocatable integrity scan found a Page Directory target outside its current shared pool");
 			}
-            if (RSS_HYBRID_PROPERTY_FORMAT_ENABLED && catalogEntry->second.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
+            if (catalogEntry->second.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL &&
                 location.page_index >= RSS_PAGE_POOL_FIRST_DATA_FRAME && location.page_index <= RSS_PAGE_POOL_DATA_FRAME_COUNT &&
                 pages.readPageOwner(catalogEntry->second, uint8_t(location.page_index)).kind == PageOwnerKind::POK_HYBRID_PROPERTY) {
                 const auto owner = pages.readPageOwner(catalogEntry->second, uint8_t(location.page_index));

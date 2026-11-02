@@ -138,8 +138,6 @@ public:
         const PropertyValue *replacement, bool eraseOwner = false,
         size_t nativeRecordLimit = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
         bool prepareColdDemotion = false) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column mutation is disabled");
         hybrid_property_detail::require(context.usesSnapshot(snapshot) && bool(memory) &&
             snapshot.superblock().generation.value() < (std::numeric_limits<uint64_t>::max)() &&
             nextGeneration.value() == snapshot.superblock().generation.value() + 1 &&
@@ -200,8 +198,6 @@ private:
         const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot, EntityPropertyKey owner,
         uint32_t token, Generation nextGeneration, std::shared_ptr<std::pmr::memory_resource> memory,
         const PropertyValue &replacement, bool pendingOwner, bool prepareColdDemotion = false) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column insertion is disabled");
         const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
         require(context.usesSnapshot(snapshot) && memory && nextGeneration.value() > snapshot.superblock().generation.value() &&
             nextGeneration.value() - snapshot.superblock().generation.value() == 1, "native insertion has an invalid fence");
@@ -273,8 +269,6 @@ public:
         size_t nativeRecordLimit = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES,
         const CancellationCheckpoint *cancellation = nullptr, bool prepareColdDemotion = false,
         bool prepareColdPending = false) {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "native column merge is disabled");
         hybrid_property_detail::require(bool(memory) && !changes.empty() && changes.size() <= RSS_HYBRID_GROUP_CAPACITY &&
             changes.front() && changes.front()->state_, "native column merge requires bounded authenticated plans and an account");
         utils::OwnedAllocationScope scope(memory);
