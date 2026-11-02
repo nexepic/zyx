@@ -29,6 +29,7 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  for (auto &pin : pinned) pin.release();
  auto old = store->openSnapshot();
  const auto oldGeneration = old.superblock().generation.value();
+ const auto oldRoute = old.superblock().page_directory_root;
  MetadataPublishOptions options; options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
   RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
@@ -38,6 +39,7 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  auto recovered = reopened->openSnapshot();
  EXPECT_EQ(recovered.superblock().generation.value(), oldGeneration + 1U);
  EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+ EXPECT_NE(recovered.superblock().page_directory_root, oldRoute);
  for (const auto &entry : expected) {
   const auto actual = reopened->findCatalog(recovered, entry.segment_id);
   EXPECT_EQ(actual.physical_slot, entry.physical_slot);
