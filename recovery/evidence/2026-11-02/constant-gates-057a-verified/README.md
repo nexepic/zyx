@@ -1,0 +1,3 @@
+# Fixed-format cleanup candidate 057a8563
+
+Standard same-source Ninja build exited 0. Discovery produced the same 11,017 names as the 9dd unit/stress results, including disabled tests: no additions or omissions. The union of prior targeted XML files contained 111 names; 110 matched this binary and all 110 passed. The unmatched `RelocatableProcessCrashTest.KillDuringPostMigrationRouteRadixCandidateRetainsPublishedGenerationAndCanRetry` is a historical name changed earlier during conversion to current-format fixtures; it does not occur in the 9dd discovery either. Full unit and stress validation is pending at this checkpoint. The seven-unit LLVM IR comparison is recorded separately and the one differing unit is not claimed equivalent.
