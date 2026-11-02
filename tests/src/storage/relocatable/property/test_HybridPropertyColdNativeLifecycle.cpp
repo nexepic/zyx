@@ -8,7 +8,6 @@
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 using namespace graph::storage;
 using graph::query::execution::MaterializedByteBudget;
 namespace {
@@ -701,4 +700,3 @@ TEST_F(HybridPropertyColdNativeLifecycleTest, ActualLogicalMixedBirthsKeepIndepe
     }
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

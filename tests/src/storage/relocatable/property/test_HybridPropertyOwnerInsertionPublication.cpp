@@ -332,7 +332,6 @@ protected:
     }
 };
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, PropertylessNodePublishesEntityAndLiveBitThenAcceptsItsFirstColumnField) {
     exercise({.kind = NODE});
 }
@@ -501,9 +500,7 @@ TEST_F(HybridPropertyOwnerInsertionPublicationTest, NewEdgeCannotDuplicateAnExis
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, RequiredFieldFailureDoesNotPublishANewCatalogName) {
     exercise({.kind = NODE, .withProperties = true, .initial = PropertyValue("new name"), .extensionField = true, .withCatalog = true, .allocateName = true, .derived = DerivedCase::ODC_REQUIRED, .expectFailure = true});
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointNodeBirthAndExistingFieldChangeShareTheirColumnImage) {
     exercise({.kind = NODE, .withProperties = true, .updateExisting = true});
 }
@@ -519,18 +516,14 @@ TEST_F(HybridPropertyOwnerInsertionPublicationTest, PartialJointNodeBirthAndExis
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, CompleteJointNodeBirthAndExistingFieldPublicationRecoversBothNewStates) {
     exercise({.kind = NODE, .completeFault = true, .withProperties = true, .updateExisting = true});
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointNodeAndEdgeBirthPublishBothNativeGroupLiveMasks) {
     exercise({.kind = NODE, .withProperties = true, .bothKinds = true});
 }
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointPropertylessNodeAndEdgeBirthPreserveBothNativeColumns) {
     exercise({.kind = NODE, .bothKinds = true});
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointNodeBirthAndDeletionMergeOneFinalColumnAndLiveMask) {
     exercise({.kind = NODE, .withProperties = true, .deleteExisting = true});
 }
@@ -546,13 +539,10 @@ TEST_F(HybridPropertyOwnerInsertionPublicationTest, PartialJointBirthAndDeletion
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, CompleteJointBirthAndDeletionPublishTheNewOwnerAndAllNewFields) {
     exercise({.kind = NODE, .completeFault = true, .withProperties = true, .deleteExisting = true});
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointSecondGroupBirthAndFirstGroupFieldChangePreserveBothSources) {
     exercise({.kind = NODE, .withProperties = true, .owners = 127, .updateExisting = true});
 }
 TEST_F(HybridPropertyOwnerInsertionPublicationTest, JointSecondGroupBirthAndFirstGroupDemotionKeepTheirLiveMasksSeparate) {
     exercise({.kind = NODE, .withProperties = true, .owners = 127, .updateExisting = true, .existingValue = PropertyValue("changed")});
 }
-#endif

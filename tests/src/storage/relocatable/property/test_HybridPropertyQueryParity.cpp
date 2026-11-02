@@ -216,14 +216,7 @@ TEST_F(HybridPropertyQueryParityTest, CoveredSameExecutorMultiHopRetainsAllParal
     EXPECT_EQ(memory->used(), 0U);
 }
 TEST_F(HybridPropertyQueryParityTest, DefaultProfileRemainsRow) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(); const auto rows = read();
-    EXPECT_EQ(rows[1], (Rows{{PropertyValue(int64_t(64)), PropertyValue(int64_t(2016))}}));
-    EXPECT_THROW(convert(EntityPropertyOwnerKind::EPOK_NODE), FormatException);
-    EXPECT_EQ(read(), rows);
-#endif
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyQueryParityTest, SameExecutorPreservesIndexedFilterAggregateOptionalMultiedgesAndLimitAcrossBothLayouts) {
     seed(); const auto row = read();
     ASSERT_EQ(row[1], (Rows{{PropertyValue(int64_t(64)), PropertyValue(int64_t(2016))}}));
@@ -1204,5 +1197,3 @@ TEST_F(HybridPropertyIndexedLifecycleTest, CoveredReferenceControlAndHybridPrope
     EXPECT_EQ(controlRows(true, memory), baseline);
     setAge(100); EXPECT_EQ(controlRows(true, memory), controlRows(false, memory));
 }
-
-#endif

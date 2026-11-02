@@ -169,10 +169,8 @@ protected:
     }
 };
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLayoutScaleTest, IsolatedPinnedNarrowLayoutCensusAt512Owners) { inspect(512, true); }
 TEST_F(HybridPropertyLayoutScaleTest, IsolatedPinnedNarrowLayoutCensusAt4096Owners) { inspect(4096, true); }
 TEST_F(HybridPropertyLayoutScaleTest, IsolatedDrainedNarrowLayoutCensusAt4096Owners) { inspect(4096, false); }
 TEST_F(HybridPropertyLayoutScaleTest, PartialRetirementPublicationRetainsOldAllocationAndNativeValues) { inspectRetirementFault(false); }
 TEST_F(HybridPropertyLayoutScaleTest, CompleteRetirementPublicationRecoversNewAllocationAndNativeValues) { inspectRetirementFault(true); }
-#endif

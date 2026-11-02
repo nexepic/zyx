@@ -7,7 +7,6 @@
 #include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
 #include "storage/relocatable/property/HybridPropertyReadContextTestAccess.hpp"
 #include "storage/relocatable/property/HybridPropertyDescriptorStoreTestAccess.hpp"
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace graph::storage::test {
 using graph::query::execution::MaterializedByteBudget;
 class HybridPropertyColdRowRoutingTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
@@ -204,4 +203,3 @@ protected:
     }
 };
 }
-#endif

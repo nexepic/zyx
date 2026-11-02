@@ -57,7 +57,6 @@ TEST_F(HybridPropertyOwnerDeletionTest, ZeroSuffixSetReadsTheOrdinaryKeyOnlyAdja
     EXPECT_FALSE(set.find(pin, key(GlobalAdjacencyDirection::GAD_OUT, 2, 1)));
     size_t records = 0; EXPECT_TRUE(set.visitAll(pin, 5, [&](const auto &) { ++records; return true; })); EXPECT_EQ(records, 4U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerDeletionTest, NodeRemovalPublishesEntityMapLivenessAndFieldDemotionTogether) {
     seed(NODE); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     auto conversion = request(NODE, memory); conversion.conversion->publish_candidate = true;
@@ -530,4 +529,3 @@ TEST_F(HybridPropertyOwnerDeletionTest, AtomicNodeDeletionHandlesSelfLoopsAndUnt
     EXPECT_EQ(properties_->readEntityPropertyOptional(old, {EDGE, outgoing}, 1)->value, PropertyValue(int64_t(43)));
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

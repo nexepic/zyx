@@ -31,7 +31,6 @@ TEST_F(HybridPropertyInlineMutationTest, DisabledOrUnconvertedComplexWritesAreRe
     EXPECT_THROW((void)write(cells, memory), FormatException);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyInlineMutationTest, ComplexReplacementDemotesOnlyItsColumnAndKeepsOldPinsAndReopen) {
     seed(NODE); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(NODE, memory));
     const auto old = metadata_->openSnapshot(); const auto original = properties_->readEntity(old, {NODE, 1});
@@ -170,9 +169,7 @@ TEST_F(HybridPropertyInlineMutationTest, RepeatedSmallWritesReusePhysicalFramesW
     EXPECT_EQ(properties_->readEntity(metadata_->openSnapshot(), {NODE, 1}).entries[0].value, PropertyValue(int64_t(169)));
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyInlineMutationTest, PackedShortTextColumnsUseTypedSinksAndRetainUpdateDemotionAndOldPins) {
  seed(NODE,64,1);
  auto options=placement();options.property_roots.page_owner_id=902;
@@ -319,9 +316,7 @@ TEST_F(HybridPropertyInlineMutationTest, PackedShortTextColumnsUseTypedSinksAndR
  auto reopened=readOnly->openSnapshot();
  EXPECT_EQ(reopenedProperties.readEntity(reopened,{NODE,1}).entries.front().value,PropertyValue("12345678"));
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyInlineMutationTest, GroupedColumnsPreserveSparseMembersAndUnrelatedExtensionAuthority) {
  seed(NODE,64,2);auto options=placement();options.property_roots.page_owner_id=902;
  NativeGraphWritePlanner writer(*metadata_,*entities_,*labels_,*properties_,*btree_pages_,options);
@@ -381,4 +376,3 @@ TEST_F(HybridPropertyInlineMutationTest, GroupedColumnsPreserveSparseMembersAndU
  EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_,*metadata_,memory).scan());
  EXPECT_EQ(memory->used(),0U);
 }
-#endif

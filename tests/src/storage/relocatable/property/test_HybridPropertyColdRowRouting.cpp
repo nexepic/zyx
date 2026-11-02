@@ -12,7 +12,6 @@
 using namespace graph::storage;
 using graph::PropertyValue;
 using graph::query::execution::MaterializedByteBudget;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 // Actual authenticated native field/index pages with an in-memory candidate
 // descriptor, as in the existing read-context fixture. This does NOT enable a
 // production converter or claim cold-ROW publication/ownership acceptance.
@@ -356,4 +355,3 @@ TEST_F(HybridPropertyColdRowRoutingTest, CompleteCollectionCountAdmissionAndValu
     }
     EXPECT_EQ(decodes, 1); EXPECT_EQ(admitted, 3U); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

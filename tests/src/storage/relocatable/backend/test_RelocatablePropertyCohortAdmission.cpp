@@ -6,7 +6,6 @@
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 using namespace relocatable_storage_backend_test;
 TEST_F(RelocatableStorageBackendTest, PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries) {
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
     options.maximum_database_file_bytes = uint64_t(2) * 1024 * 1024 * 1024;
     ASSERT_TRUE(options.adaptive_property_row_chunks);
@@ -105,5 +104,4 @@ TEST_F(RelocatableStorageBackendTest, PublicAdaptiveRowStoreAdmitsOnlyTheWholeNa
     EXPECT_EQ(gather.getRows()[2].at("value").asPrimitive(), PropertyValue(int64_t(777)));
     backend->close();
     EXPECT_EQ(owning.getRows()[0].at("owner").asNode().getProperties().at("p64"), PropertyValue(int64_t(65)));
-#endif
 }

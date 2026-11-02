@@ -1939,7 +1939,6 @@ TEST_F(RelocatablePhysicalSegmentAllocatorTest, ValidatesStorageIdentityAndCheck
 			FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(RelocatablePhysicalSegmentAllocatorTest, NativeRecoveryRejectsFramedRoutesIntoWholeSegmentObjects) {
     auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1)); PhysicalSegmentAllocator allocator(io, *store);
     const auto allocation = allocator.allocate(request(1), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2)); ASSERT_TRUE(allocation);
@@ -1960,4 +1959,3 @@ TEST_F(RelocatablePhysicalSegmentAllocatorTest, NativeRecoveryAuthenticatesWhole
     EXPECT_THROW((void)reopened->reserveNativeGraphLogicalIds(1, 0), FormatException);
     EXPECT_EQ(reopened->openSnapshot().superblock(), before);
 }
-#endif

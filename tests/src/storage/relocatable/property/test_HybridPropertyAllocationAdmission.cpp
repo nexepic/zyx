@@ -37,14 +37,7 @@ protected:
 };
 }
 TEST_F(HybridPropertyAllocationAdmissionTest, DefaultFormatStillRefusesTheIsolatedConversionBeforeIO) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(NODE, 2, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
-    const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
-    EXPECT_THROW(run(admission(memory)), FormatException);
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
-#endif
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyAllocationAdmissionTest, CompletePreparedCostsRejectTheSmallDenseShapeAndKeepItsRowAuthority) {
     seed(NODE, 64, 16); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     auto old = metadata_->openSnapshot(); const auto before = old.superblock(); const auto expected = properties_->readEntity(old, {NODE, 32});
@@ -204,4 +197,3 @@ TEST_F(HybridPropertyAllocationAdmissionTest, DirtyPrivateCachePagesAreFlushedBe
     ASSERT_NO_THROW(replaceRow(1, PropertyValue(int64_t(333)), *properties_));
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

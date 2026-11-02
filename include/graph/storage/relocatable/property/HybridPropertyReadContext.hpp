@@ -450,7 +450,6 @@ private:
         return FieldRoute::HFR_FOUND;
     }
 private:
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     friend class HybridPropertyValueReader;
     // The borrowed body is owned by this call's stack, not by a cache. The
     // original point/count readers run synchronously inside each ordered run.
@@ -704,7 +703,6 @@ private:
         if (unchanged) debug::PerfTrace::addValue("native_graph.hybrid.full_column_batches", 1);
         return unchanged;
     }
-#endif
     friend class HybridPropertyReadContextTestAccess;
     friend class HybridPropertyDirectoryIntegrity;
     friend class HybridPropertyDemotionPreparation;
@@ -757,11 +755,7 @@ private:
         return group.live & (UINT64_C(1) << hybridPropertySlotFor(owner));
     }
     [[nodiscard]] bool certifiedOwners(std::span<const EntityPropertyKey> owners) const {
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         return descriptor_ && ScanBatchReadScope::covers(metadata_, *source_io_, snapshot_, *descriptor_, owners);
-#else
-        static_cast<void>(owners); return false;
-#endif
     }
     [[nodiscard]] bool authenticateOwnerRoutes(const HybridPropertyGroupRecord &group,
         std::span<const EntityPropertyKey> owners) const {
@@ -788,9 +782,7 @@ private:
             check(); require(bool(entities[i]) == isLive(owners[i], group) && !rows[i],
                 "hybrid grouped owner has invalid Entity Map or competing ROW routing");
         }
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         debug::PerfTrace::addValue("native_graph.hybrid.owner_route_checks_performed", int64_t(owners.size()));
-#endif
         return false;
     }
     // One bounded continuation for certified monotonic windows. Seeking a
@@ -803,10 +795,8 @@ private:
             const auto binding = bind(kind, 3);
             window.directory.emplace(binding.root.index_id, trees_, metadata_, BTreeLeafValueLayout::BLVL_EMPTY, binding);
             size_t limit = (std::numeric_limits<size_t>::max)() - 1U;
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
             limit = size_t((std::min)(descriptor_->scan_membership_group_count,
                 uint64_t((std::numeric_limits<size_t>::max)() - 2U))) + 2U;
-#endif
             window.continuation.emplace(window.directory->openFixedKeyRangeCursor(snapshot_,
                 std::span<const std::byte>(key), limit, HybridPropertyGroupDirectoryMap::Record{}.size(),
                 BufferPoolReadHint::BPRH_NORMAL, false, cancellation_));
@@ -932,9 +922,7 @@ private:
                 require(!metadata_.findEntityPropertyLocationOptional(snapshot_, owner), "hybrid group owner still has a competing ROW root");
                 authenticatedOwners |= ownerBit;
                 debug::PerfTrace::addValue("native_graph.hybrid.owner_route_checks", 1);
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
                 debug::PerfTrace::addValue("native_graph.hybrid.owner_route_checks_performed", 1);
-#endif
             }
         }
         if (cacheable) {

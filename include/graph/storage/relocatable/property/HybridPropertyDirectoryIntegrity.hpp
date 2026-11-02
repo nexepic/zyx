@@ -21,9 +21,7 @@ public:
     using LargeValueVisitor = std::function<void(const LargeValueRef &)>;
     struct Report {
         uint64_t groups = 0, memberships = 0, columns = 0, extensions = 0, large_values = 0, directory_selectors = 0, cold_blocks = 0, cold_rows = 0;
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         uint64_t scan_groups = 0, scan_nodes = 0;
-#endif
     };
     [[nodiscard]] static Report verify(const HybridPropertyReadContext &context,
         const MetadataSnapshotPin &snapshot, std::shared_ptr<std::pmr::memory_resource> memory,
@@ -184,7 +182,6 @@ public:
                     context.check(); visitLarge(*extension.reference());
                 }
             }
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
             else if (magic == ScanBlockMembership::MAGIC) {
                 const auto group = LittleEndianCodec::readU64(bytes, 24);
                 static_cast<void>(ScanBlockMembership::decode(bytes, snapshot.superblock().database_id,
@@ -197,7 +194,6 @@ public:
                 require(value && HybridPropertyDirectoryCodec::decodeLocator(*value) == reference,
                     "scan membership slot is not owned by its exact directory locator");
             }
-#endif
             else require(false, "native field page contains an unknown live record type");
             add(records, 1);
         });
@@ -208,7 +204,6 @@ public:
 private:
     static void verifyScanMembership(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,
         const std::shared_ptr<std::pmr::memory_resource> &memory, Report &report) {
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         using Map = ScanMembershipDirectoryMap;
         constexpr auto ordinal = static_cast<size_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
         const auto indexId = hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
@@ -266,9 +261,6 @@ private:
                 counts.groups == context.descriptor_->scan_membership_group_count &&
                 counts.nodes == context.descriptor_->scan_live_node_count),
             "scan membership descriptor counts disagree with its complete primary coverage");
-#else
-        static_cast<void>(context); static_cast<void>(snapshot); static_cast<void>(memory); static_cast<void>(report);
-#endif
     }
     template<class Map>
     static void requireLocator(const HybridPropertyReadContext &context, const MetadataSnapshotPin &snapshot,

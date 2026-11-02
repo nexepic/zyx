@@ -3,7 +3,6 @@ using namespace graph::storage;
 using graph::PropertyValue;
 using graph::OwnedPropertyValue;
 using graph::query::execution::MaterializedByteBudget;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace {
 class HybridPropertyCompactMembershipLifecycleTest : public graph::storage::test::HybridPropertyOrdinaryConversionTestFixture {};
 }
@@ -173,4 +172,3 @@ TEST_F(HybridPropertyCompactMembershipLifecycleTest, NativeTransactionStagesComp
     EXPECT_EQ(properties_->readEntity(native, {NODE, 1}), properties_->readEntity(row, {NODE, 1}));
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

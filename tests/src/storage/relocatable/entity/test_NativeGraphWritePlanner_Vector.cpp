@@ -192,7 +192,6 @@ protected:
 	// The raw planner fixture does not maintain SCAN membership. Validate the
 	// exact vector image after building a completed image from real wide ROWs.
 	void expectIntegrityOnCompleteScanImage(bool exercisePublic = false) {
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         constexpr size_t seedCount = 1024U, fieldCount = 32U;
         size_t existingNodes = 0;
         { auto pin = metadata_->openSnapshot();
@@ -307,9 +306,6 @@ protected:
         ASSERT_TRUE(file_->is_open());
         io_ = std::make_shared<StorageIO>(file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
         reopenNativeStores();
-#else
-        EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
-#endif
     }
 
 	void reopenNativeStores() {

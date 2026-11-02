@@ -25,12 +25,6 @@ namespace graph::storage::scan_candidate_detail {
         const std::shared_ptr<query::execution::MaterializedByteBudget> &memory,
         size_t maximumGroups, const std::function<bool(const ScanBlockMembership &)> &visitor,
         const CancellationCheckpoint *cancellation = nullptr) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-        static_cast<void>(io); static_cast<void>(metadata); static_cast<void>(snapshot);
-        static_cast<void>(memory); static_cast<void>(maximumGroups); static_cast<void>(visitor);
-        static_cast<void>(cancellation);
-        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "stored scan membership requires its isolated format");
-#else
         constexpr size_t limit = 1024U * 1024U;
         if (!io || !metadata.usesDataStorage(io) || !metadata.ownsSnapshot(snapshot) || !memory ||
             memory->used() > limit || memory->available() > limit - memory->used() || !maximumGroups || !visitor)
@@ -108,6 +102,5 @@ namespace graph::storage::scan_candidate_detail {
         }
         counts.exhausted = exhausted;
         return counts;
-#endif
     }
 }

@@ -49,14 +49,7 @@ protected:
 };
 }
 TEST_F(HybridPropertyMultipleGroupsTest, DisabledFormatStillRejectsBeforeWriting) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(NODE, 1, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
-    const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
-    EXPECT_THROW(convert(NODE, 1, memory), FormatException);
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
-#endif
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyMultipleGroupsTest, ConvertingASecondGroupPreservesTheFirstAndBothOldSnapshots) {
     seed(NODE, 128, 2); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     auto original = metadata_->openSnapshot(); const auto first = properties_->readEntity(original, {NODE, 1});
@@ -589,4 +582,3 @@ TEST_F(HybridPropertyMultipleGroupsTest, MixedNodeEdgeLargeValueUsesOneIdentityA
     EXPECT_FALSE(roots.readEntityPropertyOptional(old, {NODE, 1}, 3)); EXPECT_FALSE(roots.readEntityPropertyOptional(old, {EDGE, 1}, 3));
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

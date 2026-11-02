@@ -40,7 +40,6 @@ TEST_F(HybridPropertyLargeMutationTest, DisabledOrUnconvertedLargeWritesLeaveThe
     EXPECT_THROW((void)write(cells, memory), FormatException);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLargeMutationTest, MissingLargeFieldsCreateOneContentIdentityAndPreserveOldPinsAndNoop) {
     seed(NODE, 2, 0); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(NODE, memory));
     LargeValueStore values(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
@@ -189,4 +188,3 @@ TEST_F(HybridPropertyLargeMutationTest, CorruptLargeContentCannotBeSilentlyDisca
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
     EXPECT_EQ(reference(metadata_->openSnapshot(), {NODE, 1}, 1), ref); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

@@ -53,7 +53,6 @@ protected:
     }
 };
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLargePublicationTest, FreshFieldContentPublishesWithOneDeduplicatedIdentityAndItsIndex) {
     LargeValueStore values(io_, *metadata_); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
     seedLarge(values, roots, NODE); const auto old = metadata_->openSnapshot(); const auto before = old.superblock();
@@ -326,4 +325,3 @@ TEST_F(HybridPropertyLargePublicationTest, RowReachabilityAfterFreshInverseKeeps
     EXPECT_EQ(release.retired_values, 0U); EXPECT_EQ(roots.readEntity(metadata_->openSnapshot(), {NODE, 1}), expected);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

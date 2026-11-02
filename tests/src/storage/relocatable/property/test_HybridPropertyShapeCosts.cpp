@@ -4,7 +4,6 @@
 using namespace graph::storage;
 using graph::PropertyValue;
 using graph::query::execution::MaterializedByteBudget;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace {
 enum class ShapeKind { SK_DENSE, SK_UNIQUE, SK_MIXED, SK_MULTILABEL, SK_LARGE, SK_WIDE, SK_INTERLEAVED };
 struct Shape { const char *name; size_t owners, fields, columns; ShapeKind kind; };
@@ -122,8 +121,6 @@ INSTANTIATE_TEST_SUITE_P(FixedShapes, HybridPropertyShapeCostsTest, testing::Val
     Shape{"shared_large", 64, 1, 0, ShapeKind::SK_LARGE}, Shape{"wide4096", 64, 64, 64, ShapeKind::SK_WIDE},
     Shape{"interleaved_dense_sparse", 64, 16, 8, ShapeKind::SK_INTERLEAVED}),
     [](const testing::TestParamInfo<Shape> &info) { return info.param.name; });
-#endif
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace {
 class HybridPropertyMatureShapeCostsTest : public graph::storage::test::HybridPropertyOrdinaryConversionTestFixture {};
 }
@@ -182,8 +179,6 @@ TEST_F(HybridPropertyMatureShapeCostsTest, EightBoundedGroupsKeepWholeDatabaseCo
         << " candidate_bootstrap=" << candidate->bootstrap_bytes << " row_emergency=" << row->emergency_reserve_bytes
         << " candidate_emergency=" << candidate->emergency_reserve_bytes << '\n';
 }
-#endif
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyMatureShapeCostsTest, CohortSavingDoesNotAuthorizeItsFirstGroupPublication) {
     // The registered eight-group total passes the byte gate. Admission must
     // still authenticate the actual first publication, not borrow that future
@@ -243,8 +238,6 @@ TEST_F(HybridPropertyMatureShapeCostsTest, CohortSavingDoesNotAuthorizeItsFirstG
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyMatureShapeCostsTest, CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner) {
     constexpr size_t groups = 8, fields = 64, owners = groups * 64;
     seed(NODE, owners, 0);
@@ -309,4 +302,3 @@ TEST_F(HybridPropertyMatureShapeCostsTest, CompleteGatedCohortPublishesOnceAndKe
         << " entity=" << cost->sealed_pool_bytes[size_t(NativeStorageAllocationKind::NSAK_ENTITY)]
         << " byte_gate=admit\n";
 }
-#endif

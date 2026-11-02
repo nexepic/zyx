@@ -16,7 +16,6 @@ TEST(ScanMembershipDirectoryTest, UsesTheCompleteNodeDomainAndBigEndianOrder) {
     EXPECT_THROW(static_cast<void>(Codec::decodeKey(zero)), FormatException);
 }
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 
 TEST_F(BuildingScanMembershipTest, PublishesDirectoryAndCountsTogetherAndPreservesOldPinsAndReopen) {
     insert(1, 0, {}); insert(64, 1, {7}); insert(65, 2, {7, 11});
@@ -1309,45 +1308,3 @@ TEST_F(BuildingScanMembershipTest, CompletionPublishesAtomicallyAndReadyOutlives
         std::error_code ignored; std::filesystem::remove(target, ignored);
     }
 }
-
-#else
-TEST(BuildingScanMembershipTest, DefaultFormatCannotInstallOrPublishScanMembership) {
-    const auto path = std::filesystem::temp_directory_path() /
-        ("zyx-building-refusal-" + boost::uuids::to_string(boost::uuids::random_generator()()));
-    {
-        auto file = std::make_shared<std::fstream>(path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
-        ASSERT_TRUE(file->is_open());
-        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        Superblock root; root.database_id = DatabaseId(71); root.generation = Generation(1);
-        root.checkpoint_lsn = LogSequenceNumber(1);
-        auto metadata = RelocatableMetadataStore::initializeNew(io, root);
-        const auto before = metadata->openSnapshot().superblock();
-        auto request = BuildingScanMembershipTestAccess::create();
-        request.expected_database_id = before.database_id; request.expected_generation = before.generation;
-        request.expected_descriptor = before.hybrid_property_descriptor_root; request.group_id = 1;
-        request.first_slot = PhysicalSlotId(70); request.last_slot = PhysicalSlotId(127); request.field_pool_owner_id = 989;
-        request.memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
-        io->resetStats();
-        try {
-            static_cast<void>(metadata->installBuildingScanMembershipGroup(request, LogSequenceNumber(2)));
-            FAIL() << "default format admitted scan installation";
-        } catch (const FormatException &error) { EXPECT_EQ(error.error(), FormatError::FERR_UNSUPPORTED_VERSION); }
-        EXPECT_THROW(static_cast<void>(ScanBuildingImageBuilder::populatePrimaryMembership(io, *metadata,
-            request.memory, request.first_slot, request.last_slot, request.field_pool_owner_id)), FormatException);
-        const std::filesystem::path refused(path.string() + ".scan");
-        EXPECT_THROW(static_cast<void>(ScanBuildingImageBuilder::cloneWithPrimaryMembership(path, refused,
-            request.memory, UINT64_C(64) * 1024U * 1024U, 989)), FormatException);
-        EXPECT_FALSE(std::filesystem::exists(refused));
-        auto maintenance = BuildingScanMembershipTestAccess::maintenance();
-        maintenance.memory = request.memory;
-        EXPECT_THROW(static_cast<void>(metadata->reclaimOneBuildingScanMetadataPool(maintenance, LogSequenceNumber(2))), FormatException);
-        EXPECT_THROW(static_cast<void>(ScanBuildingImageBuilder::constructFieldsForBuilding(io, *metadata,
-            request.memory, request.first_slot, request.last_slot, request.field_pool_owner_id)), FormatException);
-        EXPECT_EQ(io->stats().read_calls, 0U); EXPECT_EQ(io->stats().write_calls, 0U);
-        EXPECT_EQ(metadata->openSnapshot().superblock(), before);
-    }
-    std::error_code ignored; std::filesystem::remove(path, ignored);
-    EXPECT_FALSE(RSS_SCAN_PATH_FORMAT_ENABLED);
-    EXPECT_THROW(static_cast<void>(ScanMembershipDirectoryCodec::bind({}, {})), FormatException);
-}
-#endif

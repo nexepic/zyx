@@ -69,7 +69,6 @@ TEST(HybridPropertyPageBindingTest, FeatureGuardAndOwnedEnumerationLeaveSourceUn
         EXPECT_EQ(ordinary.readOwned(second, memory).size(), 1U);
     }
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST(HybridPropertyPageBindingTest, MixedNodeAndEdgeFieldsBindAsOneTypedFrameAndRetainSemanticVisibility) {
     auto memory = std::make_shared<MaterializedByteBudget>(65536);
     {
@@ -212,7 +211,6 @@ TEST(HybridPropertyPageBindingTest, LargeReferenceBindingRequiresRetainedAdmissi
     EXPECT_GT(media.bytes(), 0U); media.set(0);
     EXPECT_EQ(bound.ownerKind(), PageOwnerKind::POK_HYBRID_PROPERTY);
 }
-#endif
 class HybridPropertyPublicationGuardTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {};
 TEST_F(HybridPropertyPublicationGuardTest, OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation) {
     SharedPagePoolAllocator allocator(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION);
@@ -283,7 +281,6 @@ TEST_F(HybridPropertyPhysicalReaderTest, FeatureAndRowBoundariesRemainExplicit) 
     SharedPagePoolAllocator ordinary(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
     EXPECT_EQ(ordinary.read(pin, PageId(41)).owner.kind, PageOwnerKind::POK_PROPERTY);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyPhysicalReaderTest, ActualDirectoryAndPoolRouteSupportsOwnedFallbackPinAndMove) {
     seedRowPool(); installFieldFrame();
     HybridPropertyFieldPageStore reader(io_, *metadata_);
@@ -358,7 +355,6 @@ TEST_F(HybridPropertyPhysicalReaderTest, ValidChecksumsDoNotAuthorizeForeignOwne
         EXPECT_EQ(reader.read(pin, PageId(41)).isPinned(), cached);
     }
 }
-#endif
 
 TEST(HybridPropertyPageBindingTest, RowRemainderGroupUsesAuthenticatedSamePageMembershipInBorrowedView) {
     if constexpr (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED) return;

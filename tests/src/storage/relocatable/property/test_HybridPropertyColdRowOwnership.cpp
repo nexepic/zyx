@@ -1,6 +1,5 @@
 #include "storage/relocatable/property/HybridPropertyColdRowRoutingTestFixture.hpp"
 #include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 using namespace graph::storage;
 using graph::query::execution::MaterializedByteBudget;
 using graph::query::execution::MaterializedByteLimitExceeded;
@@ -241,4 +240,3 @@ TEST_F(HybridPropertyColdRowOwnershipTest, ScannerCannotGrantExhaustionWhenMetad
       EXPECT_FALSE(result.exhausted); EXPECT_EQ(result.locations_scanned, 0U); }
     EXPECT_EQ(sink.calls, 0U); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

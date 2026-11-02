@@ -19,27 +19,17 @@ protected:
 };
 }
 TEST_F(HybridPropertyMapTransactionsTest, DefaultFormatRejectsMapStagingWithoutChangingTheRowSource) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(NODE, 2, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); auto writer = planner();
-    auto tx = writer.beginTransaction(); const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
-    const std::array<PropertyCollectionRoot, 1> roots{{{1, graph::Node::typeId, {{1, PropertyValue(int64_t(99))}}}}};
-    EXPECT_THROW(tx.stageHybridPropertyMaps(roots, REPLACE, memory), FormatException); EXPECT_TRUE(tx.isActive());
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
-#endif
 }
 TEST_F(HybridPropertyMapTransactionsTest, OwnerProbeIsSnapshotBoundAndDistinguishesPropertylessLiveOwnersFromMissingOwners) {
     seed(NODE, 49, 2); auto row = metadata_->openSnapshot(); EXPECT_FALSE(properties_->isHybridPropertyOwner(row, {NODE, 1}));
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(memory));
     auto current = metadata_->openSnapshot(); EXPECT_TRUE(properties_->isHybridPropertyOwner(current, {NODE, 1}));
     EXPECT_TRUE(properties_->isHybridPropertyOwner(current, {NODE, 49})); EXPECT_FALSE(properties_->isHybridPropertyOwner(current, {NODE, 60}));
     EXPECT_FALSE(properties_->isHybridPropertyOwner(row, {NODE, 1}));
-#endif
     auto foreign = RelocatableMetadataStore::openReadOnly(io_); auto pin = foreign->openSnapshot();
     EXPECT_THROW((void)properties_->isHybridPropertyOwner(pin, {NODE, 1}), FormatException);
     EXPECT_THROW((void)properties_->isHybridPropertyOwner(row, {NODE, 0}), FormatException);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyMapTransactionsTest, MergeOwnsChangedValuesPreservesUnmentionedFieldsAndKeepsStoredNullDistinctFromMissing) {
     seed(NODE, 49, 2); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(memory));
     auto old = metadata_->openSnapshot(); const auto expectedOld = properties_->readEntity(old, {NODE, 1}); auto writer = planner(); auto tx = writer.beginTransaction();
@@ -173,4 +163,3 @@ TEST_F(HybridPropertyMapTransactionsTest, MergingThe48thHomogeneousMemberDoesNot
     EXPECT_EQ(report.columns, 1U); EXPECT_EQ(report.extensions, 48U); EXPECT_EQ(report.memberships, 96U);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

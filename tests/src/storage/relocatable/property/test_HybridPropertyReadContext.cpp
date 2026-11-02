@@ -254,7 +254,6 @@ TEST_F(HybridPropertyReadContextTest, ColumnDeltaRequiresTheExperimentalFormatAn
         {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, nullptr), FormatException);
     EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, CandidateRoutesActualMembershipsColumnsAndSingleFieldExtensions) {
     seed(); const auto pin = metadata_->openSnapshot();
     auto reader = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
@@ -385,9 +384,7 @@ TEST_F(HybridPropertyReadContextTest, MissingSourceAndCompetingRowFailClosed) {
     EXPECT_THROW(missing.visitField({EntityPropertyOwnerKind::EPOK_NODE, 2}, 1, [](const auto &) {}, [](const auto &) {}), FormatException);
     EXPECT_THROW(missing.count({EntityPropertyOwnerKind::EPOK_NODE, 2}), FormatException);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, FullCollectionAdmitsAllEntriesBeforeOutputAndRetainsOnlyReturnedStorage) {
     seed(false, 128); const auto pin = metadata_->openSnapshot();
     auto context = HybridPropertyReadContextTestAccess::open(io_, *slotted_pages_, *metadata_, pin, descriptor_);
@@ -1404,9 +1401,7 @@ TEST_F(HybridPropertyReadContextTest, InverseConversionRejectsWrongGroupQuotaAnd
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(io_->fileSize(), size); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), pin.superblock());
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges) {
     extra_columns_ = 2; seed();
     const auto pin = metadata_->openSnapshot();
@@ -1501,9 +1496,7 @@ TEST_F(HybridPropertyReadContextTest, MixedGroupMutationsCloneSharedSourcesOnceA
     EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
 }
 
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, MixedGroupKeepsAQualifiedColumnAfterRemovalAlongsideAnotherFieldDemotion) {
     live_owner_count_ = 49; group_memberships_ = 50; extra_columns_ = 1; seed();
     const auto pin = metadata_->openSnapshot();
@@ -1556,9 +1549,7 @@ TEST_F(HybridPropertyReadContextTest, MixedGroupKeepsAQualifiedColumnAfterRemova
     EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, movedPlan, memory)), FormatException);
     EXPECT_THROW((HybridPropertyColumnWritePreparation(pin, fields, movedPlan, memory)), FormatException);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce) {
     extra_columns_ = 1; seed(false, 8192, true);
     const auto pin = metadata_->openSnapshot();
@@ -1662,9 +1653,7 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionRetainsQualifiedColumnsA
     }
     EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionLeavesAnUninvolvedColumnByteIdenticalAndRefundsFailures) {
     live_owner_count_ = 49; group_memberships_ = 50; extra_columns_ = 1; extra_column_missing_owner_ = 1;
     seed(); const auto pin = metadata_->openSnapshot();
@@ -1727,9 +1716,7 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionLeavesAnUninvolvedColumn
     }
     EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(io_->fileSize(), fileSize);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyReadContextTest, ExtensionOnlyOwnerDeletionPreservesSharedLargeValueAndUnchangedColumns) {
     live_owner_count_ = 49; group_memberships_ = 51; column_missing_owner_ = 1; shared_large_owner_ = true;
     seed(false, 8192, true); const auto pin = metadata_->openSnapshot();
@@ -1773,4 +1760,3 @@ TEST_F(HybridPropertyReadContextTest, ExtensionOnlyOwnerDeletionPreservesSharedL
     EXPECT_EQ(memory->used(), baseline); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
     EXPECT_EQ(context.count(owner), 1U); EXPECT_EQ(context.count({owner.owner_kind, 2}), 2U);
 }
-#endif

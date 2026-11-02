@@ -17,10 +17,6 @@
 namespace graph::storage {
 Superblock RelocatableMetadataStore::completeBuildingScanImage(const BuildingScanCompletionRequest &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(request); static_cast<void>(checkpointLsn); static_cast<void>(options);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan completion requires its isolated format");
-#else
     constexpr uint64_t diskLimit = UINT64_C(2) * 1024U * 1024U * 1024U;
     constexpr size_t memoryLimit = 7U * 1024U * 1024U;
     if (!request.memory || request.memory->used() > memoryLimit ||
@@ -69,16 +65,11 @@ Superblock RelocatableMetadataStore::completeBuildingScanImage(const BuildingSca
     check();
     publishBatch(batch, writer, options);
     return batch.candidate();
-#endif
 }
 
 MetadataPagePoolReclamation RelocatableMetadataStore::reclaimOneBuildingScanMetadataPool(
     const BuildingScanMaintenanceRequest &request, LogSequenceNumber checkpointLsn,
     const MetadataPublishOptions &options) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(request); static_cast<void>(checkpointLsn); static_cast<void>(options);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "private scan maintenance requires its isolated format");
-#else
     constexpr size_t limit = 7U * 1024U * 1024U;
     if (!request.memory || request.memory->used() > limit ||
         request.memory->available() > limit - request.memory->used() || !checkpointLsn.isValid() ||
@@ -323,6 +314,5 @@ MetadataPagePoolReclamation RelocatableMetadataStore::reclaimOneBuildingScanMeta
 		}
 		metadata_page_pool_.releaseEmptyCatalogPools(candidateSlots);
 		return MetadataPagePoolReclamation{batch.candidate(), candidateSlots.size(), std::move(candidateSlots)};
-#endif
 }
 } // namespace graph::storage

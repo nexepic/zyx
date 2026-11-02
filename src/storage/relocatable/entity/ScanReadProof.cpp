@@ -41,11 +41,6 @@ VerifiedScanRoot VerifiedScanRoot::verifyComplete(std::shared_ptr<StorageIO> io,
     const std::shared_ptr<query::execution::MaterializedByteBudget> &workspace,
     const std::shared_ptr<std::pmr::memory_resource> &controlOwner,
     const CancellationCheckpoint *cancellation) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(io); static_cast<void>(metadata); static_cast<void>(workspace);
-    static_cast<void>(controlOwner); static_cast<void>(cancellation);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "verified scans require their isolated format");
-#else
     constexpr size_t limit = 7U * 1024U * 1024U;
     if (cancellation) cancellation->check();
     if (!io || !metadata.usesDataStorage(io) || !workspace || workspace->used() > limit ||
@@ -92,7 +87,6 @@ VerifiedScanRoot VerifiedScanRoot::verifyComplete(std::shared_ptr<StorageIO> io,
     state->io = std::move(io); state->metadata = &metadata; state->root = root;
     state->descriptor = descriptor; state->io_epoch = epoch;
     return VerifiedScanRoot(std::move(state));
-#endif
 }
 
 bool VerifiedScanRoot::matches(const RelocatableMetadataStore &metadata, const StorageIO &io,

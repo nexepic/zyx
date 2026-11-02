@@ -292,17 +292,13 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] const std::shared_ptr<StorageIO> &io() const { return io_; }
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         void installVerifiedScanRoot(VerifiedScanRoot root) { verified_scan_.emplace(std::move(root)); }
         [[nodiscard]] const VerifiedScanRoot *verifiedScanRoot() const {
             return verified_scan_ ? &*verified_scan_ : nullptr;
         }
-#endif
 
 	private:
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         std::optional<VerifiedScanRoot> verified_scan_;
-#endif
 		OwnedRelocatableBackendFile() = default;
 
 		std::shared_ptr<std::fstream> stream_;
@@ -1155,14 +1151,10 @@ namespace graph::storage {
     std::shared_ptr<StorageIO> RelocatableStorageBackend::scanSourceIO() const { return data_file_->io(); }
 
     const VerifiedScanRoot *RelocatableStorageBackend::verifiedScanRoot(const MetadataSnapshotPin &snapshot) const {
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         if (data_file_ && metadata_) {
             const auto *root = data_file_->verifiedScanRoot();
             if (root && root->matches(*metadata_, *data_file_->io(), snapshot)) return root;
         }
-#else
-        static_cast<void>(snapshot);
-#endif
         return nullptr;
     }
 
@@ -1207,7 +1199,6 @@ namespace graph::storage {
         data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
         auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
             std::to_string(recovered.database_id.value()), controlMemory);
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         if (writable && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) {
             // Authenticate complete semantics before writable recovery can
             // change any allocator control record. The writer is verified again
@@ -1222,7 +1213,6 @@ namespace graph::storage {
             if (options_.verify_integrity_on_open)
                 static_cast<void>(RelocatableIntegrityScanner(data->io(), *readOnlyMetadata, workspace).scan());
         }
-#endif
         auto metadata = writable ? RelocatableMetadataStore::open(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination)
                                  : RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory, controlMemory, logicalIdMemory, coordination);
 
@@ -1387,7 +1377,6 @@ namespace graph::storage {
 						},
 						nativeMutationOptions, system_catalog_.get());
 			}
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
             if (metadata_->openSnapshot().superblock().flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) {
                 const size_t scanWorkspaceBytes = (std::min)(options_.maximum_integrity_workspace_bytes, size_t{7U * 1024U * 1024U});
                 auto scanAccount = std::make_shared<query::execution::detail::ResourceAccount>(resource_domain_,
@@ -1398,11 +1387,6 @@ namespace graph::storage {
                 verifyConstraintSupportTrees(metadata_->openSnapshot());
             }
             if (options_.verify_integrity_on_open) static_cast<void>(verifyIntegrity());
-#else
-			if (options_.verify_integrity_on_open) {
-				static_cast<void>(verifyIntegrity());
-			}
-#endif
 			requires_reopen_after_indeterminate_write_.store(false, std::memory_order_release);
 			initializeNativeMaintenanceService();
 		} catch (...) {

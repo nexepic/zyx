@@ -11,12 +11,8 @@ Superblock block() {
 }
 TEST(ScanPathFormatTest, VersionsAndBuildingFlagsAreIsolated) {
     auto value = block(); value.flags = RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
     EXPECT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
     EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, value.flags);
-#else
-    EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
-#endif
     auto bytes = SuperblockCodec::encode(block());
     EXPECT_EQ(SuperblockCodec::decode(bytes), block());
     const uint16_t otherSuperblockVersion = RSS_SUPERBLOCK_VERSION == 1U ? 2U : 1U;
@@ -37,7 +33,6 @@ TEST(ScanPathFormatTest, DescriptorRootAndCountsHaveExplicitVersionedBytes) {
     HybridPropertyDescriptorPage page;
     page.generation = Generation(3); page.committed_lsn = LogSequenceNumber(3);
     page.descriptor.database_id = DatabaseId(7); page.descriptor.semantic_generation = Generation(3);
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
     EXPECT_EQ(RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT, 9U);
     EXPECT_EQ(RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES, 208U);
     page.descriptor.roots[8] = {PageId(55), Generation(2)};
@@ -52,18 +47,10 @@ TEST(ScanPathFormatTest, DescriptorRootAndCountsHaveExplicitVersionedBytes) {
     EXPECT_THROW((void)HybridPropertyDescriptorCodec::encode(page), FormatException);
     page.descriptor.scan_membership_group_count = 2; page.descriptor.roots[8] = {};
     EXPECT_THROW((void)HybridPropertyDescriptorCodec::encode(page), FormatException);
-#else
-    EXPECT_EQ(RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT, 8U);
-    EXPECT_EQ(RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES, 192U);
-    const auto bytes = HybridPropertyDescriptorCodec::encode(page);
-    EXPECT_EQ(LittleEndianCodec::readU16(bytes, 4), 1);
-    EXPECT_THROW((void)hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN), FormatException);
-#endif
     EXPECT_TRUE(isHybridPropertyIndexId(UINT64_C(0x8000000000000038)));
 }
 
 TEST(ScanPathFormatTest, AuthorityStatesRequireConsistentFlagsAndDescriptor) {
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
     auto value = block();
     EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, 0U);
     value.flags = RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
@@ -80,7 +67,4 @@ TEST(ScanPathFormatTest, AuthorityStatesRequireConsistentFlagsAndDescriptor) {
     LittleEndianCodec::writeU32(bytes, 116, 0U);
     LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
     EXPECT_THROW((void)SuperblockCodec::decode(bytes), FormatException);
-#else
-    GTEST_SKIP() << "Reconstructed SCAN layout is not yet unified in this build";
-#endif
 }

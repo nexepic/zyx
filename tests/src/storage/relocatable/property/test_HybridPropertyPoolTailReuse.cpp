@@ -2,7 +2,6 @@
 using namespace graph::storage;
 using graph::PropertyValue;
 using graph::query::execution::MaterializedByteBudget;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace {
 class HybridPropertyPoolTailReuseTest : public graph::storage::test::HybridPropertyOrdinaryConversionTestFixture {};
 }
@@ -53,4 +52,3 @@ TEST_F(HybridPropertyPoolTailReuseTest, ConversionFillsPartialNativePoolBeforeSp
         HybridPropertyReadContext(io_, *slotted_pages_, *metadata_, after), after, memory));
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif

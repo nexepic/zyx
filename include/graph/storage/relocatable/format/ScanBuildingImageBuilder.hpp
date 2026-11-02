@@ -174,13 +174,6 @@ namespace graph::storage {
             const CancellationCheckpoint *cancellation = nullptr,
             const std::function<void(const Superblock &)> &afterPublication = {},
             uint8_t maximumCohortGroups = 1U) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-            static_cast<void>(io); static_cast<void>(metadata); static_cast<void>(memory);
-            static_cast<void>(firstSlot); static_cast<void>(lastSlot); static_cast<void>(fieldPoolOwner);
-            static_cast<void>(cancellation);
-            static_cast<void>(afterPublication); static_cast<void>(maximumCohortGroups);
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan field construction requires the isolated format");
-#else
             if (!maximumCohortGroups || maximumCohortGroups > 8U)
                 throw std::invalid_argument("offline field cohorts require 1..8 logical groups");
             constexpr size_t limit = 1024U * 1024U;
@@ -290,7 +283,6 @@ namespace graph::storage {
                 if (after == UINT64_MAX) break;
             }
             check(); return counts;
-#endif
         }
 
         // One existing metadata-pool reclamation publication at most. Native
@@ -617,13 +609,6 @@ namespace graph::storage {
             const std::shared_ptr<query::execution::MaterializedByteBudget> &memory,
             PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, uint64_t fieldPoolOwner,
             const CancellationCheckpoint *cancellation = nullptr) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-            static_cast<void>(io); static_cast<void>(metadata); static_cast<void>(memory);
-            static_cast<void>(firstSlot); static_cast<void>(lastSlot); static_cast<void>(fieldPoolOwner);
-            static_cast<void>(cancellation);
-            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
-                "BUILDING image membership construction requires the isolated format");
-#else
             constexpr size_t limit = 1024U * 1024U;
             if (!io || !metadata.usesDataStorage(io) || !memory || memory->used() > limit ||
                 memory->available() > limit - memory->used() || !firstSlot.isValid() ||
@@ -696,7 +681,6 @@ namespace graph::storage {
             MetadataPageFile pages(io, root);
             const auto descriptor = pages.readHybridPropertyDescriptor(root.hybrid_property_descriptor_root, root).descriptor;
             return {descriptor.scan_live_node_count, descriptor.scan_membership_group_count};
-#endif
         }
     private:
         void rebuildStaleInsertionSummaries(

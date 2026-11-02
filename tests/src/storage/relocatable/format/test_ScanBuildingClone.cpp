@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "graph/storage/relocatable/format/ScanBuildingClone.hpp"
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 #include <filesystem>
 #include <fstream>
 #include <boost/uuid/uuid_generators.hpp>
@@ -184,4 +183,3 @@ TEST(ScanBuildingCloneTest, RejectsCorruptCurrentImmutablePayloadBeforeCopy) {
     EXPECT_EQ(target.io->fileSize(), RSS_SEGMENT_SIZE);
     EXPECT_EQ(budget.used(), 0U);
 }
-#endif

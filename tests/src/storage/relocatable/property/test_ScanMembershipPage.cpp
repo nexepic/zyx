@@ -15,7 +15,6 @@ TEST(ScanMembershipPageTest, IsolatedPageAdmissionAndBorrowedReadRetainOwnerIden
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
     {
         auto image = HybridPropertyPageImage::create(PageId(41), Generation(2), Generation(9), memory);
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
         const auto slot = image.appendScanMembership(membership());
         const auto bytes = image.serialize();
         const PageOwnerHeader owner{PageId(41), 51, PageOwnerKind::POK_HYBRID_PROPERTY, 0,
@@ -27,14 +26,9 @@ TEST(ScanMembershipPageTest, IsolatedPageAdmissionAndBorrowedReadRetainOwnerIden
         EXPECT_THROW((void)view.readScanMembership(slot, DatabaseId(7), 2, Generation(7)), FormatException);
         auto stale = slot; ++stale.generation;
         EXPECT_THROW((void)view.readScanMembership(stale, DatabaseId(7), 2, Generation(9)), FormatException);
-#else
-        EXPECT_THROW((void)image.appendScanMembership(membership()), FormatException);
-        EXPECT_EQ(image.liveSlotCount(), 0U);
-#endif
     }
     EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 TEST(ScanMembershipPageTest, CopyOnWriteMembershipUpdatePreservesOriginalAndGenerationBounds) {
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
     {
@@ -58,4 +52,3 @@ TEST(ScanMembershipPageTest, CopyOnWriteMembershipUpdatePreservesOriginalAndGene
     }
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif

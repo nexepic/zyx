@@ -34,7 +34,6 @@ public:
 };
 }
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 class BuildingScanMembershipTest : public ::testing::Test {
 protected:
     std::filesystem::path path;
@@ -184,5 +183,3 @@ protected:
         io->writeAt(offset, frame.data(), frame.size()); io->sync(); return slot.page_id;
     }
 };
-
-#endif

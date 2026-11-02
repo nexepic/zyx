@@ -7,7 +7,6 @@
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "storage/relocatable/property/HybridPropertyNativeWriteTestAccess.hpp"
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 using namespace graph::storage;
 using graph::PropertyValue;
 using graph::query::execution::MaterializedByteBudget;
@@ -1721,4 +1720,3 @@ TEST_F(HybridPropertyColdCompatibleHotTest, ColdBirthAndDeletionKeepOnlyNewOwner
     }
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
 }
-#endif

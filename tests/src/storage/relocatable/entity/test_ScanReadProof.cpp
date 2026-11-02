@@ -29,7 +29,6 @@ static_assert(!std::is_copy_constructible_v<ScanBatchReadGrant>);
 static_assert(!std::is_default_constructible_v<ScanBatchReadScope>);
 static_assert(!std::is_convertible_v<ScanBlockMembership, VerifiedScanRoot>);
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 class ScanReadProofTest : public BuildingScanMembershipTest {
 protected:
     std::filesystem::path target;
@@ -2342,20 +2341,3 @@ TEST_F(ScanReadProofTest, CompletedImageFinalSyncFailureReopensWholeDataAndRevis
     EXPECT_EQ(after[0], before[0] + (newValues ? 1U : 0U));
     EXPECT_EQ(after[1], newValues ? after[0] : before[1]);
 }
-
-#else
-TEST(ScanReadProofTest, OrdinaryFormatsRejectVerificationBeforeIo) {
-    const auto path = std::filesystem::temp_directory_path() /
-        ("zyx-scan-proof-refusal-" + boost::uuids::to_string(boost::uuids::random_generator()()));
-    {
-        auto file = std::make_shared<std::fstream>(path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
-        auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-        Superblock root; root.database_id = DatabaseId(71); root.generation = Generation(1); root.checkpoint_lsn = LogSequenceNumber(1);
-        auto metadata = RelocatableMetadataStore::initializeNew(io, root); io->resetStats();
-        EXPECT_THROW(static_cast<void>(VerifiedScanRoot::verifyComplete({}, *metadata, {}, {})), FormatException);
-        EXPECT_EQ(io->stats().read_calls, 0U); EXPECT_EQ(io->stats().write_calls, 0U);
-    }
-    std::error_code ignored; std::filesystem::remove(path, ignored);
-}
-
-#endif

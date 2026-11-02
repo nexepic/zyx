@@ -3,7 +3,6 @@
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include <set>
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 namespace {
 class BuildingScanFieldCohortTest : public BuildingScanMembershipTest {
 protected:
@@ -272,4 +271,3 @@ TEST_F(BuildingScanFieldCohortTest, SharedPoolRetirementWaitsForOldPinThenReuses
     auto reopened=RelocatableMetadataStore::openReadOnly(io);auto pin=reopened->openSnapshot();verify(*reopened,pin);
 }
 } // namespace
-#endif

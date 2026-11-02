@@ -85,7 +85,6 @@ TEST_F(HybridPropertyAllocationCostsTest, ACommittedPoolWithLostAllocatorOwnersh
     EXPECT_THROW((void)census(memory).inspect(pin), FormatException);
     EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyAllocationCostsTest, ActualRowAndHybridAllocationsIncludeAllMapsMetadataRetirementAndPinnedPeak) {
     seed(NODE, 64, 16); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     auto row = metadata_->openSnapshot(); const auto rowValues = properties_->readEntity(row, {NODE, 32});
@@ -110,4 +109,3 @@ TEST_F(HybridPropertyAllocationCostsTest, ActualRowAndHybridAllocationsIncludeAl
     EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
 }
-#endif

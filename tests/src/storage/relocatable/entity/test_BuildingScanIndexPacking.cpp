@@ -1,7 +1,6 @@
 #include "BuildingScanMembershipFixture.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 TEST_F(BuildingScanMembershipTest, PrivateIndexPackingReusesAnOccupiedLowerPoolAcrossEpochsPinsAndABRecovery) {
     for (const auto failpoint : {BootstrapPublishFailpoint::BPF_NONE,
             BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE,
@@ -67,9 +66,7 @@ TEST_F(BuildingScanMembershipTest, PrivateIndexPackingReusesAnOccupiedLowerPoolA
         EXPECT_EQ(memory->used(), 0U);
     }
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 TEST_F(BuildingScanMembershipTest, DataCompactionSkipsAnOrdinaryMixedOwnerIndexPoolWithoutChangingEitherTree) {
     initialize(false); // The offline builder clones a writable ROW source.
     BTreePageStore trees(*pages, *metadata);
@@ -112,4 +109,3 @@ TEST_F(BuildingScanMembershipTest, DataCompactionSkipsAnOrdinaryMixedOwnerIndexP
     EXPECT_EQ(source->used(), 0U); EXPECT_EQ(work->used(), 0U);
     std::error_code ignored; std::filesystem::remove(target, ignored);
 }
-#endif

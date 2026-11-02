@@ -167,22 +167,14 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
         // generic groupRecord guard remains for unadapted mutation consumers.
         return context.findGroup(owner, admission, reference, true, true);
     };
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     // The field planner and private page-image preparation share the same
     // authenticated source pin and pool reader. Reopening either boundary
     // repeats descriptor/pool authentication without granting new authority.
     auto &fields = context.fields_;
     require(bool(context.descriptor_), "native field preparation requires its authenticated descriptor");
-#else
-    HybridPropertyFieldPageStore fields(io_, *this, source);
-#endif
     utils::OwnedVector<HybridPropertyColumnDelta> deltas{utils::OwnedPmrAllocator<HybridPropertyColumnDelta>(request.memory)};
     utils::OwnedVector<const HybridPropertyColumnDelta *> changes{utils::OwnedPmrAllocator<const HybridPropertyColumnDelta *>(request.memory)};
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
     auto descriptor = *context.descriptor_;
-#else
-    auto descriptor = pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current).descriptor;
-#endif
     std::unique_ptr<PreparedScanMembershipMutation> scanDeletion;
     if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
         if ((current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&

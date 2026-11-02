@@ -3,7 +3,6 @@
 
 using namespace hybrid_property_query_parity_test;
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyQueryParityTest, ProductionShortTextFilterAndRealGroupConsumeAuthenticatedColumnRuns) {
     seed(false);
     const auto execute = [&]() {
@@ -1086,4 +1085,3 @@ TEST_F(HybridPropertyQueryParityTest, NativeDetachEntityFieldsCountsAndVectorRec
         const auto hits = exactVectorSearch(); ASSERT_FALSE(hits.empty()); EXPECT_EQ(hits.front().first, complete ? 2U : 1U);
     }
 }
-#endif

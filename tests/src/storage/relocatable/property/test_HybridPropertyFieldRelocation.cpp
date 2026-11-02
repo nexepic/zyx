@@ -38,7 +38,6 @@ TEST_F(HybridPropertyFieldRelocationTest, RejectsDisabledOrUnconvertedSourcesBef
     EXPECT_THROW((void)metadata_->relocateHybridPropertyEntityPool(move, LogSequenceNumber(before.checkpoint_lsn.value() + 1)), FormatException);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyFieldRelocationTest, MovesEveryCurrentFieldPageWithoutChangingLogicalRootsOrOldPins) {
     seed(NODE, 64, 16); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     auto conversion = request(NODE, memory); conversion.conversion->publish_candidate = true; ASSERT_NO_THROW(run(conversion));
@@ -487,4 +486,3 @@ TEST_F(HybridPropertyFieldRelocationTest, Full31FrameEntityPoolRepackingStaysWit
     }
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

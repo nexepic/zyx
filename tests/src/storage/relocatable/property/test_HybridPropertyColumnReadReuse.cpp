@@ -3,7 +3,6 @@
 using namespace graph::storage;
 using graph::PropertyValue;
 using graph::query::execution::MaterializedByteBudget;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 namespace {
 class HybridPropertyColumnReadReuseTest : public graph::storage::test::HybridPropertyOrdinaryConversionTestFixture {
 protected:
@@ -271,4 +270,3 @@ TEST_F(HybridPropertyColumnReadReuseTest, FullColumnCollectionPreservesNullBoole
         EXPECT_EQ(root->entries[3].value, id % 2 ? PropertyValue{} : PropertyValue(int64_t(id)));
     }
 }
-#endif

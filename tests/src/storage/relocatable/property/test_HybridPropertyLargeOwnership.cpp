@@ -42,7 +42,6 @@ TEST_F(HybridPropertyLargeOwnershipTest, RowScannerRetainsItsOriginalRecordCurso
     const auto result = scanner.scanReachableAfter(pin, 0, 1, 128, sink);
     EXPECT_TRUE(result.exhausted); EXPECT_EQ(result.locations_scanned, 0U); EXPECT_TRUE(sink.ids.empty());
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLargeOwnershipTest, MixedNativeAndRowOwnersAreScannedInOneStableLogicalOrder) {
     LargeValueStore values(io_, *metadata_); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); seedMixed(values, roots, memory);
@@ -253,4 +252,3 @@ TEST_F(HybridPropertyLargeOwnershipTest, ConcurrentNativePublicationInvalidatesT
     EXPECT_EQ(manifests, 6U);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

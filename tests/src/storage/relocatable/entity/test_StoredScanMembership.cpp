@@ -47,7 +47,6 @@ protected:
     }
 };
 
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 TEST_F(StoredScanMembershipTest, StreamsSparseGroupsIncludingPropertylessAndUnlabeledNodesAndTheTerminalId) {
     insert(65, 0, {11}); insert(1, 1, {7, 11}); insert(64, 2, {}); insert(UINT64_MAX, 3, {});
     populate();
@@ -175,11 +174,3 @@ TEST_F(StoredScanMembershipTest, FullExhaustionRejectsAValidCrcButIncorrectDescr
         [](const auto &) { return true; })), FormatException);
     EXPECT_EQ(memory->used(), 0U);
 }
-#else
-TEST_F(StoredScanMembershipTest, OrdinaryFormatsRejectTheStreamBeforeReadingStorage) {
-    auto pin = metadata->openSnapshot(); io->resetStats();
-    EXPECT_THROW(static_cast<void>(streamStoredMembership(io, *metadata, pin, memory, SIZE_MAX,
-        [](const auto &) { return true; })), FormatException);
-    EXPECT_EQ(io->stats().read_calls, 0U); EXPECT_EQ(io->stats().write_calls, 0U);
-}
-#endif

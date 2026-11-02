@@ -30,7 +30,6 @@ TEST_F(HybridPropertyOwnerInsertionPlanTest, DisabledOrRowOwnerCannotAcquirePend
         Generation(source.superblock().generation.value() + 1), memory, value), FormatException);
     EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPlanTest, PendingOwnerColumnCarriesSeparateLivenessWithoutPublishingAnEntity) {
     seed(NODE, 63, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); install(memory);
     const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
@@ -167,9 +166,7 @@ TEST_F(HybridPropertyOwnerInsertionPlanTest, PendingDemotionProducesCompleteDire
     }
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#endif
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOwnerInsertionPlanTest, PendingNodeAndEdgeGroupsShareOneBoundedPrivatePreparation) {
     seed(EDGE, 63, 1); seed(NODE, 61, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     install(memory); auto conversion = request(EDGE, memory); conversion.conversion->publish_candidate = true; run(conversion);
@@ -205,4 +202,3 @@ TEST_F(HybridPropertyOwnerInsertionPlanTest, PendingNodeAndEdgeGroupsShareOneBou
     }
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
-#endif

@@ -41,7 +41,6 @@ TEST_F(HybridPropertyLabeledDeletionTest, UnconvertedOwnerDeletionRetainsLabelsA
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
     EXPECT_EQ(readLabels(metadata_->openSnapshot(), 2), second); EXPECT_EQ(memory->used(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLabeledDeletionTest, ErasingOneOverflowOwnerCopiesItsLabelFrameAndPreservesTheSharedNeighborSlot) {
     seedLabels(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(memory));
     auto old = metadata_->openSnapshot(); const auto removed = entities_->readNode(old, 2).label_overflow;
@@ -116,4 +115,3 @@ TEST_F(HybridPropertyLabeledDeletionTest, ABRecoverySelectsMatchingNodeLabelAndN
         EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *recovered, memory).scan()); EXPECT_EQ(memory->used(), 0U);
     }
 }
-#endif

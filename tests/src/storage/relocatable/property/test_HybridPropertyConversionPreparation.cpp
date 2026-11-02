@@ -52,7 +52,6 @@ TEST(HybridPropertyConversionPreparationTest, FormatFlagControlsPrivatePreparati
     EXPECT_EQ(batch.current(), current); EXPECT_EQ(current.next_logical_page_id, 100U);
     EXPECT_EQ(batch.allocatedPageCount(), 0U); EXPECT_EQ(batch.createdPoolCount(), 0U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 const HybridPropertyPageImage &imageFor(const HybridPropertyConversionPreparation &prepared, PageId id) {
     const auto found = std::find_if(prepared.pages().begin(), prepared.pages().end(),
         [id](const auto &image) { return image.pageId() == id; });
@@ -290,5 +289,4 @@ TEST(HybridPropertyConversionPreparationTest, IncompressibleRowsThatIndividually
     }
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif
 } // namespace

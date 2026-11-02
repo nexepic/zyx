@@ -7,11 +7,6 @@ std::unique_ptr<PreparedScanMembershipMutation> RelocatableMetadataStore::prepar
     MetadataWriteBatch &batch, const MetadataWriteGuard &writer, const MetadataSnapshotPin &source,
     const NativeHybridTopologyPublication &proof, const std::shared_ptr<std::pmr::memory_resource> &memory,
     EntityPageStore &entities, EntityLabelSetStore &labels, BTreePageStore &trees) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(batch); static_cast<void>(writer); static_cast<void>(source); static_cast<void>(proof);
-    static_cast<void>(memory); static_cast<void>(entities); static_cast<void>(labels); static_cast<void>(trees);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan membership mutation requires its isolated format");
-#else
     using Map = ScanMembershipDirectoryMap;
     const auto require = [](bool value, const char *message) { hybrid_property_detail::require(value, message); };
     auto account = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(memory);
@@ -103,16 +98,11 @@ std::unique_ptr<PreparedScanMembershipMutation> RelocatableMetadataStore::prepar
         begin = end;
     }
     return result;
-#endif
 }
 
 void RelocatableMetadataStore::materializeScanMembershipMutation(MetadataWriteBatch &batch,
     const MetadataWriteGuard &writer, const MetadataSnapshotPin &source, PreparedScanMembershipMutation &plan,
     BTreePageStore &trees) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(batch); static_cast<void>(writer); static_cast<void>(source); static_cast<void>(plan); static_cast<void>(trees);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan membership publication requires its isolated format");
-#else
     using Map = ScanMembershipDirectoryMap;
     const auto require = [](bool value, const char *message) { hybrid_property_detail::require(value, message); };
     require(plan.metadata_ == this && plan.batch_ == &batch && plan.writer_ == &writer && !plan.materialized_ &&
@@ -213,6 +203,5 @@ void RelocatableMetadataStore::materializeScanMembershipMutation(MetadataWriteBa
         pages_.prepareHybridPropertyDescriptorImpl(batch, descriptor, true);
     else pages_.amendPreparedHybridPropertyDescriptor(batch, descriptor);
     batch.hybrid_property_publication_ = true;
-#endif
 }
 }

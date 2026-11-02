@@ -200,7 +200,6 @@ TEST_F(HybridPropertyGraphPublicationTest, TreePoolEpochAuthenticatesExactlyAndI
     EXPECT_EQ(index.find(current, key), 7U);
     EXPECT_EQ(index.find(old, key), 7U);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyGraphPublicationTest, DescriptorNamespaceCannotBindAnotherRoleOrAnOrdinaryIndexBeforePreparation) {
     const auto before = metadata_->openSnapshot().superblock(); const auto size = io_->fileSize();
     for (size_t ordinal = 0; ordinal < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++ordinal) {
@@ -364,5 +363,4 @@ TEST_F(HybridPropertyGraphPublicationTest, EmptyDescriptorKeepsActualRowBatchAnd
     EXPECT_FALSE(properties_->readEntityOptional(pin, owners[1]));
     EXPECT_FALSE(cursor.readEntityOptional(pin, owners[1]));
 }
-#endif
 } // namespace

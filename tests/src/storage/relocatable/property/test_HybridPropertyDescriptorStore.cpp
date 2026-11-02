@@ -17,7 +17,6 @@ using namespace graph::storage;
 namespace {
 using Access = HybridPropertyDescriptorStoreTestAccess;
 using Action = Access::Action;
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 NativeGraphWritePlannerOptions options() {
     NativeGraphWritePlannerOptions result;
     result.first_slot = PhysicalSlotId(40); result.last_slot = PhysicalSlotId(80);
@@ -25,7 +24,6 @@ NativeGraphWritePlannerOptions options() {
     result.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
     return result;
 }
-#endif
 class HybridPropertyDescriptorStoreTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
     file_handle_t native_handle_ = INVALID_FILE_HANDLE;
     void releaseStores() {
@@ -87,7 +85,6 @@ TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChe
     LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), foreignHeader));
     EXPECT_THROW(SuperblockCodec::decode(bytes), FormatException);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyDescriptorStoreTest, NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting) {
     const auto first = Access::publish(*metadata_); auto old = metadata_->openSnapshot();
     ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
@@ -236,5 +233,4 @@ TEST_F(HybridPropertyDescriptorStoreTest, NativeDiskFullDataFenceAndUncertainRoo
         recovered.release(); EXPECT_NO_THROW(Access::publish(*metadata_));
     }
 }
-#endif
 } // namespace

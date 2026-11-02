@@ -61,7 +61,6 @@ TEST_F(HybridPropertyOrdinaryConversionTest, NativeTransactionStagesConversionWi
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOrdinaryConversionTest, NativeConversionMoveRollbackAndConcurrentPublicationRespectOwnership) {
     seed(NODE, 2);
     NativeGraphWritePlannerOptions options;
@@ -904,10 +903,8 @@ TEST_F(HybridPropertyOrdinaryConversionTest, MaximumBoundedGroupCommitsBothDirec
     EXPECT_EQ(properties_->readEntity(row, {NODE, 64}), expected); EXPECT_EQ(properties_->readEntity(hybrid, {NODE, 64}), expected);
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
 }
-#endif
 } // namespace
 
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyOrdinaryConversionTest, ForwardDropsEmptyRowMappingsAndQueuesTheDetachedPoolWithoutTouchingOldPins) {
     seed(NODE); auto old = metadata_->openSnapshot();
     const auto root = metadata_->findEntityPropertyLocation(old, {NODE, 1});
@@ -1979,4 +1976,3 @@ TEST_F(HybridPropertyOrdinaryConversionTest, ExtensionNoopUsesRowEqualityForSign
     EXPECT_EQ(std::bit_cast<uint64_t>(std::get<double>(nan.entries[0].value.getVariant())), nanBits);
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif

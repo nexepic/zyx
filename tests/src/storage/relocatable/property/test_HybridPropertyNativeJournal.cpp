@@ -72,7 +72,6 @@ TEST_F(HybridPropertyNativeJournalTest, GenericStateWriterCannotCreateTheReserve
     EXPECT_THROW((void)states.upsert(forged, journalOptions().state_record_options), FormatException);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyNativeJournalTest, NativeJournalRequiresAdmissionAndOnlyWritesItsCanonicalStateIdentity) {
     seed(NODE, 2, 1); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); ASSERT_NO_THROW(convert(memory));
     StateRecordStore states(*slotted_pages_, *metadata_); LargeValueMaintenanceJournalStore store(states, *metadata_, journalOptions());
@@ -365,4 +364,3 @@ TEST_F(HybridPropertyNativeJournalTest, WritableReopenRecoversInterruptedAppendB
     }
     EXPECT_EQ(memory->used(), 0U);
 }
-#endif

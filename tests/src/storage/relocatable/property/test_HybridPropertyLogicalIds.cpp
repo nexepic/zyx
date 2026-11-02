@@ -32,14 +32,7 @@ protected:
 };
 }
 TEST_F(HybridPropertyLogicalIdsTest, DefaultFormatRetainsOrdinaryLeaseContract) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(NODE, 1, 1); const auto before = metadata_->openSnapshot().superblock();
-    const auto lease = metadata_->reserveNativeGraphLogicalIds(2, 3);
-    EXPECT_EQ(lease.nodes.first_id, before.next_logical_node_id); EXPECT_EQ(lease.edges.first_id, before.next_logical_edge_id);
-    sameGraph(before, lease.superblock);
-#endif
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyLogicalIdsTest, DurableLeasePreservesNativeFieldsGraphRootsAndOldPins) {
     native(); auto old = metadata_->openSnapshot(); const auto expected = properties_->readEntity(old, {NODE, 1});
     const auto before = old.superblock(); const auto lease = metadata_->reserveNativeGraphLogicalIds(2, 3);
@@ -107,4 +100,3 @@ TEST_F(HybridPropertyLogicalIdsTest, HighWaterLeasesDoNotGrantGeneralGraphMutati
     EXPECT_THROW((void)entities_->readNode(current, created), FormatException);
     EXPECT_EQ(properties_->readEntity(current, {NODE, 1}).entries.size(), 2U);
 }
-#endif

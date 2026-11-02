@@ -37,15 +37,7 @@ protected:
 };
 }
 TEST_F(HybridPropertyCohortAdmissionTest, DefaultFormatRefusesBeforeAnyConversionIO) {
-#if !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-    seed(NODE, 2, 1); const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
-    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement(true));
-    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); auto tx = writer.beginTransaction();
-    EXPECT_THROW(stage(tx, memory), FormatException); tx.rollback();
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
-#endif
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyCohortAdmissionTest, InvalidCohortEnvelopeRefusesBeforeIO) {
     seed(NODE, 2, 1); const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
     NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement(true));
@@ -243,4 +235,3 @@ TEST_F(HybridPropertyCohortAdmissionTest, InverseOneGroupPreservesOtherGroupAuth
     }
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan());
 }
-#endif

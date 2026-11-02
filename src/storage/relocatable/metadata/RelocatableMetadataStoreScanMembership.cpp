@@ -10,10 +10,6 @@
 namespace graph::storage {
 Superblock RelocatableMetadataStore::installBuildingScanMembershipGroup(const BuildingScanMembershipRequest &request,
     LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-    static_cast<void>(request); static_cast<void>(checkpointLsn); static_cast<void>(options);
-    throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "scan membership installation requires the isolated format");
-#else
     using Map = ScanMembershipDirectoryMap;
     const auto require = [](bool valid, const char *message) { hybrid_property_detail::require(valid, message); };
     constexpr size_t maximumBytes = 1024U * 1024U;
@@ -188,6 +184,5 @@ Superblock RelocatableMetadataStore::installBuildingScanMembershipGroup(const Bu
         "membership preparation lost BUILDING protection");
     check(); publishBatch(batch, writer, options); placement.remember();
     return batch.candidate();
-#endif
 }
 }
