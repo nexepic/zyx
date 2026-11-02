@@ -95,7 +95,8 @@ namespace graph::storage::scan_candidate_detail {
             auto sourcePair = std::allocate_shared<SuperblockPair>(std::pmr::polymorphic_allocator<SuperblockPair>(&workspace), before);
             return sourcePair->recover();
         }();
-        if (sourceRoot.hybrid_property_descriptor_root.isValid())
+        if ((sourceRoot.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) ||
+            sourceRoot.hybrid_property_descriptor_root.isValid())
             throw FormatException(FormatError::FERR_INVALID_STATE, "scan clone requires a ROW source image");
         for (size_t i = 0; i < before.size(); ++i) {
             try {
