@@ -1245,7 +1245,6 @@ namespace graph::test {
 								return portable_pwrite(fd, bytes, byteCount, offset);
 							});
 					PageLocation replacement = locations.front();
-					replacement.free_bytes = 1U;
 					static_cast<void>(metadata->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(5U)));
 					return 67;
 				}
@@ -1896,15 +1895,17 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	EXPECT_EQ(recovered.superblock().generation, Generation(4U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(metadata->findPageLocation(recovered, PageId(1U)).free_bytes, 0U);
+	const auto oldRoute = recovered.superblock().page_directory_root;
 	const auto lastLocation = locationsThatRequireRouteRadix().back();
 	EXPECT_EQ(metadata->findPageLocation(recovered, lastLocation.page_id), lastLocation);
 	EXPECT_NE(lastLocation.segment_id, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID));
 	recovered.release();
 
 	PageLocation replacement{PageId(1U), SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID), RSS_PAGE_POOL_FIRST_DATA_FRAME,
-							 Generation(1U), 1U};
+							 Generation(1U), 0U};
 	const Superblock retried = metadata->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(5U));
 	EXPECT_EQ(retried.generation, Generation(5U));
+	EXPECT_NE(retried.page_directory_root, oldRoute);
 	metadata.reset();
 
 	auto reopened = RelocatableMetadataStore::open(io);
