@@ -1896,6 +1896,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(metadata->findPageLocation(recovered, PageId(1U)).free_bytes, 0U);
 	const auto oldRoute = recovered.superblock().page_directory_root;
+	const auto oldGraphRevision = recovered.superblock().graph_revision;
+	const auto oldSchemaRevision = recovered.superblock().schema_revision;
 	const auto lastLocation = locationsThatRequireRouteRadix().back();
 	EXPECT_EQ(metadata->findPageLocation(recovered, lastLocation.page_id), lastLocation);
 	EXPECT_NE(lastLocation.segment_id, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID));
@@ -1906,6 +1908,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	const Superblock retried = metadata->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(5U));
 	EXPECT_EQ(retried.generation, Generation(5U));
 	EXPECT_NE(retried.page_directory_root, oldRoute);
+	EXPECT_EQ(retried.graph_revision, oldGraphRevision);
+	EXPECT_EQ(retried.schema_revision, oldSchemaRevision);
 	metadata.reset();
 
 	auto reopened = RelocatableMetadataStore::open(io);
