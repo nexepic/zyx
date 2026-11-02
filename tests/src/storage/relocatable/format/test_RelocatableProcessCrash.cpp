@@ -206,6 +206,8 @@ namespace {
 				io.writeAt(offset + uint64_t(location.page_index) * RSS_PAGE_SIZE, frame.data(), frame.size());
 			}
 			io.writeAt(offset, control.data(), control.size());
+			const std::byte zero{};
+			io.writeAt(offset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
 		}
 	}
 
