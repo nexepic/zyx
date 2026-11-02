@@ -27,7 +27,6 @@ TEST_F(HybridPropertyOrdinaryConversionTest, FormatFlagControlsTheTypedOrdinaryR
     const auto bytes = io_->fileSize(); const auto epoch = io_->dataMutationEpoch();
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); const auto conversion = request(NODE, memory);
     expectPreparedRefusal(conversion);
-    else EXPECT_THROW(run(conversion), FormatException);
     EXPECT_EQ(memory->used(), 0U); EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
     EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
 }

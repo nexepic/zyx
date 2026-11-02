@@ -1,0 +1,159 @@
+1/30 src/storage/relocatable/allocation/SharedPagePool.cpp OK
+2/30 src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp OK
+3/30 src/storage/relocatable/allocation/SlottedPagePool.cpp OK
+4/30 src/storage/relocatable/backend/RelocatableStorageBackend.cpp OK
+5/30 src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp OK
+6/30 src/storage/relocatable/entity/NativeGraphWriteCommit.cpp OK
+7/30 src/storage/relocatable/entity/NativeGraphWritePlanner.cpp OK
+8/30 src/storage/relocatable/entity/ScanReadProof.cpp OK
+9/30 src/storage/relocatable/format/Superblock.cpp OK
+10/30 src/storage/relocatable/index/BTreePageStore.cpp OK
+11/30 src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp OK
+12/30 src/storage/relocatable/metadata/MetadataPageFile.cpp OK
+13/30 src/storage/relocatable/metadata/MetadataStoreReclamation.cpp OK
+14/30 src/storage/relocatable/metadata/MetadataWriteBatch.cpp OK
+15/30 src/storage/relocatable/metadata/RelocatableMetadataStore.cpp OK
+16/30 src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp OK
+17/30 src/storage/relocatable/metadata/RelocatableMetadataStoreHybridMutation.cpp OK
+18/30 src/storage/relocatable/metadata/RelocatableMetadataStoreNativeJournal.cpp OK
+19/30 src/storage/relocatable/property/PropertyCollectionRootStore.cpp OK
+20/30 tests/src/storage/relocatable/entity/test_StoredScanMembership.cpp OK
+21/30 tests/src/storage/relocatable/format/test_Superblock.cpp OK
+22/30 tests/src/storage/relocatable/property/test_HybridPropertyColdConversionProbe.cpp OK
+23/30 tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp OK
+24/30 tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp OK
+25/30 tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp OK
+26/30 tests/src/storage/relocatable/property/test_HybridPropertyLargeFieldPreparation.cpp OK
+27/30 tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp FAILED
+In file included from /workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1:
+/workspace/zyx-unified-fixtures/tests/include/storage/relocatable/property/HybridPropertyOrdinaryConversionTestFixture.hpp:54:133: warning: missing field 'allocation_admission' initializer [-Wmissing-field-initializers]
+   54 |             {}, NativeGraphHybridPropertyConversion{kind, 1, std::move(memory), nullptr, PhysicalSlotId(40), PhysicalSlotId(80), 903}};
+      |                                                                                                                                     ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:30:5: error: expected expression
+   30 |     else EXPECT_THROW(run(conversion), FormatException);
+      |     ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:125:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  125 |     EXPECT_THROW(tx.commit(), std::runtime_error);
+      |                  ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:132:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  132 |     EXPECT_THROW(tx.commit(), FormatException);
+      |                  ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:568:86: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  568 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                      ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:843:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  843 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:970:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  970 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:998:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+  998 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1019:66: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1019 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1053:67: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1053 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                   ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1088:71: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1088 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                       ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1222:71: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1222 |             cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903};
+      |                                                                       ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1328:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1328 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1347:85: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1347 |         removals, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                     ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1404:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1404 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1427:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1427 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1455:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1455 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1484:81: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1484 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                 ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1545:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1545 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1572:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1572 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1592:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1592 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1614:83: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1614 |         demote, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                   ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1636:106: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1636 |         std::span(duplicate).first(1), memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                                          ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1652:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1652 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1669:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1669 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1700:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1700 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1723:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1723 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1757:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1757 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1777:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1777 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1793:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1793 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1815:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1815 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1841:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1841 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1867:83: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1867 |         demote, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                   ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1890:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1890 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1913:85: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1913 |         demotion, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                     ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1920:81: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1920 |         cells, small, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                 ^
+/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/property/test_HybridPropertyOrdinaryConversion.cpp:1962:82: warning: missing field 'owner_deletions' initializer [-Wmissing-field-initializers]
+ 1962 |         cells, memory, PhysicalSlotId(40), PhysicalSlotId(80), 903, nullptr, true};
+      |                                                                                  ^
+36 warnings and 1 error generated.
+
