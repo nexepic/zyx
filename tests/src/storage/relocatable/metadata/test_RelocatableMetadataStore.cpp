@@ -459,6 +459,9 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWrite
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
 	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
 	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
+	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
+	const std::byte zero{};
+	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
 	io->sync();
 	store.reset();
 
@@ -497,6 +500,9 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeep
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
 	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
 	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
+	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
+	const std::byte zero{};
+	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
 	io->sync();
 	store.reset();
 
