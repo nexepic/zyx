@@ -362,10 +362,13 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	RelocatableStorageBackend reopened(rawOptions);
 	uint64_t largeValueOwnerReads = 0;
 	uint64_t largeValueBodyBytes = 0;
+	std::vector<std::pair<uint64_t, uint64_t>> nativeReadRanges;
 	{
 		StorageIO::ScopedNativeReadHookForTesting observePayloadReads(
 				[&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
 					const auto count = portable_pread(fd, buffer, size, offset);
+					if (count > 0 && offset >= 0)
+						nativeReadRanges.emplace_back(static_cast<uint64_t>(offset), static_cast<uint64_t>(count));
 					if (count >= static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
 						try {
 							const auto bytes = std::span(static_cast<const std::byte *>(buffer), static_cast<size_t>(count));
@@ -382,6 +385,27 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 				});
 		reopened.open();
 	}
+	// Identify even stale data-owner frames independently after the measured
+	// open, then conservatively count all native reads intersecting their bodies.
+	uint64_t bodyIntersectionBytes = 0;
+	uint64_t discoveredDataFrames = 0;
+	std::ifstream raw(data_path_, std::ios::binary);
+	ASSERT_TRUE(raw.is_open());
+	for (uint64_t offset = 0; offset + RSS_PAGE_SIZE <= fileBytes; offset += RSS_PAGE_SIZE) {
+		std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> header{};
+		raw.seekg(static_cast<std::streamoff>(offset));
+		raw.read(reinterpret_cast<char *>(header.data()), header.size());
+		ASSERT_EQ(raw.gcount(), static_cast<std::streamsize>(header.size()));
+		try {
+			if (PageOwnerHeaderCodec::decode(header).kind != PageOwnerKind::POK_LARGE_VALUE_DATA) continue;
+		} catch (const FormatException &) { continue; }
+		++discoveredDataFrames;
+		for (const auto &[start, count] : nativeReadRanges) {
+			const auto first = std::max(start, offset + RSS_PAGE_OWNER_HEADER_BYTES);
+			const auto last = std::min(start + count, offset + RSS_PAGE_SIZE);
+			if (last > first) bodyIntersectionBytes += last - first;
+		}
+	}
 	const StorageIOStats openStatistics = reopened.ioStats().data;
     RecordProperty("raw_payload_bytes", std::to_string(PAYLOAD_BYTES));
     RecordProperty("reopen_read_bytes", std::to_string(openStatistics.read_bytes));
@@ -389,6 +413,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
     // Counts reads that start at an authenticated data-owner header; a
     // multi-page read beginning elsewhere is outside this diagnostic count.
     RecordProperty("observed_reopen_large_value_body_bytes", std::to_string(largeValueBodyBytes));
+    RecordProperty("discovered_large_value_frames", std::to_string(discoveredDataFrames));
+    RecordProperty("reopen_native_body_intersection_bytes", std::to_string(bodyIntersectionBytes));
 	// A normal open follows the A/B Superblock roots; it must not read the raw
 	// LargeValue payload merely to reconstruct the storage graph.
 	// Root-anchored Catalog/allocator validation has a fixed metadata cost, but
