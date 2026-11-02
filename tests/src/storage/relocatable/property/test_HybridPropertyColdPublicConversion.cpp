@@ -213,7 +213,9 @@ TEST_F(HybridPropertyColdPublicConversionTest, ActualConvertedPartialGroupSuppor
     backend->close(); backend->open(); backend->close(); EXPECT_EQ(memory->used(), 0U);
 }
 TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesItsNewWholeRootValueAndManifestTogether) {
-    prepare(); catalog();
+    // Use a genuinely wider ROW image so this publication exercises the
+    // unchanged whole-file saving gate even with the external large value.
+    prepare(NODE, 8, 1400); catalog();
     struct AdmissionObservation { int64_t row = 0, candidate = 0, accepted = 0, rejected = 0, unknown = 0, resource = 0; } observation;
     graph::debug::PerfTrace::ScopedObserver observe(&observation, [](void *p, std::string_view key, int64_t value, bool) noexcept {
         auto &v = *static_cast<AdmissionObservation *>(p);
@@ -227,7 +229,7 @@ TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesIts
     {
         LargeValueStore values(io_, *metadata_); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
         NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, roots, *btree_pages_, placement());
-        auto row = expected(1); row.entries[4].value = PropertyValue(std::string(8193, 'l'));
+        auto row = expected(1, NODE, 1400); row.entries[4].value = PropertyValue(std::string(8193, 'l'));
         auto tx = writer.beginTransaction(); tx.replaceNodeProperty(std::move(row)); ASSERT_TRUE(tx.commit().committed());
     }
     auto old = metadata_->openSnapshot(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); convert(memory);
@@ -241,9 +243,9 @@ TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesIts
         graph::utils::OwnedAllocationScope scope(memory); auto current = metadata_->openSnapshot();
         LargeValueStore values(io_, *metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY); PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
         for (const auto *pin : {&old, &current}) {
-            auto row = expected(1); row.entries[4].value = PropertyValue(std::string(8193, 'l'));
+            auto row = expected(1, NODE, 1400); row.entries[4].value = PropertyValue(std::string(8193, 'l'));
             EXPECT_EQ(roots.readEntity(*pin, {NODE, 1}), row);
-            EXPECT_EQ(roots.readEntity(*pin, {NODE, 512}), expected(512));
+            EXPECT_EQ(roots.readEntity(*pin, {NODE, 512}), expected(512, NODE, 1400));
         }
     }
     {
@@ -258,7 +260,7 @@ TEST_F(HybridPropertyColdPublicConversionTest, ForwardColdConversionPublishesIts
         const auto nextLsn = [&] { return LogSequenceNumber(metadata_->openSnapshot().superblock().checkpoint_lsn.value() + 1); };
         const auto retired = gc.reclaim(options, nextLsn()); EXPECT_EQ(retired.reachable_values, 1U); EXPECT_EQ(retired.retired_values, 1U);
         PropertyCollectionRootStore roots(*slotted_pages_, values, *metadata_);
-        auto wanted = expected(1); wanted.entries[4].value = PropertyValue(std::string(8193, 'l'));
+        auto wanted = expected(1, NODE, 1400); wanted.entries[4].value = PropertyValue(std::string(8193, 'l'));
         EXPECT_EQ(roots.readEntity(old, {NODE, 1}), wanted); old.release();
         const auto released = gc.reclaim(options, nextLsn()); EXPECT_EQ(released.retired_values, 0U);
         auto current = metadata_->openSnapshot(); EXPECT_EQ(roots.readEntity(current, {NODE, 1}), wanted);
