@@ -1060,7 +1060,11 @@ namespace graph::test {
 										   LogSequenceNumber(2U)};
 				if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
 					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION ||
-					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE) {
+					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE) {
 					// Publish a real, allocated opaque segment in the same generation
 					// as the Catalog entry; recovery must authenticate its envelope.
 					const CatalogSlotReservationRequest request{catalog.segment_id, catalog.kind, catalog.owner_id,
