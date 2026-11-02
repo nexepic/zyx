@@ -31,11 +31,11 @@ TEST_F(HybridPropertyAllocationCostsTest, CountsWholePoolsAndTheNonCatalogEmerge
     EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(io_->fileSize(), bytes); EXPECT_EQ(memory->used(), 0U);
 }
 TEST_F(HybridPropertyAllocationCostsTest, EnumeratesUnattributedAllocationBitsBeyondThePhysicalFileAndAcrossRadixLevels) {
-    const PhysicalSlotId far(uint64_t(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY) * RSS_CATALOG_RADIX_FANOUT + 17U);
+    const PhysicalSlotId farSlot{static_cast<uint64_t>(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY) * RSS_CATALOG_RADIX_FANOUT + 17U};
     auto previous = metadata_->openSnapshot(); const auto state = previous.superblock();
-    ASSERT_NO_THROW((void)metadata_->setPhysicalSlotAllocated(far, true, LogSequenceNumber(state.checkpoint_lsn.value() + 1U)));
+    ASSERT_NO_THROW((void)metadata_->setPhysicalSlotAllocated(farSlot, true, LogSequenceNumber(state.checkpoint_lsn.value() + 1U)));
     auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024); auto pin = metadata_->openSnapshot();
-    EXPECT_GT(far.value(), (io_->fileSize() - pin.superblock().data_region_offset) / RSS_SEGMENT_SIZE);
+    EXPECT_GT(farSlot.value(), (io_->fileSize() - pin.superblock().data_region_offset) / RSS_SEGMENT_SIZE);
     const auto epoch = io_->dataMutationEpoch(); const auto footprint = census(memory).inspect(pin);
     ASSERT_TRUE(footprint); EXPECT_FALSE(footprint->fullyAttributed()); EXPECT_EQ(footprint->unattributed_allocated_bytes, RSS_SEGMENT_SIZE);
     EXPECT_GE(footprint->allocator_metadata_pages, 4U); EXPECT_EQ(io_->dataMutationEpoch(), epoch);
