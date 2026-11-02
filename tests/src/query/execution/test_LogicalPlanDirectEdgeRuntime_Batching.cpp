@@ -1910,7 +1910,7 @@ namespace graph::query::execution {
 		delivered = 0;
 		EXPECT_THROW(static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &) {
 			++delivered; return true;
-		})), std::runtime_error);
+		}, context)), std::runtime_error);
 		EXPECT_EQ(delivered, 0U);
 		EXPECT_EQ(account->used(), 0U);
 		bounds.maximum_materialized_bytes = 100000U;
