@@ -1,0 +1,15 @@
+=================================================================
+  ZYX Performance Benchmark Suite
+  Bench IDs    : insert.native.single.none
+  Insert Scale : 100
+  Query Scale  : 500
+=================================================================
+
++------------------------------------+----------------+----------------+----------------+----------------+
+| Benchmark Name                     | Ops/Sec        | Avg(us)        | P99(us)        | Mem(KB)        |
++------------------------------------+----------------+----------------+----------------+----------------+
+   [Setup] Insert Native Single (No Index)... Done.
+| Insert Native Single (No Index)    | 290.86         | 3438.02        | 5033.24        | 18256          |
+    [Stage avg ms/op] native_graph.execute=3.381, native_graph.commit=2.420, native_graph.commit.entity_publish=1.556, native_graph.entity_batch=1.555, native_graph.metadata_publish=1.501, native_graph.mutation.finalize_materializations=0.899, storage.checksum.crc=0.447, native_graph.directory.prepare_replace=0.418, native_graph.read.metadata_decode.radix=0.380, native_graph.mutation.batch_publish=0.311, native_graph.directory.prepare_replace.write_tree=0.215, native_graph.write.btree.plan.initialize=0.197, native_graph.commit.property_plan=0.151, native_graph.directory.prepare_replace.apply_mutations=0.149, native_graph.read.metadata_acquisition=0.140, native_graph.route.publish_bootstrap=0.109
+=================================================================
+

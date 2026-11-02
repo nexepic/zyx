@@ -1,0 +1,194 @@
+[
+  {
+    "round": 1,
+    "version": "before",
+    "ops_per_second": 272.97,
+    "mean_us": 3663.47,
+    "p99_us": 6108.21,
+    "count": 200
+  },
+  {
+    "round": 1,
+    "version": "after",
+    "ops_per_second": 283.28,
+    "mean_us": 3530.11,
+    "p99_us": 4968.55,
+    "count": 200
+  },
+  {
+    "round": 2,
+    "version": "after",
+    "ops_per_second": 286.21,
+    "mean_us": 3493.96,
+    "p99_us": 5379.7,
+    "count": 200
+  },
+  {
+    "round": 2,
+    "version": "before",
+    "ops_per_second": 274.6,
+    "mean_us": 3641.63,
+    "p99_us": 8964.05,
+    "count": 200
+  },
+  {
+    "round": 3,
+    "version": "before",
+    "ops_per_second": 286.82,
+    "mean_us": 3486.46,
+    "p99_us": 5388.43,
+    "count": 200
+  },
+  {
+    "round": 3,
+    "version": "after",
+    "ops_per_second": 286.65,
+    "mean_us": 3488.55,
+    "p99_us": 4561.03,
+    "count": 200
+  },
+  {
+    "round": 4,
+    "version": "after",
+    "ops_per_second": 288.09,
+    "mean_us": 3471.08,
+    "p99_us": 4612.76,
+    "count": 200
+  },
+  {
+    "round": 4,
+    "version": "before",
+    "ops_per_second": 290.25,
+    "mean_us": 3445.33,
+    "p99_us": 4637.19,
+    "count": 200
+  },
+  {
+    "round": 5,
+    "version": "before",
+    "ops_per_second": 288.65,
+    "mean_us": 3464.38,
+    "p99_us": 4602.93,
+    "count": 200
+  },
+  {
+    "round": 5,
+    "version": "after",
+    "ops_per_second": 285.71,
+    "mean_us": 3500.04,
+    "p99_us": 4721.88,
+    "count": 200
+  },
+  {
+    "round": 6,
+    "version": "after",
+    "ops_per_second": 287.19,
+    "mean_us": 3482.02,
+    "p99_us": 4768.69,
+    "count": 200
+  },
+  {
+    "round": 6,
+    "version": "before",
+    "ops_per_second": 284.94,
+    "mean_us": 3509.52,
+    "p99_us": 4790.86,
+    "count": 200
+  },
+  {
+    "round": 7,
+    "version": "before",
+    "ops_per_second": 283.64,
+    "mean_us": 3525.57,
+    "p99_us": 5431.03,
+    "count": 200
+  },
+  {
+    "round": 7,
+    "version": "after",
+    "ops_per_second": 284.74,
+    "mean_us": 3511.92,
+    "p99_us": 5013.74,
+    "count": 200
+  },
+  {
+    "round": 8,
+    "version": "after",
+    "ops_per_second": 284.53,
+    "mean_us": 3514.52,
+    "p99_us": 5004.98,
+    "count": 200
+  },
+  {
+    "round": 8,
+    "version": "before",
+    "ops_per_second": 290.92,
+    "mean_us": 3437.36,
+    "p99_us": 4733.06,
+    "count": 200
+  },
+  {
+    "round": 9,
+    "version": "before",
+    "ops_per_second": 290.86,
+    "mean_us": 3438.02,
+    "p99_us": 5033.24,
+    "count": 200
+  },
+  {
+    "round": 9,
+    "version": "after",
+    "ops_per_second": 283.49,
+    "mean_us": 3527.51,
+    "p99_us": 5421.76,
+    "count": 200
+  },
+  {
+    "round": 10,
+    "version": "after",
+    "ops_per_second": 266.94,
+    "mean_us": 3746.16,
+    "p99_us": 6169.12,
+    "count": 200
+  },
+  {
+    "round": 10,
+    "version": "before",
+    "ops_per_second": 285.26,
+    "mean_us": 3505.6,
+    "p99_us": 5327.65,
+    "count": 200
+  },
+  {
+    "round": 11,
+    "version": "before",
+    "ops_per_second": 289.69,
+    "mean_us": 3452.0,
+    "p99_us": 4762.75,
+    "count": 200
+  },
+  {
+    "round": 11,
+    "version": "after",
+    "ops_per_second": 285.4,
+    "mean_us": 3503.82,
+    "p99_us": 4422.25,
+    "count": 200
+  },
+  {
+    "round": 12,
+    "version": "after",
+    "ops_per_second": 287.03,
+    "mean_us": 3483.94,
+    "p99_us": 4632.86,
+    "count": 200
+  },
+  {
+    "round": 12,
+    "version": "before",
+    "ops_per_second": 288.82,
+    "mean_us": 3462.36,
+    "p99_us": 5020.36,
+    "count": 200
+  }
+]

@@ -1,0 +1,9 @@
+Executing script: /workspace/zyx-link-tmp/cleanup-bench-count.cypher
+[stmt 1]
+┌─────┐
+│ n   │
+├─────┤
+│ 200 │
+└─────┘
+(1 row, 5.17ms)
+
