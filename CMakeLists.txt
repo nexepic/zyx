@@ -15,8 +15,10 @@ option(ZYX_BUILD_SHARED_LIBRARY "Build the public shared ZYX library" ON)
 option(ZYX_BUILD_STATIC_LIBRARY "Build the public static ZYX library" OFF)
 option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
-option(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT "Build isolated hybrid-property format prototype" OFF)
-option(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT "Build isolated complete-scan format prototype" OFF)
+# The reconstructed current disk layout always includes column and scan codecs.
+# Authority is selected by each authenticated superblock, not by build flags.
+set(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT ON)
+set(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT ON)
 option(ZYX_EXPERIMENTAL_STREAMING_COUNT "Enable experimental streaming count fusion" OFF)
 option(ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY "Enable experimental borrowed group-key lookup" OFF)
 option(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE "Expose experimental budgeted non-null probes" OFF)

@@ -20,15 +20,15 @@
 #include <string>
 #include <type_traits>
 
-// Kept off for ordinary builds; candidate files are deliberately incompatible.
+// Current builds compile the full codec set. File authority is per snapshot.
 #ifndef ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-#define ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT 0
+#define ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT 1
 #endif
 #ifndef ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-#define ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT 0
+#define ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT 1
 #endif
-#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT && !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-#error "Scan-path format requires the hybrid-property format"
+#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT || !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
+#error "The current storage format requires both column and scan codecs"
 #endif
 
 namespace graph::storage {
