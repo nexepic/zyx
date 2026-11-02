@@ -406,16 +406,27 @@ TEST_F(RelocatableMetadataStoreTest, LocationLogicalizesOwnedInternalChildrenAft
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+	auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.require_absent = true;
+	const auto prepare = [&](std::span<const CatalogEntry> pools) {
+		for (const auto &pool : pools) {
+			initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+			const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, pool.physical_slot) + RSS_SEGMENT_SIZE;
+			const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+		}
+	};
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1U), PhysicalSlotId(40U),
+		PhysicalSlotId(40U), LogSequenceNumber(3U), prepare));
 	MetadataSnapshotPin retainedMigration = store->openSnapshot();
 	const uint64_t beforeUpdate = store->pagePoolStats().allocated_pages;
-	static_cast<void>(store->upsertCatalog(std::vector{entry(101, 4, 4)}, LogSequenceNumber(4)));
+	request.require_absent = false; request.segment_generation = Generation(2U);
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1U), PhysicalSlotId(41U),
+		PhysicalSlotId(41U), LogSequenceNumber(4U), prepare));
 	const uint64_t afterUpdate = store->pagePoolStats().allocated_pages;
 	EXPECT_GT(afterUpdate, beforeUpdate);
 	EXPECT_EQ(store->findCatalog(retainedMigration, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(100));
+			  PhysicalSlotId(40));
 	retainedMigration.release();
 	EXPECT_EQ(store->activeSnapshotCount(), 0U);
 	store->collectMetadataGarbage();
@@ -424,7 +435,7 @@ TEST_F(RelocatableMetadataStoreTest, ReclaimsSupersededTypedRouteBranchAfterSnap
 	MetadataSnapshotPin current = store->openSnapshot();
 	EXPECT_TRUE(current.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(store->findCatalog(current, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(101));
+			  PhysicalSlotId(41));
 }
 
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry) {
