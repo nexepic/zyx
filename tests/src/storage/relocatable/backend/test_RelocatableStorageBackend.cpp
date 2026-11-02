@@ -483,6 +483,27 @@ TEST_F(RelocatableStorageBackendTest, NativeDatabaseCreationPublishesLogicalWrit
 	EXPECT_NO_THROW(reopened.close());
 }
 
+TEST_F(RelocatableStorageBackendTest, CurrentFormatCreatesWritableRowDatabaseBeforeAnyScanConversion) {
+	auto options = backendOptions();
+	options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	auto backend = RelocatableStorageBackend::initializeNew(std::move(options));
+	ASSERT_NE(backend, nullptr);
+	backend->open();
+	const auto ids = backend->createLogicalNodes({{{"Person"}, {{"name", graph::PropertyValue("Ada")}}}});
+	ASSERT_EQ(ids.size(), 1U);
+	{
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		EXPECT_EQ(snapshot->readNode(ids.front()).node_id, ids.front());
+	}
+	backend->close();
+	backend->open();
+	{
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		EXPECT_EQ(snapshot->readNode(ids.front()).node_id, ids.front());
+	}
+	backend->close();
+}
+
 TEST_F(RelocatableStorageBackendTest, NativeInitializationRejectsUnsafeModesAndPathsWithoutReplacingFiles) {
 	RelocatableStorageBackendOptions nonCreate = backendOptions();
 	nonCreate.open_mode = OpenMode::OPEN_EXISTING_FILE;
