@@ -491,6 +491,7 @@ TEST_F(RelocatableStorageBackendTest, CurrentFormatCreatesWritableRowDatabaseBef
 	backend->open();
 	const auto ids = backend->createLogicalNodes({{{"Person"}, {{"name", graph::PropertyValue("Ada")}}}});
 	ASSERT_EQ(ids.size(), 1U);
+	EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity()));
 	{
 		auto snapshot = backend->openLogicalGraphReadSnapshot();
 		EXPECT_EQ(snapshot->readNode(ids.front()).node_id, ids.front());

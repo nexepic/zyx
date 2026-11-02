@@ -416,7 +416,12 @@ namespace graph::storage {
         std::optional<SlottedPagePool> hybridPages;
         std::optional<HybridPropertyReadContext> hybrid;
         std::shared_ptr<std::pmr::memory_resource> hybridMemory;
-        if (superblock.hybrid_property_descriptor_root.isValid() || RSS_SCAN_PATH_FORMAT_ENABLED) {
+        if (!(superblock.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)))
+            requireIntegrity(!metadata_.findIndexRootOptional(snapshot,
+                hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN)),
+                "ROW authority cannot own a scan membership directory");
+        if (superblock.hybrid_property_descriptor_root.isValid() ||
+            (superblock.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE))) {
             hybridMemory = workspace_owner_ ? workspace_owner_ : utils::OwnedAllocationScope::owner();
             // Preserve the scanner's existing legacy unbounded convention;
             // explicit/scoped protected workspaces are retained verbatim.

@@ -1173,7 +1173,9 @@ namespace graph::storage {
             // changing the summary's contents. Complete scan writes must still
             // maintain its changed entries; retaining the old marker does not
             // certify unvisited pages or enable the insertion fast path.
-            const bool retainStale = RSS_SCAN_PATH_FORMAT_ENABLED && !managed && freeSummaryProofs[type].has_value();
+            const bool retainStale = RSS_SCAN_PATH_FORMAT_ENABLED &&
+                (snapshot_.superblock().flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
+                !managed && freeSummaryProofs[type].has_value();
             if (!managed && !retainStale) return;
             const uint64_t id = EntityFreeSpaceIndex::indexId(kind);
             auto position = std::lower_bound(scalar_index_mutations_.begin(), scalar_index_mutations_.end(), id,

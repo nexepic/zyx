@@ -213,6 +213,11 @@ private:
         constexpr auto ordinal = static_cast<size_t>(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
         const auto indexId = hybridPropertyIndexId(HybridPropertyRootOrdinal::HPRO_NODE_SCAN);
         const bool hasRoot = context.descriptor_ && context.descriptor_->roots[ordinal].page_id.isValid();
+        if (!(snapshot.superblock().flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE))) {
+            require(!hasRoot && !context.metadata_.findIndexRootOptional(snapshot, indexId),
+                "ROW authority cannot own a scan membership directory");
+            return;
+        }
         // Both streams retain at most one group and one tree cursor. Reserve
         // a finite source grant in the caller before opening its local account;
         // this is prepaid capacity, not a second uncharged query allowance.
