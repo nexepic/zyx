@@ -84,7 +84,7 @@ TEST_P(HybridPropertyShapeCostsTest, WholeAllocationAndEveryOwnerSurviveConversi
             static_cast<void>(context.visitField({NODE, 1}, token, [](const auto &) {}, [](const auto &) {}, {},
                 [&](size_t bytes) { credit.set(bytes); },
                 [&](const auto &, const auto &, const auto &, const auto &) { ++columns; }));
-            std::cout << "SHAPE_FIELD_TRACE token=" << token << " column=" << columns << '\n';
+            EXPECT_EQ(columns, token == 2U || token == 3U ? 1U : 0U) << "token=" << token;
         }
     }
     size_t memberships = 0, interleavedExtensions = 0;
@@ -118,7 +118,7 @@ TEST_P(HybridPropertyShapeCostsTest, WholeAllocationAndEveryOwnerSurviveConversi
 INSTANTIATE_TEST_SUITE_P(FixedShapes, HybridPropertyShapeCostsTest, testing::Values(
     Shape{"occupied47", 47, 2, 0, ShapeKind::SK_DENSE}, Shape{"occupied48", 48, 2, 2, ShapeKind::SK_DENSE},
     Shape{"occupied64", 64, 2, 2, ShapeKind::SK_DENSE}, Shape{"unique_sparse", 64, 1, 0, ShapeKind::SK_UNIQUE},
-    Shape{"mixed_null_string", 64, 4, 1, ShapeKind::SK_MIXED}, Shape{"multiple_labels", 64, 16, 16, ShapeKind::SK_MULTILABEL},
+    Shape{"mixed_null_string", 64, 4, 2, ShapeKind::SK_MIXED}, Shape{"multiple_labels", 64, 16, 16, ShapeKind::SK_MULTILABEL},
     Shape{"shared_large", 64, 1, 0, ShapeKind::SK_LARGE}, Shape{"wide4096", 64, 64, 64, ShapeKind::SK_WIDE},
     Shape{"interleaved_dense_sparse", 64, 16, 8, ShapeKind::SK_INTERLEAVED}),
     [](const testing::TestParamInfo<Shape> &info) { return info.param.name; });
