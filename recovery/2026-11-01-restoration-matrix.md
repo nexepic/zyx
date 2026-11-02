@@ -1,5 +1,7 @@
 # Restoration matrix — 2026-11-01
 
+This matrix records the **initial remote baseline**, not current recovery status. For subsequent code checkpoints and actual test outcomes, see `2026-11-01-revision-entrypoints.md`, `2026-11-01-full-default-baseline.md` and `2026-11-02-mixed-candidate-failures.md`. The restored candidate remains on a separate local branch and has not been pushed.
+
 Baseline `bc08b83db1cbe82a8a196c91cecd3c629e122345`, local checkpoint `c7331c34`. The detailed requirements below come from the previous task handoff; historical hashes and pass counts are search/acceptance anchors, not current artifacts or results. Status means **present** (source/coverage observed, not equivalent to final), **missing** (current source or an observed test disproves final contract), **partial**, or **unverified**. New contract tests remain local changes. Costs are relative estimates, not commitments.
 
 | Priority and requirement | Baseline evidence and status | Recovery / acceptance and relative cost |
