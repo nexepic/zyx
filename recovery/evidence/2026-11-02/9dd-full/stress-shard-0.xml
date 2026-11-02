@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="0" disabled="0" errors="0" time="107.732" timestamp="2026-11-02T07:48:45.544" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="3" failures="0" disabled="0" skipped="0" errors="0" time="107.727" timestamp="2026-11-02T07:48:45.544">
+    <testcase name="ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableImportInsertionTargets.cpp" line="74" status="run" result="completed" time="15.71" timestamp="2026-11-02T07:48:45.544" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="largest_added_page_count" value="90"/>
+      </properties>
+    </testcase>
+    <testcase name="NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp" line="41" status="run" result="completed" time="40.731" timestamp="2026-11-02T07:49:01.254" classname="RelocatableStorageBackendTest" />
+    <testcase name="StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableStreamedAdjacencyDelta.cpp" line="189" status="run" result="completed" time="51.286" timestamp="2026-11-02T07:49:41.986" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+</testsuites>
