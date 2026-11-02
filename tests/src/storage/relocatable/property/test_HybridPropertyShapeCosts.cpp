@@ -77,6 +77,16 @@ TEST_P(HybridPropertyShapeCostsTest, WholeAllocationAndEveryOwnerSurviveConversi
     EXPECT_EQ(entities_->readNode(current, 1), oldNode);
     HybridPropertyReadContext context(io_, *slotted_pages_, *metadata_, current);
     const auto directory = HybridPropertyDirectoryIntegrity::verify(context, current, memory, &values);
+    if (shape.kind == ShapeKind::SK_MIXED) {
+        for (uint32_t token = 1; token <= shape.fields; ++token) {
+            size_t columns = 0;
+            graph::utils::OwnedHeapReservation credit(memory);
+            static_cast<void>(context.visitField({NODE, 1}, token, [](const auto &) {}, [](const auto &) {}, {},
+                [&](size_t bytes) { credit.set(bytes); },
+                [&](const auto &, const auto &, const auto &, const auto &) { ++columns; }));
+            std::cout << "SHAPE_FIELD_TRACE token=" << token << " column=" << columns << '\n';
+        }
+    }
     size_t memberships = 0, interleavedExtensions = 0;
     for (const auto &root : expected) for (const auto &entry : root.entries) {
         ++memberships; if (entry.key_token > 8U) ++interleavedExtensions;
