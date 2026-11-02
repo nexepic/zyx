@@ -277,9 +277,7 @@ TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationReportsNoCandidateForInap
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationRejectsAStaleBootstrapGenerationBeforeScanningRoutes) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock routed = snapshot.superblock();
 	snapshot.release();
@@ -310,9 +308,7 @@ TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationRejectsAStaleBootstrapGen
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationRejectsInvisibleOrIncompleteBootstrapHeaders) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock routed = snapshot.superblock();
 	snapshot.release();
