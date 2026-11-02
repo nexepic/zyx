@@ -1,0 +1,41 @@
+in function _ZN5graph7storage24RelocatableMetadataStore37mutateNativeGraphPagesWithLargeValuesESt4spanIKNS0_28EntityPageReplacementRequestELm18446744073709551615EES2_IKNS0_28EntityPageAppendBatchRequestELm18446744073709551615EES2_IKNS0_29EntityPageNewPoolBatchRequestELm18446744073709551615EES2_IKNS0_41NativeGraphPropertyPageReplacementRequestELm18446744073709551615EES2_IKNS0_35NativeGraphPropertyPageBatchRequestELm18446744073709551615EES2_IKNS0_29NativeGraphLargeValueMutationELm18446744073709551615EERKNS0_31NativeGraphDerivedStateMutationENS0_12StrongUInt64INS0_20LogSequenceNumberTagEEERKSt8functionIFvS2_INS0_36EntityPageReplacementMaterializationELm18446744073709551615EES2_INS0_36EntityPageAppendBatchMaterializationELm18446744073709551615EES2_INS0_37EntityPageNewPoolBatchMaterializationELm18446744073709551615EES2_INS0_49NativeGraphPropertyPageReplacementMaterializationELm18446744073709551615EES2_INS0_43NativeGraphPropertyPageBatchMaterializationELm18446744073709551615EES2_INS0_31LargeValueMaterializationResultELm18446744073709551615EEEERKSR_IFvRSt6vectorIS18_INS0_26IndexTreeMutationPoolBatchESaIS19_EESaIS1B_EEEERKSR_IFvRS18_INS0_41NativeGraphVectorBootstrapMaterializationESaIS1J_EEEERKSR_IFvRS18_INS0_37NativeGraphVectorDeltaMaterializationESaIS1R_EEEES2_IKNS0_14PageRetirementELm18446744073709551615EES2_IKNSO_INS0_15LargeValueIdTagEEELm18446744073709551615EERKSR_IFvS2_IKNS0_31ExistingPoolPageRetirementBatchELm18446744073709551615EEEERKNS0_22MetadataPublishOptionsENS0_31NativeGraphLogicalIdReservationESt8optionalINSO_INS0_13GenerationTagEEEERKSR_IFS18_ISt4byteSaIS2L_EERKNS0_28NativeGraphPrivateSegmentSetEmEERKSR_IFvS2Q_RKSR_IFS2N_RKNS0_40NativeGraphPrivateSegmentMaterializationEEEEERKSR_IFNS0_28NativeGraphDeferredIndexPlanERKNS0_39NativeGraphDeferredIndexPlanningContextEEERKSR_IFvRKNS0_42NativeGraphEarlyPublicationPlanningContextEEERKSR_IFNS0_29NativeGraphDeferredIndexPlansES39_EERKS2H_INS0_37NativeGraphHybridPropertyRootMutationEERKS2H_INS0_35NativeLargeValueReclamationEvidenceEEPKNS0_29NativeHybridVectorPublicationEPKNS0_31NativeHybridTopologyPublicationE:
+  in block %2121 / %2121:
+    <   %2122 = getelementptr inbounds i8, ptr %27, i64 250
+    <   %2123 = load i8, ptr %2122, align 2, !tbaa !165, !range !22, !noundef !23
+    <   %2124 = trunc nuw i8 %2123 to i1
+  in block %2171 / %2173:
+  in block %2168 / %2170:
+    >   %2171 = phi i1 [ true, %2155 ], [ %2158, %2163 ], [ %2158, %2167 ]
+    >   %2172 = phi { ptr, i32 } [ %2156, %2155 ], [ %2159, %2163 ], [ %2159, %2167 ]
+    <   %2169 = phi i1 [ true, %2153 ], [ %2156, %2161 ], [ %2156, %2165 ]
+    <   %2170 = phi { ptr, i32 } [ %2154, %2153 ], [ %2157, %2161 ], [ %2157, %2165 ]
+  in block %2165 / %2167:
+    >   %2168 = load i64, ptr %2161, align 8, !tbaa !12
+    <   %2166 = load i64, ptr %2159, align 8, !tbaa !12
+  in block %2493 / %2495:
+    >   %2496 = phi ptr [ %2227, %2245 ], [ %2277, %2295 ], [ %2445, %2463 ]
+    <   %2494 = phi ptr [ %2225, %2243 ], [ %2275, %2293 ], [ %2443, %2461 ]
+  in block %2461 / %2463:
+    >   %2464 = phi i1 [ true, %2448 ], [ %2451, %2456 ], [ %2451, %2460 ]
+    >   %2465 = phi { ptr, i32 } [ %2449, %2448 ], [ %2452, %2456 ], [ %2452, %2460 ]
+    <   %2462 = phi i1 [ true, %2446 ], [ %2449, %2454 ], [ %2449, %2458 ]
+    <   %2463 = phi { ptr, i32 } [ %2447, %2446 ], [ %2450, %2454 ], [ %2450, %2458 ]
+  in block %2458 / %2460:
+    >   %2461 = load i64, ptr %2454, align 8, !tbaa !12
+    <   %2459 = load i64, ptr %2452, align 8, !tbaa !12
+  in block %2243 / %2245:
+    >   %2246 = phi i1 [ true, %2230 ], [ %2233, %2238 ], [ %2233, %2242 ]
+    >   %2247 = phi { ptr, i32 } [ %2231, %2230 ], [ %2234, %2238 ], [ %2234, %2242 ]
+    <   %2244 = phi i1 [ true, %2228 ], [ %2231, %2236 ], [ %2231, %2240 ]
+    <   %2245 = phi { ptr, i32 } [ %2229, %2228 ], [ %2232, %2236 ], [ %2232, %2240 ]
+  in block %2240 / %2242:
+    >   %2243 = load i64, ptr %2236, align 8, !tbaa !12
+    <   %2241 = load i64, ptr %2234, align 8, !tbaa !12
+  in block %2293 / %2295:
+    >   %2296 = phi i1 [ true, %2280 ], [ %2283, %2288 ], [ %2283, %2292 ]
+    >   %2297 = phi { ptr, i32 } [ %2281, %2280 ], [ %2284, %2288 ], [ %2284, %2292 ]
+    <   %2294 = phi i1 [ true, %2278 ], [ %2281, %2286 ], [ %2281, %2290 ]
+    <   %2295 = phi { ptr, i32 } [ %2279, %2278 ], [ %2282, %2286 ], [ %2282, %2290 ]
+  in block %2290 / %2292:
+    >   %2293 = load i64, ptr %2286, align 8, !tbaa !12
+    <   %2291 = load i64, ptr %2284, align 8, !tbaa !12
