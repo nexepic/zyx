@@ -41,6 +41,8 @@ void RelocatableMetadataStore::recoverNativePoolFrames(const MetadataWriteGuard 
         validatedOwners->reserve(1024U);
     } catch (const query::execution::detail::ResourceAdmissionDenied &) {
         validatedOwners.reset();
+    } catch (const std::bad_alloc &) {
+        validatedOwners.reset();
     }
     const auto lookupOwner = [&](const CatalogEntry &pool, uint8_t frame) -> std::optional<PageOwnerHeader> {
         if (!validatedOwners) return std::nullopt;
