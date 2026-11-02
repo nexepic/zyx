@@ -157,9 +157,8 @@ TEST_F(RelocatableMetadataStoreTest, PerformsInitialPageDirectoryBootstrapMigrat
 }
 
 TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(3)));
 	const Superblock updated = store->upsertCatalog(std::vector{entry(101, 4, 4)}, LogSequenceNumber(4));
 	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
 	MetadataPageFile pages(io, updated);
@@ -194,10 +193,9 @@ TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMi
 }
 
 TEST_F(RelocatableMetadataStoreTest, CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	std::vector<CatalogEntry> entries = catalogEntriesForLeafCount(RSS_CATALOG_RADIX_FANOUT + 1U);
-	static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(3)));
 
 	CatalogEntry replacement = entries.front();
 	replacement.physical_slot = PhysicalSlotId(5000U);
