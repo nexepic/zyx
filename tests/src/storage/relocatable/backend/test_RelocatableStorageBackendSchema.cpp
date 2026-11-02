@@ -15,6 +15,8 @@
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryGuard.hpp"
+#include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 
 #ifdef _WIN32
@@ -358,10 +360,35 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	const uint64_t fileBytes = std::filesystem::file_size(data_path_);
 	ASSERT_GT(fileBytes, PAYLOAD_BYTES);
 	RelocatableStorageBackend reopened(rawOptions);
-	reopened.open();
+	uint64_t largeValueOwnerReads = 0;
+	uint64_t largeValueBodyBytes = 0;
+	{
+		StorageIO::ScopedNativeReadHookForTesting observePayloadReads(
+				[&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
+					const auto count = portable_pread(fd, buffer, size, offset);
+					if (count >= static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
+						try {
+							const auto bytes = std::span(static_cast<const std::byte *>(buffer), static_cast<size_t>(count));
+							const auto owner = PageOwnerHeaderCodec::decode(bytes.first(RSS_PAGE_OWNER_HEADER_BYTES));
+							if (owner.kind == PageOwnerKind::POK_LARGE_VALUE_DATA) {
+								++largeValueOwnerReads;
+								largeValueBodyBytes += static_cast<uint64_t>(count) - RSS_PAGE_OWNER_HEADER_BYTES;
+							}
+						} catch (const FormatException &) {
+							// Most reads are not owner frames; ignore their decode failure.
+						}
+					}
+					return count;
+				});
+		reopened.open();
+	}
 	const StorageIOStats openStatistics = reopened.ioStats().data;
     RecordProperty("raw_payload_bytes", std::to_string(PAYLOAD_BYTES));
     RecordProperty("reopen_read_bytes", std::to_string(openStatistics.read_bytes));
+    RecordProperty("reopen_large_value_owner_reads", std::to_string(largeValueOwnerReads));
+    // Counts reads that start at an authenticated data-owner header; a
+    // multi-page read beginning elsewhere is outside this diagnostic count.
+    RecordProperty("observed_reopen_large_value_body_bytes", std::to_string(largeValueBodyBytes));
 	// A normal open follows the A/B Superblock roots; it must not read the raw
 	// LargeValue payload merely to reconstruct the storage graph.
 	// Root-anchored Catalog/allocator validation has a fixed metadata cost, but
