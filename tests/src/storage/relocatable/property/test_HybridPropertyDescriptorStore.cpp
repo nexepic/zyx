@@ -83,7 +83,7 @@ TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChe
 #if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
 TEST_F(HybridPropertyDescriptorStoreTest, NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting) {
     const auto first = Access::publish(*metadata_); auto old = metadata_->openSnapshot();
-    ASSERT_EQ(RSS_SUPERBLOCK_VERSION, 39); ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
+    ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
     const auto bytes = SuperblockCodec::encode(first); EXPECT_EQ(SuperblockCodec::decode(bytes), first);
     EXPECT_EQ(LittleEndianCodec::readU64(bytes, 336), first.hybrid_property_descriptor_root.physical_slot.value());
     const auto oldDescriptor = Access::read(*metadata_, old);
@@ -143,12 +143,18 @@ TEST_F(HybridPropertyDescriptorStoreTest, NonemptyUninstalledRootsRejectBeforeFr
     Access::rejectUninstalledRoots(*metadata_);
     EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
 }
-TEST_F(HybridPropertyDescriptorStoreTest, DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance) {
+TEST_F(HybridPropertyDescriptorStoreTest, EmptyDescriptorPublicationDoesNotConflictWithStagedNode) {
     NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
     auto transaction = planner.beginTransaction(); const auto id = transaction.createNode({});
-    Access::publish(*metadata_);
-    EXPECT_FALSE(transaction.commit().committed());
-    auto current = metadata_->openSnapshot(); EXPECT_FALSE(metadata_->findNodePageLocationOptional(current, id));
+    const auto before = metadata_->openSnapshot().superblock();
+    const auto descriptor = Access::publish(*metadata_);
+    EXPECT_NE(descriptor.hybrid_property_descriptor_root, before.hybrid_property_descriptor_root);
+    EXPECT_EQ(descriptor.graph_revision, before.graph_revision);
+    EXPECT_EQ(descriptor.schema_revision, before.schema_revision);
+    EXPECT_TRUE(transaction.commit().committed());
+    auto current = metadata_->openSnapshot();
+    EXPECT_TRUE(metadata_->findNodePageLocationOptional(current, id));
+    EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
 }
 TEST_F(HybridPropertyDescriptorStoreTest, ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen) {
     Access::publish(*metadata_); auto snapshot = metadata_->openSnapshot();

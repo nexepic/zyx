@@ -71,6 +71,7 @@ TEST_F(BuildingScanMembershipTest, PrivateIndexPackingReusesAnOccupiedLowerPoolA
 
 #if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
 TEST_F(BuildingScanMembershipTest, DataCompactionSkipsAnOrdinaryMixedOwnerIndexPoolWithoutChangingEitherTree) {
+    initialize(false); // The offline builder clones a writable ROW source.
     BTreePageStore trees(*pages, *metadata);
     const auto leaf = [](PageId id, uint64_t index, LogSequenceNumber lsn) {
         const PageOwnerHeader owner{id, index, PageOwnerKind::POK_INDEX, 0,
