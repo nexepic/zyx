@@ -1415,7 +1415,7 @@ TEST_F(HybridPropertyReadContextTest, MixedGroupMutationsCloneSharedSourcesOnceA
     auto compatible = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 4, next, memory, &number);
     ASSERT_TRUE(removed && demoted && compatible);
     const std::array<const HybridPropertyColumnDelta *, 3> changes{&*compatible, &*removed, &*demoted};
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
     DemotionNoPhysicalAllocator allocator;
     MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
     {
@@ -1512,7 +1512,7 @@ TEST_F(HybridPropertyReadContextTest, MixedGroupKeepsAQualifiedColumnAfterRemova
     const std::array<const HybridPropertyColumnDelta *, 2> changes{&*demoted, &*removed};
     DemotionNoPhysicalAllocator allocator;
     MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch();
     {
         HybridPropertyDemotionPreparation prepared(batch, pin, fields, changes, memory);
         EXPECT_EQ(prepared.group().memberships, 98U); EXPECT_EQ(prepared.group().columns, 1U);
@@ -1562,7 +1562,7 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionCoordinatesColumnDemotio
     ASSERT_TRUE(source);
     auto firstColumn = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
     ASSERT_TRUE(firstColumn);
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
     DemotionNoPhysicalAllocator allocator;
     MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
     {
@@ -1618,7 +1618,7 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionRetainsQualifiedColumnsA
     auto column = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
     ASSERT_TRUE(column);
     DemotionNoPhysicalAllocator allocator;
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch();
     {
         MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
         const std::array owners{owner};
@@ -1666,7 +1666,7 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionLeavesAnUninvolvedColumn
     auto untouched = HybridPropertyColumnDelta::planExistingColumn(context, pin, {owner.owner_kind, 2}, 3, next, memory, &same);
     ASSERT_TRUE(untouched);
     DemotionNoPhysicalAllocator allocator;
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
     struct CountingCheckpoint final : CancellationCheckpoint {
         mutable size_t calls = 0;
         size_t stop = 0;
@@ -1729,7 +1729,7 @@ TEST_F(HybridPropertyReadContextTest, ExtensionOnlyOwnerDeletionPreservesSharedL
     const graph::PropertyValue same(int64_t(101));
     auto column = HybridPropertyColumnDelta::planExistingColumn(context, pin, {owner.owner_kind, 2}, 1, next, memory, &same);
     ASSERT_TRUE(column);
-    const auto baseline = memory->used(), epoch = io_->dataMutationEpoch();
+    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch();
     DemotionNoPhysicalAllocator allocator;
     {
         MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
