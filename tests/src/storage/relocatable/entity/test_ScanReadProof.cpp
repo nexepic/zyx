@@ -1025,7 +1025,7 @@ TEST_F(ScanReadProofTest, NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerB
     ASSERT_NO_FATAL_FAILURE(makeImage(true, true));
     const auto before = store().openSnapshot().superblock();
     for (const bool deletion : {false, true}) {
-        auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(512U * 1024U);
+        auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(4096U);
         {
             graph::utils::OwnedAllocationScope owner(tiny);
             LogicalGraphMutationBatch batch;
@@ -1040,6 +1040,18 @@ TEST_F(ScanReadProofTest, NativeFieldAndDeletionWorkspacesCannotEscapeTheCallerB
         EXPECT_EQ(tiny->used(), 0U);
         EXPECT_EQ(store().openSnapshot().superblock(), before);
     }
+    // With actual retained-byte charging, this operation may fit within a
+    // larger budget even though the former fixed 1 MiB reservation could not.
+    auto adequate = std::make_shared<graph::query::execution::MaterializedByteBudget>(512U * 1024U);
+    {
+        graph::utils::OwnedAllocationScope owner(adequate);
+        LogicalGraphMutationBatch batch;
+        batch.property_replacements.push_back({{LogicalGraphMutationEntityKind::LGMK_NODE,
+            LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1},
+            {{"number", graph::PropertyValue(int64_t{999})}}});
+        EXPECT_TRUE(mutateImage(batch).committed());
+    }
+    EXPECT_EQ(adequate->used(), 0U);
     EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(targetIo(), store(), work).scan()));
 }
 
