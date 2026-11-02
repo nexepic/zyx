@@ -23,12 +23,11 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_SUPERBLOCK_MAGIC = 0x5358595AU; // Little-endian bytes: ZYXS
-	// Version 30 removes retired Property and direct Vector-adjacency roots.
-	// Earlier layouts are deliberately unsupported rather than silently
-	// migrated or reinterpreted.
-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_SCAN_PATH_FORMAT_ENABLED ? 0xF101 : RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 40 : 32;
+	// The reconstructed current layout deliberately rejects earlier versions
+	// rather than silently migrating or reinterpreting their bytes.
+	constexpr uint16_t RSS_SUPERBLOCK_VERSION = 0xF101;
 	constexpr uint32_t RSS_SUPERBLOCK_BYTES = RSS_PAGE_SIZE;
-	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 352 : 336;
+	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = 352;
 	// Crash injection must leave this checksum untouched so a torn inactive
 	// Superblock can never validate as a complete metadata generation.
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_CRC_OFFSET = 116;
