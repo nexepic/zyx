@@ -39,6 +39,7 @@
 #include "graph/storage/relocatable/metadata/CatalogPage.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 #include "storage/relocatable/format/RelocatableProcessCrashSupport.hpp"
 
 #ifdef _WIN32
@@ -1065,25 +1066,35 @@ namespace graph::test {
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE) {
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE) {
 					// Publish a real, allocated opaque segment in the same generation
 					// as the Catalog entry; recovery must authenticate its envelope.
-					const CatalogSlotReservationRequest request{catalog.segment_id, catalog.kind, catalog.owner_id,
-						catalog.generation, catalog.state, true};
-					const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1U),
-						catalog.physical_slot, catalog.physical_slot, LogSequenceNumber(2U),
+					std::vector<CatalogSlotReservationRequest> requests{{catalog.segment_id, catalog.kind, catalog.owner_id,
+						catalog.generation, catalog.state, true}};
+					const bool extentFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE ||
+						mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE;
+					if (extentFixture) for (uint64_t id : {20U, 21U})
+						requests.push_back({SegmentId(id), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U),
+							SegmentState::SGS_SEALED, true});
+					const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests,
+						catalog.physical_slot, PhysicalSlotId(extentFixture ? 102U : 100U), LogSequenceNumber(2U),
 						[&](std::span<const CatalogEntry> entries) {
-							if (entries.size() != 1U) throw std::runtime_error("expected one crash fixture segment");
-							const auto &entry = entries.front();
+							if (entries.size() != requests.size()) throw std::runtime_error("unexpected crash fixture segments");
+							for (const auto &entry : entries) {
 							SegmentEnvelope envelope;
 							envelope.kind = entry.kind; envelope.state = entry.state; envelope.segment_id = entry.segment_id;
 							envelope.owner_id = entry.owner_id; envelope.generation = entry.generation;
 							envelope.committed_lsn = entry.committed_lsn;
+							std::vector<std::byte> payload(RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES);
+							envelope.payload_bytes = static_cast<uint32_t>(payload.size());
+							envelope.payload_crc = graph::utils::calculateCrc(payload.data(), payload.size());
 							const auto bytes = SegmentEnvelopeCodec::encode(envelope);
 							const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(initial.data_region_offset, entry.physical_slot);
 							io->writeAt(offset, bytes.data(), bytes.size());
-							const std::byte zero{};
-							io->writeAt(offset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
+							io->writeAt(offset + RSS_ENVELOPE_BYTES, payload.data(), payload.size());
+							}
 						});
 					if (!prepared) throw std::runtime_error("crash fixture segment reservation failed");
 				} else {
@@ -1280,7 +1291,7 @@ namespace graph::test {
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE) {
 					const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
-					const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
+					const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 														  Generation(1U)};
 					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(3U)));
 					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
@@ -1314,7 +1325,7 @@ namespace graph::test {
 					return 71;
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE) {
-					const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
+					const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 												  Generation(1U)};
 					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(3U)));
 					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
@@ -1934,7 +1945,7 @@ TEST_F(RelocatableProcessCrashTest,
 	child.terminate();
 
 	const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
-	const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
+	const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)};
 	auto file = std::make_shared<std::fstream>(databasePath, std::ios::in | std::ios::out | std::ios::binary);
 	ASSERT_TRUE(file->is_open());
 	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
@@ -1968,7 +1979,7 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationLocationCandidateReta
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
 	EXPECT_EQ(recovered.superblock().generation, Generation(4U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
-	const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
+	const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)};
 	EXPECT_EQ(metadata->findExtentLocation(recovered, original.extent_id), original);
 	recovered.release();
 
