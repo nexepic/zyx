@@ -12,6 +12,9 @@
 
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
+#include "graph/storage/relocatable/entity/EntityPage.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 
 namespace {
 
@@ -116,9 +119,7 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationRejectsFutureDir
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationResolvesBootstrapRootsLogically) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 1, 2)}, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	Superblock routed = snapshot.superblock();
 	snapshot.release();
@@ -134,11 +135,19 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationResolvesBootstra
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationClonesTheBootstrapDataDirectoryAnchor) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	const PageLocation location{PageId(1U), SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
-								RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U)};
-	static_cast<void>(store->upsertLocations(std::span(&location, 1U), {}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	SharedPagePoolAllocationRequest request;
+	request.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID);
+	request.pool_kind = SegmentKind::SGK_ENTITY_PAGE_POOL;
+	request.pool_owner_id = 77U; request.generation = Generation(1U);
+	request.page_id = PageId(1U); request.page_owner_id = 77U;
+	request.page_owner_kind = PageOwnerKind::POK_ENTITY;
+	const PageOwnerHeader owner{request.page_id, 77U, PageOwnerKind::POK_ENTITY, 0U,
+		RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), LogSequenceNumber(3U)};
+	request.payload = EntityPage::create(owner, EntityPageRecordKind::EPRK_NODE).serialize();
+	SharedPagePoolAllocator pool(io, *store);
+	ASSERT_TRUE(pool.allocateNewPoolPage(request, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(3U)));
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
 
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock current = snapshot.superblock();
@@ -159,9 +168,7 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationClonesTheBootstr
 }
 
 TEST_F(RelocatableMetadataStoreTest, RoutedMetadataRelocationRejectsANoncurrentPageIdTarget) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock current = snapshot.superblock();
 	snapshot.release();
@@ -180,9 +187,7 @@ TEST_F(RelocatableMetadataStoreTest, RoutedMetadataRelocationRejectsANoncurrentP
 }
 
 TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAStaleBatchSuperblock) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock current = snapshot.superblock();
 	snapshot.release();
