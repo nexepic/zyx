@@ -2087,8 +2087,8 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityPoolPreservesPinnedGraphRoots) {
-    auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
-    const Superblock initial = store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U));
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, initialSuperblock());
+    const Superblock initial = store->openSnapshot().superblock();
     MetadataPageFile pages(io, initial);
     const auto dataRoot = pages.readPageDirectoryBootstrap(initial.page_directory_root).data_page_directory_root;
     std::vector<MetadataSnapshotPin> pins;
@@ -2115,8 +2115,7 @@ TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityPoolPreservesPinne
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityPoolFailureRollsBackBeforePublication) {
-    auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
-    static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, initialSuperblock());
     std::vector<MetadataSnapshotPin> pins;
     MetadataPublishOptions options;
     struct Observation { bool hit = false; bool armed = true; MetadataPublishOptions *options; } observation{false, true, &options};
@@ -2157,8 +2156,7 @@ TEST_F(RelocatableMetadataStoreValidationTest, IdLeaseCapacityRespectsFileLimitA
     const uint64_t limit = initial.data_region_offset + 8U * RSS_SEGMENT_SIZE;
     io = std::make_shared<StorageIO>(dataFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE,
                                       StorageIOAccessMode::SIOAM_READ_WRITE, limit);
-    auto store = RelocatableMetadataStore::initializeNew(io, initial);
-    static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, initial);
     std::vector<MetadataSnapshotPin> pins;
     Superblock before;
     bool refused = false;
