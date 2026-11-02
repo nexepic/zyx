@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="20" failures="0" disabled="0" errors="0" time="2.072" timestamp="2026-11-02T06:21:22.954" name="AllTests">
+  <testsuite name="RelocatableSharedPagePoolAllocatorFaultTest" tests="16" failures="0" disabled="0" skipped="0" errors="0" time="0.295" timestamp="2026-11-02T06:21:22.954">
+    <testcase name="ReplacementCandidateWriteFailureKeepsOldRouteAndFrameReusable" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="187" status="run" result="completed" time="0.015" timestamp="2026-11-02T06:21:22.954" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementCandidateShortWriteKeepsOldRouteAndFrameReusable" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="218" status="run" result="completed" time="0.014" timestamp="2026-11-02T06:21:22.970" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementDoesNotRewriteItsPublishedSourceOwner" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="249" status="run" result="completed" time="0.009" timestamp="2026-11-02T06:21:22.984" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementControlWriteFailureRetainsSourceAndReusesCandidate" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="275" status="run" result="completed" time="0.014" timestamp="2026-11-02T06:21:22.993" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementControlShortWriteRetainsThePreviousCompleteRecord" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="309" status="run" result="completed" time="0.013" timestamp="2026-11-02T06:21:23.008" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementPrePublicationSyncFailureRetainsTheOldRoute" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="341" status="run" result="completed" time="0.014" timestamp="2026-11-02T06:21:23.021" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReplacementControlDiskFullRetainsTheOldRoute" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="374" status="run" result="completed" time="0.013" timestamp="2026-11-02T06:21:23.036" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="EvacuationCandidateWriteFailureKeepsSourceAndDestinationReusable" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="409" status="run" result="completed" time="0.018" timestamp="2026-11-02T06:21:23.049" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="EvacuationDoesNotRewriteItsPublishedSourceOwner" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="442" status="run" result="completed" time="0.012" timestamp="2026-11-02T06:21:23.068" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="EvacuationControlWriteFailureRetainsSourceAndReusesDestination" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="470" status="run" result="completed" time="0.02" timestamp="2026-11-02T06:21:23.080" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="EvacuationControlShortWriteRetainsTheSourceRoute" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="505" status="run" result="completed" time="0.019" timestamp="2026-11-02T06:21:23.101" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="EvacuationDestinationControlDiskFullRetainsTheSourceRoute" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="538" status="run" result="completed" time="0.018" timestamp="2026-11-02T06:21:23.120" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="ReachableOwnerChecksumCorruptionFailsClosedOnReopen" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="574" status="run" result="completed" time="0.005" timestamp="2026-11-02T06:21:23.138" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="RecoveryRejectsACompleteHeaderWithATruncatedFrameTail" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="590" status="run" result="completed" time="0.005" timestamp="2026-11-02T06:21:23.144" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="RecoveryStillAuthenticatesEveryOwnerHeaderChecksum" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="596" status="run" result="completed" time="0.004" timestamp="2026-11-02T06:21:23.150" classname="RelocatableSharedPagePoolAllocatorFaultTest" />
+    <testcase name="RecoveryReadsHeadersWithoutScanningAllocatedValueBodies" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/allocation/test_SharedPagePoolAllocatorFaults.cpp" line="604" status="run" result="completed" time="0.095" timestamp="2026-11-02T06:21:23.155" classname="RelocatableSharedPagePoolAllocatorFaultTest">
+      <properties>
+        <property name="recovery_read_bytes" value="63424"/>
+      </properties>
+    </testcase>
+  </testsuite>
+  <testsuite name="RelocatableStorageBackendSchemaTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="1.776" timestamp="2026-11-02T06:21:23.250">
+    <testcase name="NormalReopenDoesNotScanTheLargeValueDataRegion" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp" line="348" status="run" result="completed" time="0.67" timestamp="2026-11-02T06:21:23.250" classname="RelocatableStorageBackendSchemaTest">
+      <properties>
+        <property name="raw_payload_bytes" value="2097152"/>
+        <property name="reopen_read_bytes" value="952336"/>
+        <property name="reopen_large_value_owner_reads" value="577"/>
+        <property name="observed_reopen_large_value_body_bytes" value="0"/>
+        <property name="discovered_large_value_frames" value="577"/>
+        <property name="reopen_native_body_intersection_bytes" value="0"/>
+        <property name="reopen_native_read_bytes" value="530440"/>
+      </properties>
+    </testcase>
+    <testcase name="NativeRecoveryLateCorruptOwnerFailsBeforePhysicalCleanup" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp" line="1227" status="run" result="completed" time="1.106" timestamp="2026-11-02T06:21:23.920" classname="RelocatableStorageBackendSchemaTest" />
+  </testsuite>
+  <testsuite name="NativeRecoveryOwnerCacheTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-02T06:21:25.026">
+    <testcase name="IdentityAndCapacityBoundReuse" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/metadata/test_NativeRecoveryOwnerCache.cpp" line="27" status="run" result="completed" time="0." timestamp="2026-11-02T06:21:25.026" classname="NativeRecoveryOwnerCacheTest" />
+    <testcase name="DeniedAndAllocationFailureFallBackAndRefund" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/metadata/test_NativeRecoveryOwnerCache.cpp" line="45" status="run" result="completed" time="0." timestamp="2026-11-02T06:21:25.027" classname="NativeRecoveryOwnerCacheTest" />
+  </testsuite>
+</testsuites>
