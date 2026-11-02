@@ -340,8 +340,9 @@ TEST_F(RelocatableMetadataStoreTest, NativeSparseMetadataPoolEvacuationFinalFenc
 }
 
 // Current-format native recovery fixture retains a real codebook extent route.
-TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
- const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+namespace {
+void checkRoutedCatalogWriteFault(const std::filesystem::path &path, const std::shared_ptr<std::fstream> &file, bool enospc) {
+ const auto handle = portable_open_rw(path.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
  ScopedTestNativeHandle guard{handle};
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
  auto store = RelocatableMetadataStore::initializeNewComplete(nativeIo, superblock(1U, 1U));
@@ -369,7 +370,16 @@ TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidate
     try { static_cast<void>(CatalogLeafPageCodec::decode(std::span<const std::byte>(static_cast<const std::byte *>(bytes), count))); catalogLeaf = true; }
     catch (const FormatException &) {}
    }
-   if (catalogLeaf) { interrupted = true; return portable_pwrite(fd, bytes, count - 1U, offset); }
+   if (catalogLeaf) {
+    interrupted = true;
+    if (!enospc) return portable_pwrite(fd, bytes, count - 1U, offset);
+#ifdef _WIN32
+    SetLastError(ERROR_DISK_FULL);
+#else
+    errno = ENOSPC;
+#endif
+    return static_cast<pwrite_ssize_t>(-1);
+   }
    return portable_pwrite(fd, bytes, count, offset);
   });
   EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(9U), RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::system_error);
@@ -393,4 +403,12 @@ TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidate
  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(nativeIo, *reopened).scan()));
  reopened.reset(); nativeIo.reset();
  EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
+}
+
+} // namespace
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, false);
+}
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, true);
 }
