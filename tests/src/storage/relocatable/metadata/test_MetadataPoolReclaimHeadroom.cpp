@@ -341,7 +341,7 @@ TEST_F(RelocatableMetadataStoreTest, NativeSparseMetadataPoolEvacuationFinalFenc
 
 // Current-format native recovery fixture retains a real codebook extent route.
 namespace {
-void checkRoutedCatalogWriteFault(const std::filesystem::path &path, const std::shared_ptr<std::fstream> &file, bool enospc) {
+void checkRoutedCatalogWriteFault(const std::filesystem::path &path, const std::shared_ptr<std::fstream> &file, int fault) {
  const auto handle = portable_open_rw(path.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
  ScopedTestNativeHandle guard{handle};
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
@@ -365,14 +365,28 @@ void checkRoutedCatalogWriteFault(const std::filesystem::path &path, const std::
  bool interrupted = false;
  {
   StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
-   bool catalogLeaf = false;
-   if (!interrupted && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES && count == RSS_PAGE_SIZE) {
-    try { static_cast<void>(CatalogLeafPageCodec::decode(std::span<const std::byte>(static_cast<const std::byte *>(bytes), count))); catalogLeaf = true; }
-    catch (const FormatException &) {}
+   bool target = false;
+   if (!interrupted && offset >= 0 && count == RSS_PAGE_SIZE) {
+    if ((fault == 8 || fault == 9) && static_cast<uint64_t>(offset) < RSS_FILE_BOOTSTRAP_BYTES) target = true;
+    else if (static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
+     try {
+      auto page = std::span<const std::byte>(static_cast<const std::byte *>(bytes), count);
+      if (fault == 1 || fault == 2) { static_cast<void>(CatalogLeafPageCodec::decode(page)); target = true; }
+      else if (fault == 4 || fault == 5) {
+       const auto header = PageDirectoryBootstrapCodec::decode(page);
+       target = header.generation.value() == before.generation.value() + 1U && header.metadata_page_directory_root.isValid();
+      } else if (fault == 6 || fault == 7) {
+       const auto radix = MetadataRadixPageCodec::decode(page);
+       target = radix.directory_type == MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE &&
+        radix.generation.value() == before.generation.value() + 1U && !radix.logical_children_enabled;
+      }
+     } catch (const FormatException &) {}
+    }
    }
-   if (catalogLeaf) {
+   if (target) {
     interrupted = true;
-    if (!enospc) return portable_pwrite(fd, bytes, count - 1U, offset);
+    if (fault % 2 == 1) return portable_pwrite(fd, bytes,
+        fault == 9 ? RSS_SUPERBLOCK_HEADER_CRC_OFFSET - 1U : count - 1U, offset);
 #ifdef _WIN32
     SetLastError(ERROR_DISK_FULL);
 #else
@@ -407,8 +421,32 @@ void checkRoutedCatalogWriteFault(const std::filesystem::path &path, const std::
 
 } // namespace
 TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
- checkRoutedCatalogWriteFault(testFilePath, file, false);
+ checkRoutedCatalogWriteFault(testFilePath, file, 1);
 }
 TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry) {
- checkRoutedCatalogWriteFault(testFilePath, file, true);
+ checkRoutedCatalogWriteFault(testFilePath, file, 2);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationBootstrapHeaderShortWriteKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 5);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationBootstrapHeaderEnospcKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 4);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationRouteRadixShortWriteKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 7);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationRouteRadixEnospcKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 6);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationSuperblockShortWriteKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 9);
+}
+
+TEST_F(RelocatableMetadataStoreTest, NativeRoutedMetadataPoolRelocationSuperblockEnospcKeepsTheOldGenerationAndCanRetry) {
+ checkRoutedCatalogWriteFault(testFilePath, file, 8);
 }
