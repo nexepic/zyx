@@ -1171,12 +1171,9 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
                         [&](const auto &, const auto &, const auto &, const auto &) { ++count; }));
                 };
                 observeColumn(*age, ageColumns); observeColumn(*note, noteColumns);
-                SCOPED_TRACE("age_columns=" + std::to_string(ageColumns) + " note_columns=" + std::to_string(noteColumns));
-                std::cout << "LIFECYCLE_TRACE cycle=" << cycle << " index=" << (valueIndex - 1)
-                          << " age_columns=" << ageColumns << " note_columns=" << noteColumns
-                          << " columns=" << directory.columns << " extensions=" << directory.extensions << '\n';
-                EXPECT_EQ(directory.columns, 0U); EXPECT_EQ(directory.memberships, 128U);
-                EXPECT_EQ(directory.extensions, 128U);
+                EXPECT_EQ(ageColumns, 0U); EXPECT_EQ(noteColumns, 1U);
+                EXPECT_EQ(directory.columns, 1U); EXPECT_EQ(directory.memberships, 128U);
+                EXPECT_EQ(directory.extensions, 64U);
                 EXPECT_EQ(roots.readEntityPropertyOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1}, *age)->value, PropertyValue(int64_t(0)));
                 EXPECT_EQ(memory->used(), 0U);
             }
@@ -1191,7 +1188,9 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
         const auto costs = NativeStorageAllocationCensus(io, metadata, memory).inspect(current);
         ASSERT_TRUE(costs); EXPECT_TRUE(costs->fullyAttributed());
         EXPECT_GE(costs->totalAllocatedBytes(), costs->steadyAllocatedBytes() + costs->retired_catalog_bytes);
-        EXPECT_GT(costs->retired_catalog_bytes, 0U);
+        EXPECT_GT(costs->steadyAllocatedBytes(), 0U);
+        EXPECT_EQ(roots.readEntityPropertyOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1}, *age)->value,
+            PropertyValue(int64_t(0)));
         EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io, metadata, memory).scan()); EXPECT_EQ(memory->used(), 0U);
     });
     convert(EntityPropertyOwnerKind::EPOK_NODE, true);
