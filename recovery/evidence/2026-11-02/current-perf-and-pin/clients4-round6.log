@@ -1,0 +1,4 @@
+command=['taskset', '-c', '0-3', '/workspace/zyx-link-tmp/concurrent-current', '4', '/workspace/zyx-link-tmp/current-concurrent-evidence/database-g01y2510/test.zyx']
+exit=0
+clients=4 operations=400 failures=0 conflicts=0 retries=0 seconds=0.129776 throughput=3082.24 commit_mean_ms=5.69127 commit_p95_ms=9.3473
+

@@ -1,0 +1,6 @@
+command=['taskset', '-c', '0', '/workspace/zyx-link-tmp/pin-release-space', '/workspace/zyx-link-tmp/pin-release-evidence/db-qs2xr9vu/db.zyx']
+exit=0
+sweep=1 old_owner_records=32 file_bytes=1572864
+sweep=2 old_owner_records=0 file_bytes=1572864
+pinned=32 held_records=32 held_file_bytes=1572864 after_records=0 sweeps=2 final_file_bytes=1572864
+

@@ -1,0 +1,10 @@
+clients 2 throughput mean 2863.765 range 2607.81 3144.07
+clients 2 commit_mean_ms mean 2.7941 range 2.34041 3.30538
+clients 2 commit_p95_ms mean 4.0932 range 2.67083 5.03779
+clients 2 conflicts mean 0.0 range 0.0 0.0
+clients 2 retries mean 0.0 range 0.0 0.0
+clients 4 throughput mean 3129.2717 range 2931.6 3276.78
+clients 4 commit_mean_ms mean 4.9282 range 4.26751 5.69127
+clients 4 commit_p95_ms mean 7.8889 range 5.50441 10.0745
+clients 4 conflicts mean 0.0 range 0.0 0.0
+clients 4 retries mean 0.0 range 0.0 0.0
