@@ -204,16 +204,26 @@ TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAStaleBa
 }
 
 TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAnUnallocatedRouteTarget) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
-	for (MetadataSnapshotPin &snapshot: retained) {
-		snapshot.release();
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	std::vector<CatalogSlotReservationRequest> requests;
+	for (uint64_t i = 0; i < 30U; ++i) {
+		auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U);
+		request.require_absent = true; requests.push_back(request);
 	}
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7U)));
-	const CatalogEntry catalog = entry(200U, 2U, 8U);
-	static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(8U)));
-	const ExtentLocation extent{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
-	static_cast<void>(store->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(9U)));
+	const auto reserved = store->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+		LogSequenceNumber(3U), [&](std::span<const CatalogEntry> pools) {
+			for (const auto &pool : pools) initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+			const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, PhysicalSlotId(69U)) + RSS_SEGMENT_SIZE;
+			const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+		});
+	ASSERT_TRUE(reserved);
+	std::vector<MetadataSnapshotPin> retained;
+	for (uint64_t lsn = 4U; lsn <= 7U; ++lsn) {
+		retained.emplace_back(store->openSnapshot());
+		static_cast<void>(store->upsertCatalog(reserved->entries, LogSequenceNumber(lsn)));
+	}
+	for (auto &pin : retained) pin.release();
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const Superblock current = snapshot.superblock();
 	snapshot.release();
@@ -246,7 +256,7 @@ TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAnUnallo
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationReportsNoCandidateForInapplicablePoolContexts) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin initialSnapshot = store->openSnapshot();
 	const Superblock initial = initialSnapshot.superblock();
 	initialSnapshot.release();
@@ -258,8 +268,6 @@ TEST_F(RelocatableMetadataStoreTest, MetadataEvacuationReportsNoCandidateForInap
 	EXPECT_FALSE(canRefreshMetadataRouteBranchForEvacuation(initialPages, initial, ordinarySlot, oneAllocatedFrame));
 	EXPECT_FALSE(canRefreshBootstrapHeaderForEvacuation(initialPages, initial, ordinarySlot, oneAllocatedFrame));
 
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 	MetadataSnapshotPin routedSnapshot = store->openSnapshot();
 	const Superblock routed = routedSnapshot.superblock();
 	routedSnapshot.release();
