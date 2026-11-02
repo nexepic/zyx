@@ -1151,7 +1151,9 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
             PropertyValue(true), PropertyValue(std::string(8192, 'm')), PropertyValue(int64_t(101))};
         auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024 * 1024);
         for (size_t cycle = 0; cycle < 2; ++cycle) {
+            size_t valueIndex = 0;
             for (const auto &value : values) {
+                SCOPED_TRACE("cycle=" + std::to_string(cycle) + " value_index=" + std::to_string(valueIndex++));
                 (void)writeCell(metadata, EntityPropertyOwnerKind::EPOK_NODE, 1, *age, value);
                 const auto current = metadata.openSnapshot();
                 EXPECT_EQ(roots.readEntityPropertyOptional(current, {EntityPropertyOwnerKind::EPOK_NODE, 1}, *age)->value, value);
