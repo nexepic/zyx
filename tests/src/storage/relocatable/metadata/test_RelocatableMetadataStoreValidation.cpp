@@ -112,14 +112,9 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 
 TEST_F(RelocatableMetadataStoreValidationTest,
 	   DistinguishesIdentityOnlyBootstrapAdvancesFromDirectoryMutations) {
-	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
-	MetadataSnapshotPin legacySnapshot = store->openSnapshot();
-	const Superblock legacy = legacySnapshot.superblock();
-	legacySnapshot.release();
-
-	const Superblock routed = store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, initialSuperblock());
+	const Superblock routed = store->openSnapshot().superblock();
 	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
-	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(legacy, routed));
 
 	const NativeGraphLogicalIdLease lease = store->reserveNativeGraphLogicalIds(1U, 0U);
 	EXPECT_TRUE(store->isIdentityOnlyBootstrapAdvance(routed, lease.superblock));
@@ -127,16 +122,17 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 	const Superblock directoryMutation =
 			store->setPhysicalSlotAllocated(PhysicalSlotId(40U), true, LogSequenceNumber(4U));
 	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(lease.superblock, directoryMutation));
+	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(routed, directoryMutation));
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, ReadOnlyStoreRejectsMetadataMutationAndMaintenanceEntrypoints) {
-	static_cast<void>(RelocatableMetadataStore::initializeNew(io, initialSuperblock()));
+	static_cast<void>(RelocatableMetadataStore::initializeNewComplete(io, initialSuperblock()));
 	auto readOnly = RelocatableMetadataStore::openReadOnly(io);
 
 	// These entry points either publish a new metadata generation or alter the
 	// physical tail. A read-only handle must reject them before inspecting state.
 	expectFormatError(
-			[&] { static_cast<void>(readOnly->migratePageDirectoryToBootstrap(LogSequenceNumber(2U))); },
+			[&] { static_cast<void>(readOnly->setPhysicalSlotAllocated(PhysicalSlotId(40U), true, LogSequenceNumber(3U))); },
 			FormatError::FERR_INVALID_STATE);
 	expectFormatError(
 			[&] { static_cast<void>(readOnly->reclaimEmptyMetadataPagePools(LogSequenceNumber(2U))); },
