@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="2" disabled="0" errors="0" time="0.008" timestamp="2026-11-02T07:00:06.007" name="AllTests">
+  <testsuite name="RelocatableMetadataStoreTest" tests="2" failures="2" disabled="0" skipped="0" errors="0" time="0.008" timestamp="2026-11-02T07:00:06.007">
+    <testcase name="SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens" file="/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp" line="1873" status="run" result="completed" time="0.004" timestamp="2026-11-02T07:00:06.007" classname="RelocatableMetadataStoreTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;relocatable metadata batch needs an advanced representable generation and checkpoint LSN&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "relocatable metadata batch needs an advanced representable generation and checkpoint LSN" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool" file="/workspace/zyx-unified-fixtures/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore.cpp" line="1917" status="run" result="completed" time="0.003" timestamp="2026-11-02T07:00:06.012" classname="RelocatableMetadataStoreTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;relocatable metadata batch needs an advanced representable generation and checkpoint LSN&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "relocatable metadata batch needs an advanced representable generation and checkpoint LSN" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

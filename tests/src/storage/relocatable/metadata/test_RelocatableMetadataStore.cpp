@@ -1871,12 +1871,11 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationPreservesTheOld
 }
 
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store, 1U);
 	for (MetadataSnapshotPin &snapshot: retained) {
 		snapshot.release();
 	}
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7)));
 	const CatalogEntry replacement = entry(200, 2, 8);
 	static_cast<void>(store->upsertCatalog(std::span(&replacement, 1), LogSequenceNumber(8)));
 	const ExtentLocation extent{ExtentId(1), SegmentId(20), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
@@ -1916,12 +1915,11 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationPreservesLogica
 
 TEST_F(RelocatableMetadataStoreTest,
 	   EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store, 1U);
 	for (MetadataSnapshotPin &snapshot: retained) {
 		snapshot.release();
 	}
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7)));
 
 	CatalogEntry catalog = entry(200U, 2U, 8U);
 	static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(8)));

@@ -106,13 +106,13 @@ namespace {
 	// generation, leaving at least one sealed pool reclaimable once callers
 	// release the returned snapshots.
 	[[maybe_unused]] std::vector<MetadataSnapshotPin>
-	createReclaimableMetadataPool(RelocatableMetadataStore &store) {
+	createReclaimableMetadataPool(RelocatableMetadataStore &store, uint64_t lsnOffset = 0U) {
 		const std::vector<CatalogEntry> original = entriesThatRequireAnotherMetadataPool();
-		static_cast<void>(store.upsertCatalog(original, LogSequenceNumber(2)));
+		static_cast<void>(store.upsertCatalog(original, LogSequenceNumber(2U + lsnOffset)));
 
 		std::vector<MetadataSnapshotPin> retained;
 		retained.emplace_back(store.openSnapshot());
-		static_cast<void>(store.setPhysicalSlotAllocated(PhysicalSlotId(40), true, LogSequenceNumber(3)));
+		static_cast<void>(store.setPhysicalSlotAllocated(PhysicalSlotId(40), true, LogSequenceNumber(3U + lsnOffset)));
 		retained.emplace_back(store.openSnapshot());
 
 		for (uint64_t checkpoint = 4U; checkpoint <= 6U; ++checkpoint) {
@@ -120,9 +120,9 @@ namespace {
 			for (size_t index = 0; index < replacement.size(); ++index) {
 				replacement[index].physical_slot = PhysicalSlotId(2000U + checkpoint * 100U + index);
 				replacement[index].generation = Generation(2);
-				replacement[index].committed_lsn = LogSequenceNumber(checkpoint);
+				replacement[index].committed_lsn = LogSequenceNumber(checkpoint + lsnOffset);
 			}
-			static_cast<void>(store.upsertCatalog(replacement, LogSequenceNumber(checkpoint)));
+			static_cast<void>(store.upsertCatalog(replacement, LogSequenceNumber(checkpoint + lsnOffset)));
 			if (checkpoint != 6U) {
 				retained.emplace_back(store.openSnapshot());
 			}
