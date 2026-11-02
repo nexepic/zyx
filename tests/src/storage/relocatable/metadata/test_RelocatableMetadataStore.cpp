@@ -2025,7 +2025,7 @@ TEST_F(RelocatableMetadataStoreTest,
 
 TEST_F(RelocatableMetadataStoreTest,
 	   RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	prepareRoutedMetadataPoolForEvacuation(*store);
 	MetadataSnapshotPin beforePublication = store->openSnapshot();
 	const auto routesFor = [this](const Superblock &superblock) {

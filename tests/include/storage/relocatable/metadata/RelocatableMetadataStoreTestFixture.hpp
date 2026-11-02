@@ -130,15 +130,14 @@ namespace {
 		return retained;
 	}
 
-	// Establish a fully published v5 route branch with a sparse routed source
+	// Establish a current-format route branch with a sparse routed source
 	// pool. Tests can then exercise page-local evacuation without relying on
 	// the physical-root fallback.
 	[[maybe_unused]] void prepareRoutedMetadataPoolForEvacuation(RelocatableMetadataStore &store) {
-		std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(store);
+		std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(store, 1U);
 		for (MetadataSnapshotPin &snapshot: retained) {
 			snapshot.release();
 		}
-		static_cast<void>(store.migratePageDirectoryToBootstrap(LogSequenceNumber(7U)));
 		CatalogEntry catalog = entry(2U, 1U, 8U);
 		catalog.segment_id = SegmentId(200U);
 		catalog.owner_id = 77U;

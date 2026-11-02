@@ -194,7 +194,7 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncEnospcReope
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
- auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
  prepareRoutedMetadataPoolForEvacuation(*store);
  const auto before = store->pagePoolStats();
  MetadataPagePoolReclamation result;
