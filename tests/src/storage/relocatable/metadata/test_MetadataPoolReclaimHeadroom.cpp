@@ -4,7 +4,9 @@
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 
-TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalogAcrossPublicationFault) {
+namespace {
+void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
+ BootstrapPublishFailpoint failpoint, bool committed) {
  auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
  std::vector<CatalogSlotReservationRequest> requests;
  for (uint64_t i = 0; i < 30U; ++i) {
@@ -30,16 +32,17 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  auto old = store->openSnapshot();
  const auto oldGeneration = old.superblock().generation.value();
  const auto oldRoute = old.superblock().page_directory_root;
- MetadataPublishOptions options; options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
+ MetadataPublishOptions options; options.bootstrap_failpoint = failpoint;
  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
   RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
  EXPECT_EQ(store->findCatalog(old, expected.front().segment_id).physical_slot, expected.front().physical_slot);
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
  auto recovered = reopened->openSnapshot();
- EXPECT_EQ(recovered.superblock().generation.value(), oldGeneration + 1U);
+ EXPECT_EQ(recovered.superblock().generation.value(), oldGeneration + (committed ? 1U : 0U));
  EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
- EXPECT_NE(recovered.superblock().page_directory_root, oldRoute);
+ if (committed) EXPECT_NE(recovered.superblock().page_directory_root, oldRoute);
+ else EXPECT_EQ(recovered.superblock().page_directory_root, oldRoute);
  for (const auto &entry : expected) {
   const auto actual = reopened->findCatalog(recovered, entry.segment_id);
   EXPECT_EQ(actual.physical_slot, entry.physical_slot);
@@ -51,6 +54,21 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
   EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
  }
  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
+ recovered.release();
+ if (!committed) {
+  const auto retried = reopened->evacuateSparseMetadataPagePool(LogSequenceNumber(8U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+  EXPECT_GT(retried.relocated_metadata_pages, 0U);
+  EXPECT_NE(retried.superblock.page_directory_root, oldRoute);
+  EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
+ }
+}
+}
+
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalogAcrossPublicationFault) {
+ checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE, true);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationBeforePublicationRetainsRootAndRetries) {
+ checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE, false);
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
