@@ -457,6 +457,8 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationPartialInactiveWri
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
+	io->sync();
 	store.reset();
 
 	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
@@ -492,6 +494,8 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWrite
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
+	io->sync();
 	store.reset();
 
 	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
