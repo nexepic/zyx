@@ -589,6 +589,7 @@ namespace graph::storage {
                     // independently recoverable image on every exception path.
                     const auto recovered = buildingRoot();
                     if (!(recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING) &&
+                        (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) &&
                         recovered.database_id == root.database_id &&
                         recovered.generation.value() == root.generation.value() + 1U &&
                         recovered.checkpoint_lsn == nextLsn(root) &&

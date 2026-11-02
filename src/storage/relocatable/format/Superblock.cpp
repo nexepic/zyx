@@ -130,6 +130,12 @@ namespace graph::storage {
 				throwSuperblockError(FormatError::FERR_RESERVED_BITS,
 									 "relocatable Superblock uses unknown lifecycle flags");
 			}
+            if ((superblock.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) ==
+                (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE))
+                throwSuperblockError(FormatError::FERR_INVALID_STATE, "scan authority cannot be building and complete");
+            if ((superblock.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) &&
+                !superblock.hybrid_property_descriptor_root.isValid())
+                throwSuperblockError(FormatError::FERR_INVALID_STATE, "complete scan authority requires a descriptor");
 			if (superblock.data_region_offset < RSS_FILE_BOOTSTRAP_BYTES ||
 				superblock.data_region_offset % RSS_SEGMENT_SIZE != 0) {
 				throwSuperblockError(FormatError::FERR_INVALID_HEADER,

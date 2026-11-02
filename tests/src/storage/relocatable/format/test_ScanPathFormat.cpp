@@ -55,3 +55,20 @@ TEST(ScanPathFormatTest, DescriptorRootAndCountsHaveExplicitVersionedBytes) {
 #endif
     EXPECT_TRUE(isHybridPropertyIndexId(UINT64_C(0x8000000000000038)));
 }
+
+TEST(ScanPathFormatTest, AuthorityStatesRequireConsistentFlagsAndDescriptor) {
+#if ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
+    auto value = block();
+    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, 0U);
+    value.flags = RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
+    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, value.flags);
+    value.flags = RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE;
+    EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
+    value.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1U, Generation(1)};
+    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(value)).flags, value.flags);
+    value.flags |= RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
+    EXPECT_THROW((void)SuperblockCodec::encode(value), FormatException);
+#else
+    GTEST_SKIP() << "Reconstructed SCAN layout is not yet unified in this build";
+#endif
+}

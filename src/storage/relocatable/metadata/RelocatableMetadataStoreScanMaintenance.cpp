@@ -48,6 +48,7 @@ Superblock RelocatableMetadataStore::completeBuildingScanImage(const BuildingSca
     MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
     batch.hybrid_property_publication_ = true;
     batch.candidate_.flags &= ~RSS_SUPERBLOCK_FLAG_SCAN_BUILDING;
+    batch.candidate_.flags |= RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE;
     // Materialize every COW frame before measuring actual file size. Publication
     // subsequently uses this prepared batch without allocating more disk space.
     prepareBatchPublication(batch);

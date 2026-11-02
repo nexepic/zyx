@@ -61,6 +61,8 @@ VerifiedScanRoot VerifiedScanRoot::verifyComplete(std::shared_ptr<StorageIO> io,
     const auto root = pin.superblock();
     if (root.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING)
         throw FormatException(FormatError::FERR_INVALID_STATE, "BUILDING cannot grant complete scan read authority");
+    if (!(root.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE))
+        throw FormatException(FormatError::FERR_INVALID_STATE, "ROW cannot grant complete scan read authority");
     const uint64_t epoch = io->dataMutationEpoch();
     if (epoch == UINT64_MAX)
         throw FormatException(FormatError::FERR_INVALID_STATE, "saturated I/O epoch cannot grant scan authority");
