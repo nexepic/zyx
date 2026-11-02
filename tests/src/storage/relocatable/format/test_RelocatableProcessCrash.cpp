@@ -35,7 +35,10 @@
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
+#include "graph/storage/relocatable/entity/EntityPage.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/metadata/CatalogPage.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -157,16 +160,53 @@ namespace {
 	}
 
 	std::vector<PageLocation> locationsThatRequireRouteRadix() {
-		const uint64_t count = static_cast<uint64_t>(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES) *
-							   RSS_LOCATION_LEAF_MAX_ENTRIES;
+		// One page per location-leaf range forces more route leaves than one
+		// route page can hold without aliasing thousands of logical pages to a
+		// single physical frame.
+		const uint64_t count = static_cast<uint64_t>(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES) + 1U;
 		std::vector<PageLocation> locations;
 		locations.reserve(static_cast<size_t>(count));
-		for (uint64_t pageId = 1U; pageId <= count; ++pageId) {
+		for (uint64_t i = 0; i < count; ++i) {
 			locations.push_back(
-					{PageId(pageId), SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID), RSS_PAGE_POOL_FIRST_DATA_FRAME,
+					{PageId(1U + i * RSS_LOCATION_LEAF_MAX_ENTRIES),
+					 SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i / RSS_PAGE_POOL_DATA_FRAME_COUNT),
+					 static_cast<uint8_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + i % RSS_PAGE_POOL_DATA_FRAME_COUNT),
 					 Generation(1U), 0U});
 		}
 		return locations;
+	}
+
+	void prepareDistinctRoutePages(StorageIO &io, uint64_t dataOffset, std::span<const CatalogEntry> pools) {
+		const auto locations = locationsThatRequireRouteRadix();
+		for (size_t poolIndex = 0; poolIndex < pools.size(); ++poolIndex) {
+			const auto &pool = pools[poolIndex];
+			const size_t begin = poolIndex * RSS_PAGE_POOL_DATA_FRAME_COUNT;
+			const size_t count = (std::min)(size_t{RSS_PAGE_POOL_DATA_FRAME_COUNT}, locations.size() - begin);
+			const uint32_t mask = (uint32_t{1} << count) - 1U;
+			const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(dataOffset, pool.physical_slot);
+			std::array<std::byte, RSS_PAGE_SIZE> control{};
+			SegmentEnvelope envelope; envelope.header_bytes = RSS_PAGE_SIZE; envelope.kind = pool.kind;
+			envelope.state = pool.state; envelope.segment_id = pool.segment_id; envelope.owner_id = pool.owner_id;
+			envelope.generation = pool.generation; envelope.committed_lsn = pool.committed_lsn;
+			const auto envelopeBytes = SegmentEnvelopeCodec::encode(envelope);
+			std::copy(envelopeBytes.begin(), envelopeBytes.end(), control.begin());
+			const auto active = SharedPagePoolHeaderCodec::encode({pool.segment_id, mask, pool.generation, pool.committed_lsn, 1U});
+			const auto inactive = SharedPagePoolHeaderCodec::encode({pool.segment_id, mask, pool.generation, pool.committed_lsn, 0U});
+			std::copy(active.begin(), active.end(), control.begin() + RSS_ENVELOPE_BYTES);
+			std::copy(inactive.begin(), inactive.end(), control.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES);
+			for (size_t j = 0; j < count; ++j) {
+				const auto &location = locations[begin + j];
+				PageOwnerHeader owner{location.page_id, pool.owner_id, PageOwnerKind::POK_ENTITY, 0U,
+					RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, pool.committed_lsn};
+				const auto payload = EntityPage::create(owner, EntityPageRecordKind::EPRK_NODE).serialize();
+				const auto header = PageOwnerHeaderCodec::encode(owner);
+				std::array<std::byte, RSS_PAGE_SIZE> frame{};
+				std::copy(header.begin(), header.end(), frame.begin());
+				std::copy(payload.begin(), payload.end(), frame.begin() + RSS_PAGE_OWNER_HEADER_BYTES);
+				io.writeAt(offset + uint64_t(location.page_index) * RSS_PAGE_SIZE, frame.data(), frame.size());
+			}
+			io.writeAt(offset, control.data(), control.size());
+		}
 	}
 
 	using CrashChild = graph::test::relocatable_crash::CrashChild;
@@ -1051,7 +1091,9 @@ namespace graph::test {
 				initial.database_id = DatabaseId(0x1020304050607080ULL);
 				initial.generation = Generation(1U);
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
+				const bool routeRadixFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE;
+				auto metadata = routeRadixFixture ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
+					RelocatableMetadataStore::initializeNew(io, initial);
 				const CatalogEntry catalog{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
 										   PhysicalSlotId(100U),
 										   SegmentKind::SGK_ENTITY_PAGE_POOL,
@@ -1064,6 +1106,7 @@ namespace graph::test {
 					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
@@ -1078,10 +1121,18 @@ namespace graph::test {
 					if (extentFixture) for (uint64_t id : {20U, 21U})
 						requests.push_back({SegmentId(id), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U),
 							SegmentState::SGS_SEALED, true});
+					if (routeRadixFixture) {
+						const size_t poolCount = (locationsThatRequireRouteRadix().size() + RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U) /
+							RSS_PAGE_POOL_DATA_FRAME_COUNT;
+						for (size_t i = 1; i < poolCount; ++i)
+							requests.push_back({SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i),
+								SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U), SegmentState::SGS_SEALED, true});
+					}
 					const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests,
-						catalog.physical_slot, PhysicalSlotId(extentFixture ? 102U : 100U), LogSequenceNumber(2U),
+						catalog.physical_slot, PhysicalSlotId(99U + requests.size()), LogSequenceNumber(routeRadixFixture ? 3U : 2U),
 						[&](std::span<const CatalogEntry> entries) {
 							if (entries.size() != requests.size()) throw std::runtime_error("unexpected crash fixture segments");
+							if (routeRadixFixture) { prepareDistinctRoutePages(*io, initial.data_region_offset, entries); return; }
 							for (const auto &entry : entries) {
 							SegmentEnvelope envelope;
 							envelope.kind = entry.kind; envelope.state = entry.state; envelope.segment_id = entry.segment_id;
@@ -1167,8 +1218,7 @@ namespace graph::test {
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE) {
 					const std::vector<PageLocation> locations = locationsThatRequireRouteRadix();
-					static_cast<void>(metadata->upsertLocations(locations, {}, LogSequenceNumber(3U)));
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(4U)));
+					static_cast<void>(metadata->upsertLocations(locations, {}, LogSequenceNumber(4U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtRouteRadixCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool routeRadix = false;
@@ -1844,6 +1894,9 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	EXPECT_EQ(recovered.superblock().generation, Generation(4U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(metadata->findPageLocation(recovered, PageId(1U)).free_bytes, 0U);
+	const auto lastLocation = locationsThatRequireRouteRadix().back();
+	EXPECT_EQ(metadata->findPageLocation(recovered, lastLocation.page_id), lastLocation);
+	EXPECT_NE(lastLocation.segment_id, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID));
 	recovered.release();
 
 	PageLocation replacement{PageId(1U), SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID), RSS_PAGE_POOL_FIRST_DATA_FRAME,
@@ -1855,6 +1908,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	auto reopened = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin persisted = reopened->openSnapshot();
 	EXPECT_EQ(reopened->findPageLocation(persisted, replacement.page_id).free_bytes, replacement.free_bytes);
+	EXPECT_EQ(reopened->findPageLocation(persisted, lastLocation.page_id), lastLocation);
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationCatalogCandidateRetainsPublishedGenerationAndCanRetry) {
