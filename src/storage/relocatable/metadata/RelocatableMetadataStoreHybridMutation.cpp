@@ -185,7 +185,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
 #endif
     std::unique_ptr<PreparedScanMembershipMutation> scanDeletion;
     if constexpr (RSS_SCAN_PATH_FORMAT_ENABLED) {
-        if ((current.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) &&
+        if ((current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
             !hybridTopology && !request.owner_deletions.empty()) {
             utils::OwnedVector<scan_candidate_detail::ScanNodeChange> nodes{
                 utils::OwnedPmrAllocator<scan_candidate_detail::ScanNodeChange>(request.memory)};
