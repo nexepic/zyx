@@ -2424,21 +2424,25 @@ TEST_F(RelocatableMetadataStoreTest,
 }
 
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	const std::vector<CatalogEntry> entries = entriesThatRequireAnotherMetadataPool();
-	static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
-
-	EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(
-						 LogSequenceNumber(3), 8U,
-						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
-				 BootstrapPublishInterrupted);
-	store.reset();
-	auto reopened = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin snapshot = reopened->openSnapshot();
-	EXPECT_EQ(snapshot.superblock().generation, Generation(3));
-	EXPECT_EQ(reopened->findCatalog(snapshot, entries.front().segment_id).physical_slot, entries.front().physical_slot);
-	snapshot.release();
-	EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(4)).reclaimed_pool_slots, 0U);
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
+    const auto entries = prepareCurrentEvacuationFixture(io, *store);
+    const auto before = store->openSnapshot().superblock();
+    EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(
+                     LogSequenceNumber(8), RSS_PAGE_POOL_DATA_FRAME_COUNT,
+                     withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
+                 BootstrapPublishInterrupted);
+    store.reset();
+    auto reopened = RelocatableMetadataStore::open(io);
+    auto snapshot = reopened->openSnapshot();
+    EXPECT_EQ(snapshot.superblock().generation.value(), before.generation.value() + 1U);
+    EXPECT_NE(snapshot.superblock().page_directory_root, before.page_directory_root);
+    for (const auto &entry : entries) {
+        EXPECT_EQ(reopened->findCatalog(snapshot, entry.segment_id).physical_slot, entry.physical_slot);
+        EXPECT_TRUE(reopened->isPhysicalSlotAllocated(snapshot, entry.physical_slot));
+    }
+    snapshot.release();
+    EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(9)).reclaimed_pool_slots, 0U);
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableMetadataStoreTest,

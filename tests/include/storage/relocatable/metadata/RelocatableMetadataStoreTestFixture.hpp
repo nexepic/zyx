@@ -187,6 +187,33 @@ namespace {
 		io.writeAt({offset, pool.generation.value()}, page.data(), page.size());
 	}
 
+    // Prepare real, fully allocated pools and retired metadata generations for
+    // current-format evacuation fault tests; callers own the returned entries.
+    [[maybe_unused]] std::vector<CatalogEntry> prepareCurrentEvacuationFixture(
+        const std::shared_ptr<StorageIO> &io, RelocatableMetadataStore &store) {
+        std::vector<CatalogSlotReservationRequest> requests;
+        for (uint64_t i = 0; i < 30U; ++i) {
+            auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U);
+            request.require_absent = true;
+            requests.push_back(request);
+        }
+        auto reserved = store.reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+            LogSequenceNumber(3U), [&](std::span<const CatalogEntry> entries) {
+                for (const auto &pool : entries) initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+                const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, PhysicalSlotId(69U)) + RSS_SEGMENT_SIZE;
+                const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+            });
+        if (!reserved || reserved->entries.size() != requests.size()) throw std::runtime_error("real pool fixture reservation failed");
+        auto entries = reserved->entries;
+        std::vector<MetadataSnapshotPin> pins;
+        for (uint64_t lsn = 4U; lsn <= 7U; ++lsn) {
+            pins.emplace_back(store.openSnapshot());
+            static_cast<void>(store.upsertCatalog(entries, LogSequenceNumber(lsn)));
+        }
+        for (auto &pin : pins) pin.release();
+        return entries;
+    }
+
 	[[maybe_unused]] void prepareTestSharedPageFrame(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
 									 PageId pageId, uint8_t frameIndex, uint64_t ownerId, PageOwnerKind ownerKind,
 									 LogSequenceNumber ownerLsn) {
