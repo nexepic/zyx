@@ -1163,6 +1163,14 @@ TEST_F(HybridPropertyIndexedLifecycleTest, SustainedTypeChangesStayFieldLocalWit
                 LargeValueStore large(io, metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
                 HybridPropertyReadContext context(io, pages, metadata, current);
                 const auto directory = HybridPropertyDirectoryIntegrity::verify(context, current, memory, &large);
+                size_t ageColumns = 0, noteColumns = 0;
+                const auto observeColumn = [&](uint32_t token, size_t &count) {
+                    static_cast<void>(context.visitField({EntityPropertyOwnerKind::EPOK_NODE, 1}, token,
+                        [](const auto &) {}, [](const auto &) {}, {}, {},
+                        [&](const auto &, const auto &, const auto &, const auto &) { ++count; }));
+                };
+                observeColumn(*age, ageColumns); observeColumn(*note, noteColumns);
+                SCOPED_TRACE("age_columns=" + std::to_string(ageColumns) + " note_columns=" + std::to_string(noteColumns));
                 EXPECT_EQ(directory.columns, 0U); EXPECT_EQ(directory.memberships, 128U);
                 EXPECT_EQ(directory.extensions, 128U);
                 EXPECT_EQ(roots.readEntityPropertyOptional(old, {EntityPropertyOwnerKind::EPOK_NODE, 1}, *age)->value, PropertyValue(int64_t(0)));
