@@ -3,6 +3,43 @@
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalogAcrossPublicationFault) {
+ auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+ std::vector<CatalogSlotReservationRequest> requests;
+ for (uint64_t i = 0; i < 30U; ++i) {
+  auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U);
+  request.require_absent = true;
+  requests.push_back(request);
+ }
+ const auto reserved = store->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+  LogSequenceNumber(3U), [&](std::span<const CatalogEntry> entries) {
+   for (const auto &pool : entries) initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+   const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, PhysicalSlotId(69U)) + RSS_SEGMENT_SIZE;
+   const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+  });
+ ASSERT_TRUE(reserved.has_value());
+ ASSERT_EQ(reserved->entries.size(), requests.size());
+ const auto expected = reserved->entries;
+ std::vector<MetadataSnapshotPin> pinned;
+ for (uint64_t lsn = 4U; lsn <= 7U; ++lsn) {
+  pinned.emplace_back(store->openSnapshot());
+  static_cast<void>(store->upsertCatalog(expected, LogSequenceNumber(lsn)));
+ }
+ for (auto &pin : pinned) pin.release();
+ auto old = store->openSnapshot();
+ MetadataPublishOptions options; options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
+ EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
+  RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
+ EXPECT_EQ(store->findCatalog(old, expected.front().segment_id), expected.front());
+ old.release(); store.reset();
+ auto reopened = RelocatableMetadataStore::open(io);
+ auto recovered = reopened->openSnapshot();
+ for (const auto &entry : expected) {
+  EXPECT_EQ(reopened->findCatalog(recovered, entry.segment_id), entry);
+  EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
+ }
+}
+
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
  auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
  prepareRoutedMetadataPoolForEvacuation(*store);
