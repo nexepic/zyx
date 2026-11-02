@@ -45,15 +45,22 @@ protected:
     }
 };
 
-TEST_F(HybridPropertyDescriptorStoreTest, DefaultFormatCannotPublishCandidateRoots) {
-    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) GTEST_SKIP() << "checked by the default format build";
-    const auto before = metadata_->openSnapshot().superblock(); const auto bytes = io_->fileSize();
-    EXPECT_EQ(SuperblockCodec::decode(SuperblockCodec::encode(before)), before);
-    EXPECT_THROW(Access::publish(*metadata_), FormatException);
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
-    auto invalid = before; invalid.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
-    EXPECT_THROW(SuperblockCodec::encode(invalid), FormatException);
+TEST_F(HybridPropertyDescriptorStoreTest, CurrentFormatRejectsEarlierAndUnknownVersionsWithoutMutation) {
+    const auto before = metadata_->openSnapshot().superblock();
+    const auto fileBytes = io_->fileSize();
+    const auto current = SuperblockCodec::encode(before);
+    EXPECT_EQ(SuperblockCodec::decode(current), before);
+    for (const uint16_t version : {uint16_t(32), uint16_t(39), uint16_t(40), uint16_t(42), uint16_t(0xF102)}) {
+        auto foreign = current;
+        LittleEndianCodec::writeU16(foreign, 4, version);
+        LittleEndianCodec::writeU32(foreign, 116, 0);
+        LittleEndianCodec::writeU32(foreign, 116, graph::utils::calculateCrc(foreign.data(), RSS_SUPERBLOCK_HEADER_BYTES));
+        EXPECT_THROW(static_cast<void>(SuperblockCodec::decode(foreign)), FormatException) << version;
+    }
+    EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
+    EXPECT_EQ(io_->fileSize(), fileBytes);
 }
+
 TEST_F(HybridPropertyDescriptorStoreTest, FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged) {
     auto before = metadata_->openSnapshot().superblock(); auto after = before;
     after.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
