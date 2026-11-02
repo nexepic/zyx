@@ -11,6 +11,7 @@
 #include <optional>
 #include "graph/query/execution/ResourceCoordinator.hpp"
 #include "graph/utils/UnmanagedAllocationResource.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 #include <stdexcept>
 #include <utility>
 #include "graph/debug/PerfTrace.hpp"
@@ -46,6 +47,16 @@ namespace graph::query::execution {
 			: MaterializedByteBudget(maximumBytes) {
 			if (account) parent_.emplace(std::move(account));
 		}
+        // Charge a workspace to an enclosing owned allocation domain as bytes
+        // are retained, rather than reserving its entire limit up front. The
+        // reservation owns the parent domain for the child's full lifetime.
+        struct OwnedParentTag {};
+        MaterializedByteBudget(size_t maximumBytes, std::shared_ptr<std::pmr::memory_resource> owner, OwnedParentTag)
+            : MaterializedByteBudget(maximumBytes) {
+            if (!owner || !dynamic_cast<utils::UnmanagedAllocationResource *>(owner.get()))
+                throw std::invalid_argument("materialized budget requires an accountable parent");
+            owned_parent_.emplace(std::move(owner));
+        }
 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
 		[[nodiscard]] size_t available() const noexcept { return maximum_bytes_ - used_bytes_; }
@@ -101,6 +112,7 @@ namespace graph::query::execution {
                 return;
             }
 			if (parent_) parent_->set(total);
+            if (owned_parent_) owned_parent_->set(total);
 			used_bytes_ = total; observePeak();
 		}
 
@@ -127,6 +139,7 @@ namespace graph::query::execution {
 		void *release_context_ = nullptr;
 		ReservationReleaseSink release_sink_ = nullptr;
 		std::optional<detail::ResourceLease> parent_;
+        std::optional<utils::OwnedHeapReservation> owned_parent_;
 		size_t maximum_bytes_;
 		size_t used_bytes_ = 0U;
         size_t peak_bytes_ = 0U;

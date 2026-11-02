@@ -147,3 +147,36 @@ TEST(BoundColumnLayoutTest, EveryGuardFailureRefundsOwnedAndValidationAllocation
 }
 } // namespace
 } // namespace graph::query::execution::detail
+
+TEST(MaterializedByteBudgetParentTest, ChildChargesOnlyRetainedBytesAndRejectsSharedOvercommit) {
+    using namespace graph::query::execution;
+    constexpr size_t limit = 1024U * 1024U;
+    auto parent = std::make_shared<MaterializedByteBudget>(limit);
+    parent->reserveUnmanaged(4096U);
+    auto first = std::make_shared<MaterializedByteBudget>(limit - 4096U, parent, MaterializedByteBudget::OwnedParentTag{});
+    auto second = std::make_shared<MaterializedByteBudget>(limit - 4096U, parent, MaterializedByteBudget::OwnedParentTag{});
+    EXPECT_EQ(parent->used(), 4096U);
+    first->reserveUnmanaged(3000U);
+    second->reserveUnmanaged(3000U);
+    EXPECT_EQ(parent->used(), 10096U);
+    EXPECT_THROW(second->reserveUnmanaged(1040000U), MaterializedByteLimitExceeded);
+    EXPECT_EQ(second->used(), 3000U);
+    EXPECT_EQ(parent->used(), 10096U);
+    first->releaseUnmanaged(3000U);
+    second->releaseUnmanaged(3000U);
+    parent->releaseUnmanaged(4096U);
+    EXPECT_EQ(parent->used(), 0U);
+}
+
+TEST(MaterializedByteBudgetParentTest, ChildRetainsParentAndReleasesCreditOnDestruction) {
+    using namespace graph::query::execution;
+    auto parent = std::make_shared<MaterializedByteBudget>(8192U);
+    std::weak_ptr<MaterializedByteBudget> weak = parent;
+    auto child = std::make_shared<MaterializedByteBudget>(4096U, parent, MaterializedByteBudget::OwnedParentTag{});
+    child->reserveUnmanaged(1000U);
+    parent.reset();
+    ASSERT_FALSE(weak.expired());
+    EXPECT_EQ(weak.lock()->used(), 1000U);
+    child.reset();
+    EXPECT_TRUE(weak.expired());
+}

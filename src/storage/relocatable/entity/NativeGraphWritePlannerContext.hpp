@@ -85,13 +85,8 @@ namespace graph::storage {
                 return std::make_shared<query::execution::MaterializedByteBudget>(bytes);
             auto parent = utils::OwnedAllocationScope::owner();
             if (!parent) throw query::execution::MaterializedByteLimitExceeded();
-            auto credit = std::make_shared<utils::OwnedHeapReservation>(parent, bytes);
-            // The child may outlive the local staging branch inside its writer.
-            // Its deleter retains the parent credit through the last child user.
-            return {new query::execution::MaterializedByteBudget(bytes - 4096U),
-                [credit = std::move(credit)](query::execution::MaterializedByteBudget *value) {
-                    static_cast<void>(credit); delete value;
-                }};
+            return std::make_shared<query::execution::MaterializedByteBudget>(
+                bytes - 4096U, std::move(parent), query::execution::MaterializedByteBudget::OwnedParentTag{});
         }
 
 
