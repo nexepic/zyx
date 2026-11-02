@@ -283,6 +283,14 @@ protected:
             const int64_t neighborOriginal = int64_t(neighbor + tokens.front());
             backend.replaceLogicalNodeProperties({{neighbor, values(neighbor, neighborOriginal + 2)}});
             EXPECT_EQ(old->readNodeProperty(neighbor, "scan_fixture_0"), PropertyValue(neighborOriginal));
+            ASSERT_NO_THROW(static_cast<void>(staged->commit()));
+            staged.reset();
+            backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original)}});
+            staged = backend.beginLogicalGraphTransaction(false);
+            LogicalGraphMutationBatch abaMutation;
+            abaMutation.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+                LogicalGraphMutationReferenceKind::LGRK_PERSISTED, firstSeed}, values(firstSeed, original + 9)}};
+            (void)staged->stageMutationBatch(std::move(abaMutation));
             backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original + 1)}});
             backend.replaceLogicalNodeProperties({{firstSeed, values(firstSeed, original)}});
             EXPECT_THROW(static_cast<void>(staged->commit()), LogicalGraphMutationConflict);
