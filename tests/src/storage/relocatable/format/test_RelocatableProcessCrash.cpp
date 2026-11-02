@@ -770,46 +770,36 @@ namespace graph::test {
 				initial.database_id = DatabaseId(0x1020304050607080ULL);
 				initial.generation = Generation(1U);
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
-
-				// Keep each historical Catalog root pinned while expanding it, so the
-				// routed source pool contains a real Catalog target to relocate.
-				std::vector<CatalogEntry> original;
-				original.reserve(30U);
-				for (uint64_t ordinal = 0U; ordinal < 30U; ++ordinal) {
-					original.push_back({SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID +
-																		 ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
-													PhysicalSlotId(1000U + ordinal), SegmentKind::SGK_ENTITY_PAGE_POOL, 19U,
-													Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(2U)});
-				}
-				static_cast<void>(metadata->upsertCatalog(original, LogSequenceNumber(2U)));
-				std::vector<MetadataSnapshotPin> retained;
-				retained.emplace_back(metadata->openSnapshot());
-				static_cast<void>(metadata->setPhysicalSlotAllocated(PhysicalSlotId(40U), true,
-						LogSequenceNumber(3U)));
-				retained.emplace_back(metadata->openSnapshot());
-				for (uint64_t checkpoint = 4U; checkpoint <= 6U; ++checkpoint) {
-					std::vector<CatalogEntry> replacement = original;
-					for (size_t index = 0U; index < replacement.size(); ++index) {
-						replacement[index].physical_slot = PhysicalSlotId(2000U + checkpoint * 100U + index);
-						replacement[index].generation = Generation(2U);
-						replacement[index].committed_lsn = LogSequenceNumber(checkpoint);
-					}
-					static_cast<void>(metadata->upsertCatalog(replacement, LogSequenceNumber(checkpoint)));
-					if (checkpoint != 6U) {
-						retained.emplace_back(metadata->openSnapshot());
-					}
-				}
-				for (MetadataSnapshotPin &snapshot: retained) {
-					snapshot.release();
-				}
-				static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(7U)));
-				const CatalogEntry expected{SegmentId(200U), PhysicalSlotId(2U), SegmentKind::SGK_ENTITY_PAGE_POOL,
-													77U, Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(8U)};
-				static_cast<void>(metadata->upsertCatalog(std::span(&expected, 1U), LogSequenceNumber(8U)));
-				const ExtentLocation extent{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
-												 Generation(1U)};
-				static_cast<void>(metadata->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(9U)));
+				auto metadata = RelocatableMetadataStore::initializeNewComplete(io, initial);
+                std::vector<CatalogSlotReservationRequest> requests;
+                for (uint64_t ordinal = 0; ordinal < 30U; ++ordinal)
+                    requests.push_back({SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES),
+                        SegmentKind::SGK_ENTITY_PAGE_POOL, 19U, Generation(1U), SegmentState::SGS_SEALED, true});
+                const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40U), PhysicalSlotId(69U),
+                    LogSequenceNumber(3U), [&](std::span<const CatalogEntry> entries) {
+                        for (const auto &entry : entries) prepareEmptyCrashPool(*io, initial.data_region_offset, entry);
+                    });
+                if (!prepared) return 73;
+                const auto original = prepared->entries;
+                std::vector<MetadataSnapshotPin> retained;
+                for (uint64_t checkpoint = 4U; checkpoint <= 6U; ++checkpoint) {
+                    retained.emplace_back(metadata->openSnapshot());
+                    static_cast<void>(metadata->upsertCatalog(original, LogSequenceNumber(checkpoint)));
+                }
+                for (auto &snapshot : retained) snapshot.release();
+                {
+                    PhysicalSegmentAllocator segments(io, *metadata); VectorCodebookStore codebooks(segments, *metadata);
+                    VectorCodebookWriteRequest request; request.codebook_id = 77U; request.manifest_segment_id = SegmentId(1000000U);
+                    request.generation = Generation(1U); request.element_type = VectorCodebookElementType::VCET_FLOAT32;
+                    request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
+                    const std::array<std::byte, 24U> payload{};
+                    static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(80U), PhysicalSlotId(80U), LogSequenceNumber(7U)));
+                }
+                static_cast<void>(metadata->upsertCatalog(std::span(&original.front(), 1U), LogSequenceNumber(8U)));
+                auto pinned = metadata->openSnapshot();
+                const auto extent = metadata->findExtentLocation(pinned, VectorCodebookExtentIdCodec::manifestExtentId(77U));
+                pinned.release();
+                static_cast<void>(metadata->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(9U)));
 
 				StorageIO::ScopedNativeWriteHookForTesting pauseAtRelocationBoundary(
 						[mode, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
@@ -1778,9 +1768,9 @@ TEST_F(RelocatableProcessCrashTest,
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
 	EXPECT_EQ(recovered.superblock().generation, Generation(9U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
-	EXPECT_EQ(metadata->findExtentLocation(recovered, ExtentId(1U)),
-			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(40U));
+	EXPECT_EQ(metadata->findExtentLocation(recovered, VectorCodebookExtentIdCodec::manifestExtentId(77U)),
+              (ExtentLocation{VectorCodebookExtentIdCodec::manifestExtentId(77U), SegmentId(1000000U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)}));
 	recovered.release();
 
 	const MetadataPagePoolEvacuation retried =
@@ -1792,9 +1782,10 @@ TEST_F(RelocatableProcessCrashTest,
 	auto reopened = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin persisted = reopened->openSnapshot();
 	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
-	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
-	EXPECT_EQ(reopened->findExtentLocation(persisted, ExtentId(1U)),
-			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(40U));
+	EXPECT_EQ(reopened->findExtentLocation(persisted, VectorCodebookExtentIdCodec::manifestExtentId(77U)),
+              (ExtentLocation{VectorCodebookExtentIdCodec::manifestExtentId(77U), SegmentId(1000000U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)}));
+    persisted.release(); EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest,
@@ -1810,21 +1801,24 @@ TEST_F(RelocatableProcessCrashTest,
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
 	EXPECT_EQ(recovered.superblock().generation, Generation(10U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
-	EXPECT_EQ(metadata->findExtentLocation(recovered, ExtentId(1U)),
-			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(40U));
+	EXPECT_EQ(metadata->findExtentLocation(recovered, VectorCodebookExtentIdCodec::manifestExtentId(77U)),
+              (ExtentLocation{VectorCodebookExtentIdCodec::manifestExtentId(77U), SegmentId(1000000U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)}));
 	recovered.release();
 
-	CatalogEntry replacement{SegmentId(200U), PhysicalSlotId(201U), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U,
-							 Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(11U)};
-	const Superblock updated = metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(11U));
-	EXPECT_EQ(updated.generation, Generation(11U));
+    {
+        PhysicalSegmentAllocator segments(io, *metadata); VectorCodebookStore codebooks(segments, *metadata);
+        const auto moved = codebooks.relocateExtent(77U, VectorCodebookExtentIdCodec::manifestExtentId(77U),
+            PhysicalSlotId(81U), PhysicalSlotId(81U), LogSequenceNumber(11U));
+        ASSERT_TRUE(moved); EXPECT_EQ(moved->superblock.generation, Generation(11U));
+    }
 	metadata.reset();
 
 	auto reopened = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin persisted = reopened->openSnapshot();
 	EXPECT_EQ(persisted.superblock().generation, Generation(11U));
-	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(1000000U)).physical_slot, PhysicalSlotId(81U));
+    persisted.release(); EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteCandidateRetainsPublishedGenerationAndCanRetry) {
