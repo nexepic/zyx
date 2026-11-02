@@ -426,6 +426,9 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	// Root-anchored Catalog/allocator validation has a fixed metadata cost, but
 	// it must not scale with the 2 MiB LargeValue payload. Keeping the bound
 	// below half that payload rejects a regression that reads its raw chunks.
+	EXPECT_EQ(bodyIntersectionBytes, 0U);
+	EXPECT_GT(discoveredDataFrames, 0U);
+	EXPECT_LE(largeValueOwnerReads, discoveredDataFrames);
 	EXPECT_LT(openStatistics.read_bytes, PAYLOAD_BYTES / 2U);
 	EXPECT_GT(openStatistics.read_calls, 0U);
 	RelocatableReadSnapshot snapshot = reopened.openSnapshot();

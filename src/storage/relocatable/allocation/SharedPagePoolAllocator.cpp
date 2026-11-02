@@ -1713,7 +1713,8 @@ namespace graph::storage {
 	bool SharedPagePoolAllocator::reconcilePoolFrames(
 			const CatalogEntry &entry, const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
 			const std::function<CatalogEntry(SegmentId)> &findCatalog,
-			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot, bool nativeHybridFields) const {
+			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot, bool nativeHybridFields,
+            const std::function<std::optional<PageOwnerHeader>(const CatalogEntry &, uint8_t)> &validatedOwner) const {
 		// ZYX_COV_EXCL_START: both reconciliation entry points filter Catalog kinds before invoking this helper.
 		if (!isSharedPoolKind(entry.kind)) {
 			throwSharedPagePoolAllocatorError(
@@ -1739,7 +1740,8 @@ namespace graph::storage {
 				continue;
 			}
 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
-            const PageOwnerHeader owner = readRecoveryOwner(*io_, pageOffset, fileBytes);
+            const auto cachedOwner = validatedOwner ? validatedOwner(entry, frameIndex) : std::nullopt;
+            const PageOwnerHeader owner = cachedOwner ? *cachedOwner : readRecoveryOwner(*io_, pageOffset, fileBytes);
 			frames.push_back({frameIndex, owner, findPageLocation(owner.page_id)});
 		}
 		const auto compatibleKind = [nativeHybridFields](SegmentKind pool, PageOwnerKind owner) {
