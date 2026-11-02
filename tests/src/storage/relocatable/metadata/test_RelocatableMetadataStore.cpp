@@ -297,10 +297,9 @@ TEST_F(RelocatableMetadataStoreTest, AllocatorLogicalizesOwnedInternalChildrenAf
 }
 
 TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	const ExtentLocation original{ExtentId(1), SegmentId(20), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
-	static_cast<void>(store->upsertLocations({}, std::span(&original, 1), LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	static_cast<void>(store->upsertLocations({}, std::span(&original, 1), LogSequenceNumber(3)));
 	const ExtentLocation inserted{ExtentId(2), SegmentId(21), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
 	const Superblock updated = store->upsertLocations({}, std::span(&inserted, 1), LogSequenceNumber(4));
 	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
@@ -334,10 +333,9 @@ TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMi
 }
 
 TEST_F(RelocatableMetadataStoreTest, LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	const PageLocation original{PageId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 512U};
-	static_cast<void>(store->upsertLocations(std::span(&original, 1U), {}, LogSequenceNumber(2U)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	static_cast<void>(store->upsertLocations(std::span(&original, 1U), {}, LogSequenceNumber(3U)));
 
 	PageLocation replacement = original;
 	replacement.segment_id = SegmentId(21U);
@@ -370,11 +368,10 @@ TEST_F(RelocatableMetadataStoreTest, LogicalizesDataPageDirectoryChildrenAfterBo
 }
 
 TEST_F(RelocatableMetadataStoreTest, LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
 	const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
-	static_cast<void>(store->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	static_cast<void>(store->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(3)));
 	ExtentLocation replacement = original;
 	replacement.segment_id = SegmentId(21U);
 	const Superblock updated = store->upsertLocations({}, std::span(&replacement, 1U), LogSequenceNumber(4));
