@@ -19,6 +19,7 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
@@ -217,37 +218,42 @@ TEST_F(RelocatableMetadataStoreTest, ReadOnlyMetadataStoreRejectsLeasesAndRefres
 	EXPECT_EQ(after.superblock().next_logical_edge_id, expected.next_logical_edge_id);
 }
 
-TEST_F(RelocatableMetadataStoreTest, RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased) {
-	auto firstWriter = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	auto sequentialWriter = RelocatableMetadataStore::open(io);
-
-	CatalogEntry firstEntry = entry(100U, 1U, 2U);
-	static_cast<void>(firstWriter->upsertCatalog(std::span(&firstEntry, 1U), LogSequenceNumber(2U)));
-
-	// A rebase replaces process-local metadata-pool state, so its old snapshot
-	// must be released before this handle may continue from the newer root.
-	MetadataSnapshotPin staleSnapshot = sequentialWriter->openSnapshot();
-	expectFormatError([&] { sequentialWriter->refreshAfterExternalPublication(); }, FormatError::FERR_INVALID_STATE);
-	staleSnapshot.release();
-	EXPECT_NO_THROW(sequentialWriter->refreshAfterExternalPublication());
-
-	const NativeGraphLogicalIdLease lease = sequentialWriter->reserveNativeGraphLogicalIds(2U, 1U);
-	EXPECT_EQ(lease.nodes, (NativeGraphLogicalIdLeaseRange{1U, 2U}));
-	EXPECT_EQ(lease.edges, (NativeGraphLogicalIdLeaseRange{1U, 1U}));
-
-	CatalogEntry secondEntry = entry(101U, 1U, 4U);
-	secondEntry.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 1U);
-	static_cast<void>(sequentialWriter->upsertCatalog(std::span(&secondEntry, 1U), LogSequenceNumber(4U)));
-
-	auto reopened = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin snapshot = reopened->openSnapshot();
-	const CatalogEntry recoveredFirst = reopened->findCatalog(snapshot, firstEntry.segment_id);
-	const CatalogEntry recoveredSecond = reopened->findCatalog(snapshot, secondEntry.segment_id);
-	EXPECT_EQ(recoveredFirst.physical_slot, firstEntry.physical_slot);
-	EXPECT_EQ(recoveredFirst.owner_id, firstEntry.owner_id);
-	EXPECT_EQ(recoveredSecond.physical_slot, secondEntry.physical_slot);
-	EXPECT_EQ(recoveredSecond.owner_id, secondEntry.owner_id);
-	EXPECT_EQ(snapshot.superblock().next_logical_node_id, 3U);
-	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, 2U);
-	snapshot.release();
+TEST_F(RelocatableMetadataStoreTest, SingleOwnerKeepsPinnedCatalogAcrossLeasesAndReopen) {
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    auto first = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+    first.require_absent = true;
+    const auto prepare = [&](std::span<const CatalogEntry> pools) {
+        for (const auto &pool : pools) initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+        const auto last = pools.back().physical_slot;
+        const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, last) + RSS_SEGMENT_SIZE;
+        const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+    };
+    const auto firstReservation = store->reserveFirstFreeAndUpsertCatalog(std::span(&first, 1U),
+        PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(3U), prepare);
+    ASSERT_TRUE(firstReservation);
+    auto old = store->openSnapshot();
+    const auto graphRevision = old.superblock().graph_revision;
+    const NativeGraphLogicalIdLease lease = store->reserveNativeGraphLogicalIds(2U, 1U);
+    EXPECT_EQ(lease.nodes, (NativeGraphLogicalIdLeaseRange{1U, 2U}));
+    EXPECT_EQ(lease.edges, (NativeGraphLogicalIdLeaseRange{1U, 1U}));
+    auto second = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 1U, 1U);
+    second.require_absent = true;
+    const auto secondReservation = store->reserveFirstFreeAndUpsertCatalog(std::span(&second, 1U),
+        PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(5U), prepare);
+    ASSERT_TRUE(secondReservation);
+    EXPECT_EQ(store->findCatalog(old, first.segment_id).physical_slot, PhysicalSlotId(40U));
+    EXPECT_THROW(static_cast<void>(store->findCatalog(old, second.segment_id)), FormatException);
+    auto current = store->openSnapshot();
+    EXPECT_EQ(current.superblock().graph_revision, graphRevision);
+    EXPECT_EQ(store->findCatalog(current, second.segment_id).physical_slot, PhysicalSlotId(41U));
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *store).scan()));
+    old.release(); current.release(); store.reset();
+    auto reopened = RelocatableMetadataStore::open(io);
+    auto recovered = reopened->openSnapshot();
+    EXPECT_EQ(reopened->findCatalog(recovered, first.segment_id).physical_slot, PhysicalSlotId(40U));
+    EXPECT_EQ(reopened->findCatalog(recovered, second.segment_id).physical_slot, PhysicalSlotId(41U));
+    EXPECT_EQ(recovered.superblock().next_logical_node_id, 3U);
+    EXPECT_EQ(recovered.superblock().next_logical_edge_id, 2U);
+    EXPECT_EQ(recovered.superblock().graph_revision, graphRevision);
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
