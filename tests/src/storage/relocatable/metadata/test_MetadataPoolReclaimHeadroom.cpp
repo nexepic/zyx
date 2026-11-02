@@ -2,6 +2,7 @@
 #include <set>
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalogAcrossPublicationFault) {
  auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
@@ -27,6 +28,7 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  }
  for (auto &pin : pinned) pin.release();
  auto old = store->openSnapshot();
+ const auto oldGeneration = old.superblock().generation.value();
  MetadataPublishOptions options; options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
  EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
   RSS_PAGE_POOL_DATA_FRAME_COUNT, options)), BootstrapPublishInterrupted);
@@ -34,6 +36,8 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
  auto recovered = reopened->openSnapshot();
+ EXPECT_EQ(recovered.superblock().generation.value(), oldGeneration + 1U);
+ EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
  for (const auto &entry : expected) {
   const auto actual = reopened->findCatalog(recovered, entry.segment_id);
   EXPECT_EQ(actual.physical_slot, entry.physical_slot);
@@ -44,6 +48,7 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationRetainsPinnedCatalog
   EXPECT_EQ(actual.committed_lsn, entry.committed_lsn);
   EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, entry.physical_slot));
  }
+ EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
