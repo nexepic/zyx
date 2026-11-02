@@ -1898,7 +1898,7 @@ TEST_F(RelocatableLocationDirectoryTest, ResolvesTypedBootstrapRootsWithoutSuper
 	seeded.publish(bootstrap);
 
 	MetadataWriteBatch migration(allocator, seeded.candidate(), LogSequenceNumber(3U));
-	static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
+	static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrap(migration));
 	migration.publish(bootstrap);
 	Superblock routed = migration.candidate();
 	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
@@ -2086,7 +2086,7 @@ TEST_F(RelocatableLocationDirectoryTest, StreamedLogicalRoutesPreserveExistingAn
     directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
     seed.publish(bootstrap);
     MetadataWriteBatch migration(allocator, seed.candidate(), LogSequenceNumber(3U));
-    static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
+    static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrap(migration));
     migration.publish(bootstrap);
     const Superblock before = migration.candidate();
     ASSERT_TRUE(before.usesPageDirectoryBootstrap());

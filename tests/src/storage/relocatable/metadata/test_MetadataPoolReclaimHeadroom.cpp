@@ -193,6 +193,27 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncEnospcReope
  checkNativeEvacuationFault(testFilePath, file, 11);
 }
 
+// Current-format replacements for retired pre-bootstrap migration fault tests.
+// The helper preserves fault injection, old pin, whole-root recovery and retry.
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapBeforeInactiveWriteKeepsOldRootAndRetries) {
+ checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE, false);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapPartialInactiveWriteKeepsOldRootAndRetries) {
+ checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE, false);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapRoutePageShortWriteKeepsOldRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 7);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapRoutePageEnospcKeepsOldRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 6);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapFinalSyncReopensWholeRootAndRetries) {
+ checkNativeEvacuationFault(testFilePath, file, 3);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapAfterInactiveWriteReopensNewRoot) {
+ checkCurrentFormatEvacuationFault(io, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE, true);
+}
+
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
  auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
  prepareRoutedMetadataPoolForEvacuation(*store);

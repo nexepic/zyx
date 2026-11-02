@@ -126,28 +126,28 @@ namespace {
 			"routed-metadata-pool-relocation-candidate";
 	constexpr std::string_view CRASH_CHILD_ROUTED_METADATA_POOL_RELOCATION_AFTER_PUBLICATION =
 			"routed-metadata-pool-relocation-after-publication";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION =
-			"bootstrap-migration-before-publication";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION =
-			"bootstrap-migration-after-publication";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE = "bootstrap-migration-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION =
+			"bootstrap-current-publication-before-publication";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION =
+			"bootstrap-current-publication-after-publication";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE = "bootstrap-current-publication-candidate";
 	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM = "bootstrap-route-reclaim";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE =
-			"bootstrap-post-migration-route-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE =
-			"bootstrap-post-migration-header-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE =
-			"bootstrap-post-migration-route-radix-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE =
-			"bootstrap-post-migration-catalog-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE =
-			"bootstrap-post-migration-allocator-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE =
-			"bootstrap-post-migration-allocator-internal-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE =
-			"bootstrap-post-migration-location-internal-candidate";
-	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE =
-			"bootstrap-post-migration-location-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE =
+			"bootstrap-current-route-route-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE =
+			"bootstrap-current-route-header-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE =
+			"bootstrap-current-route-route-radix-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE =
+			"bootstrap-current-route-catalog-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE =
+			"bootstrap-current-route-allocator-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE =
+			"bootstrap-current-route-allocator-internal-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE =
+			"bootstrap-current-route-location-internal-candidate";
+	constexpr std::string_view CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE =
+			"bootstrap-current-route-location-candidate";
 	Superblock superblock(uint64_t generation, uint64_t checkpointLsn, uint64_t rootSlot) {
 		Superblock result;
 		result.database_id = DatabaseId(0x1020304050607080ULL);
@@ -308,17 +308,17 @@ namespace graph::test {
 				mode != CRASH_CHILD_METADATA_POOL_RECLAIM_AFTER_PUBLICATION &&
 				mode != CRASH_CHILD_ROUTED_METADATA_POOL_RELOCATION_CANDIDATE &&
 				mode != CRASH_CHILD_ROUTED_METADATA_POOL_RELOCATION_AFTER_PUBLICATION &&
-				mode != CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION &&
-				mode != CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION &&
-				mode != CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE && mode != CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE &&
-				mode != CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE) {
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE && mode != CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE &&
+				mode != CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE) {
 				return 2;
 			}
 			auto file = std::make_shared<std::fstream>(databasePath, std::ios::in | std::ios::out | std::ios::binary |
@@ -1028,17 +1028,17 @@ namespace graph::test {
 				static_cast<void>(metadata->upsertCatalog(entries, LogSequenceNumber(2U)));
 				return 30;
 			}
-			if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
-				mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION ||
-				mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE || mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE ||
-				mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE) {
+			if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE || mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE ||
+				mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE) {
 				const file_handle_t handle = portable_open_rw(databasePath.string().c_str());
 				if (handle == INVALID_FILE_HANDLE) {
 					return 63;
@@ -1048,16 +1048,19 @@ namespace graph::test {
 				initial.database_id = DatabaseId(0x1020304050607080ULL);
 				initial.generation = Generation(1U);
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
-				const bool routeRadixFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE;
+				const bool routeRadixFixture = mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE;
                 const bool routeReclaimFixture = mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM;
                 const bool currentRouteFixture = routeRadixFixture ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE ||
-                    mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE;
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE ||
+                    mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE;
 				auto metadata = (currentRouteFixture || routeReclaimFixture) ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
 					RelocatableMetadataStore::initializeNew(io, initial);
 				const CatalogEntry catalog{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
@@ -1074,23 +1077,23 @@ namespace graph::test {
                     request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
                     const std::array<std::byte, 24U> payload{};
                     static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(100U), PhysicalSlotId(100U), LogSequenceNumber(3U)));
-                } else if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
-					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION ||
-					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE) {
+                } else if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE) {
 					// Publish a real, allocated opaque segment in the same generation
 					// as the Catalog entry; recovery must authenticate its envelope.
 					std::vector<CatalogSlotReservationRequest> requests{{catalog.segment_id, catalog.kind, catalog.owner_id,
 						catalog.generation, catalog.state, true}};
-					const bool extentFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE ||
-						mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE;
+					const bool extentFixture = mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE ||
+						mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE;
 					if (extentFixture) for (uint64_t id : {20U, 21U})
 						requests.push_back({SegmentId(id), SegmentKind::SGK_ENTITY_PAGE_POOL, 77U, Generation(1U),
 							SegmentState::SGS_SEALED, true});
@@ -1156,9 +1159,9 @@ namespace graph::test {
                     if (!relocated) return 65;
 					return 65;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
-					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE) {
-					const uint32_t candidateMagic = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE ||
+					mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE) {
+					const uint32_t candidateMagic = mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE
 														 ? RSS_METADATA_PAGE_ROUTE_LEAF_MAGIC
 														 : RSS_PAGE_DIRECTORY_BOOTSTRAP_MAGIC;
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtRouteCandidate(
@@ -1183,7 +1186,7 @@ namespace graph::test {
 					static_cast<void>(metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4U)));
 					return 66;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE) {
 					const std::vector<PageLocation> locations = locationsThatRequireRouteRadix();
 					static_cast<void>(metadata->upsertLocations(locations, {}, LogSequenceNumber(4U)));
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtRouteRadixCandidate(
@@ -1213,7 +1216,7 @@ namespace graph::test {
 					static_cast<void>(metadata->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(5U)));
 					return 67;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE) {
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtCatalogCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool catalogLeaf = false;
@@ -1243,7 +1246,7 @@ namespace graph::test {
 					static_cast<void>(metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4U)));
 					return 68;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE) {
 					StorageIO::ScopedNativeWriteHookForTesting pauseAtAllocatorLeafCandidate(
 							[&markerPath](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
 								bool allocatorLeaf = false;
@@ -1270,7 +1273,7 @@ namespace graph::test {
 					static_cast<void>(metadata->setPhysicalSlotAllocated(PhysicalSlotId(3U), true, LogSequenceNumber(4U)));
 					return 69;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE) {
 					const PhysicalSlotId firstSlot(
 							RSS_ALLOCATOR_PAGE_SLOT_CAPACITY * RSS_CATALOG_RADIX_FANOUT + 1U);
 					static_cast<void>(metadata->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(4U)));
@@ -1302,7 +1305,7 @@ namespace graph::test {
 							PhysicalSlotId(firstSlot.value() + 1U), true, LogSequenceNumber(5U)));
 					return 70;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE) {
 					const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
 					const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 														  Generation(1U)};
@@ -1336,7 +1339,7 @@ namespace graph::test {
 					static_cast<void>(metadata->upsertLocations({}, std::span(&replacement, 1U), LogSequenceNumber(5U)));
 					return 71;
 				}
-				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE) {
+				if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE) {
 					const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, RSS_PAGE_POOL_DATA_FRAME_COUNT,
 												  Generation(1U)};
 					static_cast<void>(metadata->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(4U)));
@@ -1374,7 +1377,7 @@ namespace graph::test {
 				StorageIO::ScopedNativeWriteHookForTesting pauseAtBootstrapPublication(
 						[mode, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount,
 											pwrite_off_t offset) {
-							if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE && offset >= 0 &&
+							if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE && offset >= 0 &&
 								static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES &&
 								byteCount == RSS_PAGE_SIZE) {
 								const pwrite_ssize_t written = portable_pwrite(fd, bytes, byteCount, offset);
@@ -1386,7 +1389,7 @@ namespace graph::test {
 							}
 							if (offset >= 0 && static_cast<uint64_t>(offset) < RSS_FILE_BOOTSTRAP_BYTES &&
 								byteCount == RSS_SUPERBLOCK_BYTES) {
-								if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION) {
+								if (mode == CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION) {
 									const pwrite_ssize_t written = portable_pwrite(fd, bytes, byteCount, offset);
 									if (written != static_cast<pwrite_ssize_t>(byteCount) || portable_fsync(fd) != 0) {
 										return written;
@@ -1397,7 +1400,7 @@ namespace graph::test {
 							}
 							return portable_pwrite(fd, bytes, byteCount, offset);
 						});
-				static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+                static_cast<void>(metadata->setPhysicalSlotAllocated(PhysicalSlotId(101U), true, LogSequenceNumber(4U)));
 				return 64;
 			}
 			auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
@@ -1562,8 +1565,8 @@ TEST_F(RelocatableProcessCrashTest, KillAfterAllocatorDirectoryPublicationReopen
 	EXPECT_TRUE(directory.isAllocated(next, PhysicalSlotId(2U)));
 }
 
-TEST_F(RelocatableProcessCrashTest, KillBeforeBootstrapMigrationPublicationRetainsOldGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION);
+TEST_F(RelocatableProcessCrashTest, KillBeforeCurrentBootstrapPublicationPublicationRetainsOldGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_BEFORE_PUBLICATION);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1572,19 +1575,20 @@ TEST_F(RelocatableProcessCrashTest, KillBeforeBootstrapMigrationPublicationRetai
 	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	auto metadata = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(2U));
-	EXPECT_FALSE(recovered.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(recovered.superblock().generation, Generation(3U));
+	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+    EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(101U)));
 	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
 			  PhysicalSlotId(100U));
 	recovered.release();
 
-	const Superblock retried = metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U));
-	EXPECT_EQ(retried.generation, Generation(3U));
+	const Superblock retried = metadata->setPhysicalSlotAllocated(PhysicalSlotId(101U), true, LogSequenceNumber(4U));
+	EXPECT_EQ(retried.generation, Generation(4U));
 	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringBootstrapMigrationCandidateRetainsOldGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapPublicationCandidateRetainsOldGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1593,14 +1597,15 @@ TEST_F(RelocatableProcessCrashTest, KillDuringBootstrapMigrationCandidateRetains
 	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	auto metadata = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(2U));
-	EXPECT_FALSE(recovered.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(recovered.superblock().generation, Generation(3U));
+	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+    EXPECT_FALSE(metadata->isPhysicalSlotAllocated(recovered, PhysicalSlotId(101U)));
 	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
 			  PhysicalSlotId(100U));
 	recovered.release();
 
-	const Superblock retried = metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U));
-	EXPECT_EQ(retried.generation, Generation(3U));
+	const Superblock retried = metadata->setPhysicalSlotAllocated(PhysicalSlotId(101U), true, LogSequenceNumber(4U));
+	EXPECT_EQ(retried.generation, Generation(4U));
 	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
 }
 
@@ -1795,8 +1800,8 @@ TEST_F(RelocatableProcessCrashTest,
     persisted.release(); EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteRouteCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1823,8 +1828,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteCandidateRetains
 	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationHeaderCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_HEADER_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteHeaderCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_HEADER_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1851,8 +1856,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationHeaderCandidateRetain
 	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteRouteRadixCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ROUTE_RADIX_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1888,8 +1893,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationRouteRadixCandidateRe
 	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationCatalogCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_CATALOG_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteCatalogCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_CATALOG_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1916,8 +1921,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationCatalogCandidateRetai
 	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationAllocatorCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteAllocatorCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1941,8 +1946,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationAllocatorCandidateRet
 }
 
 TEST_F(RelocatableProcessCrashTest,
-		KillDuringPostMigrationAllocatorInternalCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ALLOCATOR_INTERNAL_CANDIDATE);
+		KillDuringCurrentBootstrapRouteAllocatorInternalCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_ALLOCATOR_INTERNAL_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1970,8 +1975,8 @@ TEST_F(RelocatableProcessCrashTest,
 }
 
 TEST_F(RelocatableProcessCrashTest,
-		KillDuringPostMigrationLocationInternalCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_INTERNAL_CANDIDATE);
+		KillDuringCurrentBootstrapRouteLocationInternalCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_INTERNAL_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -1998,8 +2003,8 @@ TEST_F(RelocatableProcessCrashTest,
 	EXPECT_EQ(reopened->findExtentLocation(persisted, extentId), replacement);
 }
 
-TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationLocationCandidateRetainsPublishedGenerationAndCanRetry) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_LOCATION_CANDIDATE);
+TEST_F(RelocatableProcessCrashTest, KillDuringCurrentBootstrapRouteLocationCandidateRetainsPublishedGenerationAndCanRetry) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_ROUTE_LOCATION_CANDIDATE);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -2025,8 +2030,8 @@ TEST_F(RelocatableProcessCrashTest, KillDuringPostMigrationLocationCandidateReta
 	EXPECT_EQ(reopened->findExtentLocation(persisted, replacement.extent_id), replacement);
 }
 
-TEST_F(RelocatableProcessCrashTest, KillAfterBootstrapMigrationPublicationRecoversNewGenerationAndRemainsWritable) {
-	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION);
+TEST_F(RelocatableProcessCrashTest, KillAfterCurrentBootstrapPublicationRecoversNewGenerationAndRemainsWritable) {
+	CrashChild child(databasePath, markerPath, CRASH_CHILD_BOOTSTRAP_CURRENT_PUBLICATION_AFTER_PUBLICATION);
 	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
 	child.terminate();
 
@@ -2035,28 +2040,22 @@ TEST_F(RelocatableProcessCrashTest, KillAfterBootstrapMigrationPublicationRecove
 	auto io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	auto metadata = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin recovered = metadata->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(3U));
+	EXPECT_EQ(recovered.superblock().generation, Generation(4U));
 	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
 	EXPECT_EQ(metadata->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
 			  PhysicalSlotId(100U));
 	recovered.release();
 
-	const CatalogEntry replacement{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
-								   PhysicalSlotId(101U),
-								   SegmentKind::SGK_ENTITY_PAGE_POOL,
-								   77U,
-								   Generation(1U),
-								   SegmentState::SGS_SEALED,
-								   LogSequenceNumber(4U)};
-	const Superblock updated = metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4U));
-	EXPECT_EQ(updated.generation, Generation(4U));
-	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
-	metadata.reset();
-
-	auto reopened = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin persisted = reopened->openSnapshot();
-	EXPECT_TRUE(persisted.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
+    const Superblock updated = metadata->setPhysicalSlotAllocated(PhysicalSlotId(102U), true, LogSequenceNumber(5U));
+    EXPECT_EQ(updated.generation, Generation(5U));
+    EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
+    metadata.reset();
+    auto reopened = RelocatableMetadataStore::open(io);
+    MetadataSnapshotPin persisted = reopened->openSnapshot();
+    EXPECT_TRUE(persisted.superblock().usesPageDirectoryBootstrap());
+    EXPECT_TRUE(reopened->isPhysicalSlotAllocated(persisted, PhysicalSlotId(101U)));
+    EXPECT_TRUE(reopened->isPhysicalSlotAllocated(persisted, PhysicalSlotId(102U)));
+    EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(100U));
 }
 
 TEST_F(RelocatableProcessCrashTest, KillAfterMetadataPoolControlShortWriteRetainsThePreviousBitmap) {

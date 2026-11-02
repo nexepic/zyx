@@ -37,11 +37,6 @@ namespace graph::storage {
 		// once so the initial typed route branch cannot omit unchanged COW pages.
 		[[nodiscard]] utils::OwnedStdVector<MetadataPageRoute>
 		collectRoutesFromPhysicalDirectoryRoots(const Superblock &superblock) const;
-		// Returns the exact number of metadata frames needed by a standalone
-		// initial migration: route leaves, radix plumbing, and the physical header.
-		// The count is used for a preflight reservation before any candidate frame
-		// is allocated, so migration cannot perturb normal COW failure ordering.
-		[[nodiscard]] size_t initialBootstrapFrameCount(const Superblock &superblock) const;
 		// Counts the exact initial route/header frames after ordinary creation
 		// metadata COW has converged. This is used by the creation transaction so
 		// Catalog ownership pages are included in the reservation.
@@ -63,7 +58,7 @@ namespace graph::storage {
 		[[nodiscard]] utils::OwnedStdVector<PhysicalPageRef>
 		collectRouteBranchFrames(const Superblock &superblock, PhysicalPageRef root) const;
 		// Combines the stable current graph with final COW pairs recorded by this
-		// batch. This is the initial migration writer; later publications will
+		// batch. This is the initial bootstrap writer; later publications will
 		// merge through the already-published typed route branch instead.
 		[[nodiscard]] PhysicalPageRef buildInitialRouteBranch(MetadataWriteBatch &batch);
 		[[nodiscard]] PhysicalPageRef buildNextRouteBranch(MetadataWriteBatch &batch,
@@ -81,7 +76,7 @@ namespace graph::storage {
 		// Writes the physical header and changes only the batch candidate. Callers
 		// may publish it only after all page-directory readers and recovery paths
 		// understand the header; this helper deliberately has no automatic caller.
-		[[nodiscard]] PhysicalPageRef prepareInitialBootstrapMigration(MetadataWriteBatch &batch);
+		[[nodiscard]] PhysicalPageRef prepareInitialBootstrap(MetadataWriteBatch &batch);
 		[[nodiscard]] PhysicalPageRef find(const Superblock &superblock, PhysicalPageRef root,
 														  MetadataPageId pageId) const;
 		// Resolve one radix page's children without restarting the physical route

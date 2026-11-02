@@ -683,10 +683,6 @@ namespace graph::storage {
 		return result;
 	}
 
-	size_t MetadataPageRouteDirectory::initialBootstrapFrameCount(const Superblock &superblock) const {
-		const utils::OwnedStdVector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(superblock);
-		return bootstrapFrameCount(routes);
-	}
 
 	size_t MetadataPageRouteDirectory::initialBootstrapFrameCount(const MetadataWriteBatch &batch) const {
 		utils::OwnedMap<uint64_t, PhysicalPageRef> routeMap;
@@ -1022,7 +1018,7 @@ namespace graph::storage {
 		return reference;
 	}
 
-	PhysicalPageRef MetadataPageRouteDirectory::prepareInitialBootstrapMigration(MetadataWriteBatch &batch) {
+	PhysicalPageRef MetadataPageRouteDirectory::prepareInitialBootstrap(MetadataWriteBatch &batch) {
 		const utils::OwnedStdVector<MetadataPageRoute> routes = collectRoutesFromPhysicalDirectoryRoots(batch.current());
 		PageDirectoryBootstrap bootstrap;
 		bootstrap.generation = batch.generation();

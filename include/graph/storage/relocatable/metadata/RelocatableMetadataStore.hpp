@@ -1912,11 +1912,6 @@ namespace graph::storage {
 		[[nodiscard]] MetadataPagePoolStats pagePoolStats() const;
 		// Invalidates snapshot-local decoded data images after any StorageIO mutation.
 		[[nodiscard]] uint64_t dataMutationEpoch() const;
-		// Performs the one-time Page Directory format migration as a dedicated
-		// transaction. A capacity preflight completes before candidate allocation,
-		// keeping ordinary metadata COW failure ordering unchanged.
-		[[nodiscard]] Superblock migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
-																 const MetadataPublishOptions &options = {});
 		[[nodiscard]] uint64_t activeSnapshotCount() const;
 		[[nodiscard]] uint64_t ownedSnapshotCount() const;
 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }

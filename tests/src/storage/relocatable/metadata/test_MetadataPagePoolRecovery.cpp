@@ -366,7 +366,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RootDiscoveryUsesBootstrapRoutesWhenPhys
 	MetadataPagePoolAllocator migrationAllocator(io, populated);
 	MetadataPageFile migrationPages(io, populated);
 	MetadataWriteBatch migration(migrationAllocator, populated, LogSequenceNumber(3U));
-	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrapMigration(migration));
+	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrap(migration));
 	migration.publish(bootstrap);
 	Superblock routed = migration.candidate();
 	routed.catalog_root = {};
@@ -387,7 +387,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RootRecoveryRejectsInvisibleOrIncomplete
 	MetadataPagePoolAllocator migrationAllocator(io, populated);
 	MetadataPageFile migrationPages(io, populated);
 	MetadataWriteBatch migration(migrationAllocator, populated, LogSequenceNumber(3U));
-	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrapMigration(migration));
+	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrap(migration));
 	migration.publish(bootstrap);
 	Superblock routed = migration.candidate();
 	routed.catalog_root = {};

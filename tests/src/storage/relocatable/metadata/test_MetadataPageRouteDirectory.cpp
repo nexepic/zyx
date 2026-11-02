@@ -707,7 +707,9 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsEmptyPhysicalDirectoryR
 	const Superblock current = superblock(1U, 1U);
 	MetadataPageFile pages(io, current);
 	MetadataPageRouteDirectory directory(pages);
-	expectFormatError([&] { static_cast<void>(directory.initialBootstrapFrameCount(current)); },
+    TestMetadataPageAllocator allocator;
+    MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(directory.initialBootstrapFrameCount(batch)); },
 					  FormatError::FERR_INVALID_STATE);
 }
 
@@ -750,7 +752,7 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsBootstrapRootMissingFro
 	// A replacement root is not publishable until its metadata route is registered in this batch.
 	batch.setCatalogRoot(batch.allocatePage());
 	MetadataPageRouteDirectory directory(pages);
-	expectFormatError([&] { static_cast<void>(directory.prepareInitialBootstrapMigration(batch)); },
+	expectFormatError([&] { static_cast<void>(directory.prepareInitialBootstrap(batch)); },
 					  FormatError::FERR_INVALID_STATE);
 }
 
@@ -781,10 +783,12 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, CountsAllFramesBeforeInitialBo
 	MetadataPageRouteDirectory directory(pages);
 	// Distinct route-leaf ordinals require two leaves, one radix page, a root,
 	// and the Bootstrap header.
-	EXPECT_EQ(directory.initialBootstrapFrameCount(current), 5U);
+    TestMetadataPageAllocator allocator;
+    MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	EXPECT_EQ(directory.initialBootstrapFrameCount(batch), 5U);
 }
 
-TEST_F(RelocatableMetadataPageRouteDirectoryTest, CollectsEveryVisiblePhysicalDirectoryPageBeforeBootstrapMigration) {
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, CollectsEveryVisiblePhysicalDirectoryPageDuringBootstrap) {
 	Superblock current = superblock(1U, 1U);
 	const PhysicalPageRef catalogRoot = pageRef(1U, 1U, 1U);
 	const PhysicalPageRef catalogLeaf = pageRef(1U, 2U, 1U);
@@ -959,7 +963,7 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, StagedBootstrapOverlaysFinalBa
 	batch.registerMetadataPageRoute(replacement.page_id, replacementRef);
 
 	MetadataPageRouteDirectory directory(pages);
-	const PhysicalPageRef bootstrapReference = directory.prepareInitialBootstrapMigration(batch);
+	const PhysicalPageRef bootstrapReference = directory.prepareInitialBootstrap(batch);
 	EXPECT_EQ(batch.candidate().page_directory_root, bootstrapReference);
 	EXPECT_TRUE(batch.candidate().usesPageDirectoryBootstrap());
 	const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(bootstrapReference);

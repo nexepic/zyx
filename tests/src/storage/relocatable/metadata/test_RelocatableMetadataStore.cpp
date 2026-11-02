@@ -138,22 +138,22 @@ TEST_F(RelocatableMetadataStoreTest, ReopenFollowsPublishedRootsInsteadOfScannin
 	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
-TEST_F(RelocatableMetadataStoreTest, PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const Superblock migrated = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
-	EXPECT_TRUE(migrated.usesPageDirectoryBootstrap());
-	MetadataSnapshotPin snapshot = store->openSnapshot();
-	EXPECT_EQ(snapshot.superblock(), migrated);
-	EXPECT_EQ(store->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(100));
-
-	auto reopened = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
-	EXPECT_TRUE(reopenedSnapshot.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(reopened->findCatalog(reopenedSnapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(100));
-	EXPECT_THROW(static_cast<void>(reopened->migratePageDirectoryToBootstrap(LogSequenceNumber(4))), FormatException);
+TEST_F(RelocatableMetadataStoreTest, CurrentBootstrapPublishesCatalogAndPreservesOldSnapshotAcrossReopen) {
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    auto old = store->openSnapshot();
+    ASSERT_TRUE(old.superblock().usesPageDirectoryBootstrap());
+    const auto originalRoot = old.superblock().catalog_root;
+    const auto published = store->upsertCatalog(std::vector{entry(100U, 2U, 3U)}, LogSequenceNumber(3U));
+    EXPECT_TRUE(published.usesPageDirectoryBootstrap());
+    EXPECT_EQ(old.superblock().catalog_root, originalRoot);
+    auto current = store->openSnapshot();
+    EXPECT_EQ(current.superblock(), published);
+    EXPECT_EQ(store->findCatalog(current, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(100U));
+    current.release(); old.release(); store.reset();
+    auto reopened = RelocatableMetadataStore::open(io);
+    auto snapshot = reopened->openSnapshot();
+    EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
+    EXPECT_EQ(reopened->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(100U));
 }
 
 TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen) {
@@ -439,189 +439,6 @@ TEST_F(RelocatableMetadataStoreTest, ReclaimsSupersededTypedRouteBranchAfterSnap
 	EXPECT_EQ(reopened->findCatalog(recovered, request.segment_id).physical_slot, PhysicalSlotId(41U));
 	recovered.release();
 	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const MetadataPublishOptions options = withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE);
-	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
-				 BootstrapPublishInterrupted);
-	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
-	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
-	beforeRetry.release();
-
-	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
-	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const MetadataPublishOptions options =
-			withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE);
-	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
-				 BootstrapPublishInterrupted);
-	MetadataSnapshotPin snapshot = store->openSnapshot();
-	EXPECT_EQ(snapshot.superblock().generation, Generation(2));
-	EXPECT_FALSE(snapshot.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(store->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(100));
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
-	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
-	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
-	const std::byte zero{};
-	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
-	io->sync();
-	store.reset();
-
-	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
-	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
-	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
-	store = RelocatableMetadataStore::open(io);
-	bool interrupted = false;
-	{
-		StorageIO::ScopedNativeWriteHookForTesting shortRoutePage(
-				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
-					if (!interrupted && byteCount == RSS_PAGE_SIZE &&
-						static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
-						interrupted = true;
-						return portable_pwrite(fd, bytes, byteCount - 1U, offset);
-					}
-					return portable_pwrite(fd, bytes, byteCount, offset);
-				});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
-					 std::system_error);
-	}
-	EXPECT_TRUE(interrupted);
-	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, validSource.generation);
-	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
-	beforeRetry.release();
-	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
-	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
-	store.reset();
-	io.reset();
-	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
-	initializeTestSharedPagePool(*io, store->openSnapshot().superblock().data_region_offset, entry(100, 2, 2));
-	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
-	const std::byte zero{};
-	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
-	io->sync();
-	store.reset();
-
-	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
-	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
-	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
-	store = RelocatableMetadataStore::open(io);
-	bool interrupted = false;
-	{
-		StorageIO::ScopedNativeWriteHookForTesting failRoutePage(
-				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
-					if (!interrupted && byteCount == RSS_PAGE_SIZE &&
-						static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
-						interrupted = true;
-#ifdef _WIN32
-						SetLastError(ERROR_DISK_FULL);
-#else
-						errno = ENOSPC;
-#endif
-						return static_cast<pwrite_ssize_t>(-1);
-					}
-					return portable_pwrite(fd, bytes, byteCount, offset);
-				});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
-					 std::system_error);
-	}
-	EXPECT_TRUE(interrupted);
-	MetadataSnapshotPin beforeRetry = store->openSnapshot();
-	EXPECT_EQ(beforeRetry.superblock().generation, validSource.generation);
-	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
-	beforeRetry.release();
-	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
-	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
-	store.reset();
-	io.reset();
-	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
-	initializeTestSharedPagePool(*io, validSource.data_region_offset, entry(100, 2, 2));
-	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
-	const std::byte zero{};
-	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
-	io->sync();
-	store.reset();
-
-	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
-	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
-	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
-	store = RelocatableMetadataStore::open(io);
-	std::atomic<uint32_t> syncCalls{0U};
-	{
-		StorageIO::ScopedNativeSyncHookForTesting failPublicationFence([&syncCalls](file_handle_t fd) {
-			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
-#ifdef _WIN32
-				SetLastError(ERROR_WRITE_FAULT);
-#else
-				errno = EIO;
-#endif
-				return -1;
-			}
-			return portable_fsync(fd);
-		});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
-					 std::system_error);
-	}
-	EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
-	store.reset();
-	auto recovered = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin snapshot = recovered->openSnapshot();
-	if (snapshot.superblock().generation == validSource.generation) {
-		EXPECT_FALSE(snapshot.superblock().usesPageDirectoryBootstrap());
-		snapshot.release();
-		const Superblock retried = recovered->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
-		EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
-	} else {
-		EXPECT_EQ(snapshot.superblock().generation.value(), validSource.generation.value() + 1U);
-		EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
-		EXPECT_EQ(recovered->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-				  PhysicalSlotId(100));
-	}
-	recovered.reset();
-	io.reset();
-	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
-}
-
-TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	const MetadataPublishOptions options = withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE);
-	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
-				 BootstrapPublishInterrupted);
-	store.reset();
-
-	auto recovered = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin snapshot = recovered->openSnapshot();
-	EXPECT_EQ(snapshot.superblock().generation, Generation(3));
-	EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
-	EXPECT_EQ(recovered->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
-			  PhysicalSlotId(100));
 }
 
 TEST_F(RelocatableMetadataStoreTest, SerializesAllocatorReservationAndReusesReleasedSnapshotPages) {

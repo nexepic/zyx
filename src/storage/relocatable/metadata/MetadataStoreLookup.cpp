@@ -895,31 +895,6 @@ namespace graph::storage {
 	MetadataPagePoolStats RelocatableMetadataStore::pagePoolStats() const { return metadata_page_pool_.stats(); }
 	uint64_t RelocatableMetadataStore::dataMutationEpoch() const { return io_->dataMutationEpoch(); }
 
-	Superblock RelocatableMetadataStore::migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
-																		 const MetadataPublishOptions &options) {
-		if (read_only_) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable read-only metadata store cannot migrate the Page Directory");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		if (current.usesPageDirectoryBootstrap()) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Page Directory bootstrap migration was already published");
-		}
-		MetadataPageRouteDirectory routes(pages_);
-		const size_t requiredFrames = routes.initialBootstrapFrameCount(current);
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		batch.reserveMetadataFrames(requiredFrames);
-		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
-		publishTrackedBatch(batch, options.bootstrap_failpoint);
-        synchronized_source_ = batch.candidate();
-        pages_.rebindSuperblock(batch.candidate());
-        // Migration already validates the complete graph. Establish retirement
-        // coverage here, so the first ordinary publication stays incremental.
-        snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
 
 	std::unique_ptr<RelocatableMetadataStore>
 	RelocatableMetadataStore::initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
@@ -967,7 +942,7 @@ namespace graph::storage {
 			}
 		}
 		batch.reserveMetadataFrames(routes.initialBootstrapFrameCount(batch));
-		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
+		static_cast<void>(routes.prepareInitialBootstrap(batch));
 		publishTrackedBatch(batch, options.bootstrap_failpoint);
         synchronized_source_ = batch.candidate();
 		pages_.rebindSuperblock(batch.candidate());
