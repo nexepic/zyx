@@ -2396,53 +2396,54 @@ TEST_F(RelocatableMetadataStoreTest, KeepsCombinedReservationDataSlotSeparateFro
 }
 
 TEST_F(RelocatableMetadataStoreTest,
-	   RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	static_cast<void>(store->upsertCatalog(catalogEntriesForLeafCount(30U), LogSequenceNumber(2U)));
-	ASSERT_EQ(store->pagePoolStats().pools, 3U);
-	std::vector<CatalogSlotReservationRequest> requests;
-	requests.reserve(30U);
-	for (uint64_t ordinal = 0U; ordinal < 30U; ++ordinal) {
-		requests.push_back(reservationRequest(10000U + ordinal * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U));
-	}
-	const CatalogSlotReservationRequest request = requests.front();
-
-	EXPECT_THROW(static_cast<void>(store->reserveFirstFreeAndUpsertCatalog(
-						 requests, PhysicalSlotId(4U), PhysicalSlotId(33U), LogSequenceNumber(3U),
-						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
-				 BootstrapPublishInterrupted);
-	MetadataSnapshotPin before = store->openSnapshot();
-	EXPECT_EQ(before.superblock().generation, Generation(2U));
-	EXPECT_THROW(static_cast<void>(store->findCatalog(before, request.segment_id)), FormatException);
-	EXPECT_FALSE(store->isPhysicalSlotAllocated(before, PhysicalSlotId(4U)));
-	before.release();
-	EXPECT_EQ(store->pagePoolStats().pools, 3U);
-
-	store.reset();
-	auto interrupted = RelocatableMetadataStore::open(io);
-	EXPECT_THROW(static_cast<void>(interrupted->reserveFirstFreeAndUpsertCatalog(
-						 requests, PhysicalSlotId(4U), PhysicalSlotId(33U), LogSequenceNumber(3U),
-						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
-				 BootstrapPublishInterrupted);
-	interrupted.reset();
-
-	auto recovered = RelocatableMetadataStore::open(io);
-	MetadataSnapshotPin after = recovered->openSnapshot();
-	EXPECT_EQ(after.superblock().generation, Generation(3U));
-	EXPECT_EQ(recovered->findCatalog(after, request.segment_id).physical_slot, PhysicalSlotId(4U));
-	for (uint64_t slot = 4U; slot <= 33U; ++slot) {
-		EXPECT_TRUE(recovered->isPhysicalSlotAllocated(after, PhysicalSlotId(slot)));
-	}
-	std::vector<PhysicalSlotId> metadataPoolSlots;
-	recovered->visitCatalogEntries(after, [&metadataPoolSlots](const CatalogEntry &entry) {
-		if (entry.kind == SegmentKind::SGK_METADATA_PAGE_POOL) {
-			metadataPoolSlots.push_back(entry.physical_slot);
-		}
-	});
-	EXPECT_TRUE(std::any_of(metadataPoolSlots.begin(), metadataPoolSlots.end(),
-							[](PhysicalSlotId slot) { return slot.value() > 33U; }));
-	after.release();
-	EXPECT_GE(recovered->pagePoolStats().pools, 4U);
+       RecoversAReservedTailDataSlotAndItsFollowingMetadataPoolAcrossPublicationBoundaries) {
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+    const auto prepare = [&](std::span<const CatalogEntry> pools) {
+        uint64_t last = 0U;
+        for (const auto &pool : pools) {
+            initializeTestSharedPagePool(*io, RSS_FILE_BOOTSTRAP_BYTES, pool);
+            last = std::max(last, pool.physical_slot.value());
+        }
+        const auto end = PhysicalSegmentAllocator::checkedSlotOffset(RSS_FILE_BOOTSTRAP_BYTES, PhysicalSlotId(last)) + RSS_SEGMENT_SIZE;
+        const std::byte zero{}; io->writeAt(end - 1U, &zero, 1U);
+    };
+    std::vector<CatalogSlotReservationRequest> initial;
+    for (uint64_t i = 0; i < 30U; ++i) {
+        auto request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + i * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U);
+        request.require_absent = true; initial.push_back(request);
+    }
+    ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(initial, PhysicalSlotId(3U), PhysicalSlotId(1000U), LogSequenceNumber(3U), prepare));
+    const auto before = store->openSnapshot().superblock();
+    const auto poolsBefore = store->pagePoolStats().pools;
+    const uint64_t fileBytes = io->fileSize();
+    const uint64_t tail = (fileBytes - before.data_region_offset + RSS_SEGMENT_SIZE - 1U) / RSS_SEGMENT_SIZE;
+    const uint64_t alignedEnd = before.data_region_offset + tail * RSS_SEGMENT_SIZE;
+    if (fileBytes < alignedEnd) { const std::byte zero{}; io->writeAt(alignedEnd - 1U, &zero, 1U); }
+    const PhysicalSlotId first(tail + 1U), last(tail + 30U);
+    std::vector<CatalogSlotReservationRequest> requests;
+    for (uint64_t i = 0; i < 30U; ++i) {
+        auto request = reservationRequest(100000U + i * RSS_CATALOG_PAGE_MAX_ENTRIES, 1U);
+        request.require_absent = true; requests.push_back(request);
+    }
+    EXPECT_THROW(static_cast<void>(store->reserveFirstFreeAndUpsertCatalog(requests, first, last, LogSequenceNumber(4U), prepare,
+        withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))), BootstrapPublishInterrupted);
+    auto old = store->openSnapshot(); EXPECT_EQ(old.superblock(), before);
+    EXPECT_THROW(static_cast<void>(store->findCatalog(old, requests.front().segment_id)), FormatException);
+    EXPECT_FALSE(store->isPhysicalSlotAllocated(old, first)); old.release();
+    store.reset(); auto interrupted = RelocatableMetadataStore::open(io);
+    EXPECT_THROW(static_cast<void>(interrupted->reserveFirstFreeAndUpsertCatalog(requests, first, last, LogSequenceNumber(4U), prepare,
+        withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))), BootstrapPublishInterrupted);
+    interrupted.reset(); auto recovered = RelocatableMetadataStore::open(io); auto snapshot = recovered->openSnapshot();
+    EXPECT_EQ(snapshot.superblock().generation.value(), before.generation.value() + 1U);
+    EXPECT_EQ(recovered->findCatalog(snapshot, requests.front().segment_id).physical_slot, first);
+    for (uint64_t slot = first.value(); slot <= last.value(); ++slot) EXPECT_TRUE(recovered->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(slot)));
+    std::vector<PhysicalSlotId> metadataPoolSlots;
+    recovered->visitCatalogEntries(snapshot, [&](const CatalogEntry &entry) {
+        if (entry.kind == SegmentKind::SGK_METADATA_PAGE_POOL) metadataPoolSlots.push_back(entry.physical_slot);
+    });
+    EXPECT_TRUE(std::any_of(metadataPoolSlots.begin(), metadataPoolSlots.end(), [&](PhysicalSlotId slot) { return slot.value() > last.value(); }));
+    snapshot.release(); EXPECT_GT(recovered->pagePoolStats().pools, poolsBefore);
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *recovered).scan()));
 }
 
 TEST_F(RelocatableMetadataStoreTest, OpenIgnoresAnUnownedEmptyCatalogPoolLeftBeforePublication) {
