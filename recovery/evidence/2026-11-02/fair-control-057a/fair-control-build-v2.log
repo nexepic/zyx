@@ -1,0 +1,50 @@
+/workspace/zyx-sysroot/usr/bin/clang++-19 -I/workspace/zyx-latestonly/src/storage/relocatable/backend -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx-latestonly/include -I/workspace/zyx-latestonly/src -I/workspace/zyx-latestonly -I/workspace/zyx-release-57fa -I/workspace/zyx-latestonly/src/query/parser/cypher -I/workspace/zyx-latestonly/src/query/parser/cypher/generated -I/workspace/zyx-latestonly/src/query/parser/cypher/helpers/internal -I/workspace/zyx-latestonly/src/query/parser/cypher/helpers/public -I/workspace/zyx-latestonly/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Wno-unused-parameter -o /workspace/zyx-link-tmp/fair-control-backend.o -c /workspace/zyx-link-tmp/fair-control-RelocatableStorageBackend.cpp
+In file included from /workspace/zyx-link-tmp/fair-control-RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx-latestonly/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphRead.hpp:415:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  415 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphRead.hpp:424:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  424 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphRead.hpp:536:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  536 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphRead.hpp:630:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  630 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphRead.hpp:639:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  639 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx-link-tmp/fair-control-RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx-latestonly/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx-latestonly/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+In file included from /workspace/zyx-link-tmp/fair-control-RelocatableStorageBackend.cpp:730:
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/LogicalTransaction.inc:1209:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1209 |                                                         const auto edge = snapshot_->readEdgeShaped(patch.entity.value, {.include_type = false});
+      |                                                                                                                                               ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/LogicalTransaction.inc:1243:56: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1243 |                                         const EntityReadShape shape{.all_properties = true};
+      |                                                                                           ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/LogicalTransaction.inc:1555:96: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1555 |                                                         const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+      |                                                                                                                                                 ^
+In file included from /workspace/zyx-link-tmp/fair-control-RelocatableStorageBackend.cpp:2402:
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc:5:75: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+    5 |                                 snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                       ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc:12:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   12 |                                 snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                     ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc:798:71: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  798 |                                 snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                   ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc:1244:78: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1244 |                                         snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                 ^
+/workspace/zyx-latestonly/src/storage/relocatable/backend/backend_runtime/GraphReadsAndIndexCandidates.inc:1800:79: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1800 |                                                 snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                         ^
+14 warnings generated.

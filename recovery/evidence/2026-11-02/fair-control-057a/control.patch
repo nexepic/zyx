@@ -1,0 +1,11 @@
+--- 057a/RelocatableStorageBackend.cpp
++++ control/RelocatableStorageBackend.cpp
+@@ -2359,7 +2359,7 @@
+                         auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+                             std::move(account), bytes, std::pmr::new_delete_resource());
+                         utils::OwnedAllocationScope allocationScope(workspace);
+-                        metadata_->reclaimDeletedPropertyOwners();
++                        static_cast<void>(0); // isolated measurement control: owner cleanup disabled
+                     } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                         if (metadata_->hasIndeterminatePublication())
+                             requires_reopen_after_indeterminate_write_.store(true, std::memory_order_release);

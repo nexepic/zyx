@@ -1,0 +1,5 @@
+exit=0
+stdout:
+iterations=128 failures=0 seconds=0.74352 pairs_per_s=172.154 delete_mean_ms=2.87138 delete_p95_ms=4.2083 file_bytes=1572864
+
+stderr:

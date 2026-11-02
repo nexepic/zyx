@@ -1,0 +1,10 @@
+ Database CLI
+Usage: /workspace/zyx-link-tmp/zyx-release-057a-stripped [OPTIONS] SUBCOMMAND
+
+Options:
+  -h,--help                   Print this help message and exit
+  --help-all                  Expand all help
+
+Subcommands:
+  database                    Database operations
+  import                      Bulk import data from CSV/JSONL files

@@ -1,0 +1,4 @@
+metric=pairs_per_s control=170.3246 enabled=158.8459 delta=-11.4787 CI95=[-15.6477,-7.3097]
+metric=delete_mean_ms control=2.9424 enabled=3.3426 delta=0.4002 CI95=[0.3118,0.4886]
+metric=delete_p95_ms control=4.3855 enabled=5.3883 delta=1.0028 CI95=[0.7553,1.2504]
+metric=file_bytes control=1572864.0000 enabled=1572864.0000 delta=0.0000 CI95=[0.0000,0.0000]
