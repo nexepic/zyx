@@ -1,0 +1,5 @@
+exit=0
+stdout:
+clients=2 operations=200 failures=0 seconds=0.0686344 throughput=2913.99 commit_mean_ms=2.80489 commit_p95_ms=5.21664
+
+stderr:

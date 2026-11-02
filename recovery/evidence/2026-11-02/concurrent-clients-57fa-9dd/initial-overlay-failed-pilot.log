@@ -1,0 +1,2 @@
+client 0: native logical graph mutation batch no longer matches its read snapshot fence
+clients=2 operations=200 failures=2 seconds=0.068121 throughput=2935.95 commit_mean_ms=3.24877 commit_p95_ms=4.56989

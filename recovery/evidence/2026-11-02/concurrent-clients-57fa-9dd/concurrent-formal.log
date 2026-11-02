@@ -1,0 +1,6 @@
+clients=2 metric=throughput 57fa=2916.2567 9dd=3045.6517 delta=129.3950 CI95=[-103.0399,361.8299]
+clients=2 metric=commit_mean_ms 57fa=2.9732 9dd=2.6749 delta=-0.2984 CI95=[-0.5166,-0.0802]
+clients=2 metric=commit_p95_ms 57fa=4.5012 9dd=3.6928 delta=-0.8085 CI95=[-1.4532,-0.1637]
+clients=4 metric=throughput 57fa=3245.3450 9dd=3164.2433 delta=-81.1017 CI95=[-171.2707,9.0674]
+clients=4 metric=commit_mean_ms 57fa=4.6080 9dd=5.0233 delta=0.4153 CI95=[-0.4602,1.2909]
+clients=4 metric=commit_p95_ms 57fa=6.6282 9dd=7.7733 delta=1.1452 CI95=[-2.1993,4.4897]
