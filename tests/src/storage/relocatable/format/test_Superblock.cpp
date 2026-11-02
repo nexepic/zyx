@@ -151,7 +151,8 @@ TEST(RelocatableSuperblockTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 	EXPECT_EQ(std::to_integer<uint8_t>(encoded[1]), 0x59U);
 	EXPECT_EQ(std::to_integer<uint8_t>(encoded[2]), 0x58U);
 	EXPECT_EQ(std::to_integer<uint8_t>(encoded[3]), 0x53U);
-	EXPECT_EQ(std::to_integer<uint8_t>(encoded[4]), RSS_SUPERBLOCK_VERSION);
+	EXPECT_EQ(std::to_integer<uint8_t>(encoded[4]), RSS_SUPERBLOCK_VERSION & 0xffU);
+	EXPECT_EQ(std::to_integer<uint8_t>(encoded[5]), RSS_SUPERBLOCK_VERSION >> 8U);
 	EXPECT_EQ(LittleEndianCodec::readU16(encoded, 6), RSS_SUPERBLOCK_HEADER_BYTES);
 	EXPECT_EQ(LittleEndianCodec::readU64(encoded, DATA_REGION_OFFSET), RSS_FILE_BOOTSTRAP_BYTES);
 	EXPECT_EQ(LittleEndianCodec::readU64(encoded, CATALOG_ROOT_OFFSET), 10U);
