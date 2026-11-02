@@ -226,9 +226,7 @@ TEST_F(RelocatableMetadataStoreTest, CatalogLogicalizesOwnedInternalChildrenAfte
 }
 
 TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	const Superblock updated = store->setPhysicalSlotAllocated(PhysicalSlotId(40), true, LogSequenceNumber(4));
 	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
 	MetadataPageFile pages(io, updated);
@@ -260,10 +258,9 @@ TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMi
 }
 
 TEST_F(RelocatableMetadataStoreTest, AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 	const PhysicalSlotId firstSlot(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY * RSS_CATALOG_RADIX_FANOUT + 1U);
-	static_cast<void>(store->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(2)));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	static_cast<void>(store->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(3)));
 	const PhysicalSlotId replacementSlot(firstSlot.value() + 1U);
 	const Superblock updated = store->setPhysicalSlotAllocated(replacementSlot, true, LogSequenceNumber(4));
 	MetadataPageFile pages(io, updated);
