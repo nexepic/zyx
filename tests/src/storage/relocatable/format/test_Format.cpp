@@ -103,11 +103,24 @@ TEST(RelocatableFormatTest, LittleEndianPrimitivesRejectTruncatedBuffers) {
 
 TEST(RelocatableFormatTest, EnvelopeCodecMatchesGoldenLittleEndianBytes) {
 	const auto encoded = SegmentEnvelopeCodec::encode(allocatedEnvelope());
-	const std::array<uint8_t, RSS_ENVELOPE_BYTES> expected = {
+	std::array<uint8_t, RSS_ENVELOPE_BYTES> expected = {
 			0x5A, 0x59, 0x58, 0x47, 0x05, 0x00, 0x80, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11,
 			0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x20, 0x00, 0x00, 0x00, 0xA3, 0x43, 0xA2, 0x54, 0xDD, 0xCC, 0xBB, 0xAA, 0x00, 0x00, 0x00, 0x00};
+	// These independent golden checksums cover each currently selectable
+	// layout. A future current-format version must add its own golden value.
+	uint32_t expectedCrc = 0;
+	switch (RSS_FORMAT_VERSION) {
+		case 5: expectedCrc = 0x54A243A3U; break;
+		case 13: expectedCrc = 0xB48B289EU; break;
+		case 15: expectedCrc = 0xFA5D33C1U; break;
+		default: FAIL() << "Add independent envelope golden bytes for the current format";
+	}
+	expected[4] = static_cast<uint8_t>(RSS_FORMAT_VERSION & 0xffU);
+	expected[5] = static_cast<uint8_t>(RSS_FORMAT_VERSION >> 8U);
+	for (size_t byte = 0; byte < 4; ++byte)
+		expected[52 + byte] = static_cast<uint8_t>((expectedCrc >> (8U * byte)) & 0xffU);
 	for (size_t index = 0; index < expected.size(); ++index) {
 		EXPECT_EQ(std::to_integer<uint8_t>(encoded[index]), expected[index]);
 	}
