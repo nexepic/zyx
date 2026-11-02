@@ -37,6 +37,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
+#include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/metadata/CatalogPage.hpp"
@@ -210,6 +211,7 @@ namespace {
 			io.writeAt(offset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
 		}
 	}
+
 
 	using CrashChild = graph::test::relocatable_crash::CrashChild;
 	using graph::test::relocatable_crash::waitToBeKilled;
@@ -1094,7 +1096,8 @@ namespace graph::test {
 				initial.generation = Generation(1U);
 				initial.checkpoint_lsn = LogSequenceNumber(1U);
 				const bool routeRadixFixture = mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_RADIX_CANDIDATE;
-				auto metadata = routeRadixFixture ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
+                const bool routeReclaimFixture = mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM;
+				auto metadata = (routeRadixFixture || routeReclaimFixture) ? RelocatableMetadataStore::initializeNewComplete(io, initial) :
 					RelocatableMetadataStore::initializeNew(io, initial);
 				const CatalogEntry catalog{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
 										   PhysicalSlotId(100U),
@@ -1103,7 +1106,14 @@ namespace graph::test {
 										   Generation(1U),
 										   SegmentState::SGS_SEALED,
 										   LogSequenceNumber(2U)};
-				if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
+				if (routeReclaimFixture) {
+                    PhysicalSegmentAllocator segments(io, *metadata); VectorCodebookStore codebooks(segments, *metadata);
+                    VectorCodebookWriteRequest request; request.codebook_id = 77U; request.manifest_segment_id = catalog.segment_id;
+                    request.generation = Generation(1U); request.element_type = VectorCodebookElementType::VCET_FLOAT32;
+                    request.dimensions = 2U; request.subspace_count = 1U; request.centroid_count = 3U;
+                    const std::array<std::byte, 24U> payload{};
+                    static_cast<void>(codebooks.writeImmutable(request, payload, PhysicalSlotId(100U), PhysicalSlotId(100U), LogSequenceNumber(3U)));
+                } else if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
 					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION ||
 					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE ||
 					mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
@@ -1154,7 +1164,6 @@ namespace graph::test {
 					static_cast<void>(metadata->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(2U)));
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM) {
-					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 					bool published = false;
 					StorageIO::ScopedNativeWriteHookForTesting pauseAfterRouteReclaim(
 							[&published, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount,
@@ -1180,14 +1189,10 @@ namespace graph::test {
 								}
 								return portable_pwrite(fd, bytes, byteCount, offset);
 							});
-					const CatalogEntry replacement{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
-												   PhysicalSlotId(101U),
-												   SegmentKind::SGK_ENTITY_PAGE_POOL,
-												   77U,
-												   Generation(1U),
-												   SegmentState::SGS_SEALED,
-												   LogSequenceNumber(4U)};
-					static_cast<void>(metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4U)));
+                    PhysicalSegmentAllocator segments(io, *metadata); VectorCodebookStore codebooks(segments, *metadata);
+                    const auto relocated = codebooks.relocateExtent(77U, VectorCodebookExtentIdCodec::manifestExtentId(77U),
+                        PhysicalSlotId(101U), PhysicalSlotId(101U), LogSequenceNumber(4U));
+                    if (!relocated) return 65;
 					return 65;
 				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_POST_MIGRATION_ROUTE_CANDIDATE ||
@@ -1660,20 +1665,22 @@ TEST_F(RelocatableProcessCrashTest, KillAfterBootstrapRouteReclaimRecoversPublis
 			  PhysicalSlotId(101U));
 	recovered.release();
 
-	const CatalogEntry replacement{SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID),
-								   PhysicalSlotId(102U),
-								   SegmentKind::SGK_ENTITY_PAGE_POOL,
-								   77U,
-								   Generation(1U),
-								   SegmentState::SGS_SEALED,
-								   LogSequenceNumber(5U)};
-	const Superblock updated = metadata->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(5U));
-	EXPECT_EQ(updated.generation, Generation(5U));
+    {
+    PhysicalSegmentAllocator segments(io, *metadata);
+    static_cast<void>(segments.releaseRelocatedSource(SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID), Generation(2U), LogSequenceNumber(5U)));
+    VectorCodebookStore codebooks(segments, *metadata);
+    const auto relocated = codebooks.relocateExtent(77U, VectorCodebookExtentIdCodec::manifestExtentId(77U),
+        PhysicalSlotId(102U), PhysicalSlotId(102U), LogSequenceNumber(6U));
+    ASSERT_TRUE(relocated);
+    EXPECT_EQ(relocated->superblock.generation, Generation(6U));
+    }
 	metadata.reset();
 
 	auto reopened = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin persisted = reopened->openSnapshot();
-	EXPECT_EQ(reopened->findCatalog(persisted, replacement.segment_id).physical_slot, replacement.physical_slot);
+    EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot, PhysicalSlotId(102U));
+    persisted.release();
+    EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *reopened).scan()));
 }
 
 TEST_F(RelocatableProcessCrashTest,
