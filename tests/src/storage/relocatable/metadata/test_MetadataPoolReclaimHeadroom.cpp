@@ -41,7 +41,25 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  const auto oldGeneration = old.superblock().generation.value();
  const auto oldRoute = old.superblock().page_directory_root;
  MetadataPublishOptions options; options.bootstrap_failpoint = failpoint;
- if (nativeFault) {
+ if (nativeFault == 3) {
+  uint32_t syncCalls = 0U;
+  {
+   StorageIO::ScopedNativeSyncHookForTesting hook([&](file_handle_t fd) {
+    if (syncCalls++ == 1U) {
+#ifdef _WIN32
+     SetLastError(ERROR_WRITE_FAULT);
+#else
+     errno = EIO;
+#endif
+     return -1;
+    }
+    return portable_fsync(fd);
+   });
+   EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(8U),
+    RSS_PAGE_POOL_DATA_FRAME_COUNT)), std::runtime_error);
+  }
+  EXPECT_GE(syncCalls, 2U);
+ } else if (nativeFault) {
   bool injected = false;
   {
    StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) {
@@ -74,6 +92,11 @@ void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  old.release(); store.reset();
  auto reopened = RelocatableMetadataStore::open(io);
  auto recovered = reopened->openSnapshot();
+ if (nativeFault == 3) {
+  const auto generation = recovered.superblock().generation.value();
+  ASSERT_TRUE(generation == oldGeneration || generation == oldGeneration + 1U);
+  committed = generation == oldGeneration + 1U;
+ }
  EXPECT_EQ(recovered.superblock().generation.value(), oldGeneration + (committed ? 1U : 0U));
  EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
  if (committed) EXPECT_NE(recovered.superblock().page_directory_root, oldRoute);
@@ -115,6 +138,12 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationEnospcRetainsRootAnd
  const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
  checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 2);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
+}
+TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncReopensWholeRoute) {
+ const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
+ checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 3);
  nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
 }
 
