@@ -1058,7 +1058,32 @@ namespace graph::test {
 										   Generation(1U),
 										   SegmentState::SGS_SEALED,
 										   LogSequenceNumber(2U)};
-				static_cast<void>(metadata->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(2U)));
+				if (mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_BEFORE_PUBLICATION ||
+					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_AFTER_PUBLICATION ||
+					mode == CRASH_CHILD_BOOTSTRAP_MIGRATION_CANDIDATE) {
+					// Publish a real, allocated opaque segment in the same generation
+					// as the Catalog entry; recovery must authenticate its envelope.
+					const CatalogSlotReservationRequest request{catalog.segment_id, catalog.kind, catalog.owner_id,
+						catalog.generation, catalog.state, true};
+					const auto prepared = metadata->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1U),
+						catalog.physical_slot, catalog.physical_slot, LogSequenceNumber(2U),
+						[&](std::span<const CatalogEntry> entries) {
+							if (entries.size() != 1U) throw std::runtime_error("expected one crash fixture segment");
+							const auto &entry = entries.front();
+							SegmentEnvelope envelope;
+							envelope.kind = entry.kind; envelope.state = entry.state; envelope.segment_id = entry.segment_id;
+							envelope.owner_id = entry.owner_id; envelope.generation = entry.generation;
+							envelope.committed_lsn = entry.committed_lsn;
+							const auto bytes = SegmentEnvelopeCodec::encode(envelope);
+							const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(initial.data_region_offset, entry.physical_slot);
+							io->writeAt(offset, bytes.data(), bytes.size());
+							const std::byte zero{};
+							io->writeAt(offset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
+						});
+					if (!prepared) throw std::runtime_error("crash fixture segment reservation failed");
+				} else {
+					static_cast<void>(metadata->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(2U)));
+				}
 				if (mode == CRASH_CHILD_BOOTSTRAP_ROUTE_RECLAIM) {
 					static_cast<void>(metadata->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
 					bool published = false;
