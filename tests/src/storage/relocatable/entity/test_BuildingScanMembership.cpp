@@ -1278,6 +1278,7 @@ TEST_F(BuildingScanMembershipTest, CompletionPublishesAtomicallyAndReadyOutlives
             const auto recovered = builder->buildingRoot();
             ready = !(recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING);
             EXPECT_EQ(ready, failpoint != BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE);
+            EXPECT_EQ((recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE) != 0U, ready);
             EXPECT_EQ(recovered.database_id, before.database_id);
             EXPECT_EQ(recovered.hybrid_property_descriptor_root, before.hybrid_property_descriptor_root);
             EXPECT_LE(builder->targetFileBytes() * 10U, builder->sourceFileBytes() * 9U);
