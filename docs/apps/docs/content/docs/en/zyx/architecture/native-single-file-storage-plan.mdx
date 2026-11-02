@@ -12,6 +12,8 @@ projectOrder: 1
 
 # Native Single-File Storage Specification
 
+> **Current format:** The reconstructed implementation uses segment version `0xF100` and Superblock version `0xF101`; these are newly assigned identifiers, not recovered historical version numbers. ROW, BUILDING and completed SCAN authority are per file/snapshot. Unsupported versions and invalid authority states are rejected. Older numbered build profiles below describe historical experiments, not supported formats. Current source and the [optimization plan](optimization) govern behavior.
+
 > This page retains current single-file rules and explicitly labeled design targets; it is no longer an independent implementation checklist. The [architecture and performance plan](optimization) exclusively owns tasks, admission and progress. Old Stage/P/C ledgers are archived outside the site; their percentages, test counts and not-started claims do not describe the current tree.
 
 Updated: 2026-10-22. Retain COW/A-B publication; do not introduce WAL. Active implementation exclusively follows P0–P7 of [core performance plan](optimization) `core-cost-20261022`. PageId, owner, generation, snapshot, codec, publication, and reclamation invariants remain; amend specific clauses and version affected formats before changing layouts or interfaces, never silently relax reader validation.
@@ -141,7 +143,7 @@ Ordinary graph adjacency is a built-in Packed B+Tree and therefore uses `SGK_IND
 
 ### 4.4 Query scratch development format
 
-The default build uses Segment envelope version **5** and Superblock version **31**; see 4.5 for the isolated experimental build. Query scratch registers kind **15**; bulk scratch retains kind **14**. This is an incompatible development format change: version 4/30 files are refused without migration or rewriting an older A/B root. The stable-format adoption gate remains open.
+The current format uses segment version `0xF100` and Superblock version `0xF101`. Query scratch registers kind **15**; bulk scratch retains kind **14**. Unsupported versions are rejected rather than migrated or reinterpreted.
 
 `query_scratch_enabled` defaults to `false`. Its opt-in native Sort path uses owner-authenticated private handles, checked version-1 row/run blocks, stable input ordinals and bounded two-way merging. Unsupported rows or orderings remain in memory before the first spill and fail explicitly if encountered after runs are sealed; consumed inputs are never replayed. Physical read-only files cannot allocate, publish or reclaim scratch and cannot use host temporary files as a fallback.
 
@@ -149,9 +151,9 @@ Private extent admission counts each complete 128 KiB physical segment before IO
 
 Integrity scanning reports sealed private scratch as requiring owner quiescence or writable recovery. A physical read-only open performs no cleanup. Sort, partitioned DISTINCT/UNION, shared budgets, and resource faults were accepted in the previous cycle; aggregate state and hash join still lack general spill. See `benchmarks/architecture-design/decisions/20261016-s53-budget-and-spill-acceptance/`; R6 protects these capabilities during subsequent changes.
 
-### 4.5 Isolated hybrid-property experimental format
+### 4.5 Historical hybrid-property experiments
 
-`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` defaults OFF. This matrix records default/isolated boundaries. Final R3admission is limited to explicit cost-gated cohorts in the [optimization plan](optimization),without automatic layout switching; `Format.hpp`/`Superblock.hpp` remain the version authority.
+The following dated matrix records historical experiments only; these builds and version numbers are not supported current format choices. Current admission remains explicit and cost-gated; see the [optimization plan](optimization).
 
 | Build | Segment profile/envelope version | Superblock version/header bytes | Property routing |
 |---|---:|---:|---|
@@ -1012,10 +1014,6 @@ Default5/31 remains unchanged; explicit experimental profile13/Superblock39 reta
 
 Final evidence: `benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`. Historical progress notes moved to historical-storage-notes-en.md there. Retain protocol contracts and original failures; early publication-closed/incomplete-lifecycle notes no longer define the current boundary.
 
-## Batch-scan candidate format 15/41: isolated implementation and acceptance
+## Current offline SCAN construction
 
-Candidate B for `scan-path-20261023` is specified in `benchmarks/architecture-design/decisions/20261024-scan-path-s2/persistent-format.en.md`, with record bytes in the adjacent `membership-wire.en.md`. `ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT` is off by default and requires the experimental hybrid format. It selects isolated versions 15/41, a 208-byte version 2 descriptor and the ninth `NODE_SCAN` membership directory root. Default 5/31, experimental 13/39 and 15/41 reject each other's files without in-place reinterpretation or replacement. BUILDING prevents public opening of unfinished destinations; there is no additional READY flag.
-
-The isolated build provides the explicit offline command `zyx-scan-convert SOURCE DESTINATION`. The source must be a closed 5/31 file and the destination must not exist. The builder checks the read-only source identity, installs complete Node membership and converts eligible Node fields under the existing general rules. Edge fields and ineligible fields retain ROW. Maintenance uses the existing COW, directory, retirement and pool ownership mechanisms. Before clearing BUILDING, completion must run fresh full-graph integrity and, after publication preparation, verify at least 10% saving using actual whole-file length within the 2 GiB combined source, destination and temporary-file limit. Failed destinations may retain BUILDING and must not be used as complete databases; the source is never replaced. The public bounded 8×64 conversion contract is unchanged.
-
-Completed 15/41 files support public SDK opening and modification; direct creation of a new 15/41 database remains refused. Node creation, deletion and label changes publish membership and field roots together through A/B. Writes invalidate read proofs while old pins retain their versions. Public opening verifies the complete Node supply chain; ROW Edge records retain ordinary access validation. Offline completion and explicit full checks validate the entire graph. Linux module, fault, resource and generality evidence is retained in the `20261025-public-scan-lifecycle/`, `20261025-bounded-offline-lifecycle/`, `20261025-node-supply-proof/` and `20261025-capacity-rollback/` decision directories. macOS, Windows and WASM were not executed in this environment. Implementation availability does not grant candidate adoption: real-image space, total cost, performance and guard acceptance follow the current [optimization checklist](optimization) and final evidence.
+The explicit offline converter builds a separate target from a closed current-format ROW source. The target begins in BUILDING state and is not a completed public image. Completion verifies full membership and integrity and requires at least 10% savings against actual whole-file source size before publishing completed SCAN authority; failure does not replace the source. Writes, membership and data roots publish atomically, and old snapshots retain their view. The current implementation supports only the latest format; unknown formats and invalid authority states are rejected. Historical candidate details remain in `benchmarks/architecture-design/decisions/20261024-scan-path-s2/`. Linux verification is recorded with the recovery evidence; Windows and macOS results require their own CI.

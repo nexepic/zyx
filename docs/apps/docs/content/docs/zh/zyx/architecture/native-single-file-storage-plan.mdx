@@ -12,6 +12,8 @@ projectOrder: 1
 
 # 原生单文件存储规范
 
+> **当前格式：**重建实现使用 Segment 版本 `0xF100` 和 Superblock 版本 `0xF101`；这是重新分配的编号，并非找回的历史最终编号。ROW、BUILDING 和已完成 SCAN 的权限状态按文件及快照确定；不支持的版本和无效状态会被拒绝。下文旧编号构建组合仅为历史实验，并非当前支持的格式；以当前源码和[优化计划](optimization)为准。
+
 > 本文保留现行单文件格式规则和明确标注的设计目标，不再是独立实施清单。后续任务、准入和进度唯一以[架构调整与通用性能实施方案](optimization)为准。旧 Stage/P/C 流水记录已移出文档站；旧百分比、测试数量和“未开始”描述不代表当前工作树。
 
 更新：2026-10-22。继续使用 COW/A-B 发布；不引入 WAL。当前实施唯一遵循[核心性能方案](optimization) `core-cost-20261022` 的 P0–P7。本页的 PageId、owner、generation、快照、字节编码、发布与回收不变量继续有效；改变布局或接口前必须修订具体条款并版本化，不能默默放宽 reader 校验。
@@ -141,7 +143,7 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 
 ### 4.4 查询 scratch 开发格式
 
-默认构建使用 Segment envelope 版本 **5** 与 Superblock 版本 **31**；隔离实验构建另见 4.5。查询 scratch 注册 kind **15**，bulk scratch 保持 kind **14**。这是不兼容的开发格式变更：4/30 版本文件会被拒绝，不执行迁移，也不重写旧 A/B 根。稳定格式采用门槛仍待验收。
+当前格式使用 Segment 版本 `0xF100` 和 Superblock 版本 `0xF101`。查询 scratch 注册 kind **15**，bulk scratch 保持 kind **14**；不支持的版本直接拒绝，不迁移或重新解释旧文件。
 
 `query_scratch_enabled` 默认为 `false`。显式启用的原生 Sort 路径使用归属验证的私有句柄、经过校验的版本 1 行/run block、稳定输入序号与有界双路归并。不支持的行或排序在首次 spill 前保留内存执行，已封存 run 后遇到则明确失败；不会重放已消费输入。物理只读文件不能分配、发布或回收 scratch，也不会退回宿主临时文件。
 
@@ -149,9 +151,9 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 
 完整性扫描把 sealed 私有 scratch 报告为需要所有者静止或可写恢复。物理只读打开不执行清理。排序、分区 DISTINCT/UNION、共享预算及故障合同已在上一轮验收；聚合状态和哈希连接仍无通用 spill。见 `benchmarks/architecture-design/decisions/20261016-s53-budget-and-spill-acceptance/`，后续变更按 R6 保护这些能力。
 
-### 4.5 隔离的混合属性实验格式
+### 4.5 历史混合属性实验
 
-`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` 默认 OFF。以下矩阵描述默认与隔离格式边界；R3最终准入仅限[优化计划](optimization)登记的显式成本门禁cohort，不授予自动布局切换。版本定义仍以 `Format.hpp`／`Superblock.hpp` 为准。
+以下矩阵仅记录历史实验，不代表当前支持的构建或格式选择。当前准入仍需显式成本门槛，详见[优化计划](optimization)。
 
 | 构建 | Segment profile／envelope 版本 | Superblock 版本／header 字节 | 属性路由范围 |
 |---|---:|---:|---|
@@ -1008,10 +1010,6 @@ SlottedPagePool 的选页空闲索引从所选池已分配帧的有效 owner ID 
 
 最终证据：`benchmarks/architecture-design/decisions/20261023-core-cost-acceptance/`。过时的逐轮状态已移到其中的 historical-storage-notes-zh.md；保留协议合同及原始失败证据，不再把早期“发布关闭／生命周期未完成”当作当前限制。
 
-## 批扫描候选格式 15/41：隔离实现与验收边界
+## 当前离线 SCAN 构建
 
-`scan-path-20261023` 的候选 B 协议见 `benchmarks/architecture-design/decisions/20261024-scan-path-s2/persistent-format.zh.md`，成员记录字节见同目录 `membership-wire.zh.md`。`ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT` 默认关闭，依赖实验 hybrid 格式；开启后使用隔离版本 15/41、208 字节的版本 2 描述符及第九个 `NODE_SCAN` 成员目录根。默认 5/31、实验 13/39 与 15/41 互相拒绝，不原地解释或覆盖旧库。BUILDING 标记保持独立目标不可公开打开；没有另加 READY 标记。
-
-隔离构建提供显式离线命令 `zyx-scan-convert SOURCE DESTINATION`，源必须是已关闭的 5/31 文件，目标必须不存在。构建器核对只读源身份，建立完整 Node 成员覆盖并按既有通用规则转换可接纳的 Node 字段；Edge 及不合算字段保留 ROW。维护使用现有 COW、目录、退休和池所有权机制。清除 BUILDING 前必须重新执行完整图 integrity，并在发布准备完成后按实际全文件长度满足至少 10% 节省及源、目标、临时文件合计不超过 2 GiB 的门槛。失败目标可能保留 BUILDING，不得当作完整库使用；源文件不被替换。公共 8×64 有界转换入口的合同不变。
-
-完成的 15/41 文件可经公开 SDK 打开和修改；直接创建新 15/41 库仍拒绝。节点插入、删除及标签变化与成员/字段根在一次 A/B 发布中保持一致；写入使旧读取证明失效，旧 pin 继续保护原版本。公开打开验证完整 Node 供给链，ROW Edge 保留原访问校验；离线完成和显式完整检查验证全图。当前 Linux 模块、故障、资源及泛化验证证据见 `20261025-public-scan-lifecycle/`、`20261025-bounded-offline-lifecycle/`、`20261025-node-supply-proof/` 和 `20261025-capacity-rollback/` 决策目录。macOS、Windows 和 WASM 未在本次环境执行验证。实现可用不代表候选已获采用；真实两库空间、总成本、性能与守护验收以 [优化清单](optimization) 的当前状态及最终证据为准。
+显式离线转换器从已关闭的当前格式 ROW 源构建独立目标。目标先处于 BUILDING 状态，不能作为完成的公开映像打开；完成前须验证完整成员关系与完整性，并按真实全文件大小达到至少 10% 的空间节省，之后才发布已完成 SCAN 状态。失败不会替换源库；写入、成员关系与数据根原子发布，旧快照保持原有视图。当前实现只支持最新格式，对未知版本和无效状态明确拒绝。历史候选细节保留在 `benchmarks/architecture-design/decisions/20261024-scan-path-s2/`；Linux 验证见恢复证据，Windows 和 macOS 仍需独立 CI。

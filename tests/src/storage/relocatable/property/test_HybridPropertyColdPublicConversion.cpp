@@ -69,7 +69,7 @@ protected:
     }
 };
 }
-#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT && defined(ZYX_HAS_LZ4)
+#if defined(ZYX_HAS_LZ4)
 TEST_F(HybridPropertyColdPublicConversionTest, PublicColdCohortUsesRealRowSourcesAndTheWholeDatabaseGate) {
     prepare(); auto old = metadata_->openSnapshot(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     struct Costs { int64_t row = 0, candidate = 0, accepted = 0, refused = 0; } costs;
@@ -307,14 +307,6 @@ TEST_F(HybridPropertyColdPublicConversionTest, RealConvertedFieldPoolMovesWithou
     old.release(); static_cast<void>(metadata_->reclaimRetiredPhysicalSlots(nextLsn()));
     { auto current = metadata_->openSnapshot(); EXPECT_FALSE(metadata_->isPhysicalSlotAllocated(current, pool.physical_slot)); verify(current, memory); }
     EXPECT_NO_THROW((void)RelocatableIntegrityScanner(io_, *metadata_, memory).scan()); EXPECT_EQ(memory->used(), 0U);
-}
-#elif !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-TEST_F(HybridPropertyColdPublicConversionTest, DefaultFormatRejectsColdPublicationBeforeIo) {
-    seed(NODE, 2, 0); const auto before = metadata_->openSnapshot().superblock(); const auto epoch = io_->dataMutationEpoch();
-    auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
-    NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, placement(true));
-    auto tx = writer.beginTransaction(); EXPECT_THROW(stage(tx, memory), FormatException); tx.rollback();
-    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->dataMutationEpoch(), epoch); EXPECT_EQ(memory->used(), 0U);
 }
 #else
 TEST_F(HybridPropertyColdPublicConversionTest, RawColdLayoutRetainsRowWhenWholeDatabaseSavingIsInsufficient) {

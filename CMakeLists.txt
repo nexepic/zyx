@@ -17,8 +17,6 @@ option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
 # The reconstructed current disk layout always includes column and scan codecs.
 # Authority is selected by each authenticated superblock, not by build flags.
-set(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT ON)
-set(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT ON)
 option(ZYX_EXPERIMENTAL_STREAMING_COUNT "Enable experimental streaming count fusion" OFF)
 option(ZYX_EXPERIMENTAL_BORROWED_GROUP_KEY "Enable experimental borrowed group-key lookup" OFF)
 option(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE "Expose experimental budgeted non-null probes" OFF)
@@ -27,9 +25,6 @@ set_source_files_properties("${PROJECT_SOURCE_DIR}/src/query/execution/LogicalPl
 set_source_files_properties("${PROJECT_SOURCE_DIR}/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp"
     "${PROJECT_SOURCE_DIR}/src/storage/relocatable/property/PropertyCollectionRootStore.cpp" PROPERTIES
     COMPILE_DEFINITIONS "ZYX_EXPERIMENTAL_BUDGETED_PRESENCE=$<BOOL:${ZYX_EXPERIMENTAL_BUDGETED_PRESENCE}>")
-if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT)
-    message(FATAL_ERROR "Scan-path format requires the hybrid-property format option")
-endif()
 option(ZYX_INSTALL_PKGCONFIG "Install pkg-config metadata" ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -95,9 +90,7 @@ target_include_directories(zyx_core
         "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
-target_compile_definitions(zyx_core PUBLIC COVERAGE_SKIP_ZLIB_ERRORS
-    ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT}>
-    ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT}>)
+target_compile_definitions(zyx_core PUBLIC COVERAGE_SKIP_ZLIB_ERRORS)
 target_link_libraries(zyx_core
     PUBLIC
         zyx_project_options
@@ -158,7 +151,7 @@ if(NOT ZYX_WASM AND ZYX_BUILD_STATIC_LIBRARY)
     add_library(zyx::zyx_static ALIAS zyx_static)
 endif()
 
-if(ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT AND NOT ZYX_WASM)
+if(NOT ZYX_WASM)
     add_executable(zyx_scan_convert EXCLUDE_FROM_ALL apps/scan_convert/main.cpp)
     set_target_properties(zyx_scan_convert PROPERTIES OUTPUT_NAME zyx-scan-convert)
     target_link_libraries(zyx_scan_convert PRIVATE zyx::core)

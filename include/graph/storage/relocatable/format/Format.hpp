@@ -21,20 +21,11 @@
 #include <type_traits>
 
 // Current builds compile the full codec set. File authority is per snapshot.
-#ifndef ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-#define ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT 1
-#endif
-#ifndef ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT
-#define ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT 1
-#endif
-#if !ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT || !ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
-#error "The current storage format requires both column and scan codecs"
-#endif
 
 namespace graph::storage {
 
-    constexpr bool RSS_SCAN_PATH_FORMAT_ENABLED = ZYX_EXPERIMENTAL_SCAN_PATH_FORMAT != 0;
-    constexpr bool RSS_HYBRID_PROPERTY_FORMAT_ENABLED = ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT != 0;
+    constexpr bool RSS_SCAN_PATH_FORMAT_ENABLED = true;
+    constexpr bool RSS_HYBRID_PROPERTY_FORMAT_ENABLED = true;
 
 	constexpr uint32_t RSS_SEGMENT_SIZE = 128U * 1024U;
 	constexpr uint32_t RSS_PAGE_SIZE = 4U * 1024U;
