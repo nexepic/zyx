@@ -93,14 +93,21 @@ TEST(QueryResultResourcesTest, CopyDenialPreservesSourceAndAssignmentDestination
 
 TEST(QueryResultResourcesTest, MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy) {
 	auto first = resultAccount(), second = resultAccount();
-	QueryResult source{ResourceLease(first)}, destination{ResourceLease(second)};
-	source.addRow({{"x", PropertyValue(1)}}); destination.addRow({{"y", PropertyValue(2)}});
-	const auto bytes = first->used();
-	destination = std::move(source);
-	EXPECT_EQ(second->used(), 0U); EXPECT_EQ(first->used(), bytes);
-	EXPECT_EQ(destination.getRows()[0].at("x").asPrimitive(), PropertyValue(1));
-	destination = QueryResult{};
+	{
+		QueryResult source{ResourceLease(first)}, destination{ResourceLease(second)};
+		source.addRow({{"x", PropertyValue(1)}}); destination.addRow({{"y", PropertyValue(2)}});
+		const auto bytes = first->used();
+		destination = std::move(source);
+		const auto emptySourceBytes = 3U * utils::detail::standardContainerProxyBytes();
+		EXPECT_TRUE(source.getRows().empty());
+		EXPECT_EQ(source.retainedResourceBytes(), emptySourceBytes);
+		EXPECT_EQ(second->used(), 0U); EXPECT_EQ(first->used(), bytes + emptySourceBytes);
+		EXPECT_EQ(destination.getRows()[0].at("x").asPrimitive(), PropertyValue(1));
+		destination = QueryResult{};
+		EXPECT_EQ(first->used(), emptySourceBytes);
+	}
 	EXPECT_EQ(first->used(), 0U);
+	EXPECT_EQ(second->used(), 0U);
 }
 
 TEST(QueryResultResourcesTest, ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased) {

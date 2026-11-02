@@ -300,3 +300,38 @@ TEST(PrepaidMemoryResourceTest, ExternalResizeRejectsBeforeChangingCreditAndSupp
  memory.reset(); EXPECT_EQ(account->used(), 0U);
 }
 }
+
+namespace graph::query::execution::detail {
+TEST(PrepaidMemoryResourceTest, OwningAllocatorHandlesEmptyCopyAssignmentAcrossResources) {
+    auto first = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
+    auto second = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
+    using Values = std::vector<uint64_t, utils::OwnedPmrAllocator<uint64_t>>;
+    {
+        Values source({11U, 22U}, utils::OwnedPmrAllocator<uint64_t>(first));
+        Values empty{utils::OwnedPmrAllocator<uint64_t>(second)};
+        ASSERT_EQ(empty.capacity(), 0U);
+        empty = source;
+        EXPECT_EQ(empty, source);
+        EXPECT_EQ(empty.get_allocator().owner(), first);
+        EXPECT_EQ(second->used(), 0U);
+    }
+    EXPECT_EQ(first->used(), 0U);
+    EXPECT_EQ(second->used(), 0U);
+}
+
+TEST(PrepaidMemoryResourceTest, OwningAllocatorNullZeroDoesNotTouchResource) {
+    auto memory = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
+    utils::OwnedPmrAllocator<uint64_t> allocator(memory);
+    allocator.deallocate(nullptr, 0U);
+    EXPECT_EQ(memory->used(), 0U);
+    auto *value = allocator.allocate(1U);
+    ASSERT_EQ(memory->used(), sizeof(uint64_t));
+    allocator.deallocate(value, 1U);
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST(PrepaidMemoryResourceTest, OwningAllocatorRejectsNullNonzeroRelease) {
+    utils::OwnedPmrAllocator<uint64_t> allocator;
+    EXPECT_DEATH_IF_SUPPORTED(allocator.deallocate(nullptr, 1U), "");
+}
+}

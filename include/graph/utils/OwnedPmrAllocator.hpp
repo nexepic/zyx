@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <memory_resource>
@@ -56,7 +57,15 @@ public:
         if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) throw std::bad_array_new_length();
         return static_cast<T *>(resource()->allocate(count * sizeof(T), alignof(T)));
     }
-    void deallocate(T *pointer, size_t count) noexcept { resource()->deallocate(pointer, count * sizeof(T), alignof(T)); }
+    void deallocate(T *pointer, size_t count) noexcept {
+        // libc++ may release an empty vector when propagating a different
+        // allocator during copy assignment. No allocation exists in that case.
+        if (pointer == nullptr) {
+            if (count != 0U) std::terminate();
+            return;
+        }
+        resource()->deallocate(pointer, count * sizeof(T), alignof(T));
+    }
     [[nodiscard]] const std::shared_ptr<std::pmr::memory_resource> &owner() const noexcept { return owner_; }
     [[nodiscard]] std::pmr::memory_resource *resource() const noexcept {
         return resource_;
