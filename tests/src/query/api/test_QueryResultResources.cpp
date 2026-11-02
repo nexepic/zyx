@@ -44,14 +44,18 @@ TEST(QueryResultResourcesTest, RowsColumnsAndNotificationsRemainChargedUntilDest
 }
 
 TEST(QueryResultResourcesTest, RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission) {
-	auto account = resultAccount(1000U);
+	// Leave room for one row and the platform's container bookkeeping, while
+	// keeping each requested growth well above the complete account limit.
+	constexpr size_t limit = 8192U;
+	constexpr size_t oversized = 16384U;
+	auto account = resultAccount(limit);
 	QueryResult result{ResourceLease(account)};
 	result.addRow({{"x", PropertyValue(7)}});
 	const auto previous = account->used();
-	EXPECT_THROW(result.addRow({{"large", PropertyValue(std::string(2000U, 'x'))}}), ResourceAdmissionDenied);
+	EXPECT_THROW(result.addRow({{"large", PropertyValue(std::string(oversized, 'x'))}}), ResourceAdmissionDenied);
 	EXPECT_THROW(result.reserveRows(10000U), ResourceAdmissionDenied);
-	EXPECT_THROW(result.setColumns({std::string(2000U, 'x')}), ResourceAdmissionDenied);
-	EXPECT_THROW(result.addNotification(std::string(2000U, 'x')), ResourceAdmissionDenied);
+	EXPECT_THROW(result.setColumns({std::string(oversized, 'x')}), ResourceAdmissionDenied);
+	EXPECT_THROW(result.addNotification(std::string(oversized, 'x')), ResourceAdmissionDenied);
 	EXPECT_EQ(result.rowCount(), 1U);
 	EXPECT_EQ(result.getRows()[0].at("x").asPrimitive(), PropertyValue(7));
 	EXPECT_TRUE(result.getColumns().empty()); EXPECT_TRUE(result.getNotifications().empty());
