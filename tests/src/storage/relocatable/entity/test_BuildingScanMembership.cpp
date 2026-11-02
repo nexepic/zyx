@@ -279,6 +279,7 @@ TEST_F(BuildingScanMembershipTest, BuilderCancellationAfterOnePublicationLeavesO
 }
 
 TEST_F(BuildingScanMembershipTest, OfflineRawPageCacheUsesGovernedCreditAndRefundsAfterClose) {
+    initialize(false);
     insert(1, 0, {7}); const auto sourceBytes = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
@@ -302,6 +303,7 @@ TEST_F(BuildingScanMembershipTest, OfflineRawPageCacheUsesGovernedCreditAndRefun
 }
 
 TEST_F(BuildingScanMembershipTest, OfflineBuilderClonesRealPrimaryPagesFromReadOnlyCurrentSource) {
+    initialize(false);
     insert(65, 0, {11}); insert(1, 1, {7}); insert(64, 2, {});
     const auto sourceRoot = metadata->openSnapshot().superblock();
     const auto sourceBytes = closeCurrentRowSourceBytes();
@@ -474,6 +476,7 @@ TEST_F(BuildingScanMembershipTest, CancellationWithAnAdmissionExceptionIsNotMisc
 }
 
 TEST_F(BuildingScanMembershipTest, RealCurrentCloneBuildsNodeFieldsAndPreservesEdgeRowsBeforeCompletePublication) {
+    initialize(false);
     std::vector<PropertyCollectionRoot> expected;
     {
         LargeValueStore values(io, *metadata);
@@ -639,6 +642,7 @@ TEST_F(BuildingScanMembershipTest, OrdinaryRootCannotMintDeferredAdmissionAtEith
 }
 
 TEST_F(BuildingScanMembershipTest, BuilderAuthenticatesAllRowSlotsBeforeFieldNormalization) {
+    initialize(false);
     {
         PropertyCollectionRootStore properties(*pages, *metadata);
         BTreePageStore indexes(*pages, *metadata);
@@ -676,6 +680,7 @@ TEST_F(BuildingScanMembershipTest, BuilderAuthenticatesAllRowSlotsBeforeFieldNor
 }
 
 TEST_F(BuildingScanMembershipTest, SourceLengthChangeDiscardsThePrivateImageBeforeFieldWrites) {
+    initialize(false);
     insert(1, 0, {});
     static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
@@ -695,6 +700,7 @@ TEST_F(BuildingScanMembershipTest, SourceLengthChangeDiscardsThePrivateImageBefo
 }
 
 TEST_F(BuildingScanMembershipTest, SourceChangeDuringCloneDeletesTheExclusivePrivateTarget) {
+    initialize(false);
     insert(1, 0, {});
     static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
@@ -720,6 +726,7 @@ TEST_F(BuildingScanMembershipTest, SourceChangeDuringCloneDeletesTheExclusivePri
 
 #ifndef _WIN32
 TEST_F(BuildingScanMembershipTest, SameBytesAtAReplacedSourcePathDoNotAuthorizeTheOpenedImage) {
+    initialize(false);
     insert(1, 0, {});
     const auto sourceBytes = closeCurrentRowSourceBytes();
     const std::filesystem::path target(path.string() + ".scan"), moved(path.string() + ".moved");
@@ -863,6 +870,7 @@ TEST_F(BuildingScanMembershipTest, MetadataMaintenanceABFaultsRecoverACompleteBu
 }
 
 TEST_F(BuildingScanMembershipTest, PrivateImageMovesTheOrdinaryAdjacencyPoolWithoutChangingMembershipAuthority) {
+    initialize(false);
     {
         PropertyCollectionRootStore properties(*pages, *metadata);
         BTreePageStore indexes(*pages, *metadata);
@@ -907,6 +915,7 @@ TEST_F(BuildingScanMembershipTest, PrivateImageMovesTheOrdinaryAdjacencyPoolWith
 }
 
 TEST_F(BuildingScanMembershipTest, PrivateDataCompactionAndRetirementShrinkTheActualFileAndKeepBuilding) {
+    initialize(false);
     insert(1, 0, {7});
     static_cast<void>(closeCurrentRowSourceBytes());
     const auto originalBytes = std::filesystem::file_size(path) + 16U * RSS_SEGMENT_SIZE;
@@ -951,7 +960,7 @@ TEST_F(BuildingScanMembershipTest, PrivateDataCompactionAndRetirementShrinkTheAc
 
 
 TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionEvacuatesOnePoolBelowItsSourceAndRetainsBuilding) {
-    initialize(true, true);
+    initialize(false, true);
     MetadataSnapshotPin oldest; std::vector<MetadataSnapshotPin> history;
     ASSERT_NO_FATAL_FAILURE(seedPinnedNodeVersions(24U, oldest, history));
     oldest.release(); history.clear(); static_cast<void>(closeCurrentRowSourceBytes());
@@ -1016,6 +1025,7 @@ TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionEvacuatesOnePoolBelow
 
 
 TEST_F(BuildingScanMembershipTest, MetadataCompactionCancellationQuotaAndPhysicalSourceRefusalKeepTheImagePrivate) {
+    initialize(false);
     insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
@@ -1047,7 +1057,7 @@ TEST_F(BuildingScanMembershipTest, MetadataCompactionCancellationQuotaAndPhysica
 TEST_F(BuildingScanMembershipTest, SparseMetadataCompactionABFaultsPreserveOldAndRecoveredRootIntegrity) {
     for (const auto failpoint : {BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE,
             BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
-        initialize(true, true);
+        initialize(false, true);
         MetadataSnapshotPin oldest; std::vector<MetadataSnapshotPin> history;
         ASSERT_NO_FATAL_FAILURE(seedPinnedNodeVersions(24U, oldest, history));
         oldest.release(); history.clear(); static_cast<void>(closeCurrentRowSourceBytes());
@@ -1114,6 +1124,7 @@ TEST_F(BuildingScanMembershipTest, ConsecutiveMembershipsShareACowPageAndPreserv
 }
 
 TEST_F(BuildingScanMembershipTest, CompletionRejectsUnconstructedAndUnsavedImages) {
+    initialize(false);
     insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     const std::filesystem::path target(path.string() + ".scan");
     auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);
@@ -1138,6 +1149,7 @@ TEST_F(BuildingScanMembershipTest, CompletionRejectsUnconstructedAndUnsavedImage
 
 
 TEST_F(BuildingScanMembershipTest, CompletionCancelsBeforeIoAndRejectsChecksummedMembershipCorruption) {
+    initialize(false);
     insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
     const std::filesystem::path target(path.string() + ".scan");
@@ -1198,6 +1210,7 @@ TEST_F(BuildingScanMembershipTest, CompletionCancelsBeforeIoAndRejectsChecksumme
 
 
 TEST_F(BuildingScanMembershipTest, SourceChangeDuringPreparedCompletionDiscardsThePrivateImage) {
+    initialize(false);
     insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
     std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
     const std::filesystem::path target(path.string() + ".scan");
@@ -1250,7 +1263,7 @@ TEST_F(BuildingScanMembershipTest, CompletionPublishesAtomicallyAndReadyOutlives
     for (const auto failpoint : {BootstrapPublishFailpoint::BPF_NONE,
             BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE,
             BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
-        initialize(true); insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
+        initialize(false); insert(1, 0, {7}); static_cast<void>(closeCurrentRowSourceBytes());
         std::filesystem::resize_file(path, std::filesystem::file_size(path) + 32U * RSS_SEGMENT_SIZE);
         const std::filesystem::path target(path.string() + ".scan");
         auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U * 1024U);

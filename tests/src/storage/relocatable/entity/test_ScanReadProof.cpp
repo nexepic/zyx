@@ -42,7 +42,7 @@ protected:
     std::unique_ptr<ScanBuildingImageBuilder> builder;
     void makeImage(bool complete = true, bool scalarRows = false, bool oversizedLabels = false, size_t typedColumns = 2U, bool terminalNode = false, size_t nodeCount = 64U, bool seedRowEdge = false, bool mixedNumbers = false) {
         if (scalarRows) {
-            initialize(true, true);
+            initialize(false, true);
             LargeValueStore values(io, *metadata);
             PropertyCollectionRootStore properties(*pages, values, *metadata);
             BTreePageStore indexes(*pages, *metadata);
@@ -107,7 +107,7 @@ protected:
                 stats.setGraphCardinalityStatistics({uint64_t(nodeCount + 1U), 0U}); stats.finish();
                 ASSERT_TRUE(terminal.commit().committed());
             }
-        } else { insert(1, 0, {7}); insert(65, 1, {11}); }
+        } else { initialize(false); insert(1, 0, {7}); insert(65, 1, {11}); }
         closeCurrentRowSource();
         std::filesystem::resize_file(path, std::filesystem::file_size(path) + 16U * RSS_SEGMENT_SIZE);
         target = path.string() + ".scan";
