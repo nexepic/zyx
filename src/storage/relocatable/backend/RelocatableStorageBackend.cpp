@@ -719,7 +719,7 @@ namespace graph::storage {
                     new (memory) RelocatableMaintenanceWorkspace(std::move(io), memory));
             }
 			void requireActive() const {if(!refund_)throw std::logic_error("query scratch session is finished");if(backend_.hasIndeterminateWriteOutcome())throw std::logic_error("query scratch requires database reopen after uncertain IO");}
-			void releasePermit(){if(refund_){disk_.close();auto refund=std::move(refund_);refund();lease_.reset();}}
+			void releasePermit(){if(refund_){disk_.close();auto refund=std::exchange(refund_, {});refund();lease_.reset();}}
 			RelocatableStorageBackend &backend_;std::unique_ptr<NativeBulkRunStore> store_;std::shared_ptr<NativeBulkSessionLease> lease_;std::function<void()> refund_;
 			uint64_t owner_;size_t maximum_bytes_,maximum_fragments_,used_bytes_=0U;std::map<uint64_t,NativeBulkRunFragmentLocation, std::less<uint64_t>, utils::OwnedPmrAllocator<std::pair<const uint64_t, NativeBulkRunFragmentLocation>>> locations_;
 			detail::QueryScratchDiskBudget::Session disk_;

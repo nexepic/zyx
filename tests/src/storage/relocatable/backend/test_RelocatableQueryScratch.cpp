@@ -329,6 +329,8 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchHandleGrantIsSharedAndRetained
     EXPECT_EQ(first->read(handle), payload);
     EXPECT_EQ(domain->usage().classes[kind], before + 2U * firstCharge);
     first->finish(); second->finish();
+    EXPECT_NO_THROW(first->finish());
+    EXPECT_NO_THROW(second->finish());
     EXPECT_EQ(domain->usage().classes[kind], before + 2U * firstCharge);
     first.reset();
     EXPECT_EQ(domain->usage().classes[kind], before + firstCharge);
