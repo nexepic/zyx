@@ -57,7 +57,11 @@ void RelocatableMetadataStore::recoverNativePoolFrames(const MetadataWriteGuard 
     // Catalog and control records cannot change under this writer. Cleanup below
     // rereads each pool's actual control record before any physical mutation.
     struct PoolControl { SegmentId id; bool shared = false, header_loaded = false; SharedPagePoolHeader header; };
-    std::array<PoolControl, 16> controls{}; size_t nextControl = 0;
+    // Bounded by the existing 32 KiB recovery frontier admission. The two
+    // validation walks may reuse these immutable control records; physical
+    // cleanup still rereads each actual control record before mutation.
+    static_assert(sizeof(PoolControl) * 32U <= 32U * 1024U);
+    std::array<PoolControl, 32> controls{}; size_t nextControl = 0;
     const auto control = [&](const CatalogEntry &pool, bool withHeader = true) {
         for (auto &entry : controls) if (entry.id == pool.segment_id) {
             if (withHeader && entry.shared && !entry.header_loaded) { entry.header = pools.readPoolHeader(pool); entry.header_loaded = true; }

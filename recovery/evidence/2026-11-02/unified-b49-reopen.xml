@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" disabled="0" errors="0" time="0.673" timestamp="2026-11-02T06:08:58.780" name="AllTests">
+  <testsuite name="RelocatableStorageBackendSchemaTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.673" timestamp="2026-11-02T06:08:58.780">
+    <testcase name="NormalReopenDoesNotScanTheLargeValueDataRegion" file="/workspace/zyx-latestonly/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp" line="348" status="run" result="completed" time="0.673" timestamp="2026-11-02T06:08:58.780" classname="RelocatableStorageBackendSchemaTest">
+      <properties>
+        <property name="raw_payload_bytes" value="2097152"/>
+        <property name="reopen_read_bytes" value="952336"/>
+        <property name="reopen_large_value_owner_reads" value="577"/>
+        <property name="observed_reopen_large_value_body_bytes" value="0"/>
+        <property name="discovered_large_value_frames" value="577"/>
+        <property name="reopen_native_body_intersection_bytes" value="0"/>
+        <property name="reopen_native_read_bytes" value="530440"/>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>
