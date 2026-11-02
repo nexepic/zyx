@@ -944,7 +944,8 @@
                 batch.candidate().node_entity_directory_root : batch.candidate().edge_entity_directory_root;
             if ((root.isValid() && root.generation != fence.target_directory_generation) || (!root.isValid() && fence.free_pages)) {
                 bool retainedStale = false;
-                if (RSS_SCAN_PATH_FORMAT_ENABLED && root.isValid()) {
+                if (RSS_SCAN_PATH_FORMAT_ENABLED &&
+                    (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) && root.isValid()) {
                     auto source = snapshots_.pinCurrentUnderWrite(writer, current);
                     BTreePageStore sourceTrees(*deferredSchemaPool, *this);
                     const auto kind = fence.index_id == RSS_NODE_FREE_SPACE_INDEX_ID ?

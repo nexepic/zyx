@@ -676,6 +676,7 @@ namespace graph::storage {
         // contain no native field pages, which require their separate joined
         // reconciliation path.
         const bool scanCowPool = RSS_SCAN_PATH_FORMAT_ENABLED &&
+            (current.flags & (RSS_SUPERBLOCK_FLAG_SCAN_BUILDING | RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) &&
             (visible.kind == SegmentKind::SGK_ENTITY_PAGE_POOL || visible.kind == SegmentKind::SGK_INDEX_PAGE_POOL);
         if (nativeActive && !isLargeValueMaintenancePool(visible) && !scanCowPool)
             throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
