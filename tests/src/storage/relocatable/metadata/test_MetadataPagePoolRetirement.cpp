@@ -13,10 +13,9 @@
 #include "graph/utils/OwnedPmrAllocator.hpp"
 
 TEST_F(RelocatableMetadataStoreTest, IncrementalRetirementKeepsOldSnapshotAcrossRepeatedPublicationAndReopen) {
-    auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+    auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
     auto original = entry(40U, 1U, 2U);
-    static_cast<void>(store->upsertCatalog(std::span(&original, 1U), LogSequenceNumber(2U)));
-    static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+    static_cast<void>(store->upsertCatalog(std::span(&original, 1U), LogSequenceNumber(3U)));
     auto old = store->openSnapshot();
     graph::debug::PerfTrace::setValueCollectionEnabled(true);
     graph::debug::PerfTrace::reset();
@@ -115,10 +114,9 @@ namespace {
 class IncrementalMetadataPublicationTest : public RelocatableMetadataStoreTest {
 protected:
     void checkFixedChange(uint64_t leafCount) {
-        auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+        auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
         auto entries = catalogEntriesForLeafCount(leafCount);
-        static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2U)));
-        static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+        static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(3U)));
         auto old = store->openSnapshot();
         auto replacement = entries.back(); replacement.physical_slot = PhysicalSlotId(10000U);
         replacement.committed_lsn = LogSequenceNumber(4U);
