@@ -544,6 +544,12 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeep
 TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const auto validSource = store->setPhysicalSlotAllocated(PhysicalSlotId(100), true, LogSequenceNumber(3));
+	initializeTestSharedPagePool(*io, validSource.data_region_offset, entry(100, 2, 2));
+	const auto poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(validSource.data_region_offset, PhysicalSlotId(100));
+	const std::byte zero{};
+	io->writeAt(poolOffset + RSS_SEGMENT_SIZE - 1U, &zero, 1U);
+	io->sync();
 	store.reset();
 
 	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
@@ -563,20 +569,20 @@ TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationFinalSyncFailureRe
 			}
 			return portable_fsync(fd);
 		});
-		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(4))),
 					 std::system_error);
 	}
 	EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
 	store.reset();
 	auto recovered = RelocatableMetadataStore::open(io);
 	MetadataSnapshotPin snapshot = recovered->openSnapshot();
-	if (snapshot.superblock().generation == Generation(2)) {
+	if (snapshot.superblock().generation == validSource.generation) {
 		EXPECT_FALSE(snapshot.superblock().usesPageDirectoryBootstrap());
 		snapshot.release();
-		const Superblock retried = recovered->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+		const Superblock retried = recovered->migratePageDirectoryToBootstrap(LogSequenceNumber(4));
 		EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
 	} else {
-		EXPECT_EQ(snapshot.superblock().generation, Generation(3));
+		EXPECT_EQ(snapshot.superblock().generation.value(), validSource.generation.value() + 1U);
 		EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
 		EXPECT_EQ(recovered->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
 				  PhysicalSlotId(100));
