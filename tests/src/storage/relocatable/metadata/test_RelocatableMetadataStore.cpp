@@ -656,8 +656,7 @@ TEST_F(RelocatableMetadataStoreTest, SerializesAllocatorReservationAndReusesRele
 }
 
 TEST_F(RelocatableMetadataStoreTest, BootstrapReservationExhaustionDoesNotPublishPartialGeneration) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
-	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2)));
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1, 1));
 
 	const std::optional<AllocatorReservation> first =
 			store->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(41), LogSequenceNumber(3));
