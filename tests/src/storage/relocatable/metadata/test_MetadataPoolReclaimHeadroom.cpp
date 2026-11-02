@@ -13,6 +13,10 @@
 #endif
 
 namespace {
+struct ScopedTestNativeHandle {
+ file_handle_t handle;
+ ~ScopedTestNativeHandle() { if (handle != INVALID_FILE_HANDLE) static_cast<void>(portable_close_rw(handle)); }
+};
 void checkCurrentFormatEvacuationFault(const std::shared_ptr<StorageIO> &io,
  BootstrapPublishFailpoint failpoint, bool committed, int nativeFault = 0) {
  auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
@@ -130,21 +134,24 @@ TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationBeforePublicationRet
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationShortWriteRetainsRootAndRetries) {
  const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
  checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 1);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationEnospcRetainsRootAndRetries) {
  const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
  checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 2);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
 }
 TEST_F(RelocatableMetadataStoreTest, CurrentFormatEvacuationFinalSyncReopensWholeRoute) {
  const auto handle = portable_open_rw(testFilePath.string().c_str()); ASSERT_NE(handle, INVALID_FILE_HANDLE);
+ ScopedTestNativeHandle guard{handle};
  auto nativeIo = std::make_shared<StorageIO>(file, handle, handle);
  checkCurrentFormatEvacuationFault(nativeIo, BootstrapPublishFailpoint::BPF_NONE, false, 3);
- nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0);
+ nativeIo.reset(); EXPECT_EQ(portable_close_rw(handle), 0); guard.handle = INVALID_FILE_HANDLE;
 }
 
 TEST_F(RelocatableMetadataStoreTest, ReclaimsRoutedEmptyMetadataPoolsWithPublicationHeadroom) {
