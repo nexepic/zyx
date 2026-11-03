@@ -163,9 +163,30 @@ TEST(RelocatablePropertyValueInspectionTest, ScopedPrivateDecodeRejectsBeforeCop
         const auto decoded = CanonicalPropertyValueCodec::decodeNext(encoded, offset);
         EXPECT_EQ(decoded, expected); EXPECT_EQ(offset, encoded.size());
         EXPECT_EQ(enough->used(), shape.maximum_heap_request_bytes);
+        // Independently measure the retained vector and 512-byte strings;
+        // this lower bound does not reuse the decoder's request estimator.
+        const auto &items = decoded.getList();
+        size_t observed = items.capacity() * sizeof(PropertyValue);
+        for (const auto &item : items) {
+            const auto &text = std::get<std::string>(item.getVariant());
+            ASSERT_EQ(text.size(), 512U);
+            observed += text.capacity() + 1U;
+        }
+        EXPECT_LE(observed, enough->used());
     }
     EXPECT_EQ(enough->used(), 0U);
     EXPECT_EQ(property_decode::AllocationScope::current(), previous);
+    auto combined = std::make_shared<query::execution::MaterializedByteBudget>(2U * shape.maximum_heap_request_bytes);
+    {
+        detail::PropertyDecodeWorkspace workspace(combined);
+        size_t firstOffset = 0U, secondOffset = 0U;
+        const auto first = CanonicalPropertyValueCodec::decodeNext(encoded, firstOffset);
+        EXPECT_EQ(combined->used(), shape.maximum_heap_request_bytes);
+        const auto second = CanonicalPropertyValueCodec::decodeNext(encoded, secondOffset);
+        EXPECT_EQ(first, expected); EXPECT_EQ(second, expected);
+        EXPECT_EQ(combined->used(), 2U * shape.maximum_heap_request_bytes);
+    }
+    EXPECT_EQ(combined->used(), 0U);
 }
 
 TEST(RelocatablePropertyValueInspectionTest, NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints) {
