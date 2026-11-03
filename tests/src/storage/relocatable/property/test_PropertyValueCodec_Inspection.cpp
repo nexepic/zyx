@@ -146,12 +146,23 @@ TEST(RelocatablePropertyValueInspectionTest, ScopedPrivateDecodeRejectsBeforeCop
         EXPECT_EQ(offset, 0U); EXPECT_EQ(small->used(), 0U);
     }
     EXPECT_EQ(property_decode::AllocationScope::current(), previous);
-    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(1048576U);
+    size_t inspected = 0U;
+    const auto shape = CanonicalPropertyValueCodec::inspectNext(encoded, inspected);
+    ASSERT_EQ(inspected, encoded.size());
+    ASSERT_GT(shape.maximum_heap_request_bytes, 1024U);
+    auto almost = std::make_shared<query::execution::MaterializedByteBudget>(shape.maximum_heap_request_bytes - 1U);
+    {
+        detail::PropertyDecodeWorkspace workspace(almost);
+        EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::decodeNext(encoded, offset)),
+            query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(offset, 0U); EXPECT_EQ(almost->used(), 0U);
+    }
+    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(shape.maximum_heap_request_bytes);
     {
         detail::PropertyDecodeWorkspace workspace(enough);
         const auto decoded = CanonicalPropertyValueCodec::decodeNext(encoded, offset);
         EXPECT_EQ(decoded, expected); EXPECT_EQ(offset, encoded.size());
-        EXPECT_GE(enough->used(), 524288U);
+        EXPECT_EQ(enough->used(), shape.maximum_heap_request_bytes);
     }
     EXPECT_EQ(enough->used(), 0U);
     EXPECT_EQ(property_decode::AllocationScope::current(), previous);
