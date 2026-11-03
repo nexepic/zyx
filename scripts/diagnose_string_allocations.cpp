@@ -37,6 +37,8 @@ int main() {
         observing = false;
         std::printf("length=%zu allocations=%zu requested=%zu capacity=%zu\n",
                     length, allocations, requested, value.capacity());
+        if (length == 8192 && allocations == 0)
+            std::printf("measurement_unavailable: allocator interposition was not observed\n");
         if (value.size() != length) return 1;
     }
     std::size_t maxExtra = 0, maxExtraLength = 0, multipleAllocationLengths = 0;
