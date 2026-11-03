@@ -11,6 +11,10 @@ from 195352 to 163224 bytes. A same-source, difference-object incremental
 link passed 87 selected tests: 73 ordinary hybrid conversion, 10 SCAN field
 cohort, three ABI ingest cases, and one blind rebase. This does not prove the
 macOS sanitizer succeeds or substitute for a clean full build.
+The blind rebase case also passed 20 repetitions under a 256 KiB Linux stack
+limit without sanitizers, and 20 repetitions in a separate Linux binary with
+only the graph publication translation unit built with ASan+UBSan. Neither
+experiment establishes the behavior of the fully instrumented macOS binary.
 
 The two original ABI ingest cases used independent writable database handles.
 The native public contract permits one writable owner; on Windows, its
@@ -21,6 +25,10 @@ leaves the public active-ingest exclusion intact. Related Linux suites passed
 14/14 using a same-source difference-object link. Test hooks are compile-time
 guarded; syntax checking the production unit with hooks absent passed.
 Windows has not yet run this candidate.
+The ABI cases still stage through the public ingest interface and verify
+commit/rebase or conflict/rollback and reopen; the real competing write is
+injected only through the same backend by the test-only bridge. The diagnostic
+workflow filter follows the renamed same-owner rebase case.
 
 The macOS `shared_large` fixture retains 64 decoded 8192-byte strings in one
 1 MiB workspace. The current libc++ fresh-string admission upper bound alone
