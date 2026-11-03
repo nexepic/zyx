@@ -22,6 +22,8 @@
 
 #include <gtest/gtest.h>
 
+#include "api/DatabaseBulkInternal.hpp"
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -577,20 +579,10 @@ TEST_F(RelocatableDriverAbiIngestRebaseCorruptionTest,
 			  ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
 
-	// Delete the staged target through a separate public handle so commit observes a real graph conflict.
-	zyx_driver_db_t *concurrentWriter = nullptr;
-	std::error_code pathError;
-	const bool pathExists = fs::exists(databasePath, pathError);
-	ASSERT_EQ(zyx_driver_db_open_if_exists(databasePath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK)
-			<< "path exists=" << pathExists << ", filesystem error=" << pathError.message()
-			<< ", driver error=" << (error != nullptr ? zyx_driver_error_message(error) : "none");
-	const std::string deleteQuery = "MATCH (n:RebaseEndpoint) WHERE id(n) = " + std::to_string(target) + " DELETE n";
-	zyx_driver_result_t *deleteResult = nullptr;
-	ASSERT_EQ(zyx_driver_db_execute(concurrentWriter, deleteQuery.c_str(), nullptr, &deleteResult, &error), ZYX_DRIVER_OK);
-	zyx_driver_result_free(deleteResult);
-	deleteResult = nullptr;
-	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
-	concurrentWriter = nullptr;
+	// Keep one writable owner: inject the actual competing deletion through
+	// its backend while the ABI transaction remains staged.
+	zyx::detail::DatabaseBulkInternal::deleteNodeOnOwnerForTesting(
+			*database->db, static_cast<uint64_t>(target));
 
 	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_EXECUTION_ERROR);
 	ASSERT_NE(error, nullptr);

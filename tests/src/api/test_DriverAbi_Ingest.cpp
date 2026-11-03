@@ -17,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include "api/DatabaseBulkInternal.hpp"
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -609,11 +611,8 @@ TEST_F(RelocatableDriverAbiIngestTest, ActiveStreamedIngestRejectsOrdinaryWriteA
 	EXPECT_EQ(countEdges("ABI_BLOCKED_REL"), 0);
 }
 
-TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEdgePublication) {
+TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverASameOwnerEdgePublication) {
 	const auto [source, target] = createEndpoints();
-	zyx_driver_db_t *concurrentWriter = nullptr;
-	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
-	ASSERT_NE(concurrentWriter, nullptr);
 
 	IngestEdgeSchema schema;
 	// Exceed one sealed scratch run so the rebase covers durable private staging,
@@ -629,13 +628,12 @@ TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEd
 			  ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
 
-	int64_t concurrentEdge = 0;
-	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_CONCURRENT_REL", nullptr,
-								  &concurrentEdge, &error),
-			  ZYX_DRIVER_OK) << (error != nullptr ? zyx_driver_error_message(error) : "no driver error detail");
+	// Publish through the same writable owner while its ingest is staged. The
+	// public ABI intentionally excludes ordinary writes on an active handle;
+	// this test-only bridge exercises the genuine backend rebase instead.
+	const auto concurrentEdge = zyx::detail::DatabaseBulkInternal::createEdgeOnOwnerForTesting(
+			*db->db, static_cast<uint64_t>(source), static_cast<uint64_t>(target), "ABI_CONCURRENT_REL");
 	EXPECT_GT(concurrentEdge, 0);
-	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
-	concurrentWriter = nullptr;
 
 	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);

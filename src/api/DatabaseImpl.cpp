@@ -1787,6 +1787,23 @@ namespace zyx {
 		return checkedDirectWriteIds(logicalWrites.createLogicalEdges(requests), "Edge");
 	}
 
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+	uint64_t detail::DatabaseBulkInternal::createEdgeOnOwnerForTesting(
+			const Database &database, uint64_t source, uint64_t target, const std::string &type) {
+		const auto backend = database.impl_->db_.getLogicalGraphWriteBackend();
+		if (!backend) throw std::logic_error("test requires a logical graph write backend");
+		const auto ids = backend->createLogicalEdges({{source, target, type, {}}});
+		if (ids.size() != 1U) throw std::logic_error("test edge publication did not return one ID");
+		return ids.front();
+	}
+
+	void detail::DatabaseBulkInternal::deleteNodeOnOwnerForTesting(const Database &database, uint64_t node) {
+		const auto backend = database.impl_->db_.getLogicalGraphWriteBackend();
+		if (!backend) throw std::logic_error("test requires a logical graph write backend");
+		backend->deleteLogicalNodes({{node, false, 0U}});
+	}
+#endif
+
 	std::vector<int64_t> detail::DatabaseBulkInternal::createEdgesColumnar(
 			const Database &database, Transaction &transaction, const std::string &edgeType,
 			const std::vector<int64_t> &sourceIds, const std::vector<int64_t> &targetIds,

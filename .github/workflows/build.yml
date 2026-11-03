@@ -266,7 +266,7 @@ jobs:
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
-          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverAConcurrentAbiEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
+          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverASameOwnerEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
         shell: bash
 
       - name: Diagnose Windows plan cache failures

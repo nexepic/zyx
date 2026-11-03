@@ -42,6 +42,13 @@ namespace zyx {
 			createEdgesColumnar(const Database &database, Transaction &transaction, const std::string &edgeType,
 								const std::vector<int64_t> &sourceIds, const std::vector<int64_t> &targetIds,
 								const std::vector<BulkPropertyColumn> &columns);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			// Exercise a genuine competing publication inside the same writable
+			// backend without widening the public ABI's active-ingest contract.
+			[[nodiscard]] static uint64_t createEdgeOnOwnerForTesting(
+					const Database &database, uint64_t source, uint64_t target, const std::string &type);
+			static void deleteNodeOnOwnerForTesting(const Database &database, uint64_t node);
+#endif
 		};
 
 	} // namespace detail
