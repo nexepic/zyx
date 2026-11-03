@@ -273,7 +273,7 @@ jobs:
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
-          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='PlanCacheTest.*'
+          python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
         shell: bash
 
       - name: Run Unit Tests
