@@ -579,7 +579,11 @@ TEST_F(RelocatableDriverAbiIngestRebaseCorruptionTest,
 
 	// Delete the staged target through a separate public handle so commit observes a real graph conflict.
 	zyx_driver_db_t *concurrentWriter = nullptr;
-	ASSERT_EQ(zyx_driver_db_open_if_exists(databasePath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
+	std::error_code pathError;
+	const bool pathExists = fs::exists(databasePath, pathError);
+	ASSERT_EQ(zyx_driver_db_open_if_exists(databasePath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK)
+			<< "path exists=" << pathExists << ", filesystem error=" << pathError.message()
+			<< ", driver error=" << (error != nullptr ? zyx_driver_error_message(error) : "none");
 	const std::string deleteQuery = "MATCH (n:RebaseEndpoint) WHERE id(n) = " + std::to_string(target) + " DELETE n";
 	zyx_driver_result_t *deleteResult = nullptr;
 	ASSERT_EQ(zyx_driver_db_execute(concurrentWriter, deleteQuery.c_str(), nullptr, &deleteResult, &error), ZYX_DRIVER_OK);

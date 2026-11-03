@@ -146,7 +146,7 @@ jobs:
 
       - name: Run native storage ASan+UBSan gates
         run: |
-          ASAN_OPTIONS='halt_on_error=1' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
             ./build-asan-ubsan/zyx_test_suite \
               --gtest_filter='NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
         shell: bash
@@ -254,6 +254,21 @@ jobs:
             exit 2
           fi
           printf 'ZYX_STAGE10_ENDURANCE_REPETITIONS=%s\n' "$repetitions" >> "$GITHUB_ENV"
+        shell: bash
+
+      # Diagnostics are additional to, and cannot replace, the normal unit gate.
+      - name: Diagnose Windows ingest failures
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverAConcurrentAbiEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
+        shell: bash
+
+      - name: Diagnose Windows plan cache failures
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='PlanCacheTest.*'
         shell: bash
 
       - name: Run Unit Tests

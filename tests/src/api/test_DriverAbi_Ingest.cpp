@@ -603,7 +603,7 @@ TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEd
 	int64_t concurrentEdge = 0;
 	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_CONCURRENT_REL", nullptr,
 								  &concurrentEdge, &error),
-			  ZYX_DRIVER_OK);
+			  ZYX_DRIVER_OK) << (error != nullptr ? zyx_driver_error_message(error) : "no driver error detail");
 	EXPECT_GT(concurrentEdge, 0);
 	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
 	concurrentWriter = nullptr;
