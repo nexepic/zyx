@@ -1,0 +1,307 @@
+RUN PlanCacheTest.MissThenHitAndUpdateExistingEntry
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.MissThenHitAndUpdateExistingEntry exit=0
+RUN PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity exit=0
+RUN PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList exit=0
+RUN PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder exit=0
+RUN PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant exit=0
+RUN PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry exit=0
+RUN PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode exit=0
+RUN PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed exit=0
+RUN PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds exit=0
+RUN PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners exit=0
+RUN PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan exit=0
+RUN PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity exit=0
+RUN PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion exit=0
+RUN PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation exit=0
+RUN PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy exit=0
+RUN PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices exit=0
+RUN PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 1 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m1[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+RESULT PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate exit=0
+Isolated 17 cases; failures: 0
