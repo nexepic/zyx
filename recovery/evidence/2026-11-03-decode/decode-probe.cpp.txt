@@ -1,0 +1,17 @@
+#include <cstdio>
+#include <memory>
+#include <string>
+#include <vector>
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+extern "C" void probe_begin();
+extern "C" void probe_end(size_t *);
+int main(){using namespace graph;using namespace graph::storage;using query::execution::MaterializedByteBudget;
+ PropertyValue original(std::vector<PropertyValue>(1024,PropertyValue(std::string(512,'x'))));
+ std::vector<std::byte> encoded;CanonicalPropertyValueCodec::append(encoded,original);size_t at=0;
+ const auto shape=CanonicalPropertyValueCodec::inspectNext(encoded,at);
+ auto budget=std::make_shared<MaterializedByteBudget>(shape.maximum_heap_request_bytes);
+ size_t out[5]={}; size_t charged=0; bool equal=false;
+ {detail::PropertyDecodeWorkspace workspace(budget);size_t offset=0;probe_begin();auto value=CanonicalPropertyValueCodec::decodeNext(encoded,offset);probe_end(out);charged=budget->used();equal=value==original && offset==encoded.size();}
+ std::printf("shape=%zu charge=%zu measured_live=%zu measured_peak=%zu measured_total=%zu calls=%zu tracking_overflow=%zu equal=%d released=%zu\n",shape.maximum_heap_request_bytes,charged,out[0],out[1],out[2],out[3],out[4],equal,budget->used());
+ return !(equal && !out[4] && out[1]<=charged && !budget->used());}

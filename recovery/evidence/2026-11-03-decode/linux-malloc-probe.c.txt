@@ -1,0 +1,18 @@
+#include <stddef.h>
+#include <stdint.h>
+extern void *__libc_malloc(size_t);
+extern void *__libc_realloc(void *,size_t);
+extern void *__libc_memalign(size_t,size_t);
+extern void __libc_free(void *);
+typedef struct { void *ptr; size_t size; } item;
+static __thread item items[32768];
+static __thread int active;
+static __thread size_t current,peak,total,calls,overflow;
+static void add(void *p,size_t n) { if (!active || !p) return; for(size_t i=0;i<32768;i++) if(!items[i].ptr){items[i]=(item){p,n};current+=n;total+=n;calls++;if(current>peak)peak=current;return;}overflow++; }
+static void sub(void *p) { if(!active || !p)return;for(size_t i=0;i<32768;i++)if(items[i].ptr==p){current-=items[i].size;items[i].ptr=0;return;} }
+void *malloc(size_t n){void *p=__libc_malloc(n);add(p,n);return p;}
+void free(void *p){sub(p);__libc_free(p);}
+void *realloc(void *p,size_t n){sub(p);void *q=__libc_realloc(p,n);add(q,n);return q;}
+int posix_memalign(void **p,size_t a,size_t n){void *q=__libc_memalign(a,n);if(!q)return 12;*p=q;add(q,n);return 0;}
+void probe_begin(void){for(size_t i=0;i<32768;i++)items[i].ptr=0;current=peak=total=calls=overflow=0;active=1;}
+void probe_end(size_t *out){active=0;out[0]=current;out[1]=peak;out[2]=total;out[3]=calls;out[4]=overflow;}
