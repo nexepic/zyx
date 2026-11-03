@@ -570,7 +570,8 @@ namespace graph::query::execution {
 			}, context()));
 			FAIL() << "Map structure should exceed the conversion allowance";
 		} catch (const std::runtime_error &error) {
-			EXPECT_NE(std::string(error.what()).find("logical LOAD CSV conversion"), std::string::npos);
+			EXPECT_NE(std::string(error.what()).find("logical LOAD CSV conversion"), std::string::npos)
+					<< "actual error: " << error.what();
 		}
 		EXPECT_EQ(delivered, 0U);
 		constrained.maximum_materialized_bytes *= 4U;
