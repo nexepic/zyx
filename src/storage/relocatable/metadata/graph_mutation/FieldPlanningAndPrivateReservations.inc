@@ -140,6 +140,9 @@
         }
         if (reclamationEvidence) batch.hybrid_property_publication_ = true;
         if (hybridPropertyRootMutation && hybridPropertyRootMutation->conversion) {
+            // Keep the conversion-only planning frame off ordinary graph writes.
+            // The conversion retains its existing lexical lifetime and writer fence.
+            return [&]() -> Superblock {
             const auto &conversion = *hybridPropertyRootMutation->conversion;
             const std::function<void()> checkpoint = [&conversion] {
                 if (conversion.cancellation) conversion.cancellation->check();
@@ -782,6 +785,7 @@
             publishBatch(batch, writer, options);
             placement.remember();
             return batch.candidate();
+            }();
         }
 		if (derivedState.external_private_tail_reservation.has_value()) {
 			// Keep the source outside every metadata allocator decision, but do not
