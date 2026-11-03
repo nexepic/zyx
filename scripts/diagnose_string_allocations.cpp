@@ -39,4 +39,19 @@ int main() {
                     length, allocations, requested, value.capacity());
         if (value.size() != length) return 1;
     }
+    std::size_t maxExtra = 0, maxExtraLength = 0, multipleAllocationLengths = 0;
+    for (std::size_t length = 0; length <= sizeof(input); ++length) {
+        requested = allocations = 0;
+        observing = true;
+        std::string value{std::string_view(input, length)};
+        observing = false;
+        if (value.size() != length) return 1;
+        if (allocations > 1) ++multipleAllocationLengths;
+        if (requested > length && requested - length > maxExtra) {
+            maxExtra = requested - length;
+            maxExtraLength = length;
+        }
+    }
+    std::printf("range=0..%zu max_requested_minus_length=%zu at_length=%zu multiple_allocation_lengths=%zu\n",
+                sizeof(input), maxExtra, maxExtraLength, multipleAllocationLengths);
 }
