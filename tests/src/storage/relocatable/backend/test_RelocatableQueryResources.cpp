@@ -239,7 +239,9 @@ TEST_F(RelocatableStorageBackendTest, NativeReadFallbackInheritsTheSnapshotGrant
         EXPECT_EQ(memory->used(), baseline);
         auto &created = selectNativeReadSession(pin, nullptr, fallback);
         EXPECT_TRUE(fallback.has_value());
-        EXPECT_GT(memory->used(), baseline);
+		EXPECT_EQ(created.memoryOwner().get(), memory.get());
+		// An empty standard container may allocate lazily on some platforms.
+		EXPECT_GE(memory->used(), baseline);
         const size_t createdBytes = memory->used();
         EXPECT_EQ(&selectNativeReadSession(pin, nullptr, fallback), &created);
         EXPECT_EQ(memory->used(), createdBytes);

@@ -730,9 +730,11 @@ TEST(NativeReadSessionTokenBudgetTest, SeparatePrivateBookkeepingKeepsLabelRepla
  {
   NativeReadSession session(cache, structure);
   EXPECT_EQ(cache->live, 0U);
-  EXPECT_GT(structure->live, 0U);
   const std::vector<uint64_t> first{1U}, second{1U,2U,3U}, third{2U,3U};
   session.putNodeLabels(1U,first);
+  // Verify an actual entry uses the private allocator; empty containers can
+  // reserve no backing storage on libc++.
+  EXPECT_GT(structure->live, 0U);
   session.putNodeLabels(1U,second);
   EXPECT_EQ(session.nodeLabels(1U),second);
   session.putNodeLabels(1U,third);
