@@ -676,13 +676,11 @@
 																   additionalEnrichmentBytes,
 																   "logical-plan Sort materialization size overflowed"),
 													state.shared.bounds.maximum_materialized_bytes)) {
-									throw std::runtime_error(
-											"logical-plan Sort exceeded its materialization byte bound");
+									throw MaterializedByteLimitExceeded();
 								}
 								if (enrichmentBytes >
 									state.shared.materialized_budget.available()) {
-									throw std::runtime_error(
-											"logical-plan Sort keys exceeded the shared materialized byte bound");
+									throw MaterializedByteLimitExceeded();
 								}
 								additionalEnrichmentBytes =
 										checkedSizeAdd(additionalEnrichmentBytes, enrichmentBytes,
