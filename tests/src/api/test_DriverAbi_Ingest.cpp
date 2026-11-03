@@ -580,6 +580,35 @@ TEST_F(RelocatableDriverAbiIngestTest, ArrowEdgeIngestStagesRowsUntilCommitAndDr
 	EXPECT_EQ(zyx_driver_db_close(reader, &error), ZYX_DRIVER_OK);
 }
 
+TEST_F(RelocatableDriverAbiIngestTest, ActiveStreamedIngestRejectsOrdinaryWriteAndCanStillCommit) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"staged"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_STAGED_REL", &schema.root, &ingestor, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t rejectedEdge = 0;
+	EXPECT_EQ(zyx_driver_db_create_edge(db, source, target, "ABI_BLOCKED_REL", nullptr, &rejectedEdge, &error),
+			  ZYX_DRIVER_TRANSACTION_ERROR);
+	ASSERT_NE(error, nullptr);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(rejectedEdge, 0);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("ABI_STAGED_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_BLOCKED_REL"), 0);
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("ABI_STAGED_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_BLOCKED_REL"), 0);
+}
+
 TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEdgePublication) {
 	const auto [source, target] = createEndpoints();
 	zyx_driver_db_t *concurrentWriter = nullptr;
