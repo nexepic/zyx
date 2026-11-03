@@ -158,7 +158,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             cc: clang-20
             cxx: clang++-20
             llvm_cov: llvm-cov-20
