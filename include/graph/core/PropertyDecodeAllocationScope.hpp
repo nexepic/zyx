@@ -14,8 +14,9 @@ class AllocationScope final {
 public:
     using Admission = void (*)(void *, size_t);
     using Checkpoint = void (*)(void *);
-    AllocationScope(void *context, Admission admission, Checkpoint checkpoint = nullptr, bool guardedCopies = false)
-        : context_(context), admission_(admission), checkpoint_(checkpoint), previous_(active_), guarded_copies_(guardedCopies) {
+    using Refund = void (*)(void *, size_t);
+    AllocationScope(void *context, Admission admission, Checkpoint checkpoint = nullptr, bool guardedCopies = false, Refund refund = nullptr)
+        : context_(context), admission_(admission), checkpoint_(checkpoint), previous_(active_), guarded_copies_(guardedCopies), refund_(refund) {
         if (!admission_) throw std::invalid_argument("property decode scope requires admission");
         active_ = this;
     }
@@ -24,6 +25,7 @@ public:
     AllocationScope &operator=(const AllocationScope &) = delete;
     static AllocationScope *current() noexcept { return active_; }
     void admit(size_t bytes) const { admission_(context_, bytes); }
+    void refundUnused(size_t bytes) const { if (refund_ && bytes) refund_(context_, bytes); }
     [[nodiscard]] bool guardedCopies() const noexcept { return guarded_copies_; }
     void checkpoint() const {
         if (checkpoint_) checkpoint_(context_);
@@ -35,6 +37,7 @@ private:
     Checkpoint checkpoint_;
     AllocationScope *previous_;
     bool guarded_copies_;
+    Refund refund_;
     inline static thread_local AllocationScope *active_ = nullptr;
 };
 } // namespace graph::property_decode

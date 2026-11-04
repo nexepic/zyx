@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/query/execution/StandardContainerHeapBytes.hpp"
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
+#include "graph/utils/StringBufferBytes.hpp"
 #include "graph/core/GuardedPropertyCopy.hpp"
 #include "graph/debug/PerfTrace.hpp"
 
@@ -665,10 +666,21 @@ namespace graph::storage {
 
 	PropertyValue CanonicalPropertyValueCodec::decodeNext(std::span<const std::byte> bytes, size_t &offset) {
         if (auto *scope = property_decode::AllocationScope::current()) {
-            const auto admit = [&](const DecodeShape &shape) { scope->admit(shape.maximum_heap_request_bytes); };
+            size_t admitted = 0U;
+            const auto admit = [&](const DecodeShape &shape) {
+                scope->admit(shape.maximum_heap_request_bytes);
+                admitted = shape.maximum_heap_request_bytes;
+            };
             const auto check = [&] { scope->checkpoint(); };
-            // std::function reference_wrapper targets require no heap storage.
-            return decodeNextWithAdmission(bytes, offset, std::ref(admit), std::ref(check));
+            // Keep the full construction upper bound until construction finishes.
+            // A standalone string then exposes its actual retained capacity in O(1).
+            // Compound values retain their conservative grant until their scope dies.
+            auto value = decodeNextWithAdmission(bytes, offset, std::ref(admit), std::ref(check));
+            if (const auto *text = std::get_if<std::string>(&value.getVariant())) {
+                const size_t retained = utils::detail::dynamicStringBufferBytes(*text);
+                if (retained < admitted) scope->refundUnused(admitted - retained);
+            }
+            return value;
         }
 		if (offset > bytes.size()) fail(FormatError::FERR_INVALID_HEADER, "Property cursor exceeds payload");
 		ByteReader reader{bytes.subspan(offset)};

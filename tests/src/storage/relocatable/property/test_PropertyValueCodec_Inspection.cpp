@@ -5,6 +5,8 @@
  */
 #include <gtest/gtest.h>
 #include <optional>
+#include <array>
+#include "graph/utils/StringBufferBytes.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
@@ -187,6 +189,43 @@ TEST(RelocatablePropertyValueInspectionTest, ScopedPrivateDecodeRejectsBeforeCop
         EXPECT_EQ(combined->used(), 2U * shape.maximum_heap_request_bytes);
     }
     EXPECT_EQ(combined->used(), 0U);
+}
+
+TEST(RelocatablePropertyValueInspectionTest, ScalarStringsKeepConstructionAdmissionButReleaseUnusedCapacityCredit) {
+    std::vector<std::byte> encoded;
+    CanonicalPropertyValueCodec::append(encoded, PropertyValue(std::string(8192U, 's')));
+    size_t cursor = 0U;
+    const auto upper = CanonicalPropertyValueCodec::inspectNext(encoded, cursor).maximum_heap_request_bytes;
+    auto denied = std::make_shared<query::execution::MaterializedByteBudget>(upper - 1U);
+    {
+        detail::PropertyDecodeWorkspace workspace(denied);
+        cursor = 0U;
+        EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::decodeNext(encoded, cursor)),
+            query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(cursor, 0U);
+        EXPECT_EQ(denied->used(), 0U);
+    }
+    auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1024U * 1024U);
+    {
+        detail::PropertyDecodeWorkspace workspace(memory);
+        // Fixed harness storage requires no heap allocation; all decoded strings
+        // remain alive together through their final charge check.
+        std::array<std::optional<PropertyValue>, 64U> values;
+        size_t retained = 0U, count = 0U;
+        for (auto &slot : values) {
+            cursor = 0U;
+            slot.emplace(CanonicalPropertyValueCodec::decodeNext(encoded, cursor));
+            const auto &text = std::get<std::string>(slot->getVariant());
+            ASSERT_EQ(text, std::string(8192U, 's'));
+            retained += utils::detail::dynamicStringBufferBytes(text);
+            ++count;
+            EXPECT_EQ(memory->used(), retained);
+            EXPECT_GE(memory->used(), count * 8193U);
+            EXPECT_LE(memory->used(), 1024U * 1024U);
+        }
+        EXPECT_EQ(memory->used(), retained);
+    }
+    EXPECT_EQ(memory->used(), 0U);
 }
 
 TEST(RelocatablePropertyValueInspectionTest, NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints) {
