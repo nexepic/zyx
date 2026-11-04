@@ -414,11 +414,11 @@
 							}
 							admittedPropertyBytes += bytes;
 						};
+						if (!state.snapshot.supportsPropertyReadAdmission()) {
+							throw std::logic_error("logical MERGE relationship Property reads require source admission");
+						}
 						const std::vector<std::vector<PropertyValue>> columns =
-								state.snapshot.supportsPropertyReadAdmission()
-										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, propertyKeys, admission)
-										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, propertyKeys);
+								state.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, propertyKeys, admission);
 						if (columns.size() != orderedProperties.size()) {
 							throw std::runtime_error(
 									"logical MERGE relationship Property batch returned an invalid column count");

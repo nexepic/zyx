@@ -203,6 +203,25 @@ namespace graph::query {
 		EXPECT_EQ(backend->readMetrics().full_edge_reads, 2U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsUnadmittedRelationshipPropertiesBeforeReading) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		backend->setPropertyAdmission(false);
+		const uint64_t source = backend->addNode({"Source"}, {});
+		const uint64_t target = backend->addNode({"Target"}, {});
+		static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2026)}}));
+		backend->resetReadMetrics();
+		QueryEngine engine(backend, backend);
+		const char *query = "MERGE (source:Source)-[relationship:LINK {since: 2026}]->"
+				"(target:Target) RETURN relationship";
+		EXPECT_THROW(static_cast<void>(engine.execute(query)), std::logic_error);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 0U);
+		EXPECT_EQ(backend->edgeCount(), 1U);
+		backend->setPropertyAdmission(true);
+		const QueryResult result = engine.execute(query);
+		EXPECT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(backend->edgeCount(), 1U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsMalformedSelectedRelationshipPropertyColumns) {
 		for (const TestPropertyColumnMode mode: {TestPropertyColumnMode::TPCM_MISSING_COLUMN,
 				 TestPropertyColumnMode::TPCM_TRUNCATED_COLUMN}) {
@@ -268,7 +287,8 @@ namespace graph::query {
 
 		EXPECT_EQ(backend->edgeCount(), 1U);
 		EXPECT_EQ(backend->graph().mutation_batches, 0U);
-		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_admission_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 0U);
 		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
 	}
 
