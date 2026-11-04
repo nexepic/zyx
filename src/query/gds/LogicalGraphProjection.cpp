@@ -315,7 +315,9 @@ namespace graph::query::gds {
 							edgeIds.push_back(pending[indexes[offset + position]].topology->edge_id);
 						}
 						std::vector<std::vector<PropertyValue>> columns;
-						if (snapshot.supportsPropertyReadAdmission()) {
+						if (!snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded projection weight Properties require source admission");
+						{
 							const std::string_view keyView = key;
 							const size_t remainingPropertyBytes = bounds.maximum_property_bytes -
 									std::min(columnBytes, bounds.maximum_property_bytes);
@@ -331,8 +333,6 @@ namespace graph::query::gds {
 							};
 							columns = snapshot.readEdgePropertyColumnsSortedWithAdmission(
 									edgeIds, std::span<const std::string_view>(&keyView, 1U), admitSourceBytes);
-						} else {
-							columns.push_back(snapshot.readEdgePropertiesSorted(edgeIds, key));
 						}
 						checkBuild();
 						if (columns.size() != 1U) {

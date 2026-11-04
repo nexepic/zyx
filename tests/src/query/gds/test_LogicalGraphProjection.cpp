@@ -75,7 +75,7 @@ namespace graph::query::gds {
 		mutable size_t topology_reads = 0U;
 			mutable size_t batched_property_reads = 0U;
 			mutable std::vector<size_t> batched_property_read_sizes;
-			bool support_property_read_admission = false;
+			bool support_property_read_admission = true;
 			mutable size_t admitted_property_values_copied = 0U;
 			mutable size_t legacy_property_values_copied = 0U;
 			mutable std::vector<storage::EntityReadShape> node_scan_shapes;
@@ -735,6 +735,23 @@ namespace graph::query::gds {
 		LogicalProjectionBuildBounds limited = bounds();
 		limited.maximum_property_bytes = 16U;
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, limited)), std::runtime_error);
+	}
+
+	TEST(LogicalGraphProjectionTest, PropertyWeightsRequireSourceAdmissionBeforeCopy) {
+		Snapshot snapshot; snapshot.support_property_read_admission = false;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}};
+		snapshot.edges = {{1U, 1U, 2U, "CALLS", {property("cost", PropertyValue(2.0))}}};
+		LogicalGraphProjectionSpec spec; spec.name = "required-weight-admission";
+		spec.relationships = {{.type = "CALLS", .weight = {
+			.kind = LogicalProjectionWeightKind::LPWK_PROPERTY, .property_name = "cost"}}};
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, bounds())), std::logic_error);
+		EXPECT_EQ(snapshot.batched_property_reads, 0U);
+		EXPECT_EQ(snapshot.legacy_property_values_copied, 0U);
+		snapshot.support_property_read_admission = true;
+		const auto projection = LogicalGraphProjection::build(snapshot, spec, bounds());
+		ASSERT_EQ(projection.outgoing(1U).size(), 1U);
+		EXPECT_DOUBLE_EQ(projection.outgoing(1U).front().weight, 2.0);
+		EXPECT_EQ(snapshot.admitted_property_values_copied, 1U);
 	}
 
 	TEST(LogicalGraphProjectionTest, AdmitsWeightPayloadBeforeSelectedColumnCopy) {
