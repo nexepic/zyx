@@ -181,10 +181,9 @@ TEST_F(RelocatableStorageBackendTest, StagedOverlayCellsMergeBaseOwnersAndReject
             overlay.replaceLogicalNodeProperties({{nodes[1], {{"payload", PropertyValue("changed")}}}});
         }, [](size_t) {}), std::runtime_error);
     EXPECT_TRUE(mutated);
-    size_t mixedDeliveries = 0U;
-    EXPECT_THROW(snapshot->readNodePropertyCellsSortedWithAdmission(nodeIds, keys,
-        [&](size_t, size_t, std::optional<PropertyValue>) { ++mixedDeliveries; }, [](size_t) {}), std::runtime_error);
-    EXPECT_EQ(mixedDeliveries, 0U);
+    // A later operation may reuse this read-your-writes view. Continuation
+    // revision ownership is scoped to the query, not permanently to this object.
+    EXPECT_EQ(snapshot->readNodeProperty(nodes[1], "payload"), PropertyValue("changed"));
     snapshot.reset();
     transaction->rollback();
     auto base = backend.openLogicalGraphReadSnapshot();
@@ -251,6 +250,51 @@ TEST_F(RelocatableStorageBackendTest, MultiKeyCellRetriesSkipEveryAlreadyRetaine
                 static_cast<unsigned long long>(backend.ioStats().data.read_bytes));
         }
     }
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryCellRetriesAbortChangedOverlayAndCanReuseReadView) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(std::move(options)); backend.open();
+    std::vector<LogicalGraphNodeCreateRequest> requests;
+    for (size_t i = 0; i < 6U; ++i)
+        requests.push_back({{"RetryFence"}, {{"payload", PropertyValue(std::string(3000U, char('a' + i)))}}});
+    const auto ids = backend.createLogicalNodes(requests);
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    LogicalGraphTransactionOverlay overlay(*transaction);
+    auto snapshot = overlay.openLogicalGraphReadSnapshot();
+    graph::parser::cypher::CypherParserImpl parser;
+    const auto plan = parser.parseToLogical("MATCH (n:RetryFence) RETURN n.payload AS payload");
+    execution::LogicalPlanReadRuntime runtime(overlay);
+    execution::LogicalPlanReadRuntimeBounds bounds{
+        .maximum_node_records = 16U, .maximum_node_page_records = 4U,
+        .maximum_metadata_pages_per_node_page = 8U, .maximum_edges_per_node = 16U,
+        .maximum_edge_records = 16U, .maximum_adjacency_page_records = 4U,
+        .maximum_property_entries = 2U, .maximum_rows = 16U,
+        .maximum_distinct_rows = 16U, .maximum_materialized_bytes = 6000U};
+    graph::query::QueryContext context;
+    struct Mutation { LogicalGraphTransactionOverlay *overlay; uint64_t id; bool changed = false; std::exception_ptr error; } mutation{&overlay, ids.front()};
+    size_t delivered = 0U;
+    {
+        graph::debug::PerfTrace::ScopedObserver observer(&mutation, [](void *state, std::string_view key, int64_t value, bool) noexcept {
+            auto &m = *static_cast<Mutation *>(state);
+            if (!m.changed && key == "logical_plan.property_prefetch_split_batches" && value > 0) {
+                m.changed = true;
+                try { m.overlay->replaceLogicalNodeProperties({{m.id, {{"payload", PropertyValue("changed")}}}}); }
+                catch (...) { m.error = std::current_exception(); }
+            }
+        });
+        EXPECT_THROW(static_cast<void>(runtime.executeWithSnapshot(*snapshot, *plan.root, bounds,
+            [&](const auto &) { ++delivered; return true; }, context)), std::runtime_error);
+    }
+    EXPECT_TRUE(mutation.changed); EXPECT_FALSE(mutation.error); EXPECT_EQ(delivered, 0U);
+    size_t changed = 0U;
+    EXPECT_NO_THROW(static_cast<void>(runtime.executeWithSnapshot(*snapshot, *plan.root, bounds,
+        [&](const auto &row) { ++delivered; if (std::get<PropertyValue>(row.values.at("payload")) == PropertyValue("changed")) ++changed; return true; }, context)));
+    EXPECT_EQ(delivered, 6U); EXPECT_EQ(changed, 1U);
+    snapshot.reset(); transaction->rollback();
     EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
     backend.close();
 }

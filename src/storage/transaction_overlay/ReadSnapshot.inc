@@ -1,11 +1,4 @@
 	class LogicalGraphTransactionOverlay::Snapshot final : public LogicalGraphReadSnapshot {
-        void requireResumableRevision() const {
-            requireActive();
-            if (!resumable_revision_) resumable_revision_ = overlay_.logical_revision_;
-            if (*resumable_revision_ != overlay_.logical_revision_)
-                throw std::runtime_error("transaction changed between resumable Property cell reads");
-        }
-
 		[[nodiscard]] auto readRevisionCheckpoint() const {
 			const uint64_t revision = overlay_.logical_revision_;
 			return [this, revision] {
@@ -425,7 +418,6 @@
             const std::function<void(size_t)> &admission) const override {
             if (!supportsResumableNodePropertyCells()) throw std::logic_error("overlay base lacks resumable Node cells");
             if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
-            requireResumableRevision();
             const auto check = readRevisionCheckpoint();
             const auto admit = guardReadAdmission(admission);
             readOverlayPropertyCells(ids, keys, overlay_.nodes_,
@@ -443,7 +435,6 @@
             const std::function<void(size_t)> &admission) const override {
             if (!supportsResumableEdgePropertyCells()) throw std::logic_error("overlay base lacks resumable Edge cells");
             if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
-            requireResumableRevision();
             const auto check = readRevisionCheckpoint();
             const auto admit = guardReadAdmission(admission);
             readOverlayPropertyCells(ids, keys, overlay_.edges_,
@@ -2202,7 +2193,6 @@
 		}
 
 		const LogicalGraphTransactionOverlay &overlay_;
-        mutable std::optional<uint64_t> resumable_revision_;
 		mutable std::map<ContinuationKey, ContinuationState> continuations_;
 		struct TopologyContinuationState {
 			std::optional<LogicalGraphAdjacencyContinuation> before_pending;

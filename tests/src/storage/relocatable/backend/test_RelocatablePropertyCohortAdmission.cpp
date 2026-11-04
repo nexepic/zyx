@@ -89,7 +89,7 @@ TEST_F(RelocatableStorageBackendTest, PublicAdaptiveRowStoreAdmitsOnlyTheWholeNa
                 EXPECT_EQ(type, graph::PropertyType::INTEGER); EXPECT_EQ(word, 2U);
                 overlay.replaceLogicalNodeProperties({{1, {{"p1", PropertyValue(999)}}}});
             }, [](size_t) {}), std::runtime_error);
-        EXPECT_TRUE(scalarDelivered); EXPECT_FALSE(snapshot->supportsNodePropertyCellBatches());
+        EXPECT_TRUE(scalarDelivered); EXPECT_TRUE(snapshot->supportsResumableNodePropertyCells());
         EXPECT_EQ(snapshot->readNodeProperty(1, "p1"), PropertyValue(999));
         transaction->rollback();
     }
