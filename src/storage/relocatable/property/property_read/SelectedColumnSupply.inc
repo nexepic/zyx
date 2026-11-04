@@ -134,34 +134,43 @@
 				}
 			}
 			std::vector<std::optional<PropertyCollectionRootEntry>> decoded;
+            const std::function<void(size_t, std::optional<PropertyCollectionRootEntry>)> emitCell =
+                [&](size_t column, std::optional<PropertyCollectionRootEntry> value) {
+                    if (cancellation_) cancellation_->check();
+                    (*sink)(ownerIndex, column, std::move(value));
+                };
+            bool streamed = false;
 			if (pinned.has_value()) {
 				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
-                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
+                if (sink && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, *scalarOutput, textOutput, admission, cancellation_)) {
+                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, textOutput, admission, cancellation_)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
                     continue;
                 }
 				if (runs) runs->flush();
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
-						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission);
+						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission, sink ? &emitCell : nullptr);
+                streamed = sink && EntityPropertyLargeValueReferenceCodec::hasMagic(bytes);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
 			} else {
 				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
-                if (sink && scalars && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
+                if (sink && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         copied->pageId(), copied->ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, *scalarOutput, texts, admission, cancellation_)) {
+                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, texts, admission, cancellation_)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
                     continue;
                 }
 				if (runs) runs->flush();
 				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
-						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission);
+						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission, sink ? &emitCell : nullptr);
+                streamed = sink && EntityPropertyLargeValueReferenceCodec::hasMagic(bytes);
 				debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
 			}
 			if (cancellation_ != nullptr) cancellation_->check();
+            if (streamed) continue;
 			if (decoded.size() != keyTokens.size()) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Property scan batch decoder changed its column cardinality");

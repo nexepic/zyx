@@ -246,32 +246,74 @@ namespace graph::storage {
 			return result;
 		}
 
+        // Borrow the decoder authority while reading a temporary encoded range.
+        // Its standard buffers die before these charges are refunded; owning
+        // decoded values are admitted after capture ends and keep their credit.
+        class TransientRangeCharges final {
+        public:
+            TransientRangeCharges() : parent_(property_decode::AllocationScope::current()) {
+                if (parent_) scope_.emplace(this, &admit, &check, parent_->guardedCopies(), &refund);
+            }
+            void endCapture() noexcept { scope_.reset(); }
+            ~TransientRangeCharges() { endCapture(); if (parent_) parent_->refundUnused(bytes_); }
+        private:
+            static void admit(void *context, size_t bytes) {
+                auto &self = *static_cast<TransientRangeCharges *>(context);
+                const size_t next = checkedLargeValueBuffers(self.bytes_, bytes);
+                self.parent_->admit(bytes);
+                self.bytes_ = next;
+            }
+            static void refund(void *context, size_t bytes) {
+                auto &self = *static_cast<TransientRangeCharges *>(context);
+                if (bytes > self.bytes_) throw std::logic_error("transient range refund exceeds admission");
+                self.parent_->refundUnused(bytes); self.bytes_ -= bytes;
+            }
+            static void check(void *context) { static_cast<TransientRangeCharges *>(context)->parent_->checkpoint(); }
+            property_decode::AllocationScope *parent_;
+            size_t bytes_ = 0U;
+            std::optional<property_decode::AllocationScope> scope_;
+        };
+
 		[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>> readSelectedLargeValueProperties(
 				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference,
 				LargeValuePropertyDirectory &directory, std::span<const uint32_t> keyTokens,
-				const SelectedPropertyReadAdmission *admission = nullptr, const SelectedPropertyReadAdmission *bufferAdmission = nullptr) {
+				const SelectedPropertyReadAdmission *admission = nullptr, const SelectedPropertyReadAdmission *bufferAdmission = nullptr,
+                const std::function<void(size_t, std::optional<PropertyCollectionRootEntry>)> *cellSink = nullptr) {
 			std::vector<std::optional<PropertyCollectionRootEntry>> result;
 			const size_t directoryBytes = checkedLargeValueBuffers(manifestBufferBytes(directory.manifest), checkedLargeValueBuffers(directory.header_and_directory.capacity(), directory.locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation)));
 			const auto admit = [&](size_t bytes) { if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(directoryBytes, bytes)); };
 			if (keyTokens.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<PropertyCollectionRootEntry>))
 				throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "selected LargeValue result slots overflowed");
 			admit(checkedLargeValueBuffers(keyTokens.size() * sizeof(std::optional<PropertyCollectionRootEntry>), directory.range_cache.retainedBytes()));
-			result.reserve(keyTokens.size());
+			if (!cellSink) result.reserve(keyTokens.size());
+            size_t ordinal = 0U;
+            const auto deliver = [&](std::optional<PropertyCollectionRootEntry> value) {
+                if (cellSink) {
+                    if (value) debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
+                    (*cellSink)(ordinal++, std::move(value));
+                } else result.emplace_back(std::move(value));
+            };
 			const size_t resultBytes = result.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>);
 			admit(checkedLargeValueBuffers(resultBytes, directory.range_cache.retainedBytes()));
 			for (const uint32_t token: keyTokens) {
 				const auto found = std::ranges::lower_bound(directory.locations, token, {},
 																	&EntityPropertyLargeValueEntryLocation::key_token);
 				if (found == directory.locations.end() || found->key_token != token) {
-					result.emplace_back(std::nullopt);
+					deliver(std::nullopt);
 					continue;
 				}
 				if (admission != nullptr) (*admission)(found->length);
 				const uint64_t offset = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset;
-				const std::vector<std::byte> entry = store.readRangeFromManifestCached(
+				std::optional<PropertyCollectionRootEntry> value;
+                {
+                TransientRangeCharges transient;
+                const std::vector<std::byte> entry = store.readRangeFromManifestCached(
 						snapshot, directory.manifest, offset, found->length, directory.range_cache,
 					bufferAdmission ? SelectedPropertyReadAdmission([&](size_t bytes) { admit(checkedLargeValueBuffers(resultBytes, bytes)); }) : SelectedPropertyReadAdmission{});
-				result.emplace_back(EntityPropertyLargeValuePayloadCodec::decodeEntry(entry, token));
+                transient.endCapture();
+				value = EntityPropertyLargeValuePayloadCodec::decodeEntry(entry, token);
+                } // Encoded entry storage dies before ownership reaches the sink.
+                deliver(std::move(value));
 			}
 			admit(checkedLargeValueBuffers(resultBytes, directory.range_cache.retainedBytes()));
 			return result;
@@ -1203,7 +1245,7 @@ namespace graph::storage {
             if (cancellation) cancellation->check();
             if (!encoded) { sink(ownerOrdinal, column, std::nullopt); return; }
             if (const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(*encoded)) {
-                if (primitive->type != PropertyType::STRING) {
+                if (primitive->type != PropertyType::STRING && scalars) {
                     scalars(ownerOrdinal, column, primitive->type, primitive->bits);
                     debug::PerfTrace::addValue("native_graph.read.property_typed_scalar_cells", 1);
                     debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
@@ -1238,7 +1280,8 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 			const EntityPropertyLocation &location, const PageId pageId, const PageOwnerKind ownerKind,
 			const std::span<const std::byte> bytes, const std::span<const uint32_t> keyTokens,
-			const SelectedPropertyReadAdmission *admission) const {
+			const SelectedPropertyReadAdmission *admission,
+            const std::function<void(size_t, std::optional<PropertyCollectionRootEntry>)> *cellSink) const {
 		if (keyTokens.empty()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"multi-column Entity Property decoding requires selected tokens");
@@ -1272,7 +1315,7 @@ namespace graph::storage {
 			}
 			LargeValuePropertyDirectory directory =
 					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
-			return recordSelectedValues(readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens, admission));
+			return recordSelectedValues(readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens, admission, nullptr, cellSink));
 		}
 
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);

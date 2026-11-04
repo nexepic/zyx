@@ -239,7 +239,8 @@ namespace graph::storage {
 									  const EntityPropertyLocation &location, PageId pageId,
 									  PageOwnerKind ownerKind, std::span<const std::byte> bytes,
 																																														std::span<const uint32_t> keyTokens,
-				const SelectedPropertyReadAdmission *admission = nullptr) const;
+				const SelectedPropertyReadAdmission *admission = nullptr,
+                const std::function<void(size_t, std::optional<PropertyCollectionRootEntry>)> *cellSink = nullptr) const;
         [[nodiscard]] bool emitSelectedEntityProperties(const EntityPropertyKey &key,
             const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
             std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,

@@ -1685,7 +1685,13 @@
 				// Leave room for cache enrichment rather than filling the entire
 				// allowance with input references before their payload sizes are known.
 				const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);
-				const size_t batchAllowance =
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                if (std::getenv("ZYX_CI_BUDGET_TRACE") && state.shared.bounds.maximum_materialized_bytes <= 6000U) {
+                    static thread_local unsigned inputReports = 0U;
+                    if (inputReports++ < 20U) std::fprintf(stderr, "CI_PREFETCH_INPUT row_bytes=%zu bindings=%zu metadata=%zu properties=%zu charge=%zu used=%zu available=%zu\n", rowBytes, row.values.size(), row.entity_metadata_cache.size(), row.property_cache.size(), charge.bytes(), state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                }
+#endif
+                const size_t batchAllowance =
 						checkedSizeAdd(checkedSizeAdd(state.shared.materialized_budget.available(), bufferedRowsBytes.bytes(),
 													  "logical-plan prefetch input allowance overflowed"),
 									   charge.bytes(), "logical-plan prefetch input allowance overflowed");
