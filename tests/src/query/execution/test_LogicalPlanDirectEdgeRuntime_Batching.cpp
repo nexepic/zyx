@@ -1992,4 +1992,25 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PointPropertyEvaluationRequiresSourceAdmissionBeforeReading) {
+		for (const bool edge : {false, true}) {
+			SCOPED_TRACE(edge);
+			auto graph = direct_edge_test::directGraph(); graph.enable_property_read_admission = false;
+			direct_edge_test::DirectEdgeSnapshot snapshot(graph);
+			LogicalPlanReadRow row;
+			row.values.emplace("item", edge ? EntityRef{10U, true, 1U, 2U, 1U} : EntityRef{1U, false, 0U, 0U, 0U});
+			expressions::VariableReferenceExpression expression("item", edge ? "weight" : "rank");
+			QueryContext context;
+			EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+				snapshot, expression, row, direct_edge_test::directBounds(), context)), std::logic_error);
+			EXPECT_EQ(graph.node_property_point_reads, 0U); EXPECT_EQ(graph.edge_property_point_reads, 0U);
+			EXPECT_EQ(graph.node_property_column_batch_reads, 0U); EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+			graph.enable_property_read_admission = true;
+			const auto value = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+				snapshot, expression, row, direct_edge_test::directBounds(), context);
+			EXPECT_EQ(std::get<PropertyValue>(value), PropertyValue(edge ? 7 : 1));
+			EXPECT_EQ(edge ? graph.edge_property_column_admission_reads : graph.node_property_column_admission_reads, 1U);
+		}
+	}
 }

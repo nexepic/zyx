@@ -1070,7 +1070,7 @@
 			uint64_t id, bool edge, std::string_view key, ExecutionState &state) {
 			checkGuard(state);
 			if (!snapshot.supportsPropertyReadAdmission())
-				return edge ? snapshot.readEdgeProperty(id, key) : snapshot.readNodeProperty(id, key);
+				throw std::logic_error("bounded Property read requires source admission");
 			MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 			sourceBytes.set(sizeof(std::vector<PropertyValue>) + sizeof(PropertyValue));
 			const std::function<void(size_t)> admission = [&](size_t bytes) {
