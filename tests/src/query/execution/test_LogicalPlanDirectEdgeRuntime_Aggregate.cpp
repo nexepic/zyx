@@ -439,9 +439,10 @@ namespace graph::query::execution {
 				return true;
 			}));
 			EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(1)});
-			EXPECT_EQ(edges ? graph.edge_property_point_reads : graph.node_property_point_reads, 3U);
-			// This compatibility reader implements an Edge Property point read
-			// by reading its Edge. COUNT must not add an existence/full-read pass.
+			EXPECT_EQ(edges ? graph.edge_property_point_reads : graph.node_property_point_reads, 0U);
+			// This fallback supplies one admitted selected column per owner. It
+			// must not add an existence or full-read pass.
+			EXPECT_EQ(edges ? graph.edge_property_column_batch_reads : graph.node_property_column_batch_reads, 3U);
 			EXPECT_EQ(graph.edge_read_ids.size(), edges ? 3U : 0U);
 			if (!edges) EXPECT_TRUE(graph.node_read_ids.empty());
 		}

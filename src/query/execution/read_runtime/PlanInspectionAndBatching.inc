@@ -773,7 +773,7 @@
 			bool stoppedByVisitor = false;
 			size_t largestInputRowBytes = 0U;
 			std::function<bool()> flush;
-			struct PrefetchBytePressure { unsigned line; };
+			struct PrefetchBytePressure { unsigned line; bool propertySource = false; };
 			const auto putCacheValue = [&](auto &cache, const std::string &variable, const std::string &key,
 										   auto &&value) {
 				const size_t previousBytes = bufferedRowsBytes.bytes();
@@ -1281,7 +1281,7 @@
 							const size_t next = checkedSizeAdd(propertyReadBytes.bytes(), bytes,
 															   "logical-plan Property source size overflowed");
 							if (propertyReadBytes.wouldExceed(next))
-								throw PrefetchBytePressure{__LINE__};
+								throw PrefetchBytePressure{__LINE__, true};
 							propertyReadBytes.set(next);
 							debug::PerfTrace::addValue(
 									"logical_plan.property_source.admitted_bytes",
@@ -1582,7 +1582,9 @@
 						debug::PerfTrace::addValue("logical_plan.property_prefetch_split_batches", 1);
 						return splitBufferedRowsAndFlush();
 					}
-					throw std::runtime_error("bounded batch exceeded its byte limit");
+					throw std::runtime_error(pressure.propertySource
+						? "logical-plan Property batch exceeded its byte bound"
+						: "bounded batch exceeded its byte limit");
 				}
 			};
 

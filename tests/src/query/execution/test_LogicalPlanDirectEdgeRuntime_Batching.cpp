@@ -1409,8 +1409,8 @@ namespace graph::query::execution {
 		}));
 
 		ASSERT_EQ(observed, (std::vector<PropertyValue>{PropertyValue("a")}));
-		EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
-		EXPECT_EQ(graph.node_property_point_reads, 1U);
+		EXPECT_EQ(graph.node_property_column_batch_ids, (std::vector<std::vector<uint64_t>>{{1U}}));
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, ReusesSelectedPropertiesAcrossEntityAliasProjections) {

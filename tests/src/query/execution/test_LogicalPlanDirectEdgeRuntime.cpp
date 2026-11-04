@@ -61,7 +61,9 @@ namespace graph::query::execution {
 				return !stop;
 			})));
 			EXPECT_EQ(ids, stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2}));
-			EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+			if (stop) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+			else EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+			EXPECT_GE(graph.node_property_column_admission_reads, graph.node_property_column_batch_reads);
 		}
 		graph.nodes.at(1U).properties.pop_back();
 		std::vector<int64_t> ids;
@@ -270,7 +272,8 @@ namespace graph::query::execution {
 		EXPECT_THROW(
 				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
 				std::runtime_error);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
+		EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
 		EXPECT_EQ(graph.edge_shaped_reads, 0U);
 	}
 
@@ -517,8 +520,9 @@ namespace graph::query::execution {
 		EXPECT_THROW(
 				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
 				std::runtime_error);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_read_ids, (std::vector<uint64_t>{10U, 11U, 12U}));
+		EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+		EXPECT_TRUE(graph.edge_read_ids.empty());
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, EnforcesMaterializedByteBoundAtPublicEntityResultBoundary) {

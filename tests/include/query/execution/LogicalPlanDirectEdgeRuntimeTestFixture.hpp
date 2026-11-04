@@ -418,6 +418,13 @@ namespace graph::query::execution::direct_edge_test {
 					std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys,
 					const std::function<void(size_t)> &admission) const override {
 				++graph_.node_property_column_admission_reads;
+				if (graph_.truncate_node_property_batch && !nodeIds.empty() && !keys.empty()) {
+					// Deliberately malformed shape without copying any selected payload.
+					++graph_.node_property_column_batch_reads;
+					graph_.node_property_column_batch_ids.emplace_back(nodeIds.begin(), nodeIds.end());
+					graph_.node_property_column_batch_keys.emplace_back(keys.begin(), keys.end());
+					return std::vector<std::vector<PropertyValue>>(keys.size());
+				}
 				for (const std::string_view key: keys) {
 					for (const uint64_t id: nodeIds) {
 						const PropertyValue *value = findProperty(graph_.nodes.at(id).properties, key);
@@ -431,6 +438,11 @@ namespace graph::query::execution::direct_edge_test {
 					std::span<const uint64_t> edgeIds, std::span<const std::string_view> keys,
 					const std::function<void(size_t)> &admission) const override {
 				++graph_.edge_property_column_admission_reads;
+				if (graph_.truncate_edge_property_batch && !edgeIds.empty() && !keys.empty()) {
+					++graph_.edge_property_column_batch_reads;
+					graph_.edge_property_column_batch_keys.emplace_back(keys.begin(), keys.end());
+					return std::vector<std::vector<PropertyValue>>(keys.size());
+				}
 				for (const std::string_view key: keys) {
 					for (const uint64_t id: edgeIds) {
 						const auto edge = std::ranges::find(graph_.edges, id, &LogicalGraphEdge::edge_id);
