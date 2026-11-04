@@ -720,6 +720,14 @@
 				}
 			}
 
+            // The continuation belongs to this prefetch invocation, not to a
+            // reusable transaction snapshot. Private completed cells may only be
+            // combined while the source view still matches this operation's fence.
+            const auto propertySourceFence = state.shared.snapshot.mutationFence();
+            const auto verifyPropertySource = [&] {
+                if (propertySourceFence && state.shared.snapshot.mutationFence() != propertySourceFence)
+                    throw std::runtime_error("transaction changed during resumable Property prefetch");
+            };
 			struct PropertyGroup {
 				std::string variable;
 				std::vector<std::string> keys;
@@ -864,6 +872,7 @@
 				return rows.empty() || flush();
 			};
 			flush = [&]() {
+                verifyPropertySource();
 				if (rows.empty()) {
 					return true;
 				}
@@ -1349,6 +1358,7 @@
                                 }
                                 if (selectedKeys.empty()) { first = last; continue; }
                                 const auto receiveValue = [&](size_t relative, size_t selected, std::optional<PropertyValue> value) {
+                                    verifyPropertySource();
                                     if (relative >= last - first || selected >= selectedColumns.size())
                                         throw std::runtime_error("logical graph backend changed Property cell cardinality");
                                     const size_t ordinal = first + relative, column = selectedColumns[selected];
@@ -1371,6 +1381,7 @@
                                 const auto owners = std::span<const uint64_t>(cellIds).subspan(first, last - first);
                                 if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
                                 else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
+                                verifyPropertySource();
                                 // Omitted cells become NULL only after this whole run
                                 // completed; a failed run leaves unproduced keys pending.
                                 for (size_t ordinal = first; ordinal < last; ++ordinal)

@@ -1,11 +1,4 @@
 	class LogicalGraphTransactionOverlay::VectorSnapshot final : public LogicalGraphVectorSearchSnapshot {
-        void requireResumableRevision() const {
-            requireActive();
-            if (!resumable_revision_) resumable_revision_ = overlay_.logical_revision_;
-            if (*resumable_revision_ != overlay_.logical_revision_)
-                throw std::runtime_error("transaction changed between resumable Property cell reads");
-        }
-
 		[[nodiscard]] auto readRevisionCheckpoint() const {
 			const uint64_t revision = overlay_.logical_revision_;
 			return [this, revision] {
@@ -57,7 +50,6 @@
             if (!supportsResumableNodePropertyCells()) throw std::logic_error("overlay base lacks resumable Node cells");
             if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
             if (!values || !admission) throw std::invalid_argument("overlay direct cells require sink and admission");
-            requireResumableRevision();
             const auto check = readRevisionCheckpoint();
             const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                 check(); values(row, column, std::move(value)); check();
@@ -81,7 +73,6 @@
             if (!supportsResumableEdgePropertyCells()) throw std::logic_error("overlay base lacks resumable Edge cells");
             if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
             if (!values || !admission) throw std::invalid_argument("overlay direct Edge cells require sink and admission");
-            requireResumableRevision();
             const auto check = readRevisionCheckpoint();
             const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                 check(); values(row, column, std::move(value)); check();
@@ -776,7 +767,6 @@
 		}
 
 		const LogicalGraphTransactionOverlay &overlay_;
-        mutable std::optional<uint64_t> resumable_revision_;
 		LogicalGraphVectorSearchSnapshot &derived_snapshot_;
 		// Continuation mappings belong to one logical revision of this wrapper.
 		mutable std::shared_ptr<LogicalGraphReadSnapshot> overlay_snapshot_;
