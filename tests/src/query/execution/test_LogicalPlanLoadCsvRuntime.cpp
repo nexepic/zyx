@@ -819,10 +819,12 @@ namespace graph::query::execution {
 		EXPECT_EQ(runtime.executeToQueryResult(*csvOnly.root, constrained, context()).rowCount(), 1U);
 		delivered = 0U;
 		const size_t readsBeforeCombined = graph.node_property_column_batch_reads;
+		const size_t admissionsBeforeCombined = graph.node_property_column_admission_reads;
 		EXPECT_THROW(static_cast<void>(runtime.execute(*combined, constrained,
 				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())), std::runtime_error);
 		EXPECT_EQ(delivered, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined + 1U);
+		EXPECT_GT(graph.node_property_column_admission_reads, admissionsBeforeCombined);
+		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined);
 		constrained.maximum_materialized_bytes = 24000U;
 		const auto result = runtime.executeToQueryResult(*combined, constrained, context());
 		ASSERT_EQ(result.rowCount(), 1U);
