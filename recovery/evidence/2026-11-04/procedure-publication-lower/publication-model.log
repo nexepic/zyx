@@ -1,0 +1,35 @@
+PUB row=0 max=4096 retained=3033 source=543 result=32 output=423 pending=4031 cap=0 rows=1
+SRC row=0 base=352 heap=175 props=16 logical=453
+PUB row=0 max=7500 retained=69 source=6289 result=32 output=1609 pending=7999 cap=0 rows=3
+SRC row=0 base=352 heap=175 props=16 logical=450
+SRC row=1 base=352 heap=2505 props=16 logical=1640
+SRC row=2 base=352 heap=2505 props=16 logical=1640
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 2 tests across 1 suites
+
+
+[38;5;105;1m[  0% |   0/  1][0m [1;31mX RetainsConvertedQueryVectorThroughResultPublication FAILED[0m
+              [1m/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:581[0m
+              Failed
+              the live converted Vector query and retained result should share the byte bound
+              
+
+
+[38;5;105;1m[  0% |   0/  1][0m [1;31mX MetadataJointRetentionRejectsLowBudgetAndCanRetry FAILED[0m
+              [1m<unknown>:-1[0m
+              C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+              
+
+[38;5;105;1m[100% |   1/  1][0m [1;31mFAIL[0m [1mLogicalVectorPropertyBatchTest[0m [1;31m(2 failures, 2 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;31m  TESTS FAILED![0m
+
+  Passed: [1;32m0[0m
+  Failed: [1;31m2[0m
+  Time  : 2 ms
+[38;5;105;1m================================================================================[0m
+
