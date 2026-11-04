@@ -47,9 +47,15 @@ namespace graph::debug {
 			return left + right;
 		}
 
-		struct Shard {
+		struct TransparentLabelHash {
+            using is_transparent = void;
+            size_t operator()(std::string_view key) const noexcept { return std::hash<std::string_view>{}(key); }
+        };
+        using TraceEntries = std::unordered_map<std::string, PerfTrace::Entry, TransparentLabelHash, std::equal_to<>>;
+
+        struct Shard {
 			std::mutex mutex;
-			PerfTrace::Snapshot data;
+			TraceEntries data;
 		};
 
 		struct Collector {
@@ -79,7 +85,7 @@ namespace graph::debug {
 			return gCollector.shards[hash % gCollector.shards.size()];
 		}
 
-		void mergeInto(PerfTrace::Snapshot &target, const PerfTrace::Snapshot &source) {
+		void mergeInto(PerfTrace::Snapshot &target, const TraceEntries &source) {
 			for (const auto &[key, sourceEntry]: source) {
 				auto &targetEntry = target[key];
 				targetEntry.totalNs = saturatingAdd(targetEntry.totalNs, sourceEntry.totalNs);
@@ -123,7 +129,8 @@ namespace graph::debug {
 
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
-		auto &entry = shard.data[std::string(key)];
+		const auto found = shard.data.find(key);
+        auto &entry = found != shard.data.end() ? found->second : shard.data.try_emplace(std::string(key)).first->second;
 		entry.totalNs = saturatingAdd(entry.totalNs, durationNs);
 		entry.calls = saturatingAdd(entry.calls, uint64_t{1});
 	}
@@ -139,7 +146,8 @@ namespace graph::debug {
 
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
-		auto &entry = shard.data[std::string(key)];
+		const auto found = shard.data.find(key);
+        auto &entry = found != shard.data.end() ? found->second : shard.data.try_emplace(std::string(key)).first->second;
 		entry.totalNs = saturatingAdd(entry.totalNs, durationNs);
 		entry.calls = saturatingAdd(entry.calls, calls);
 	}
@@ -155,7 +163,8 @@ namespace graph::debug {
 
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
-		auto &entry = shard.data[std::string(key)];
+		const auto found = shard.data.find(key);
+        auto &entry = found != shard.data.end() ? found->second : shard.data.try_emplace(std::string(key)).first->second;
 		entry.maximumValue = entry.valueCalls == 0U ? value : std::max(entry.maximumValue, value);
 		entry.totalValue = saturatingAdd(entry.totalValue, value);
 		entry.valueCalls = saturatingAdd(entry.valueCalls, uint64_t{1});
