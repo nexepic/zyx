@@ -1,0 +1,67 @@
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=3699 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=3718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=3902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=3790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4199 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=3718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=3902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=3790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4199 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=3718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=3902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=3790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4199 source_admission=0
+node predicate splits=0, property prefetch splits=3
+Google Test trace:
+/tmp/zyx-prefetch-probe.cpp:1936: 5000
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4218 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4402
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4290 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4699 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4218 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4402
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4290 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4699 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4218 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4402
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4290 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=4699 source_admission=0
+node predicate splits=0, property prefetch splits=3
+Google Test trace:
+/tmp/zyx-prefetch-probe.cpp:1936: 5500
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=5199 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=5199 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=4718 source_admission=0
+CI_PREFETCH pressure_line=1342 rows=2 buffered=818 used=818 available=4902
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=4790 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=5199 source_admission=0
+node predicate splits=0, property prefetch splits=3
+Google Test trace:
+/tmp/zyx-prefetch-probe.cpp:1936: 6000
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=5218 source_admission=0
+CI_PREFETCH pressure_line=1350 rows=2 buffered=818 used=818 available=5402
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=5290 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=5699 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=5218 source_admission=0
+CI_PREFETCH pressure_line=1350 rows=2 buffered=818 used=818 available=5402
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=930 available=5290 source_admission=0
+CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=112 payload=3008 working_set=3120 admitted=112 used=521 available=5699 source_admission=0
+CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=184 payload=6016 working_set=6200 admitted=184 used=1002 available=5218 source_admission=0
+CI_PREFETCH pressure_line=1350 rows=2 buffered=818 used=818 available=5402
+node predicate splits=0, property prefetch splits=3
+Google Test trace:
+/tmp/zyx-prefetch-probe.cpp:1936: 6500
+[  FAILED  ] LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce (2 ms)
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce
