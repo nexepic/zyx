@@ -546,7 +546,11 @@ namespace graph::query::execution {
 			headers += names.back();
 			record += 'a';
 		}
-		const fs::path csv = writeFile("map-structure.csv", headers + "\n" + record + "\n");
+		// Sharded runners use a longer temporary root. Exercise a long path even
+		// when this test is run alone, while preserving the same budget boundary.
+		const std::string directory(96U, 'p');
+		fs::create_directory(root_ / directory);
+		const fs::path csv = writeFile(directory + "/map-structure.csv", headers + "\n" + record + "\n");
 		QueryPlan plan = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(csv) + "' AS row RETURN row");
 		ASSERT_NE(plan.root, nullptr);
 		auto constrained = bounds();

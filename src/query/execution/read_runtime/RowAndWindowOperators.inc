@@ -167,6 +167,11 @@
 						} else {
 							retainedSource.set(inputBytes);
 						}
+						// The opened reader owns its file handle; the URI and path strings
+						// are needed only while resolving and opening it. Keep their charge
+						// until those temporaries have actually been destroyed.
+						const size_t retainedInputBytes = retainedSource.bytes();
+						auto reader = [&]() -> CsvReader {
 						PropertyValue uri;
 						{ ScopedBoundInputs scopedInputs(state, boundInputs, input);
 							uri = scalarValue(evaluateExpression(*loadCsv.getUrlExpr(), input, state)); }
@@ -199,12 +204,15 @@
 								checkedSizeAdd(pathBytes, sourcePathBytes, "logical LOAD CSV retained size overflowed"),
 								"logical LOAD CSV retained size overflowed");
 						retainedSource.set(retainedInputSourcePathBytes);
-						CsvReader reader(sourcePath, delimiter,
+						return CsvReader(sourcePath, delimiter,
 										 CsvReaderLimits{state.shared.context->csv_import_policy.maximum_record_bytes,
 														 state.shared.context->csv_import_policy.maximum_columns,
 														 state.shared.context->csv_import_policy.maximum_field_bytes,
 														 state.shared.materialized_budget.available()},
 										 [&state] { state.shared.context->checkGuardNow(); });
+						}();
+						retainedSource.set(retainedInputBytes);
+						reader.setMaximumBufferedBytes(state.shared.materialized_budget.available());
 
 						std::vector<std::string> headers;
 						size_t headerBytes = 0U;
