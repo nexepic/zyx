@@ -1296,6 +1296,78 @@ TEST_F(RelocatableStorageBackendTest, NativeSnapshotAdmissionAndPrefetchPreserve
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	for (size_t i = 0; i < 6U; ++i)
+		requests.push_back({{"NativeTightAdmission"}, {{"payload", PropertyValue(std::string(3000U, static_cast<char>('a' + i)))}}});
+	const auto nodeIds = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodeIds.size(), 6U);
+	{
+		auto snapshot = backend.openLogicalGraphReadSnapshot();
+		ASSERT_TRUE(snapshot->supportsPropertyReadAdmission());
+		const std::array<uint64_t, 2U> ids{nodeIds[0], nodeIds[1]};
+		const std::array<std::string_view, 1U> keys{"payload"};
+		const bool wasEnabled = graph::debug::PerfTrace::areValuesEnabled();
+		struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); } } restore{wasEnabled};
+		graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		size_t admitted = 0U, admissionCalls = 0U;
+		EXPECT_THROW(static_cast<void>(snapshot->readNodePropertyColumnsSortedWithAdmission(ids, keys, [&](size_t bytes) {
+			++admissionCalls;
+			if (bytes > 4096U - admitted) throw std::runtime_error("test source admission denied");
+			admitted += bytes;
+		})), std::runtime_error);
+		EXPECT_GE(admissionCalls, 2U);
+		EXPECT_LE(admitted, 4096U);
+		const auto rejectedTrace = graph::debug::PerfTrace::snapshotAndReset();
+		if (const auto decoded = rejectedTrace.find("native_graph.read.selected_values_decoded"); decoded != rejectedTrace.end())
+			EXPECT_LE(decoded->second.totalValue, 1);
+	}
+	graph::parser::cypher::CypherParserImpl parser;
+	const auto plan = parser.parseToLogical("MATCH (n:NativeTightAdmission) RETURN n.payload AS payload");
+	execution::LogicalPlanReadRuntime runtime(backend);
+	execution::LogicalPlanReadRuntimeBounds bounds{
+		.maximum_node_records = 16U, .maximum_node_page_records = 4U,
+		.maximum_metadata_pages_per_node_page = 8U, .maximum_edges_per_node = 4U,
+		.maximum_edge_records = 16U, .maximum_adjacency_page_records = 4U,
+		.maximum_property_entries = 2U, .maximum_rows = 16U, .maximum_distinct_rows = 16U};
+	for (const size_t budget : {size_t{4096U}, size_t{100000U}}) {
+		SCOPED_TRACE(budget); bounds.maximum_materialized_bytes = budget;
+		const bool wasEnabled = graph::debug::PerfTrace::areValuesEnabled();
+		struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); } } restore{wasEnabled};
+		graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		size_t observedPeak = 0U;
+		graph::debug::PerfTrace::ScopedObserver observer(&observedPeak, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+			if (key == "logical_plan.materialized_budget_peak_bytes" && value > 0)
+				*static_cast<size_t *>(owner) = std::max(*static_cast<size_t *>(owner), static_cast<size_t>(value));
+		});
+		size_t delivered = 0U; std::array<size_t, 6U> seen{};
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) {
+			++delivered;
+			const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at("payload")).getVariant());
+			EXPECT_EQ(value.size(), 3000U);
+			if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') {
+				++seen[static_cast<size_t>(value.front() - 'a')];
+				EXPECT_TRUE(std::ranges::all_of(value, [&](char character) { return character == value.front(); }));
+			} else ADD_FAILURE() << "unexpected payload";
+			return true;
+		})));
+		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		EXPECT_EQ(delivered, 6U);
+		EXPECT_EQ(seen, (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U}));
+		EXPECT_GT(observedPeak, 0U);
+		EXPECT_LE(observedPeak, budget);
+		::testing::Test::RecordProperty(budget == 4096U ? "tight_logical_peak_bytes" : "ample_logical_peak_bytes", static_cast<int>(observedPeak));
+		ASSERT_TRUE(trace.contains("logical_plan.property_source.admitted_bytes"));
+		EXPECT_GE(trace.at("logical_plan.property_source.admitted_bytes").totalValue, 18000);
+		ASSERT_TRUE(trace.contains("native_graph.read.selected_values_decoded"));
+		EXPECT_EQ(trace.at("native_graph.read.selected_values_decoded").totalValue, 6);
+	}
+	backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication) {
 	materializeNativeDatabase();
 	auto options = backendOptions();
