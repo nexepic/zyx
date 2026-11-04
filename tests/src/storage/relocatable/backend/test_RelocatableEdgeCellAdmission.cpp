@@ -10,6 +10,7 @@
 
 #include "CypherParserImpl.hpp"
 #include <thread>
+#include <cstdio>
 #include <exception>
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
@@ -186,6 +187,66 @@ TEST_F(RelocatableStorageBackendTest, StagedOverlayCellsMergeBaseOwnersAndReject
     EXPECT_EQ(base->readNodeProperty(nodes[1], "payload"), PropertyValue("old"));
     EXPECT_EQ(base->readEdgeProperty(edges[1], "payload"), PropertyValue("old"));
     base.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, MultiKeyCellRetriesSkipEveryAlreadyRetainedValue) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(std::move(options)); backend.open();
+    std::vector<LogicalGraphNodeCreateRequest> requests;
+    for (size_t i = 0; i < 6U; ++i) requests.push_back({{"MultiCell"}, {
+        {"first", PropertyValue(std::string(1200U, static_cast<char>('a' + i)))},
+        {"second", PropertyValue(std::string(1200U, static_cast<char>('A' + i)))}}});
+    const auto ids = backend.createLogicalNodes(requests);
+    std::vector<LogicalGraphEdgeCreateRequest> edgeRequests;
+    for (size_t i = 0; i < ids.size(); ++i) edgeRequests.push_back({ids[i], ids[i], "MULTI_CELL", requests[i].properties});
+    ASSERT_EQ(backend.createLogicalEdges(edgeRequests).size(), ids.size());
+    graph::parser::cypher::CypherParserImpl parser;
+    execution::LogicalPlanReadRuntime runtime(backend);
+    execution::LogicalPlanReadRuntimeBounds bounds{
+        .maximum_node_records = 16U, .maximum_node_page_records = 4U,
+        .maximum_metadata_pages_per_node_page = 8U, .maximum_edges_per_node = 16U,
+        .maximum_edge_records = 16U, .maximum_adjacency_page_records = 4U,
+        .maximum_property_entries = 4U, .maximum_rows = 16U, .maximum_distinct_rows = 16U};
+    for (const auto query : {"MATCH (n:MultiCell) RETURN n.first AS first, n.second AS second",
+                            "MATCH ()-[e:MULTI_CELL]->() RETURN e.first AS first, e.second AS second"}) {
+        const auto plan = parser.parseToLogical(query);
+        for (size_t limit : {4096U, 6000U, 100000U}) {
+            SCOPED_TRACE(query);
+            SCOPED_TRACE(limit);
+            bounds.maximum_materialized_bytes = limit;
+            const bool oldEnabled = graph::debug::PerfTrace::areValuesEnabled();
+            struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); } } restore{oldEnabled};
+            graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+            size_t peak = 0U;
+            graph::debug::PerfTrace::ScopedObserver observer(&peak, [](void *owner, std::string_view key, int64_t value, bool) noexcept {
+                if (key == "logical_plan.materialized_budget_peak_bytes" && value > 0)
+                    *static_cast<size_t *>(owner) = std::max(*static_cast<size_t *>(owner), static_cast<size_t>(value));
+            });
+            backend.resetIoStats();
+            std::array<size_t, 6U> seen{};
+            ASSERT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) {
+                const auto &first = std::get<std::string>(std::get<PropertyValue>(row.values.at("first")).getVariant());
+                const auto &second = std::get<std::string>(std::get<PropertyValue>(row.values.at("second")).getVariant());
+                EXPECT_EQ(first.size(), 1200U); EXPECT_EQ(second.size(), 1200U);
+                if (!first.empty() && first.front() >= 'a' && first.front() <= 'f') {
+                    ++seen[first.front() - 'a'];
+                    EXPECT_EQ(first, std::string(1200U, first.front()));
+                    EXPECT_EQ(second, std::string(1200U, static_cast<char>('A' + first.front() - 'a')));
+                } else ADD_FAILURE() << "unexpected multi-key owner";
+                return true;
+            })));
+            EXPECT_EQ(seen, (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U}));
+            const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+            ASSERT_TRUE(trace.contains("native_graph.read.selected_values_decoded"));
+            EXPECT_EQ(trace.at("native_graph.read.selected_values_decoded").totalValue, 12);
+            EXPECT_GT(peak, 0U); EXPECT_LE(peak, limit);
+            std::fprintf(stderr, "MULTI_CELL limit=%zu peak=%zu data_read_bytes=%llu\n", limit, peak,
+                static_cast<unsigned long long>(backend.ioStats().data.read_bytes));
+        }
+    }
     EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
     backend.close();
 }
