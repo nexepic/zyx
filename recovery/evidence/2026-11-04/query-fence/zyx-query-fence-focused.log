@@ -1,0 +1,23 @@
+MULTI_CELL limit=4096 peak=3217 data_read_bytes=258048
+MULTI_CELL limit=6000 peak=4934 data_read_bytes=282624
+MULTI_CELL limit=100000 peak=21166 data_read_bytes=307200
+MULTI_CELL limit=4096 peak=3576 data_read_bytes=266240
+MULTI_CELL limit=6000 peak=5014 data_read_bytes=290816
+MULTI_CELL limit=100000 peak=22838 data_read_bytes=315392
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 9 tests across 2 suites
+
+[38;5;105;1m[ 50% |   1/  2][0m [1;32mPASS[0m [1mRelocatableStorageBackendTest[0m [38;5;105;1m(5069 ms)[0m
+[38;5;105;1m[100% |   2/  2][0m [1;32mPASS[0m [1mWideIdPropertyReadTest[0m [38;5;105;1m(68 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m9[0m
+  Failed: [1;31m0[0m
+  Time  : 5138 ms
+[38;5;105;1m================================================================================[0m
+
