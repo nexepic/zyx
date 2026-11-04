@@ -181,6 +181,10 @@ TEST_F(RelocatableStorageBackendTest, StagedOverlayCellsMergeBaseOwnersAndReject
             overlay.replaceLogicalNodeProperties({{nodes[1], {{"payload", PropertyValue("changed")}}}});
         }, [](size_t) {}), std::runtime_error);
     EXPECT_TRUE(mutated);
+    size_t mixedDeliveries = 0U;
+    EXPECT_THROW(snapshot->readNodePropertyCellsSortedWithAdmission(nodeIds, keys,
+        [&](size_t, size_t, std::optional<PropertyValue>) { ++mixedDeliveries; }, [](size_t) {}), std::runtime_error);
+    EXPECT_EQ(mixedDeliveries, 0U);
     snapshot.reset();
     transaction->rollback();
     auto base = backend.openLogicalGraphReadSnapshot();
