@@ -681,10 +681,10 @@
 													  "logical-plan indexed Node batch capacity overflowed"),
 									   "logical-plan indexed Node batch capacity overflowed");
 				const size_t byteBatchCapacity =
-						std::max<size_t>(1U, state.shared.bounds.maximum_materialized_bytes / minimumCandidateBytes);
-				// Adapt the row cap before reading. Admission-capable readers reserve
-				// payload bytes at the source; compatibility readers are checked on
-				// return. Pre-delivery pressure can further split these ranges.
+						std::max<size_t>(1U, state.shared.materialized_budget.available() / minimumCandidateBytes);
+				// Previously visited candidate IDs remain charged across producer pages.
+				// Size this page from the remaining allowance, not the original limit.
+				// Source admission can further split ranges before delivery.
 				const size_t candidateBatchCapacity =
 						std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_node_records,
 								  state.shared.bounds.maximum_rows, byteBatchCapacity});
