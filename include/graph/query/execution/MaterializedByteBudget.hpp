@@ -15,6 +15,10 @@
 #include <stdexcept>
 #include <utility>
 #include "graph/debug/PerfTrace.hpp"
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::query::execution {
 	// Optional execution kernels may decline admission without swallowing an
@@ -107,6 +111,9 @@ namespace graph::query::execution {
 		}
 		void replace(size_t previousBytes, size_t nextBytes, bool transferReservation = false) {
 			if (nextBytes > previousBytes && nextBytes - previousBytes > available()) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+				diagnosticRejection("replace", previousBytes, nextBytes, 0U);
+#endif
 				throw MaterializedByteLimitExceeded();
 			}
 			const size_t total = used_bytes_ - previousBytes + nextBytes;
@@ -116,10 +123,30 @@ namespace graph::query::execution {
                 release_sink_(release_context_, std::move(released));
                 return;
             }
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			try {
+				if (parent_) parent_->set(total);
+                if (owned_parent_) owned_parent_->set(total);
+			} catch (...) {
+				diagnosticRejection("parent", previousBytes, nextBytes, 0U);
+				throw;
+			}
+#else
 			if (parent_) parent_->set(total);
             if (owned_parent_) owned_parent_->set(total);
+#endif
 			used_bytes_ = total; observePeak();
 		}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		void diagnosticRejection(const char *operation, size_t previous, size_t requested, size_t embedded) const noexcept {
+			static thread_local unsigned emitted = 0;
+			if (emitted < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+				++emitted;
+				std::fprintf(stderr, "CI_BUDGET operation=%s requested=%zu previous=%zu embedded=%zu used=%zu peak=%zu maximum=%zu available=%zu parent_charge=%zu parent_maximum=%zu owned_parent_charge=%zu\n", operation, requested, previous, embedded, used_bytes_, peak_bytes_, maximum_bytes_, available(), parent_ ? parent_->bytes() : 0U, parent_ ? parent_->accountMaximum() : 0U, owned_parent_ ? owned_parent_->bytes() : 0U);
+				std::fflush(stderr);
+			}
+		}
+#endif
 
         void observePeak() noexcept {
             if (used_bytes_ <= peak_bytes_) return;
@@ -227,7 +254,11 @@ namespace graph::query::execution {
 			bytes_ = 0U;embedded_bytes_=0U;
 		}
 		[[nodiscard]] bool wouldExceed(size_t nextBytes) const noexcept {
-			return budget_ != nullptr && nextBytes-std::min(embedded_bytes_,nextBytes)>bytes_-embedded_bytes_ && nextBytes-std::min(embedded_bytes_,nextBytes)-(bytes_-embedded_bytes_)>budget_->available();
+			const bool exceeded = budget_ != nullptr && nextBytes-std::min(embedded_bytes_,nextBytes)>bytes_-embedded_bytes_ && nextBytes-std::min(embedded_bytes_,nextBytes)-(bytes_-embedded_bytes_)>budget_->available();
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			if (exceeded) budget_->diagnosticRejection("wouldExceed", bytes_, nextBytes, embedded_bytes_);
+#endif
+			return exceeded;
 		}
 
 	private:

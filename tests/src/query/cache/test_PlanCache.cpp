@@ -5,11 +5,21 @@
 
 #include <gtest/gtest.h>
 #include <cstdio>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <limits>
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 
 #include "graph/query/cache/PlanCache.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <dbghelp.h>
+#endif
 
 using namespace graph::query;
 using namespace graph::query::cache;
@@ -95,7 +105,13 @@ public:
     size_t large_threshold = (std::numeric_limits<size_t>::max)(), large_requests = 0U;
 private:
 	void *do_allocate(size_t bytes, size_t alignment) override {
-		if (++calls == fail_at) throw std::bad_alloc();
+		if (++calls == fail_at) {
+#ifdef _WIN32
+            std::fprintf(stderr, "PlanCache failing allocation: call=%zu bytes=%zu alignment=%zu\n", calls, bytes, alignment);
+            std::fflush(stderr);
+#endif
+            throw std::bad_alloc();
+        }
         if (bytes >= large_threshold) ++large_requests;
 		return grant->allocate(bytes, alignment);
 	}
@@ -118,6 +134,42 @@ TEST(PlanCacheTest, QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant) 
 }
 
 TEST(PlanCacheTest, EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry) {
+#ifdef _WIN32
+    struct RestoreTerminateHandler {
+        std::terminate_handler previous;
+        ~RestoreTerminateHandler() { std::set_terminate(previous); }
+    } restore{std::set_terminate([]() noexcept {
+        std::fputs("CI_PLANCACHE terminate handler invoked\n", stderr);
+        if (const auto error = std::current_exception()) {
+            try { std::rethrow_exception(error); }
+            catch (const std::exception &e) { std::fprintf(stderr, "CI_PLANCACHE active exception: %s\n", e.what()); }
+            catch (...) { std::fputs("CI_PLANCACHE active exception: non-std\n", stderr); }
+        } else std::fputs("CI_PLANCACHE active exception: none\n", stderr);
+        void *frames[32]{};
+        const auto count = CaptureStackBackTrace(0, 32, frames, nullptr);
+        const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+        const auto library = LoadLibraryW(L"dbghelp.dll");
+        const auto initialize = library ? reinterpret_cast<decltype(&SymInitialize)>(GetProcAddress(library, "SymInitialize")) : nullptr;
+        const auto symbol = library ? reinterpret_cast<decltype(&SymFromAddr)>(GetProcAddress(library, "SymFromAddr")) : nullptr;
+        const auto cleanup = library ? reinterpret_cast<decltype(&SymCleanup)>(GetProcAddress(library, "SymCleanup")) : nullptr;
+        const auto process = GetCurrentProcess();
+        const bool symbolsReady = initialize && symbol && initialize(process, nullptr, TRUE);
+        for (unsigned i = 0; i < count; ++i) {
+            alignas(SYMBOL_INFO) unsigned char storage[sizeof(SYMBOL_INFO) + 256]{};
+            auto *info = reinterpret_cast<SYMBOL_INFO *>(storage);
+            info->SizeOfStruct = sizeof(SYMBOL_INFO); info->MaxNameLen = 255;
+            DWORD64 displacement = 0;
+            if (symbolsReady && symbol(process, reinterpret_cast<DWORD64>(frames[i]), &displacement, info))
+                std::fprintf(stderr, "CI_PLANCACHE frame=%u symbol=%s displacement=%llu\n", i, info->Name, static_cast<unsigned long long>(displacement));
+            else
+                std::fprintf(stderr, "CI_PLANCACHE frame=%u address=%p executable_base=%p\n", i, frames[i], reinterpret_cast<void *>(base));
+        }
+        if (symbolsReady && cleanup) cleanup(process);
+        if (library) FreeLibrary(library);
+        std::fflush(stderr);
+        std::abort();
+    })};
+#endif
 	auto memory = std::make_shared<FailingPlanMetadata>(planMetadataGrant(65536U));
 	QueryPlan empty; const std::string key(1000U, 'x'); size_t allocations = 0U;
 	{
@@ -134,9 +186,15 @@ TEST(PlanCacheTest, EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllows
 			PlanCache cache(2U, memory);
             memory->calls = 0U; memory->fail_at = failure;
 			EXPECT_THROW(cache.put(key, empty), std::bad_alloc);
+#ifdef _WIN32
+            std::fprintf(stderr, "CI_PLANCACHE failure=%zu caught; checking retry\n", failure); std::fflush(stderr);
+#endif
 			EXPECT_EQ(cache.size(), 0U);
 			memory->fail_at = (std::numeric_limits<size_t>::max)();
 			cache.put(key, empty); ASSERT_TRUE(cache.get(key)); EXPECT_EQ(cache.size(), 1U);
+#ifdef _WIN32
+            std::fprintf(stderr, "CI_PLANCACHE failure=%zu retry complete\n", failure); std::fflush(stderr);
+#endif
 		}
 		EXPECT_EQ(memory->grant->used(), 0U);
 	}

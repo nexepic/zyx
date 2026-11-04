@@ -773,7 +773,7 @@
 			bool stoppedByVisitor = false;
 			size_t largestInputRowBytes = 0U;
 			std::function<bool()> flush;
-			struct PrefetchBytePressure {};
+			struct PrefetchBytePressure { unsigned line; };
 			const auto putCacheValue = [&](auto &cache, const std::string &variable, const std::string &key,
 										   auto &&value) {
 				const size_t previousBytes = bufferedRowsBytes.bytes();
@@ -796,7 +796,7 @@
 									   "logical-plan prefetch selection size overflowed");
 				if (nextBytes > state.shared.bounds.maximum_materialized_bytes ||
 					bufferedRowsBytes.wouldExceed(withSelection)) {
-					throw PrefetchBytePressure{};
+					throw PrefetchBytePressure{__LINE__};
 				}
 				bufferedRowsBytes.set(nextBytes);
 				try {
@@ -898,7 +898,7 @@
 						const size_t maximumReferenceBytes =
 							referenceBytes(maximumNodeReferences, maximumEdgeReferences);
 						if (referenceWorkspaceBytes.wouldExceed(maximumReferenceBytes))
-							throw PrefetchBytePressure{};
+							throw PrefetchBytePressure{__LINE__};
 						referenceWorkspaceBytes.set(maximumReferenceBytes);
 						std::vector<storage::EntityRef> nodeReferences;
 						std::vector<storage::EntityRef> edgeReferences;
@@ -907,7 +907,7 @@
 						const size_t actualReferenceBytes =
 							referenceBytes(nodeReferences.capacity(), edgeReferences.capacity());
 						if (referenceWorkspaceBytes.wouldExceed(actualReferenceBytes))
-							throw PrefetchBytePressure{};
+							throw PrefetchBytePressure{__LINE__};
 						referenceWorkspaceBytes.set(actualReferenceBytes);
 						for (const LogicalPlanReadRow &row: rows.values()) {
 							for (const std::string &variable: completeEntityVariables) {
@@ -927,7 +927,7 @@
 							} catch (const std::runtime_error &error) {
 								if (std::string_view(error.what()) != "shared materialization exceeded its byte bound")
 									throw;
-								throw PrefetchBytePressure{};
+								throw PrefetchBytePressure{__LINE__};
 							}
 						};
 						if (!nodeReferences.empty()) {
@@ -1281,7 +1281,7 @@
 							const size_t next = checkedSizeAdd(propertyReadBytes.bytes(), bytes,
 															   "logical-plan Property source size overflowed");
 							if (propertyReadBytes.wouldExceed(next))
-								throw PrefetchBytePressure{};
+								throw PrefetchBytePressure{__LINE__};
 							propertyReadBytes.set(next);
 							debug::PerfTrace::addValue(
 									"logical_plan.property_source.admitted_bytes",
@@ -1329,9 +1329,17 @@
 																	  "logical-plan Property batch size overflowed");
 						const size_t retainedWorkingSet = checkedSizeAdd(
 								columnStructures, retainedColumns, "logical-plan Property working set size overflowed");
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        static thread_local unsigned readsReported = 0;
+                        if (readsReported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                            ++readsReported;
+                            std::fprintf(stderr, "CI_PREFETCH_READ rows=%zu nodes=%zu edges=%zu structures=%zu payload=%zu working_set=%zu admitted=%zu used=%zu available=%zu source_admission=%d\n", rows.size(), nodeIds.size(), edgeIds.size(), columnStructures, retainedColumns, retainedWorkingSet, propertyReadBytes.bytes(), state.shared.materialized_budget.used(), state.shared.materialized_budget.available(), int(sourceAdmission));
+                            std::fflush(stderr);
+                        }
+#endif
 						if (retainedWorkingSet > state.shared.bounds.maximum_materialized_bytes) {
 							if (rows.size() > 1U) {
-								throw PrefetchBytePressure{};
+								throw PrefetchBytePressure{__LINE__};
 							}
 							throw std::runtime_error("logical-plan Property batch exceeded its byte bound");
 						}
@@ -1339,7 +1347,7 @@
 						// estimate once the complete shape has been authenticated. Readers
 						// without source admission only gain this post-read reservation.
 						if (propertyReadBytes.wouldExceed(retainedWorkingSet))
-							throw PrefetchBytePressure{};
+							throw PrefetchBytePressure{__LINE__};
 						propertyReadBytes.set(retainedWorkingSet);
 						if (borrowRepeatedNodeColumns && groups.size() == 1U && metadataGroups.empty() &&
 							completeEntityVariables.empty() && edgeIds.empty() && !nodeIds.empty() && nodeIds.size() < rows.size()) {
@@ -1430,7 +1438,7 @@
 						const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes > enrichedLimit - std::min(enrichedBytes, enrichedLimit)) {
 							if (rows.size() > 1U) {
-								throw PrefetchBytePressure{};
+								throw PrefetchBytePressure{__LINE__};
 							}
 							throw std::runtime_error("bounded batch exceeded its byte limit");
 						}
@@ -1451,7 +1459,7 @@
 							checkedSizeMul(largestEnrichedRowBytes, 2U, "logical-plan prefetch handoff headroom overflowed"),
 							"logical-plan prefetch handoff headroom overflowed");
 						if (handoffHeadroom > state.shared.materialized_budget.available())
-							throw PrefetchBytePressure{};
+							throw PrefetchBytePressure{__LINE__};
 					}
 					struct ColumnScope {
 						ExecutionState &state; const ScopedPropertyColumns *previous;
@@ -1479,7 +1487,7 @@
 						auto &columns = *ownedColumns;
 						const size_t scratchBytes = checkedSizeMul(columns.ids.size(), sizeof(size_t),
 							"logical-plan selected scatter size overflowed");
-						if (scratchBytes > state.shared.materialized_budget.available()) throw PrefetchBytePressure{};
+						if (scratchBytes > state.shared.materialized_budget.available()) throw PrefetchBytePressure{__LINE__};
 						detail::BudgetMemoryResource scatterMemory(state.shared.materialized_budget);
 						std::pmr::vector<size_t> lastSelected(columns.ids.size(), rows.size(), &scatterMemory);
 						const auto ordinalFor = [&](const LogicalPlanReadRow &row) -> std::optional<size_t> {
@@ -1561,7 +1569,19 @@
 					bufferedRowsBytes.reset();
 					largestInputRowBytes = 0U;
 					return keepGoing;
-				} catch (const PrefetchBytePressure &) {
+				} catch (const PrefetchBytePressure &pressure) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    static thread_local unsigned reported = 0;
+                    if (reported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                        ++reported;
+                        std::fprintf(stderr, "CI_PREFETCH pressure_line=%u rows=%zu buffered=%zu used=%zu available=%zu\n",
+                            pressure.line, rows.size(), bufferedRowsBytes.bytes(),
+                            state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                        std::fflush(stderr);
+                    }
+#else
+                    (void)pressure;
+#endif
 					if (rows.size() > 1U) {
 						debug::PerfTrace::addValue("logical_plan.property_prefetch_split_batches", 1);
 						return splitBufferedRowsAndFlush();

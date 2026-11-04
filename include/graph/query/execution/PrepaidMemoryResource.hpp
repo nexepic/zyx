@@ -3,6 +3,10 @@
 #include <atomic>
 #include <exception>
 #include <utility>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 #include "graph/query/execution/ResourceCoordinator.hpp"
 #include "graph/utils/UnmanagedAllocationResource.hpp"
 
@@ -67,6 +71,13 @@ private:
 		for (;;) {
 			if (bytes > capacity_ - prior) {
 				denials_.fetch_add(1U, std::memory_order_relaxed);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                if (ci_reported_ < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                    ++ci_reported_;
+                    std::fprintf(stderr, "CI_PREPAID rejection requested=%zu used=%zu peak=%zu capacity=%zu\n", bytes, prior, peak_.load(std::memory_order_relaxed), capacity_);
+                    std::fflush(stderr);
+                }
+#endif
 				throw ResourceAdmissionDenied();
 			}
 			if (used_.compare_exchange_weak(prior, prior + bytes, std::memory_order_relaxed)) break;
@@ -74,7 +85,18 @@ private:
 		size_t peak = peak_.load(std::memory_order_relaxed);
 		while (peak < prior + bytes && !peak_.compare_exchange_weak(peak, prior + bytes, std::memory_order_relaxed)) {}
 	}
-	void releaseBytes(size_t bytes) noexcept { used_.fetch_sub(bytes, std::memory_order_relaxed); }
+	void releaseBytes(size_t bytes) noexcept {
+        const auto previous = used_.fetch_sub(bytes, std::memory_order_relaxed);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        if (bytes && ci_reported_ > 0U && ci_reported_ < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+            ++ci_reported_;
+            std::fprintf(stderr, "CI_PREPAID refund=%zu previous=%zu remaining=%zu capacity=%zu\n", bytes, previous, previous - bytes, capacity_);
+            std::fflush(stderr);
+        }
+#else
+        (void)previous;
+#endif
+    }
 	void *do_allocate(size_t bytes, size_t alignment) override {
 		reserveBytes(bytes);
 		try { return upstream_->allocate(bytes, alignment); }
@@ -90,5 +112,8 @@ private:
 	const size_t capacity_;
 	std::pmr::memory_resource *upstream_;
 	std::atomic<size_t> used_{0U}, peak_{0U}, denials_{0U};
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    inline static thread_local unsigned ci_reported_ = 0;
+#endif
 };
 } // namespace graph::query::execution::detail

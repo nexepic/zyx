@@ -8,6 +8,10 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::utils::detail {
 
@@ -67,7 +71,16 @@ namespace graph::utils::detail {
     const size_t bytes = 0U;
     throw std::logic_error("admitted string construction requires a supported standard string ABI");
 #endif
-    return addStandardHeapBytes(proxy, standardAllocatorRequestBytes(bytes, alignof(char)));
+    const auto admitted = addStandardHeapBytes(proxy, standardAllocatorRequestBytes(bytes, alignof(char)));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    static thread_local unsigned reported = 0;
+    if (count >= 64U && reported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+        ++reported;
+        std::fprintf(stderr, "CI_STRING_BOUND characters=%zu raw_upper=%zu proxy=%zu admitted=%zu\n", count, bytes, proxy, admitted);
+        std::fflush(stderr);
+    }
+#endif
+    return admitted;
 }
 
 template<class T>

@@ -19,6 +19,10 @@
 #include <string>
 #include <vector>
 #include <utility>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 #include "graph/query/execution/StringBufferBytes.hpp"
 
 namespace graph::query::execution {
@@ -418,6 +422,12 @@ private:
 			const size_t targetBytes = checkedMultiply(target, sizeof(std::string));
 			const size_t peakBytes = checkedAdd(checkedAdd(retainedBytes, oldBytes), targetBytes);
 			if (peakBytes > limits_.maximum_buffered_bytes) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                if (std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                    std::fprintf(stderr, "CI_CSV field_growth required=%zu capacity=%zu target=%zu retained=%zu old=%zu target_bytes=%zu peak=%zu limit=%zu\n", required, fields.capacity(), target, retainedBytes, oldBytes, targetBytes, peakBytes, limits_.maximum_buffered_bytes);
+                    std::fflush(stderr);
+                }
+#endif
 				throw std::runtime_error("CsvReader: field-vector growth peak exceeds its byte bound");
 			}
 			fields.reserve(target);

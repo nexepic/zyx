@@ -9,6 +9,10 @@
 #include <mutex>
 #include <stdexcept>
 #include <utility>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::query::execution::detail {
 
@@ -208,11 +212,32 @@ public:
 		}
 		auto &database = account_->database_;
 		auto &process = database.process_;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		static thread_local unsigned reported = 0;
+		std::unique_lock lock(process.mutex_);
+#else
 		std::lock_guard lock(process.mutex_);
+#endif
 		const size_t kind = account_->kind_;
 		if (next > bytes_) {
 			const size_t delta = next - bytes_;
-			if (delta > account_->availableLocked()) return false;
+			const size_t available = account_->availableLocked();
+			if (delta > available) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                if (reported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                    ++reported;
+                    const auto previous = bytes_, accountUsed = account_->used_, accountMaximum = account_->maximum_;
+                    const auto databaseUsed = database.usage_.total, databaseMaximum = database.limits_.total;
+                    const auto processUsed = process.usage_.total, processMaximum = process.limits_.total;
+                    const auto databaseClassUsed = database.usage_.classes[kind], databaseClassMaximum = database.limits_.classes[kind];
+                    const auto processClassUsed = process.usage_.classes[kind], processClassMaximum = process.limits_.classes[kind];
+                    lock.unlock();
+                    std::fprintf(stderr, "CI_RESOURCE class=%zu lease=%zu requested=%zu available=%zu account=%zu/%zu database=%zu/%zu database_class=%zu/%zu process=%zu/%zu process_class=%zu/%zu\n", kind, previous, next, available, accountUsed, accountMaximum, databaseUsed, databaseMaximum, databaseClassUsed, databaseClassMaximum, processUsed, processMaximum, processClassUsed, processClassMaximum);
+                    std::fflush(stderr);
+                }
+#endif
+				return false;
+			}
 			account_->used_ += delta;
 			database.usage_.total += delta; database.usage_.classes[kind] += delta;
 			process.usage_.total += delta; process.usage_.classes[kind] += delta;
@@ -221,6 +246,17 @@ public:
 			account_->used_ -= delta;
 			database.usage_.total -= delta; database.usage_.classes[kind] -= delta;
 			process.usage_.total -= delta; process.usage_.classes[kind] -= delta;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            if (delta && reported > 0U && reported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+                ++reported;
+                const auto accountUsed = account_->used_, databaseUsed = database.usage_.total, processUsed = process.usage_.total;
+                bytes_ = next;
+                lock.unlock();
+                std::fprintf(stderr, "CI_RESOURCE refund class=%zu amount=%zu lease=%zu account=%zu database=%zu process=%zu\n", kind, delta, next, accountUsed, databaseUsed, processUsed);
+                std::fflush(stderr);
+                return true;
+            }
+#endif
 		}
 		bytes_ = next;
 		return true;

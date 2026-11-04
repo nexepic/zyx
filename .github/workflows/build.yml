@@ -110,7 +110,9 @@ jobs:
   native-storage-asan-ubsan:
     name: Native storage ASan+UBSan (macOS)
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Cold Conan setup and an instrumented build can consume most of 45 minutes
+    # before the sanitizer test gates even start on hosted arm64 runners.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout Code
@@ -142,6 +144,17 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           cmake --build build-asan-ubsan --target zyx_test_suite
+        shell: bash
+
+      - name: Diagnose concurrent publication with ASan+UBSan
+        continue-on-error: true
+        run: |
+          ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+            --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage' \
+            | grep -F 'BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_test_process.py --timeout 600 -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
         shell: bash
 
       - name: Run native storage ASan+UBSan gates
@@ -233,6 +246,16 @@ jobs:
 
       # Keep the reports and test transcripts outside the build directory so
       # every platform can upload one self-contained Stage 10 audit artifact.
+      - name: Diagnose Windows fresh string allocations
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          MSYS_NO_PATHCONV: '1'
+        run: |
+          clang-cl /nologo /std:c++20 /EHsc /Od /MDd scripts/diagnose_string_allocations.cpp /FebuildDir/zyx-string-alloc.exe
+          ./buildDir/zyx-string-alloc.exe
+        shell: bash
+
       - name: Prepare Stage 10 evidence directory
         run: |
           evidence_dir="$RUNNER_TEMP/stage10-evidence"
@@ -274,6 +297,26 @@ jobs:
         continue-on-error: true
         run: |
           python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
+        shell: bash
+
+      # These additional, bounded diagnostics cannot replace the unit gate.
+      # Each process has its own capped rejection trace; no data values are logged.
+      - name: Diagnose Windows materialization budgets
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
+        shell: bash
+
+      - name: Diagnose macOS materialization budgets
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
         shell: bash
 
       - name: Run Unit Tests

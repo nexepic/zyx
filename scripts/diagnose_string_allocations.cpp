@@ -29,6 +29,9 @@ int main() {
 #ifdef _LIBCPP_VERSION
     std::printf(" libcxx=%d", _LIBCPP_VERSION);
 #endif
+#ifdef _MSVC_STL_VERSION
+    std::printf(" msvc_stl=%d iterator_debug=%d", _MSVC_STL_VERSION, _ITERATOR_DEBUG_LEVEL);
+#endif
     std::printf("\n");
     for (const std::size_t length : {std::size_t{22}, std::size_t{23}, std::size_t{512}, std::size_t{8192}}) {
         requested = allocations = 0;
