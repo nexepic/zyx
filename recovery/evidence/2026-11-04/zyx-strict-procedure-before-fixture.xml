@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="81" failures="36" disabled="0" errors="0" time="0.263" timestamp="2026-11-04T12:05:53.264" name="AllTests">
+  <testsuite name="LogicalVectorBufferedSortTest" tests="4" failures="3" disabled="0" skipped="0" errors="0" time="0.073" timestamp="2026-11-04T12:05:53.265">
+    <testcase name="PermutesMultipleCyclesAndFixedRowsWithStableTiesAndAlignedPayloads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorBufferedSort.cpp" line="25" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.265" classname="LogicalVectorBufferedSortTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorBufferedSort.cpp" line="71" status="run" result="completed" time="0.071" timestamp="2026-11-04T12:05:53.266" classname="LogicalVectorBufferedSortTest" />
+    <testcase name="CompactsProjectedFilterAndDistinctRowsWithoutMisaligningOwnedPayloads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorBufferedSort.cpp" line="115" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.338" classname="LogicalVectorBufferedSortTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="OrdersMixedNullKeysForFullSortTopKAndOffsetWithoutLosingStableTies" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorBufferedSort.cpp" line="168" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.338" classname="LogicalVectorBufferedSortTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="77" failures="33" disabled="0" skipped="0" errors="0" time="0.189" timestamp="2026-11-04T12:05:53.338">
+    <testcase name="ProjectExpressionsShareRetainedProcedureOutputBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="8" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.338" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="RejectsQueryVectorCopyBeforeSearchWhenItExceedsMaterializedBound" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="51" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.338" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CountsRetainedQueryResultRowsAcrossProcedureBatches" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="65" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.338" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:79&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:79
+Expected: static_cast<void>(execute(project)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:80&#x0A;Expected: (backend-&gt;state-&gt;property_column_reads) &gt; (0U), actual: 0 vs 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:80
+Expected: (backend->state->property_column_reads) > (0U), actual: 0 vs 0
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ShortestPathDirectResultSharesBufferedOutputBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="104" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.340" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="GdsDijkstraProcedureForwardsMaterializedByteBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="133" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.341" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="177" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.341" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ShortestPathLimitMaterializesOnlyRequestedNodeAndHandlesSelfPath" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="197" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.341" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CompletePropertyBatchAlsoSuppliesLabelsWithoutSecondRead" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="221" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.342" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="MetadataBatchRejectsMalformedAndOversizedLabels" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="240" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.342" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="SelectedProcedureColumnsRequireSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="261" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.343" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BatchesSelectedProjectionAndRestoresScoreOrderWithMissingFields" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="274" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.343" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="299" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.343" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:322&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:322
+Expected: static_cast<void>(execute(project)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="347" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.344" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BatchesFilterAndReusesSurvivingFields" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="380" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.344" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CompleteBatchReplacesEarlierSelectedMissingFieldCache" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="403" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.344" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="426" status="run" result="completed" time="0.063" timestamp="2026-11-04T12:05:53.344" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CompleteBatchRejectsInvalidPropertiesAndResourceBounds" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="470" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.408" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="StreamsFilterInBoundedBatchesAndReusesSurvivingProperties" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="497" status="run" result="completed" time="0.002" timestamp="2026-11-04T12:05:53.408" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ProcedureArgumentViewReferencesLargeDirectAndBoundValues" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="526" status="run" result="completed" time="0.002" timestamp="2026-11-04T12:05:53.410" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="RetainsConvertedQueryVectorThroughResultPublication" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="546" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.413" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ShortestPathBfsStateObeysMaterializedByteBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="574" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.414" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="GdsDijkstraPipelineRetainsPathBytesDuringResultPublication" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="618" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.414" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="GdsCatalogListSharesBufferedRowsAndRetainedResultBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="649" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.415" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BatchesMetadataAndSelectedPropertiesInTheSameExpression" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="684" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.415" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="MetadataJointRetentionRejectsLowBudgetAndCanRetry" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="723" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.415" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="RejectsMalformedColumnsAndOversizedSelectedValues" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="764" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.416" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:771&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:771
+Expected: static_cast<void>(execute(project)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+    </testcase>
+    <testcase name="SelectedSourceRejectsBeforeCopyAndRetriesAfterCancellationOrPressure" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="781" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.417" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ProjectionAliasesKeepOriginalScopeAndIndependentPayloads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="817" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.417" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="840" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.417" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CompleteSemanticErrorsPrecedeJointPressureRetry" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="883" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.418" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="SelectedCacheDoesNotReplaceCompleteMapOrNodeOutput" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="911" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.418" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="MaterializesRepeatedNodeOutputsWithCapacityAccountedGatherBuffers" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="939" status="run" result="completed" time="0.076" timestamp="2026-11-04T12:05:53.419" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="StreamsSelectedProjectionAcrossBoundedHitBatches" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="973" status="run" result="completed" time="0.002" timestamp="2026-11-04T12:05:53.496" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SkipAndLimitBeforeProjectReadOnlyRetainedRows" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1004" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ValidatesNegativeWindowEvenWhenSearchReturnsNoHits" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1021" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="EmptyVectorProcedureResultChargesOutputColumnStorage" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1036" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="DirectVectorResultSharesBufferedRowsAndRetainedResultBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1070" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="RejectsOversizedSearchHitBufferBeforeReadingNodes" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1090" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ShortestPathScalarOutputSkipsFullNodesUnderSmallByteBound" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1106" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.499" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ShortestPathProjectedResultCountsLivePathIds" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1138" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.500" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="GdsPageRankPipelineSharesAlgorithmRowsAndQueryResultBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1167" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.500" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="GdsPageRankAndWccProceduresForwardMaterializedByteBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1198" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.500" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="MetadataSemanticErrorsPrecedeJointPressureSplitting" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1237" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.501" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ScalarHeapProjectionSharesRetainedResultBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1264" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.502" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1292" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.502" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1325" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.502" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1362" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.503" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BatchesCompleteExpressionsForBufferedAndStreamingProjection" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1401" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.503" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ProcedureProjectionReadsOnlySelectedColumnsMissingFromFilterCache" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1452" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.504" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="CarriesSelectedFieldsAcrossEntityRefRenaming" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1480" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.505" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesOnlyPrefixNeededForProjectSkipLimit" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1500" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.505" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1518" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.505" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="UsesBoundedTopKForSortSkipLimitPipeline" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="7" status="run" result="completed" time="0.002" timestamp="2026-11-04T12:05:53.506" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKFilterReadsProjectedEntityAliasAfterItsBinding" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="86" status="run" result="completed" time="0.002" timestamp="2026-11-04T12:05:53.509" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="DistinctBeforeLimitKeepsFullSortedCandidateSemantics" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="132" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.511" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="UsesBoundedTopKWhenDistinctSortAndProjectionShareAnExpression" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="157" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.511" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="KeepsFilterAfterSkipSemanticsInSortWindowPipeline" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="195" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.511" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BufferedSortPreservesStableTiesMultiKeyDirectionAndNulls" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="228" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.512" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKComputedKeyReleasesUnreadSuffixAndPreservesWindowOrder" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="264" status="run" result="completed" time="0.004" timestamp="2026-11-04T12:05:53.512" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="BatchesFilterDistinctSkipLimitAcrossHitBoundaryAndStopsAtLimit" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="298" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.516" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKAllFilteredRowsStillChargesOutputColumnStorage" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="341" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.518" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:363&#x0A;Expected: static_cast&lt;void&gt;(execute(*project)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:363
+Expected: static_cast<void>(execute(*project)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKResultPublicationSharesHeapRowsAndRetainedResultBudget" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="374" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.518" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:388&#x0A;Expected: static_cast&lt;void&gt;(execute(topTwo)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:388
+Expected: static_cast<void>(execute(topTwo)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="UsesExpandableTopKWhenFilterFollowsSkipBeforeLimit" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="400" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.519" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:425&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:425
+Expected: static_cast<void>(execute(project)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKPrefetchesFilterPropertyThroughProjectedEntityAlias" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="461" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.519" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="UsesBoundedTopKForSortDistinctSkipLimit" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="507" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.521" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BufferedSortChargesHeapKeysTogetherWithRowsAndCanRetry" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="552" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.521" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="TopKHeapPayloadBackpressurePreservesStableTieWindowAcrossBatches" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="576" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.521" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CompleteBatchCacheSurvivesFilterSortAndProjection" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="607" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.521" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ReusesMetadataAcrossEntityRenamingFilterAndSort" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="637" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.522" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="ReusesSortPropertiesForFollowingProjection" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="673" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.522" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="UsesBoundedTopKWhenFilterPrecedesSkipAndLimitAfterSort" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="690" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.522" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="737" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.524" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:764&#x0A;Expected: static_cast&lt;void&gt;(execute(limit)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded procedure Property columns require source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:764
+Expected: static_cast<void>(execute(limit)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded procedure Property columns require source admission".
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKPreservesFiltersOnBothSidesOfEntityProjection" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="779" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.524" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="DistinctTopKFallsBackWhenSortKeyIsNotProjected" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="831" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.526" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ExpandsDistinctTopKForFilterAfterSkip" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="860" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.526" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopKHeapAndNextHeapPayloadShareAllowanceAndRetryCleanly" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="901" status="run" result="completed" time="0." timestamp="2026-11-04T12:05:53.526" classname="LogicalVectorPropertyBatchTest" />
+    <testcase name="PreservesDistinctProjectionStateAcrossHitBatches" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp" line="937" status="run" result="completed" time="0.001" timestamp="2026-11-04T12:05:53.527" classname="LogicalVectorPropertyBatchTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded procedure Property columns require source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded procedure Property columns require source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

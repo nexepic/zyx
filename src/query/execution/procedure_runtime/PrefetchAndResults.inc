@@ -454,11 +454,10 @@
 							if (columnBytes.wouldExceed(next)) throw ProcedureColumnBytePressure{};
 							columnBytes.set(next);
 						};
-						auto columns = snapshot.supportsPropertyReadAdmission()
-							? (isEdge ? snapshot.readEdgePropertyColumnsSortedWithAdmission(batch, keys, admission)
-								: snapshot.readNodePropertyColumnsSortedWithAdmission(batch, keys, admission))
-							: (isEdge ? snapshot.readEdgePropertyColumnsSorted(batch, keys)
-								: snapshot.readNodePropertyColumnsSorted(batch, keys));
+						if (!snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded procedure Property columns require source admission");
+						auto columns = isEdge ? snapshot.readEdgePropertyColumnsSortedWithAdmission(batch, keys, admission)
+							: snapshot.readNodePropertyColumnsSortedWithAdmission(batch, keys, admission);
 						if (columns.size() != keys.size() || std::ranges::any_of(columns, [&](const auto &column) {
 							return column.size() != count;
 						})) throw std::runtime_error("logical procedure backend changed Property batch cardinality");

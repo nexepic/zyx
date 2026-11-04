@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="0." timestamp="2026-11-04T12:04:03.033" name="AllTests">
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-04T12:04:03.034">
+    <testcase name="SelectedProcedureColumnsRequireSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="261" status="run" result="completed" time="0." timestamp="2026-11-04T12:04:03.034" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:265&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type std::logic_error.&#x0A;  Actual: it throws nothing.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:265
+Expected: static_cast<void>(execute(project)) throws an exception of type std::logic_error.
+  Actual: it throws nothing.
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:266&#x0A;Expected equality of these values:&#x0A;  backend-&gt;state-&gt;property_column_reads&#x0A;    Which is: 1&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:266
+Expected equality of these values:
+  backend->state->property_column_reads
+    Which is: 1
+  0U
+    Which is: 0
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

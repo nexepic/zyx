@@ -258,6 +258,34 @@ namespace graph::query {
 
 
 
+	TEST_F(LogicalVectorPropertyBatchTest, SelectedProcedureColumnsRequireSourceAdmissionBeforeReading) {
+		backend->state->enable_property_admission = false;
+		const auto rank = std::make_shared<expressions::VariableReferenceExpression>("node", "rank");
+		logical::LogicalProject project(search(), {{rank, "rank"}});
+		EXPECT_THROW(static_cast<void>(execute(project)), std::logic_error);
+		EXPECT_EQ(backend->state->property_column_reads, 0U);
+		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		backend->state->enable_property_admission = true;
+		const auto result = execute(project);
+		EXPECT_EQ(result.rowCount(), 3U);
+		EXPECT_GT(backend->state->property_column_reads, 0U);
+	}
+
+	TEST_F(LogicalVectorPropertyBatchTest, ProcedureFixtureAdmitsEdgePayloadBeforeCopy) {
+		backend->state->edges = {{11U, 1U, 2U, "LINK", {{"weight", PropertyValue(std::string(1000U, 'w'))}}}};
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		const std::array<uint64_t, 1U> ids{11U}; const std::array<std::string_view, 1U> keys{"weight"};
+		EXPECT_THROW(static_cast<void>(snapshot->readEdgePropertyColumnsSortedWithAdmission(ids, keys,
+			[](size_t) { throw std::runtime_error("denied"); })), std::runtime_error);
+		EXPECT_EQ(backend->state->admitted_property_copies, 0U);
+		size_t admitted = 0U;
+		const auto columns = snapshot->readEdgePropertyColumnsSortedWithAdmission(ids, keys,
+			[&](size_t bytes) { admitted += bytes; });
+		ASSERT_EQ(columns.size(), 1U); ASSERT_EQ(columns[0].size(), 1U);
+		EXPECT_GT(admitted, 1000U); EXPECT_EQ(backend->state->admitted_property_copies, 1U);
+		EXPECT_EQ(columns[0][0], PropertyValue(std::string(1000U, 'w')));
+	}
+
 	TEST_F(LogicalVectorPropertyBatchTest, BatchesSelectedProjectionAndRestoresScoreOrderWithMissingFields) {
 		backend->state->nodes.at(1U).properties.erase(backend->state->nodes.at(1U).properties.begin());
 		const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
@@ -296,6 +324,12 @@ namespace graph::query {
 			logical::LogicalProject project(
 				std::make_unique<logical::LogicalSort>(search(), std::vector<logical::LogicalSortItem>{{score, true}}),
 				{{size, "size"}, {score, "score"}});
+			if (!admission) {
+				const size_t readsBefore = backend->state->property_column_reads;
+				EXPECT_THROW(static_cast<void>(execute(project)), std::logic_error);
+				EXPECT_EQ(backend->state->property_column_reads, readsBefore);
+				continue;
+			}
 			// Keep room for three final payloads and one temporary column, but
 			// not three temporary slots. Derive the row base from public types
 			// so the pressure contract does not depend on the platform ABI.

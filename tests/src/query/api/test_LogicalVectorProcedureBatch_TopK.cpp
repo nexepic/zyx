@@ -591,6 +591,11 @@ namespace graph::query {
 		for (const bool admission: {false, true}) {
 			backend->state->enable_property_admission = admission;
 			backend->state->property_column_ids.clear();
+			if (!admission) {
+				EXPECT_THROW(static_cast<void>(execute(project)), std::logic_error);
+				EXPECT_TRUE(backend->state->property_column_ids.empty());
+				continue;
+			}
 			const auto result = execute(project);
 			ASSERT_EQ(result.rowCount(), 2U);
 			EXPECT_EQ(result.getRows()[0].at("score").asPrimitive(), PropertyValue(0.0));
