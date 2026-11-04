@@ -270,6 +270,26 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.edge_property_point_reads, 0U);
 	}
 
+	TEST(LogicalPlanDirectEdgeRuntimeTest, EdgePredicateRequiresSourceAdmissionBeforeReading) {
+		DirectEdgeGraph graph = directGraph(); graph.enable_adjacency_reference_pages = true;
+		graph.enable_property_read_admission = false;
+		DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"),
+			"a", "r", "b", "KNOWS", "out", {}, {},
+			PropertyValue::MapType{{"weight", PropertyValue(7)}});
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U); EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.edge_property_point_reads, 0U);
+		graph.enable_property_read_admission = true;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(traversal, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})));
+		EXPECT_EQ(delivered, 2U); EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+	}
+
 	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsOversizedAnchoredEdgePredicateBatchBeforeFullEdgeRead) {
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_adjacency_reference_pages = true;

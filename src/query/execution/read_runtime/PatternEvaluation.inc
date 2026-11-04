@@ -236,13 +236,11 @@
 												   "logical-plan pattern Property source size overflowed"));
 				};
 				const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
+				if (!sourceAdmission)
+					throw std::logic_error("bounded pattern Properties require source admission");
 				auto columns =
-						edgeRecords ? (sourceAdmission ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-																 ids, keyViews, admitProperty)
-													   : state.shared.snapshot.readEdgePropertyColumnsSorted(ids, keyViews))
-									: (sourceAdmission ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-																 ids, keyViews, admitProperty)
-													   : state.shared.snapshot.readNodePropertyColumnsSorted(ids, keyViews));
+						edgeRecords ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(ids, keyViews, admitProperty)
+									: state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keyViews, admitProperty);
 				if (columns.size() != keyViews.size()) {
 					throw std::runtime_error("logical graph pattern named columns changed column count");
 				}

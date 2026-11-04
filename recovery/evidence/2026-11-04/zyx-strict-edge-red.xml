@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="0." timestamp="2026-11-04T12:00:06.428" name="AllTests">
+  <testsuite name="LogicalPlanDirectEdgeRuntimeTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-04T12:00:06.429">
+    <testcase name="EdgePredicateRequiresSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="273" status="run" result="completed" time="0." timestamp="2026-11-04T12:00:06.429" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:283&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(traversal, directBounds(), [&amp;](const LogicalPlanReadRow &amp;) { ++delivered; return true; })) throws an exception of type std::logic_error.&#x0A;  Actual: it throws nothing.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:283
+Expected: static_cast<void>(runtime.execute(traversal, directBounds(), [&](const LogicalPlanReadRow &) { ++delivered; return true; })) throws an exception of type std::logic_error.
+  Actual: it throws nothing.
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:284&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 2&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:284
+Expected equality of these values:
+  delivered
+    Which is: 2
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:284&#x0A;Expected equality of these values:&#x0A;  graph.edge_property_column_batch_reads&#x0A;    Which is: 1&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:284
+Expected equality of these values:
+  graph.edge_property_column_batch_reads
+    Which is: 1
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:290&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 4&#x0A;  2U&#x0A;    Which is: 2&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:290
+Expected equality of these values:
+  delivered
+    Which is: 4
+  2U
+    Which is: 2
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

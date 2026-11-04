@@ -1214,9 +1214,9 @@
 									targetPropertyReadBytes.set(checkedSizeAdd(targetPropertyReadBytes.bytes(), bytes,
 										"logical-plan anchored target Property batch size overflowed"));
 								};
-								resolvedPropertyColumns = state.shared.snapshot.supportsPropertyReadAdmission()
-									? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission)
-									: state.shared.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
+								if (!state.shared.snapshot.supportsPropertyReadAdmission())
+									throw std::logic_error("bounded traversal target Properties require source admission");
+								resolvedPropertyColumns = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission);
 								if (resolvedPropertyColumns.size() != targetPropertyKeys.size())
 									throw std::runtime_error("logical graph backend changed anchored target Property column cardinality");
 								for (const auto &column: resolvedPropertyColumns)
@@ -1948,11 +1948,9 @@
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						const auto sortedColumns =
-								state.shared.snapshot.supportsPropertyReadAdmission()
-										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, edgePropertyKeys, admission)
-										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal Edge Properties require source admission");
+						const auto sortedColumns = state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, edgePropertyKeys, admission);
 						if (sortedColumns.size() != edgePredicates.size()) {
 							throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
 						}
@@ -2209,11 +2207,10 @@
 														   "logical-plan source Property payload size overflowed"));
 				};
 				const bool supportsSourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
-				std::vector<std::vector<PropertyValue>> sourceValues =
-						supportsSourceAdmission
-								? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-										  sourceIds, sourcePropertyKeyViews, admitSourceProperty)
-								: state.shared.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
+				if (!supportsSourceAdmission)
+					throw std::logic_error("bounded traversal source Properties require source admission");
+				std::vector<std::vector<PropertyValue>> sourceValues = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
+						sourceIds, sourcePropertyKeyViews, admitSourceProperty);
 				if (sourceValues.size() != sourcePropertyKeys.size()) {
 					throw std::runtime_error("logical graph backend changed source Node Property column cardinality");
 				}
@@ -2467,11 +2464,9 @@
 							}
 							selectedPropertyBytes.set(next);
 						};
-						auto sortedColumns =
-								state.shared.snapshot.supportsPropertyReadAdmission()
-										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, edgePropertyKeys, admission)
-										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal Edge Properties require source admission");
+						auto sortedColumns = state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, edgePropertyKeys, admission);
 						const size_t selectedEdgeBytes = propertyColumnBytes(
 								sortedColumns, edgePropertyKeys,
 								"logical-plan direct traversal Edge Property batch size overflowed", state.shared.context);
@@ -2665,11 +2660,10 @@
 							}
 							targetPropertyBytes.set(next);
 						};
-						auto targetValues = state.shared.snapshot.supportsPropertyReadAdmission()
-													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-															  targetIds, targetPropertyKeyViews, targetAdmission)
-													: state.shared.snapshot.readNodePropertyColumnsSorted(
-															  targetIds, targetPropertyKeyViews);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal target Properties require source admission");
+						auto targetValues = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
+								targetIds, targetPropertyKeyViews, targetAdmission);
 						const size_t selectedTargetPayloadBytes =
 								propertyColumnBytes(targetValues, targetPropertyKeyViews,
 													"logical-plan direct target Property batch size overflowed", state.shared.context);

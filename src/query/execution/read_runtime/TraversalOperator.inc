@@ -209,12 +209,10 @@
 												}
 												selectedPropertyBytes.set(next);
 											};
-											auto sortedColumns =
-													state.shared.snapshot.supportsPropertyReadAdmission()
-															? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-																	  edgeIds, edgePropertyKeys, admission)
-															: state.shared.snapshot.readEdgePropertyColumnsSorted(
-																	  edgeIds, edgePropertyKeys);
+											if (!state.shared.snapshot.supportsPropertyReadAdmission())
+												throw std::logic_error("bounded adjacent Edge Properties require source admission");
+											auto sortedColumns = state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+												edgeIds, edgePropertyKeys, admission);
 											const size_t selectedEdgeBytes = propertyColumnBytes(
 													sortedColumns, edgePropertyKeys,
 													"logical-plan adjacent Edge Property batch size overflowed", state.shared.context);
@@ -364,13 +362,10 @@
 										}
 										targetPropertyBytes.set(next);
 									};
-									auto targetColumns =
-											targetPredicates.empty() ? std::vector<std::vector<PropertyValue>>{}
-											: state.shared.snapshot.supportsPropertyReadAdmission()
-													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-															  targetIds, targetKeyViews, targetAdmission)
-													: state.shared.snapshot.readNodePropertyColumnsSorted(targetIds,
-																								   targetKeyViews);
+									if (!targetPredicates.empty() && !state.shared.snapshot.supportsPropertyReadAdmission())
+										throw std::logic_error("bounded adjacent target Properties require source admission");
+									auto targetColumns = targetPredicates.empty() ? std::vector<std::vector<PropertyValue>>{}
+											: state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(targetIds, targetKeyViews, targetAdmission);
 									const size_t targetPayloadBytes = propertyColumnBytes(
 											targetColumns, targetKeyViews,
 											"logical-plan adjacent target Property batch size overflowed", state.shared.context);
@@ -745,13 +740,10 @@
 										}
 										targetPropertyBytes.set(next);
 									};
-									const auto targetColumns =
-											targetKeyViews.empty() ? std::vector<std::vector<PropertyValue>>{}
-											: state.shared.snapshot.supportsPropertyReadAdmission()
-													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-															  targetIds, targetKeyViews, targetAdmission)
-													: state.shared.snapshot.readNodePropertyColumnsSorted(targetIds,
-																								   targetKeyViews);
+									if (!targetKeyViews.empty() && !state.shared.snapshot.supportsPropertyReadAdmission())
+										throw std::logic_error("bounded paged target Properties require source admission");
+									const auto targetColumns = targetKeyViews.empty() ? std::vector<std::vector<PropertyValue>>{}
+											: state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(targetIds, targetKeyViews, targetAdmission);
 									const size_t targetPayloadBytes = propertyColumnBytes(
 											targetColumns, targetKeyViews,
 											"logical-plan paged target Property batch size overflowed", state.shared.context);
