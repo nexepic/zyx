@@ -1289,16 +1289,12 @@
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
 						const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
+						if (!sourceAdmission && (!nodeIds.empty() || !edgeIds.empty()))
+							throw std::logic_error("bounded Property prefetch requires source admission");
 						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
-										   : sourceAdmission
-												   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-															 nodeIds, keys, admitProperty)
-												   : state.shared.snapshot.readNodePropertyColumnsSorted(nodeIds, keys);
+										   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keys, admitProperty);
 						auto edgeColumns = edgeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
-										   : sourceAdmission
-												   ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-															 edgeIds, keys, admitProperty)
-												   : state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, keys);
+										   : state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, keys, admitProperty);
 						// Invalid storage output must fail before budget retries. Otherwise
 						// smaller reads could conceal corruption in the original batch.
 						const auto validateColumns = [&](const std::vector<uint64_t> &ids,

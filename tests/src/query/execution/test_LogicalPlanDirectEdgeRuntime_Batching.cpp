@@ -1944,6 +1944,7 @@ namespace graph::query::execution {
 			});
 			direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
 			graph.enable_property_tokens = true;
+			graph.enable_property_read_admission = true;
 			graph.nodes.clear();
 			const PropertyValue payload(std::string(3000U, 'p'));
 			for (uint64_t id = 1; id <= 6; ++id)
@@ -1969,5 +1970,26 @@ namespace graph::query::execution {
 			if (budget == 100000U) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
 			EXPECT_EQ(graph.node_property_point_reads, 0U);
 		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PropertyPrefetchRejectsBackendWithoutSourceAdmissionBeforeReading) {
+		direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
+		graph.enable_property_tokens = true;
+		graph.enable_property_read_admission = false;
+		graph.nodes.clear();
+		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"payload", PropertyValue(std::string(3000U, 'p'))}}});
+		direct_edge_test::DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "payload"), "payload");
+		logical::LogicalProject root(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
+		auto bounds = direct_edge_test::directBounds(); bounds.maximum_materialized_bytes = 4096U;
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
 }

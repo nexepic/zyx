@@ -63,7 +63,9 @@ namespace graph::query::execution::direct_edge_test {
 			bool enable_native_topology_pages = false;
 			bool enable_shaped_property_admission = false;
 			bool enable_adjacency_read_admission = false;
-			bool enable_property_read_admission = false;
+			// The strict reader contract requires source admission before copying
+			// selected payloads; unsupported-reader tests opt out explicitly.
+			bool enable_property_read_admission = true;
 			std::vector<uint64_t> node_read_ids;
 			std::vector<uint64_t> node_ref_scan_order;
 			std::vector<uint64_t> edge_read_ids;

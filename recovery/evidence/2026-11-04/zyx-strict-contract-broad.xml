@@ -1,0 +1,558 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="191" failures="50" disabled="0" errors="0" time="0.162" timestamp="2026-11-04T11:43:50.853" name="AllTests">
+  <testsuite name="LogicalPlanDirectEdgeRuntimeTest" tests="191" failures="50" disabled="0" skipped="0" errors="0" time="0.161" timestamp="2026-11-04T11:43:50.853">
+    <testcase name="NodePredicateBufferLeavesRoomForHeapPayloadsAcrossManyBatches" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="10" status="run" result="completed" time="0.005" timestamp="2026-11-04T11:43:50.853" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="44" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.859" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PropertyColumnLastConsumerPreservesRepeatedEntityPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="95" status="run" result="completed" time="0.002" timestamp="2026-11-04T11:43:50.860" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CompleteNodeAndEdgeCachesShareTheExecutionBudgetAndReuseRecords" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="138" status="run" result="completed" time="0.003" timestamp="2026-11-04T11:43:50.863" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AppliesSourceEdgeAndTargetPredicatesWithoutAdjacencyDescent" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="196" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.867" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesEdgePredicatesOnAnchoredReferencePages" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="228" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.867" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsOversizedAnchoredEdgePredicateBatchBeforeFullEdgeRead" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="253" status="run" result="completed" time="0.005" timestamp="2026-11-04T11:43:50.867" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesEveryEdgePredicateAndPreservesSelectedValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="277" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.872" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DeduplicatesPropertyReadsButPreservesDuplicateEdgeRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="305" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.873" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="SplitsLargeEdgeProjectionIntoBoundedBatches" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="324" status="run" result="completed" time="0.025" timestamp="2026-11-04T11:43:50.873" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesEdgeFilterPropertyAndReusesItForProjection" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="351" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.898" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="GlobalEdgePropertyPathDoesNotScanUnconstrainedSources" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="381" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.898" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="GlobalEdgePropertyPathFailsClosedForMissingSourceEndpoint" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="405" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.898" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesMultiplePropertiesFromOneFilterExpression" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="423" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.899" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesDeferredEdgeProjectionAcrossTheTraversal" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="454" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.899" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="EnforcesMaterializedByteBoundForLargeSelectedProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="481" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.899" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="RejectsOversizedSelectedEdgePredicateBatchBeforeOutputMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="503" status="run" result="completed" time="0.002" timestamp="2026-11-04T11:43:50.900" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="EnforcesMaterializedByteBoundAtPublicEntityResultBoundary" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="524" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.902" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RawNodeResultPreflightsItsCompletePayloadBeforePublication" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="538" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.904" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RawEdgeResultPreflightsItsCompletePayloadBeforePublication" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="626" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.905" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CachedNodeReferenceResultPreservesPayloadAndRejectsDuplicates" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="667" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.906" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CachedEdgeReferenceResultPreservesPayloadAndRejectsDuplicates" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="711" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.906" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="OversizedEdgeReferenceFallbackPreservesCompleteResult" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="737" status="run" result="completed" time="0.016" timestamp="2026-11-04T11:43:50.906" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ShapedReferenceSourceAdmissionRejectsBeforePayloadCopy" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="770" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.922" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PatternNamedColumnsShareSourceAndRetainedBatchBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="817" status="run" result="completed" time="0.003" timestamp="2026-11-04T11:43:50.923" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReusesQueryBoundEdgeMaterializationForRepeatedIntrospection" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="852" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.926" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesEntityMetadataForRepeatedIntrospectionExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="886" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.927" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="SplitsMetadataPrefetchWhenSourceAndRowCopiesExceedBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="934" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.927" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="JoinAndOptionalMatchRetainEntityMetadataCaches" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="967" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.927" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="InvalidatesEntityMetadataWhenUnwindRebindsAnEntityVariable" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1020" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.928" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsRelationshipReferenceWithStaleTypeToken" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1048" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.928" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DoesNotCacheMaterializedEdgesBeyondTheByteBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1058" status="run" result="completed" time="0.004" timestamp="2026-11-04T11:43:50.928" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BorrowedUnwindKeepsEntityScalarConversionAndSuppression" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1086" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.932" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="SubqueryOuterAndImportedRowsShareTheExecutionBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1107" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.932" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="UnitSubqueryReleasesImportedRowsBeforeDownstreamSort" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1156" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedSortPrefetchesOuterPropertyAndTransfersRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1186" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="NestedSortPrefetchCombinesRowsWhenBudgetAllows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1220" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FilterBetweenSortsTransfersSelectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1250" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ProjectBetweenSortsTransfersProjectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1284" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="DistinctProjectBetweenSortsReleasesDuplicateRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1319" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.933" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="SortPreservesProjectedFilteredRowsWithoutOuterPrefetch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1340" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.934" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SortReceivesWindowedRowsThroughSkipAndLimit" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1379" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.934" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1399" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.934" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="OwnedSubqueryReturnsPreserveLargePayloadDuplicatesAndVisitorStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1426" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.934" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CorrelatedSubqueryAdmitsCombinedOutputBesideLiveImports" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1453" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.934" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="JoinBatchBudgetStillRejectsOversizedRowsDiscardedBySkip" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1501" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.935" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedJoinAndOptionalBuffersShareTheExecutionBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1555" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.936" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="JoinChargesBufferedRowsOnceAndStillEnforcesItsByteBound" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1616" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.936" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="JoinAndOptionalAdmitCombinedRowsWithRetainedPatternBytes" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1669" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.937" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoHopMergedTargetsFilterBeforeEnforcingMultiplicityRowBound" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="10" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.937" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoHopParallelFinalEdgesAggregateWithinBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="47" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="71" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoHopLabelCardinalityFailureCanRetryAtEitherHop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="95" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoHopCountBudgetFailureCanRetryWithParallelEdgeMultiplicity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="126" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AggregateKeepsInputChargeWhileGrowingGroupsButStreamsCountOnly" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="155" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AggregateChargesGroupVectorGrowthPeak" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="196" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.938" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BorrowedCountPredicatesPreserveLiteralTypesDuplicatesAndContradictions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="245" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.939" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DirectCountRejectsCorruptedColumnsBeforeBytePressureRetries" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="303" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.940" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredCountAdmitsTargetColumnsBeforeCopyingPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="328" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.940" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DirectFilteredCountSplitsSharedPropertyScratchAndRejectsOversizedCells" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="350" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.940" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AggregatesNodePropertiesThroughOneSelectedColumnBatch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="392" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CountPropertyFallbackExcludesNullAndAvoidsExtraEntityReads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="414" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="GroupedMixedCountOmitsPayloadOnlyWithNonNullCapability" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="450" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CountUsesProjectedPropertyColumnBeforeEntityProbe" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="493" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesSafeSubsetOfMixedAggregateExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="513" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SharesOneBatchAcrossGroupedAndMultipleAggregatePropertyExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="544" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="AggregatesEdgePropertiesThroughOneSelectedColumnBatch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="573" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.941" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CountsEdgePropertyMatchesThroughSortedColumnsWithoutRowMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="596" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="FusesFilteredEdgeCountIntoTheSelectedColumnScan" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="629" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="FilteredEdgeCountValidatesEndpointsOnceAndFailsClosed" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="668" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ShortCircuitsContradictoryInlineAndFilterEdgeCounts" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="690" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CountsUnconstrainedEdgesThroughReferencesWithoutTypeMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="718" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DoesNotMaterializeUnboundTopologyOnlyTargetNodes" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="745" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsAnUnknownNativeRelationshipTypeBeforeScanningEdges" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="765" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="DoesNotApplyDirectNodeCountWhenAParameterPredicateFiltersTheScan" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="785" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="EnforcesGlobalAndPerSourceEdgeBounds" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="810" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AcceptsUnorderedPhysicalTopologyAndHonorsEarlyStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="839" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.942" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="LimitStopsTopologyOnlyDirectTraversalBeforeReadAhead" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="877" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsAnUnincrementableGlobalEdgeBound" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="913" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchAdjacencyCountPreservesDirectionAndSelfLoopSemantics" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="928" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchAdjacencyCountAppliesTypeLabelsAndEndpointLiveness" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="957" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NativeAdjacencySkipsTargetIoAfterEdgePredicatesRejectTheBatch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="992" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NativeAdjacencyRejectsInvalidTargetPropertyDefinitions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1018" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NativeAdjacencyTreatsTargetLabelMissAsAFilter" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1037" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.943" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NativeAdjacencyRejectsMissingEndpointsAndBatchCardinalityChanges" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1059" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.944" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NativeAdjacencyRejectsCorruptedSelectedColumnCardinality" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1084" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.944" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredCountReservesOnlyDemandedPendingCapacity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1104" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.944" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredLabelBitsRejectMalformedProbeAndRetryReferenceSource" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1127" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.944" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredLabelsRemainCorrectBeyondOptionalCacheLimit" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1150" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.944" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredPropertiesRemainCorrectBeyondOptionalCacheLimit" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1179" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.945" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AnchoredPropertiesBorrowLongDuplicateKeysWithinBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1209" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.945" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AggregateObjectAdmissionRejectsBeforeScanningAndAllowsFreshExecution" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp" line="1233" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.946" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesEdgePropertySortKeysBeforeOrdering" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="9" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="AdmitsDirectTraversalEdgePropertyColumnsBeforeCopyingPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="32" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AdmitsDirectTraversalTargetColumnsBeforeCopyingPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="53" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AdmitsConstrainedSourceColumnsBeforeCopyingPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="75" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesAdjacentTargetPropertyPredicatesByReferencePage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="99" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AdmitsAdjacentTargetColumnsBeforeCopyingPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="119" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.947" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReservesAdjacentTargetColumnFramesBeforeReadingMissingProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="142" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.948" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReservesAdjacentEdgeColumnFramesBeforeReadingMissingProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="160" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.948" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="AccountsPendingReferencesForConstrainedSourceTraversal" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="178" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.948" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesSafeSubsetOfMixedSortKeys" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="200" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.948" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityReferencesAndPreservesProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="266" status="run" result="completed" time="0.008" timestamp="2026-11-04T11:43:50.948" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEdgeEntityReferencesUnderSharedBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="307" status="run" result="completed" time="0.01" timestamp="2026-11-04T11:43:50.956" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesDeferredNodeSortKeysBeforeQueryResultMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="356" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.967" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesCompleteEntityProjectionAcrossNodeRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="387" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.967" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesImportedPropertiesAcrossReadOnlyCorrelatedSubqueryRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="416" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.967" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesImportedListPropertiesForCorrelatedSubqueryUnwind" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="443" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.967" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesCompleteImportedEntityAcrossReadOnlyCorrelatedSubqueryRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="474" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.967" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CallSubqueryCarriesEntityMetadataCachesAcrossImportedAndReturnedAliases" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="504" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.968" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityPayloadAfterJoinAndOptionalMatch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="546" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.968" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityFilterPredicateAcrossNodeRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="597" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityKeysFilterAndPreservesDuplicateRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="627" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CompleteEntityFilterTreatsNullPredicateAsUnknown" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="658" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CompleteEntityFilterStopsAtTheVisitorBoundary" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="683" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityAggregateArguments" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="711" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesSelectedPropertyAndCompleteEntityWithinOneAggregateExpression" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="736" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.969" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="KeepsSafeCompleteEntityAggregateBatchBesideExistsExpression" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="769" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.970" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompleteEntityInsideCaseBesideNestedExistsScope" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="803" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.970" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesGroupedAggregateWithCompleteEntityArguments" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="840" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.970" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PreservesReversedPropertyComparisonSemantics" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="878" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.970" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesAllSourcePredicateColumnsInOneSortedRead" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="900" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.970" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TransfersSourcePredicateColumnIntoDownstreamRowCache" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="928" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesNodeScanPredicateColumnsBeforeRowMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="959" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesPropertyProjectionDirectlyOverNodeScan" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="985" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FlushesSelectedPropertyRowsBeforeTheByteBudgetIsExceeded" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1008" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="SplitsVariablePropertyPayloadBatchesAndPreservesEarlyStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1042" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1091" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.971" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { delivered.push_back(std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;))); return !stopEarly; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123
+Expected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at("payload"))); return !stopEarly; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: {}&#x0A;  expected&#x0A;    Which is: { 64-byte object &lt;00-19 13-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72&gt;, 64-byte object &lt;70-E0 0E-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 6F-77 6E-20 69-6E 20-74 68-65 20-74 65-73 74-20 62-6F 64-79 2E-0A 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;60-61 13-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;50-9B 07-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;80-30 FB-EA DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;D0-02 14-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-EF 0B-EB DE-55 00-00 04-EE 0B-EB DE-55 00-00&gt; }&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126
+Expected equality of these values:
+  delivered
+    Which is: {}
+  expected
+    Which is: { 64-byte object <00-19 13-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72>, 64-byte object <70-E0 0E-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 6F-77 6E-20 69-6E 20-74 68-65 20-74 65-73 74-20 62-6F 64-79 2E-0A 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <60-61 13-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <50-9B 07-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <80-30 FB-EA DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <D0-02 14-EB DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-EF 0B-EB DE-55 00-00 04-EE 0B-EB DE-55 00-00> }
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1128&#x0A;Expected: (graph.node_property_column_batch_reads) &gt; (1U), actual: 0 vs 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1128
+Expected: (graph.node_property_column_batch_reads) > (1U), actual: 0 vs 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { delivered.push_back(std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;))); return !stopEarly; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123
+Expected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at("payload"))); return !stopEarly; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: {}&#x0A;  expected&#x0A;    Which is: { 64-byte object &lt;80-30 FB-EA DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72&gt; }&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126
+Expected equality of these values:
+  delivered
+    Which is: {}
+  expected
+    Which is: { 64-byte object <80-30 FB-EA DE-55 00-00 F4-01 00-00 00-00 00-00 F4-01 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72> }
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1132&#x0A;Expected: (graph.node_property_column_batch_reads) &gt;= (1U), actual: 0 vs 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1132
+Expected: (graph.node_property_column_batch_reads) >= (1U), actual: 0 vs 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { delivered.push_back(std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;))); return !stopEarly; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123
+Expected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at("payload"))); return !stopEarly; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: {}&#x0A;  expected&#x0A;    Which is: { 64-byte object &lt;70-5A 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72&gt;, 64-byte object &lt;E0-45 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 6F-77 6E-20 69-6E 20-74 68-65 20-74 65-73 74-20 62-6F 64-79 2E-0A 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;E0-9F 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;40-34 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;20-40 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00&gt;, 64-byte object &lt;00-4C 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-EF 0B-EB DE-55 00-00 04-EE 0B-EB DE-55 00-00&gt; }&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126
+Expected equality of these values:
+  delivered
+    Which is: {}
+  expected
+    Which is: { 64-byte object <70-5A 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72>, 64-byte object <E0-45 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 6F-77 6E-20 69-6E 20-74 68-65 20-74 65-73 74-20 62-6F 64-79 2E-0A 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <E0-9F 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <40-34 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <20-40 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <00-4C 16-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-EF 0B-EB DE-55 00-00 04-EE 0B-EB DE-55 00-00> }
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1128&#x0A;Expected: (graph.node_property_column_batch_reads) &gt; (1U), actual: 0 vs 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1128
+Expected: (graph.node_property_column_batch_reads) > (1U), actual: 0 vs 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { delivered.push_back(std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;))); return !stopEarly; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123
+Expected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at("payload"))); return !stopEarly; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: {}&#x0A;  expected&#x0A;    Which is: { 64-byte object &lt;70-5A 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72&gt; }&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126
+Expected equality of these values:
+  delivered
+    Which is: {}
+  expected
+    Which is: { 64-byte object <70-5A 14-EB DE-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 69-70 74-69 6F-6E 20-22 62-6F 75-6E 64-65 64-20 50-72 6F-70 65-72 74-79 20-70 72-65 66-65 74-63 04-20 72-65 71-75 69-72> }
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: true
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500
+]]></failure>
+    </testcase>
+    <testcase name="PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1147" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.972" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1166&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, visit)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1166
+Expected: static_cast<void>(runtime.execute(root, bounds, visit)) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1167&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1167
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1175&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, visit)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1175
+Expected: static_cast<void>(runtime.execute(root, bounds, visit)) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1176&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  6U&#x0A;    Which is: 6&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1176
+Expected equality of these values:
+  delivered
+    Which is: 0
+  6U
+    Which is: 6
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1177&#x0A;Expected: (graph.node_property_column_batch_reads) &gt; (readsBefore + 1U), actual: 0 vs 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1177
+Expected: (graph.node_property_column_batch_reads) > (readsBefore + 1U), actual: 0 vs 1
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1180&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(root, bounds, visit)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1180
+Expected: static_cast<void>(runtime.execute(root, bounds, visit)) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1181&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  6U&#x0A;    Which is: 6&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1181
+Expected equality of these values:
+  delivered
+    Which is: 0
+  6U
+    Which is: 6
+]]></failure>
+    </testcase>
+    <testcase name="PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1186" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.972" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(sort, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;payload\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215
+Expected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"payload\"))", "payload", std::get<PropertyValue>(row.values.at("payload")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(sort, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;payload\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215
+Expected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"payload\"))", "payload", std::get<PropertyValue>(row.values.at("payload")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true
+]]></failure>
+    </testcase>
+    <testcase name="ReservesCrossRowPropertyColumnFramesBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1222" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsMalformedPropertyColumnsBeforeBudgetRetries" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1247" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="DeduplicatesComplexProjectionPropertyRequestsInOneBatch" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1290" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesPropertySubsetOfMixedProjection" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1336" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesNodeListPropertiesBeforeUnwindExpansion" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1363" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="PublicVisitorKeepsUnwindPropertyReadAheadDisabled" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1390" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReusesSelectedPropertiesAcrossEntityAliasProjections" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1416" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="RenamedIdentityProjectionPreservesEntityMetadataCache" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1451" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.973" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesMapProjectionPropertySelectorsWithNestedPropertyExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1488" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesDynamicListLiteralPropertyExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1519" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ReportsPrefetchMovesWithoutChangingProjectionValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1552" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BorrowsRepeatedOwnerColumnsWhilePreservingBagRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1568" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BorrowedWideColumnsOwnEscapedResultsAndReleaseOnEarlyStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1592" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BorrowsMultipleNodeColumnsPreservingOrderMissingAndNull" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1611" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BorrowsAggregateNodeColumnsPreservingGroupsAndBagMultiplicity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1668" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.974" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BorrowedAggregateColumnsIgnoreMissingAndNullValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1714" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.975" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CollectedTwoHopTopologyPreservesStreamingOrderAndBag" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1740" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.975" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="CollectedTwoHopLimitDoesNotValidateALaterDanglingTarget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1775" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.975" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReleasesReferenceTargetScratchAcrossRejectedLabelBatchesAndFailure" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1790" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.975" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BorrowedColumnOutputCopiesReportRetainedBytesAndOwnTheirValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1820" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.976" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="GenericMapPropertyCopiesAreOwnedAndReportRetainedPayloads" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1852" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.976" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TwoLiveProjectedPayloadsShareOneMaterializationBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1883" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.976" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1907&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(*project(false), bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;a\&quot;))&quot;, &quot;first&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;a&quot;)), first))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1906, gtest_ar.failure_message()) = ::testing::Message(); return true; }, context)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1907
+Expected: static_cast<void>(runtime.execute(*project(false), bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"a\"))", "first", std::get<PropertyValue>(row.values.at("a")), first))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1906, gtest_ar.failure_message()) = ::testing::Message(); return true; }, context)) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1908&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1908
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1913&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(*project(true), bounds, [&amp;](const LogicalPlanReadRow &amp;) { ++delivered; return true; }, context)) throws an exception of type std::runtime_error.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1913
+Expected: static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &) { ++delivered; return true; }, context)) throws an exception of type std::runtime_error.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1922&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(*project(true), bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;a\&quot;))&quot;, &quot;first&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;a&quot;)), first))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1920, gtest_ar.failure_message()) = ::testing::Message(); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;b\&quot;))&quot;, &quot;second&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;b&quot;)), second))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1921, gtest_ar.failure_message()) = ::testing::Message(); return true; }, context)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::logic_error with description &quot;bounded Property prefetch requires source admission&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1922
+Expected: static_cast<void>(runtime.execute(*project(true), bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"a\"))", "first", std::get<PropertyValue>(row.values.at("a")), first))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1920, gtest_ar.failure_message()) = ::testing::Message(); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"b\"))", "second", std::get<PropertyValue>(row.values.at("b")), second))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1921, gtest_ar.failure_message()) = ::testing::Message(); return true; }, context)) doesn't throw an exception.
+  Actual: it throws std::logic_error with description "bounded Property prefetch requires source admission".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1926&#x0A;Expected: (boundReads) != (trace.end()), actual: 8-byte object &lt;00-00 00-00 00-00 00-00&gt; vs 8-byte object &lt;00-00 00-00 00-00 00-00&gt;&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1926
+Expected: (boundReads) != (trace.end()), actual: 8-byte object <00-00 00-00 00-00 00-00> vs 8-byte object <00-00 00-00 00-00 00-00>
+]]></failure>
+    </testcase>
+    <testcase name="TightAndAmplePropertyPrefetchReadEachNodeOnce" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1934" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.977" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PropertyPrefetchRejectsBackendWithoutSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1975" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.977" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesOuterPropertiesUsedByPatternComprehension" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="7" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.977" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesPatternLocalTargetPropertiesByAdjacencyPage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="39" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.977" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesPatternLocalRelationshipPropertiesByAdjacencyPage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="68" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.977" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesPatternLocalPropertiesOnTopologyPages" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="97" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.978" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ConstantPatternProjectionRetainsAnonymousTargetLabelFiltering" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="127" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.978" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PatternMetadataOnlyBatchSkipsSourceTargetAndEdgeProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="152" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.978" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesCompletePatternPropertyMapsWithoutReadingRelationshipProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="188" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.978" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CompleteRelationshipPatternBatchDoesNotReadTargetProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="223" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.978" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="MetadataExistsReadsOnlyOneShapedCandidateBeforeStopping" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="251" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CompletePropertyExistsStopsBeforeUnneededCandidatePayload" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="297" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="KeepsPatternLocalPropertiesOnSemanticFallback" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="332" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesOuterPropertyInsidePatternLocalMapProjection" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="359" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesOuterPropertiesUsedByListComprehensions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="397" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="BatchesOuterPropertiesUsedByReduceAndQuantifierExpressions" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="431" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.979" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ScopedExpressionBindingsDoNotPrefetchShadowedOuterEntities" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="475" status="run" result="completed" time="0.002" timestamp="2026-11-04T11:43:50.980" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ScopedCollectorsKeepOuterReadsInListSourcesAndReduceInitializers" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="515" status="run" result="completed" time="0.005" timestamp="2026-11-04T11:43:50.982" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="TopologyOnlyExistsUsesReferencePagesWithoutEntityMaterialization" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="540" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.987" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="BatchesTargetNodePredicatesByDistinctSortedTargetIds" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="571" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.987" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CountsNodesFromReferencesWithoutMaterializingNodeRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="605" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.987" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsInvalidNodeReferencesAtTheDirectCountBoundary" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="631" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.988" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsInvalidEdgeReferencesAtTheDirectTraversalBoundary" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="651" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:50.988" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedGraphScopesReadOnlyTheirSelectedEntityProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="671" status="run" result="completed" time="0.009" timestamp="2026-11-04T11:43:50.988" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedCompletePropertyRequirementsStayWithTheirEntityScope" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="720" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:50.998" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PatternNamedColumnsPreserveUnknownTokensAndMissingValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="747" status="run" result="completed" time="0.003" timestamp="2026-11-04T11:43:50.999" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PatternNamedColumnsRejectMalformedBatchesAndRequestedLargeValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="807" status="run" result="completed" time="0.002" timestamp="2026-11-04T11:43:51.003" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="CompletePatternMapsDoNotAcquireMissingNamedFields" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="840" status="run" result="completed" time="0.001" timestamp="2026-11-04T11:43:51.005" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReferenceTargetPlanLiteralsKeepIndependentOutputAndPropertyOrder" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="866" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.007" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReferenceTargetPlanLiteralsRetainDefinitionAndNullChecks" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp" line="897" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.007" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="FilterSelectedColumnsPreserveEscapedCachesAndBagOrder" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="8" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.008" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FilterSelectedColumnsKeepNullAndMissingPredicateSemantics" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="53" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.008" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="81" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.008" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="JoinFilterPushdownPreservesScalarBagNullsAndEarlyStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="121" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.008" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="170" status="run" result="completed" time="0.005" timestamp="2026-11-04T11:43:51.009" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;bounded Property prefetch requires source admission&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "bounded Property prefetch requires source admission" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="RejectsTargetLabelsBeforeMaterializingTypedEdgePredicates" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp" line="5" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.014" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsMissingTypedTopologyEndpointBeforeReadingEdgeProperties" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp" line="27" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.014" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="RejectsDuplicateTopologyBeforeReadingEdgePropertiesAndRetries" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp" line="48" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.015" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ReferenceTraversalRejectsMissingEndpointBeforePropertyColumns" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanTraversalTopologyPrefilter.cpp" line="69" status="run" result="completed" time="0." timestamp="2026-11-04T11:43:51.015" classname="LogicalPlanDirectEdgeRuntimeTest" />
+  </testsuite>
+</testsuites>
