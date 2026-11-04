@@ -1934,11 +1934,13 @@ namespace graph::query::execution {
 	TEST(LogicalPlanDirectEdgeRuntimeTest, TightAndAmplePropertyPrefetchReadEachNodeOnce) {
 		for (const size_t budget : {size_t{4096U}, size_t{100000U}}) {
 			SCOPED_TRACE(budget);
-			struct Trace { size_t node_splits = 0; } trace;
+			struct Trace { size_t node_splits = 0; size_t prefetch_splits = 0; } trace;
 			debug::PerfTrace::ScopedObserver observer(&trace, [](void *owner, std::string_view key,
 																	 int64_t value, bool) noexcept {
 				if (key == "logical_plan.node_predicate_split_batches" && value > 0)
 					static_cast<Trace *>(owner)->node_splits += static_cast<size_t>(value);
+				if (key == "logical_plan.property_prefetch_split_batches" && value > 0)
+					static_cast<Trace *>(owner)->prefetch_splits += static_cast<size_t>(value);
 			});
 			direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
 			graph.enable_property_tokens = true;
@@ -1962,7 +1964,8 @@ namespace graph::query::execution {
 				fetched.insert(fetched.end(), batch.begin(), batch.end());
 			std::ranges::sort(fetched);
 			EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U}))
-					<< "node predicate splits=" << trace.node_splits;
+					<< "node predicate splits=" << trace.node_splits
+					<< ", property prefetch splits=" << trace.prefetch_splits;
 			if (budget == 100000U) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
 			EXPECT_EQ(graph.node_property_point_reads, 0U);
 		}

@@ -1562,8 +1562,10 @@
 					largestInputRowBytes = 0U;
 					return keepGoing;
 				} catch (const PrefetchBytePressure &) {
-					if (rows.size() > 1U)
+					if (rows.size() > 1U) {
+						debug::PerfTrace::addValue("logical_plan.property_prefetch_split_batches", 1);
 						return splitBufferedRowsAndFlush();
+					}
 					throw std::runtime_error("bounded batch exceeded its byte limit");
 				}
 			};

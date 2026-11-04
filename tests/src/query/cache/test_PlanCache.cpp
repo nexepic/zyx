@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdio>
 #include <limits>
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 
@@ -124,6 +125,10 @@ TEST(PlanCacheTest, EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllows
 	}
 	ASSERT_GE(allocations, 4U); ASSERT_EQ(memory->grant->used(), 0U);
 	for (size_t failure = 1U; failure <= allocations; ++failure) {
+#ifdef _WIN32
+        std::fprintf(stderr, "PlanCache injected allocation failure %zu of %zu\n", failure, allocations);
+        std::fflush(stderr);
+#endif
 		SCOPED_TRACE(failure); memory->fail_at = (std::numeric_limits<size_t>::max)();
 		{
 			PlanCache cache(2U, memory);
