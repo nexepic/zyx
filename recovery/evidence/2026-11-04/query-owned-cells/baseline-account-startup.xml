@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="0.149" timestamp="2026-11-04T14:08:23.167" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0.149" timestamp="2026-11-04T14:08:23.168">
+    <testcase name="RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1375" status="run" result="completed" time="0.149" timestamp="2026-11-04T14:08:23.168" classname="RelocatableStorageBackendTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1416&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(*plan.root, bounds, visit, context)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description &quot;shared materialization exceeded its byte bound&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1416
+Expected: static_cast<void>(runtime.execute(*plan.root, bounds, visit, context)) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 0
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  mode == 2 ? 3U : 1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 0&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417
+Expected equality of these values:
+  delivered
+    Which is: 0
+  mode == 2 ? 3U : 1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 0
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  mode == 2 ? 3U : 1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417
+Expected equality of these values:
+  delivered
+    Which is: 0
+  mode == 2 ? 3U : 1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 1
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1416&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(*plan.root, bounds, visit, context)) doesn&apos;t throw an exception.&#x0A;  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description &quot;shared materialization exceeded its byte bound&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 2&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1416
+Expected: static_cast<void>(runtime.execute(*plan.root, bounds, visit, context)) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 2
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  mode == 2 ? 3U : 1U&#x0A;    Which is: 3&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 2&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1417
+Expected equality of these values:
+  delivered
+    Which is: 0
+  mode == 2 ? 3U : 1U
+    Which is: 3
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1396: 2
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1421&#x0A;Expected equality of these values:&#x0A;  fresh-&gt;readNodeProperty(ids.back(), &quot;payload&quot;)&#x0A;    Which is: 64-byte object &lt;90-B8 5B-FC 63-55 00-00 B8-0B 00-00 00-00 00-00 B8-0B 00-00 00-00 00-00 B0-4F 8A-84 63-7F 00-00 30-3D 22-AA FF-7F 00-00 00-00 00-00 00-00 00-00 28-3D 22-AA FF-7F 00-00 04-3C 22-AA FF-7F 00-00&gt;&#x0A;  PropertyValue(std::string(3000U, &apos;z&apos;))&#x0A;    Which is: 64-byte object &lt;C0-AC 5B-FC 63-55 00-00 B8-0B 00-00 00-00 00-00 B8-0B 00-00 00-00 00-00 A8-04 59-84 63-7F 00-00 0E-56 BC-84 63-7F 00-00 CD-09 00-00 00-00 00-00 80-5E 5A-84 63-7F 00-00 04-F5 B2-84 63-7F 00-00&gt;&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1421
+Expected equality of these values:
+  fresh->readNodeProperty(ids.back(), "payload")
+    Which is: 64-byte object <90-B8 5B-FC 63-55 00-00 B8-0B 00-00 00-00 00-00 B8-0B 00-00 00-00 00-00 B0-4F 8A-84 63-7F 00-00 30-3D 22-AA FF-7F 00-00 00-00 00-00 00-00 00-00 28-3D 22-AA FF-7F 00-00 04-3C 22-AA FF-7F 00-00>
+  PropertyValue(std::string(3000U, 'z'))
+    Which is: 64-byte object <C0-AC 5B-FC 63-55 00-00 B8-0B 00-00 00-00 00-00 B8-0B 00-00 00-00 00-00 A8-04 59-84 63-7F 00-00 0E-56 BC-84 63-7F 00-00 CD-09 00-00 00-00 00-00 80-5E 5A-84 63-7F 00-00 04-F5 B2-84 63-7F 00-00>
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

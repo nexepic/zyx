@@ -1,0 +1,599 @@
+JOB 126432106315
+CI_BUDGET_CASE BEGIN LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads
+2026-11-04T07:15:14.8386657Z CI_BUDGET operation=wouldExceed requested=24530 previous=24512 embedded=0 used=257172 peak=257172 maximum=257180 available=8 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:14.8425493Z CI_BUDGET operation=replace requested=38400 previous=0 embedded=0 used=233100 peak=233100 maximum=257180 available=24080 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:15.1917279Z 
+2026-11-04T07:15:15.1918239Z ================================================================================
+2026-11-04T07:15:15.1918692Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:15.1919055Z ================================================================================
+2026-11-04T07:15:15.1919330Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:15.1919461Z 
+2026-11-04T07:15:15.1919465Z 
+2026-11-04T07:15:15.1919808Z [  0% |   0/  1] X SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads FAILED
+2026-11-04T07:15:15.1920532Z               <unknown>:-1
+2026-11-04T07:15:15.1920966Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:15.1921337Z 
+2026-11-04T07:15:15.1921631Z [100% |   1/  1] FAIL LogicalVectorBufferedSortTest (1 failures, 108 ms)
+2026-11-04T07:15:15.1922400Z 
+2026-11-04T07:15:15.1922738Z ================================================================================
+2026-11-04T07:15:15.1923230Z   TESTS FAILED!
+2026-11-04T07:15:15.1923394Z 
+2026-11-04T07:15:15.1923535Z   Passed: 0
+2026-11-04T07:15:15.1923800Z   Failed: 1
+2026-11-04T07:15:15.1924005Z   Time  : 109 ms
+2026-11-04T07:15:15.1924382Z ================================================================================
+2026-11-04T07:15:15.1924679Z 
+2026-11-04T07:15:15.2264973Z CI_BUDGET_CASE END LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads exit=1
+2026-11-04T07:15:15.2265791Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget
+2026-11-04T07:15:15.8671551Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8672003Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8672369Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8680163Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8683565Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8684335Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8684910Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8685459Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8686030Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8686948Z CI_BUDGET operation=replace requested=3976 previous=0 embedded=0 used=536 peak=536 maximum=4275 available=3739 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:15.8690704Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8691105Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8691462Z CI_STRING_BOUND characters=1200 raw_upper=1216 proxy=16 admitted=1232
+2026-11-04T07:15:15.8693002Z CI_BUDGET operation=replace requested=3976 previous=0 embedded=0 used=536 peak=536 maximum=1626 available=1090 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:16.1213646Z 
+2026-11-04T07:15:16.1214566Z ================================================================================
+2026-11-04T07:15:16.1215126Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:16.1215616Z ================================================================================
+2026-11-04T07:15:16.1216003Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:16.1216174Z 
+2026-11-04T07:15:16.1216191Z 
+2026-11-04T07:15:16.1216622Z [  0% |   0/  1] X ProjectExpressionsShareRetainedProcedureOutputBudget FAILED
+2026-11-04T07:15:16.1217502Z               D:\a\zyx\zyx\tests\src\query\api\test_LogicalVectorProcedureBatch_Materialization.cpp:25
+2026-11-04T07:15:16.1218089Z               Expected equality of these values:
+2026-11-04T07:15:16.1218679Z                 error.what()
+2026-11-04T07:15:16.1219076Z                   Which is: "shared materialization exceeded its byte bound"
+2026-11-04T07:15:16.1219662Z                 "logical procedure source and retained result exceeded their byte bound"
+2026-11-04T07:15:16.1220018Z 
+2026-11-04T07:15:16.1220511Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)
+2026-11-04T07:15:16.1221259Z 
+2026-11-04T07:15:16.1221544Z ================================================================================
+2026-11-04T07:15:16.1221978Z   TESTS FAILED!
+2026-11-04T07:15:16.1222139Z 
+2026-11-04T07:15:16.1222272Z   Passed: 0
+2026-11-04T07:15:16.1222523Z   Failed: 1
+2026-11-04T07:15:16.1222713Z   Time  : 3 ms
+2026-11-04T07:15:16.1223067Z ================================================================================
+2026-11-04T07:15:16.1223366Z 
+2026-11-04T07:15:16.1565702Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget exit=1
+2026-11-04T07:15:16.1566844Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget
+2026-11-04T07:15:16.7977212Z CI_BUDGET operation=wouldExceed requested=13344 previous=0 embedded=0 used=3093 peak=3093 maximum=15944 available=12851 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:16.7978520Z CI_BUDGET operation=wouldExceed requested=8896 previous=0 embedded=0 used=7429 peak=7541 maximum=15944 available=8515 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:16.7979380Z CI_BUDGET operation=wouldExceed requested=4448 previous=0 embedded=0 used=11765 peak=11877 maximum=15944 available=4179 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:17.0478244Z 
+2026-11-04T07:15:17.0479047Z ================================================================================
+2026-11-04T07:15:17.0480615Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:17.0480982Z ================================================================================
+2026-11-04T07:15:17.0481256Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:17.0481383Z 
+2026-11-04T07:15:17.0481387Z 
+2026-11-04T07:15:17.0481686Z [  0% |   0/  1] X GdsDijkstraProcedureForwardsMaterializedByteBudget FAILED
+2026-11-04T07:15:17.0483010Z               D:\a\zyx\zyx\tests\src\query\api\test_LogicalVectorProcedureBatch_Materialization.cpp:161
+2026-11-04T07:15:17.0483634Z               Expected equality of these values:
+2026-11-04T07:15:17.0483975Z                 error.what()
+2026-11-04T07:15:17.0484880Z                   Which is: "logical procedure Node output exceeded its joint byte bound: phase=returned Node, requested=4448, rows=11669, routing=96, limit=15944"
+2026-11-04T07:15:17.0485833Z                 "logical procedure source and retained result exceeded their byte bound"
+2026-11-04T07:15:17.0486400Z               <unknown>:-1
+2026-11-04T07:15:17.0487039Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:17.0487612Z 
+2026-11-04T07:15:17.0488076Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)
+2026-11-04T07:15:17.0488545Z 
+2026-11-04T07:15:17.0488811Z ================================================================================
+2026-11-04T07:15:17.0489198Z   TESTS FAILED!
+2026-11-04T07:15:17.0489372Z 
+2026-11-04T07:15:17.0489500Z   Passed: 0
+2026-11-04T07:15:17.0489778Z   Failed: 1
+2026-11-04T07:15:17.0489997Z   Time  : 3 ms
+2026-11-04T07:15:17.0490378Z ================================================================================
+2026-11-04T07:15:17.0490675Z 
+2026-11-04T07:15:17.0811818Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget exit=1
+2026-11-04T07:15:17.0812568Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder
+2026-11-04T07:15:17.7290506Z CI_BUDGET operation=wouldExceed requested=3320 previous=296 embedded=0 used=2643 peak=2643 maximum=5354 available=2711 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:17.7292563Z CI_BUDGET operation=wouldExceed requested=2224 previous=208 embedded=0 used=3563 peak=3563 maximum=5354 available=1791 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:17.7294007Z CI_BUDGET operation=wouldExceed requested=1128 previous=120 embedded=0 used=4483 peak=4483 maximum=5354 available=871 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:17.9829374Z 
+2026-11-04T07:15:17.9830361Z ================================================================================
+2026-11-04T07:15:17.9830830Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:17.9831177Z ================================================================================
+2026-11-04T07:15:17.9831447Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:17.9831689Z 
+2026-11-04T07:15:17.9831695Z 
+2026-11-04T07:15:17.9832012Z [  0% |   0/  1] X SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder FAILED
+2026-11-04T07:15:17.9832492Z               <unknown>:-1
+2026-11-04T07:15:17.9832931Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:17.9833297Z 
+2026-11-04T07:15:17.9833609Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 3 ms)
+2026-11-04T07:15:17.9834323Z 
+2026-11-04T07:15:17.9834934Z ================================================================================
+2026-11-04T07:15:17.9835573Z   TESTS FAILED!
+2026-11-04T07:15:17.9835758Z 
+2026-11-04T07:15:17.9835889Z   Passed: 0
+2026-11-04T07:15:17.9836146Z   Failed: 1
+2026-11-04T07:15:17.9836355Z   Time  : 3 ms
+2026-11-04T07:15:17.9836733Z ================================================================================
+2026-11-04T07:15:17.9837065Z 
+2026-11-04T07:15:18.0177050Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder exit=1
+2026-11-04T07:15:18.0178307Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing
+2026-11-04T07:15:18.6573561Z CI_BUDGET operation=wouldExceed requested=10104 previous=90 embedded=0 used=939 peak=939 maximum=4820 available=3881 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:18.6577176Z CI_BUDGET operation=wouldExceed requested=1352 previous=1104 embedded=0 used=1953 peak=1953 maximum=2020 available=67 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:18.9062096Z 
+2026-11-04T07:15:18.9063120Z ================================================================================
+2026-11-04T07:15:18.9063561Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:18.9063893Z ================================================================================
+2026-11-04T07:15:18.9064343Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:18.9064479Z 
+2026-11-04T07:15:18.9064483Z 
+2026-11-04T07:15:18.9064822Z [  0% |   0/  1] X BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing FAILED
+2026-11-04T07:15:18.9065258Z               <unknown>:-1
+2026-11-04T07:15:18.9066146Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:18.9066838Z 
+2026-11-04T07:15:18.9067398Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)
+2026-11-04T07:15:18.9067874Z 
+2026-11-04T07:15:18.9068145Z ================================================================================
+2026-11-04T07:15:18.9068591Z   TESTS FAILED!
+2026-11-04T07:15:18.9068763Z 
+2026-11-04T07:15:18.9069173Z   Passed: 0
+2026-11-04T07:15:18.9069456Z   Failed: 1
+2026-11-04T07:15:18.9069666Z   Time  : 2 ms
+2026-11-04T07:15:18.9070027Z ================================================================================
+2026-11-04T07:15:18.9070304Z 
+2026-11-04T07:15:18.9398722Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing exit=1
+2026-11-04T07:15:18.9399965Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches
+2026-11-04T07:15:19.9024221Z 
+2026-11-04T07:15:19.9025094Z ================================================================================
+2026-11-04T07:15:19.9025514Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:19.9025865Z ================================================================================
+2026-11-04T07:15:19.9026148Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:19.9026282Z 
+2026-11-04T07:15:19.9026285Z 
+2026-11-04T07:15:19.9026607Z [  0% |   0/  1] X CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches FAILED
+2026-11-04T07:15:19.9027038Z               <unknown>:-1
+2026-11-04T07:15:19.9027448Z               C++ exception with description "logical procedure materialization exceeded its byte bound" thrown in the test body.
+2026-11-04T07:15:19.9027803Z 
+2026-11-04T07:15:19.9028112Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 77 ms)
+2026-11-04T07:15:19.9028713Z 
+2026-11-04T07:15:19.9029085Z ================================================================================
+2026-11-04T07:15:19.9029513Z   TESTS FAILED!
+2026-11-04T07:15:19.9029693Z 
+2026-11-04T07:15:19.9029782Z   Passed: 0
+2026-11-04T07:15:19.9029964Z   Failed: 1
+2026-11-04T07:15:19.9030118Z   Time  : 77 ms
+2026-11-04T07:15:19.9030374Z ================================================================================
+2026-11-04T07:15:19.9030572Z 
+2026-11-04T07:15:19.9361312Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches exit=1
+2026-11-04T07:15:19.9362595Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry
+2026-11-04T07:15:20.5772828Z CI_BUDGET operation=wouldExceed requested=5706 previous=0 embedded=0 used=2331 peak=2331 maximum=5844 available=3513 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:20.5774495Z CI_BUDGET operation=wouldExceed requested=3804 previous=0 embedded=0 used=3527 peak=4391 maximum=5844 available=2317 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:20.5776032Z CI_BUDGET operation=wouldExceed requested=1902 previous=0 embedded=0 used=4723 peak=5595 maximum=5844 available=1121 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:20.5780040Z CI_BUDGET operation=wouldExceed requested=5706 previous=0 embedded=0 used=2331 peak=2331 maximum=7344 available=5013 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:20.5796746Z CI_BUDGET operation=wouldExceed requested=5706 previous=0 embedded=0 used=2331 peak=2331 maximum=7344 available=5013 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:20.8315603Z 
+2026-11-04T07:15:20.8316336Z ================================================================================
+2026-11-04T07:15:20.8316766Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:20.8317116Z ================================================================================
+2026-11-04T07:15:20.8317394Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:20.8317521Z 
+2026-11-04T07:15:20.8317526Z 
+2026-11-04T07:15:20.8317813Z [  0% |   0/  1] X MetadataJointRetentionRejectsLowBudgetAndCanRetry FAILED
+2026-11-04T07:15:20.8318700Z               D:\a\zyx\zyx\tests\src\query\api\test_LogicalVectorProcedureBatch_Materialization.cpp:735
+2026-11-04T07:15:20.8319157Z               Expected: (backend->state->node_batch_reads - before) <= (3U), actual: 5 vs 3
+2026-11-04T07:15:20.8319679Z               D:\a\zyx\zyx\tests\src\query\api\test_LogicalVectorProcedureBatch_Materialization.cpp:735
+2026-11-04T07:15:20.8320557Z               Expected: (backend->state->node_batch_reads - before) <= (3U), actual: 5 vs 3
+2026-11-04T07:15:20.8320889Z 
+2026-11-04T07:15:20.8321229Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 4 ms)
+2026-11-04T07:15:20.8321531Z 
+2026-11-04T07:15:20.8321711Z ================================================================================
+2026-11-04T07:15:20.8322003Z   TESTS FAILED!
+2026-11-04T07:15:20.8322120Z 
+2026-11-04T07:15:20.8322214Z   Passed: 0
+2026-11-04T07:15:20.8322399Z   Failed: 1
+2026-11-04T07:15:20.8322551Z   Time  : 4 ms
+2026-11-04T07:15:20.8322801Z ================================================================================
+2026-11-04T07:15:20.8322990Z 
+2026-11-04T07:15:20.8637985Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry exit=1
+2026-11-04T07:15:20.8638714Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes
+2026-11-04T07:15:21.7873394Z 
+2026-11-04T07:15:21.7874436Z ================================================================================
+2026-11-04T07:15:21.7875720Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:21.7876109Z ================================================================================
+2026-11-04T07:15:21.7876379Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:21.7876515Z 
+2026-11-04T07:15:21.7876520Z 
+2026-11-04T07:15:21.7876885Z [  0% |   0/  1] X RejectsOversizedSearchHitBufferBeforeReadingNodes FAILED
+2026-11-04T07:15:21.7877686Z               D:\a\zyx\zyx\tests\src\query\api\test_LogicalVectorProcedureBatch_Materialization.cpp:1084
+2026-11-04T07:15:21.7878082Z               Expected equality of these values:
+2026-11-04T07:15:21.7878301Z                 error.what()
+2026-11-04T07:15:21.7878604Z                   Which is: "logical Vector procedure request exceeded its materialized byte bound"
+2026-11-04T07:15:21.7879019Z                 "logical Vector procedure hit buffer exceeded its materialized byte bound"
+2026-11-04T07:15:21.7879264Z 
+2026-11-04T07:15:21.7879584Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 0 ms)
+2026-11-04T07:15:21.7879868Z 
+2026-11-04T07:15:21.7880044Z ================================================================================
+2026-11-04T07:15:21.7880322Z   TESTS FAILED!
+2026-11-04T07:15:21.7880441Z 
+2026-11-04T07:15:21.7880527Z   Passed: 0
+2026-11-04T07:15:21.7880710Z   Failed: 1
+2026-11-04T07:15:21.7880863Z   Time  : 0 ms
+2026-11-04T07:15:21.7881110Z ================================================================================
+2026-11-04T07:15:21.7881292Z 
+2026-11-04T07:15:21.8204229Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes exit=1
+2026-11-04T07:15:21.8204966Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting
+2026-11-04T07:15:22.4549729Z CI_BUDGET operation=wouldExceed requested=4836 previous=0 embedded=0 used=2331 peak=2331 maximum=5844 available=3513 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:22.4550594Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4552049Z CI_BUDGET operation=wouldExceed requested=3224 previous=0 embedded=0 used=3845 peak=3949 maximum=5844 available=1999 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:22.4554613Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4555580Z CI_BUDGET operation=wouldExceed requested=1612 previous=0 embedded=0 used=5359 peak=5471 maximum=5844 available=485 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:22.4556352Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4556690Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4557038Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4560170Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4561141Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.4561740Z CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520
+2026-11-04T07:15:22.7045890Z 
+2026-11-04T07:15:22.7046919Z ================================================================================
+2026-11-04T07:15:22.7047588Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:22.7048070Z ================================================================================
+2026-11-04T07:15:22.7048452Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:22.7048640Z 
+2026-11-04T07:15:22.7048645Z 
+2026-11-04T07:15:22.7049098Z [  0% |   0/  1] X MetadataSemanticErrorsPrecedeJointPressureSplitting FAILED
+2026-11-04T07:15:22.7050607Z               <unknown>:-1
+2026-11-04T07:15:22.7051525Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:22.7052131Z 
+2026-11-04T07:15:22.7052607Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 3 ms)
+2026-11-04T07:15:22.7053087Z 
+2026-11-04T07:15:22.7053355Z ================================================================================
+2026-11-04T07:15:22.7053802Z   TESTS FAILED!
+2026-11-04T07:15:22.7053968Z 
+2026-11-04T07:15:22.7054086Z   Passed: 0
+2026-11-04T07:15:22.7054324Z   Failed: 1
+2026-11-04T07:15:22.7054519Z   Time  : 3 ms
+2026-11-04T07:15:22.7054887Z ================================================================================
+2026-11-04T07:15:22.7055197Z 
+2026-11-04T07:15:22.7369486Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting exit=1
+2026-11-04T07:15:22.7370742Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound
+2026-11-04T07:15:23.3778432Z CI_BUDGET operation=wouldExceed requested=3338 previous=2324 embedded=0 used=4671 peak=4671 maximum=5456 available=785 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:23.3779730Z CI_BUDGET operation=wouldExceed requested=2236 previous=1222 embedded=0 used=4577 peak=4671 maximum=5456 available=879 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:23.3781358Z CI_BUDGET operation=wouldExceed requested=1134 previous=120 embedded=0 used=4483 peak=4671 maximum=5456 available=973 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:23.6229680Z 
+2026-11-04T07:15:23.6230473Z ================================================================================
+2026-11-04T07:15:23.6231242Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:23.6231737Z ================================================================================
+2026-11-04T07:15:23.6232122Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:23.6232301Z 
+2026-11-04T07:15:23.6232306Z 
+2026-11-04T07:15:23.6232840Z [  0% |   0/  1] X FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound FAILED
+2026-11-04T07:15:23.6234509Z               <unknown>:-1
+2026-11-04T07:15:23.6235568Z               C++ exception with description "logical procedure Property columns exceeded their byte bound (retained rows=4315, IDs=24, limit=5456)" thrown in the test body.
+2026-11-04T07:15:23.6236373Z 
+2026-11-04T07:15:23.6236822Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)
+2026-11-04T07:15:23.6237484Z 
+2026-11-04T07:15:23.6237811Z ================================================================================
+2026-11-04T07:15:23.6238282Z   TESTS FAILED!
+2026-11-04T07:15:23.6238437Z 
+2026-11-04T07:15:23.6238556Z   Passed: 0
+2026-11-04T07:15:23.6238809Z   Failed: 1
+2026-11-04T07:15:23.6239027Z   Time  : 2 ms
+2026-11-04T07:15:23.6239410Z ================================================================================
+2026-11-04T07:15:23.6239736Z 
+2026-11-04T07:15:23.6548165Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound exit=1
+2026-11-04T07:15:23.6549014Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication
+2026-11-04T07:15:24.2909872Z CI_BUDGET operation=wouldExceed requested=4194 previous=0 embedded=0 used=2331 peak=2331 maximum=4788 available=2457 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:24.2912092Z CI_BUDGET operation=wouldExceed requested=2796 previous=0 embedded=0 used=3379 peak=3739 maximum=4788 available=1409 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:24.2918876Z CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024
+2026-11-04T07:15:24.2920177Z CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024
+2026-11-04T07:15:24.2920894Z CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024
+2026-11-04T07:15:24.5397683Z 
+2026-11-04T07:15:24.5398523Z ================================================================================
+2026-11-04T07:15:24.5398923Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:24.5399260Z ================================================================================
+2026-11-04T07:15:24.5399529Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:24.5399655Z 
+2026-11-04T07:15:24.5399659Z 
+2026-11-04T07:15:24.5400017Z [  0% |   0/  1] X CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication FAILED
+2026-11-04T07:15:24.5400518Z               <unknown>:-1
+2026-11-04T07:15:24.5400952Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-04T07:15:24.5401313Z 
+2026-11-04T07:15:24.5401999Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 3 ms)
+2026-11-04T07:15:24.5402535Z 
+2026-11-04T07:15:24.5402866Z ================================================================================
+2026-11-04T07:15:24.5403353Z   TESTS FAILED!
+2026-11-04T07:15:24.5403524Z 
+2026-11-04T07:15:24.5403666Z   Passed: 0
+2026-11-04T07:15:24.5403914Z   Failed: 1
+2026-11-04T07:15:24.5404151Z   Time  : 3 ms
+2026-11-04T07:15:24.5404511Z ================================================================================
+2026-11-04T07:15:24.5404822Z 
+2026-11-04T07:15:24.5723658Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication exit=1
+2026-11-04T07:15:24.5724641Z CI_BUDGET_CASE BEGIN LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip
+2026-11-04T07:15:25.2090855Z CI_BUDGET operation=wouldExceed requested=1608 previous=0 embedded=0 used=2772 peak=3014 maximum=3828 available=1056 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:25.2092688Z CI_BUDGET operation=replace requested=1608 previous=0 embedded=0 used=2772 peak=3014 maximum=3828 available=1056 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:15:25.4618867Z 
+2026-11-04T07:15:25.4619647Z ================================================================================
+2026-11-04T07:15:25.4620042Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:15:25.4620520Z ================================================================================
+2026-11-04T07:15:25.4620821Z  Target: 1 tests across 1 suites
+2026-11-04T07:15:25.4620959Z 
+2026-11-04T07:15:25.4620964Z 
+2026-11-04T07:15:25.4621203Z [  0% |   0/  1] X ExpandsDistinctTopKForFilterAfterSkip FAILED
+2026-11-04T07:15:25.4621548Z               <unknown>:-1
+2026-11-04T07:15:25.4621925Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-04T07:15:25.4622260Z 
+2026-11-04T07:15:25.4622888Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)
+2026-11-04T07:15:25.4623229Z 
+2026-11-04T07:15:25.4623422Z ================================================================================
+2026-11-04T07:15:25.4623713Z   TESTS FAILED!
+2026-11-04T07:15:25.4623828Z 
+2026-11-04T07:15:25.4623914Z   Passed: 0
+2026-11-04T07:15:25.4624340Z   Failed: 1
+2026-11-04T07:15:25.4624495Z   Time  : 2 ms
+2026-11-04T07:15:25.4624898Z ================================================================================
+2026-11-04T07:15:25.4625096Z 
+2026-11-04T07:15:25.4948313Z CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip exit=1
+2026-11-04T07:15:25.4949019Z CI_BUDGET_CASE total=12 failed=12
+2026-11-04T07:15:25.5041889Z ##[error]Process completed with exit
+JOB 126432106020
+CI_BUDGET_CASE BEGIN LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure
+2026-11-04T07:10:54.7930050Z CI_PREFETCH_READ rows=10 nodes=3 edges=0 structures=312 payload=12312 working_set=12624 admitted=312 used=6254 available=9930 source_admission=0
+2026-11-04T07:10:54.7932470Z CI_BUDGET operation=wouldExceed requested=12624 previous=312 embedded=0 used=6254 peak=6254 maximum=16184 available=9930 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:10:54.7939100Z CI_PREFETCH pressure_line=1350 rows=10 buffered=5870 used=5942 available=10242
+2026-11-04T07:10:54.7941080Z CI_PREFETCH_READ rows=5 nodes=3 edges=0 structures=248 payload=12312 working_set=12560 admitted=248 used=6190 available=9994 source_admission=0
+2026-11-04T07:10:54.7943580Z CI_BUDGET operation=wouldExceed requested=12560 previous=248 embedded=0 used=6190 peak=6254 maximum=16184 available=9994 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:10:54.7945410Z CI_PREFETCH pressure_line=1350 rows=5 buffered=2935 used=5942 available=10242
+2026-11-04T07:10:54.7946970Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=152 payload=8208 working_set=8360 admitted=152 used=6094 available=10090 source_admission=0
+2026-11-04T07:10:54.7959360Z CI_BUDGET operation=replace requested=4104 previous=0 embedded=0 used=14174 peak=14318 maximum=16184 available=2010 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:10:54.8415930Z 
+2026-11-04T07:10:54.8424560Z ================================================================================
+2026-11-04T07:10:54.8425020Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:10:54.8425410Z ================================================================================
+2026-11-04T07:10:54.8425720Z  Target: 1 tests across 1 suites
+2026-11-04T07:10:54.8425870Z 
+2026-11-04T07:10:54.8425880Z 
+2026-11-04T07:10:54.8426230Z [  0% |   0/  1] X FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure FAILED
+2026-11-04T07:10:54.8426680Z               <unknown>:-1
+2026-11-04T07:10:54.8427110Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-04T07:10:54.8427470Z 
+2026-11-04T07:10:54.8427800Z [100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 43 ms)
+2026-11-04T07:10:54.8428130Z 
+2026-11-04T07:10:54.8428320Z ================================================================================
+2026-11-04T07:10:54.8428650Z   TESTS FAILED!
+2026-11-04T07:10:54.8428790Z 
+2026-11-04T07:10:54.8428870Z   Passed: 0
+2026-11-04T07:10:54.8429080Z   Failed: 1
+2026-11-04T07:10:54.8429260Z   Time  : 43 ms
+2026-11-04T07:10:54.8430470Z ================================================================================
+2026-11-04T07:10:54.8430720Z 
+2026-11-04T07:10:54.8557380Z CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure exit=1
+2026-11-04T07:10:54.8559760Z CI_BUDGET_CASE BEGIN RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+2026-11-04T07:10:55.8524730Z CI_STRING_BOUND characters=1000 raw_upper=2001 proxy=0 admitted=2001
+2026-11-04T07:10:55.8611630Z CI_RESOURCE class=0 lease=4803 requested=5817 available=285 account=32483/32768 database=68452067/268435456 database_class=32483/201326592 process=68452067/536870912 process_class=32483/536870912
+2026-11-04T07:10:55.8613630Z CI_BUDGET operation=parent requested=1230 previous=216 embedded=0 used=4803 peak=11992 maximum=67107040 available=67102237 parent_charge=4803 parent_maximum=32768 owned_parent_charge=0
+2026-11-04T07:10:55.8620150Z CI_RESOURCE refund class=0 amount=216 lease=4587 account=32267 database=68451851 process=68451851
+2026-11-04T07:10:55.8621690Z CI_RESOURCE refund class=0 amount=800 lease=3787 account=31467 database=68451051 process=68451051
+2026-11-04T07:10:55.8623070Z CI_RESOURCE refund class=0 amount=387 lease=3400 account=31080 database=68450664 process=68450664
+2026-11-04T07:10:55.8624440Z CI_RESOURCE refund class=0 amount=4 lease=3396 account=31076 database=68450660 process=68450660
+2026-11-04T07:10:55.8625770Z CI_RESOURCE refund class=0 amount=56 lease=3340 account=31020 database=68450604 process=68450604
+2026-11-04T07:10:55.8627090Z CI_RESOURCE refund class=0 amount=40 lease=3300 account=30980 database=68450564 process=68450564
+2026-11-04T07:10:55.8628430Z CI_RESOURCE refund class=0 amount=24 lease=3276 account=30956 database=68450540 process=68450540
+2026-11-04T07:10:55.8629770Z CI_RESOURCE refund class=0 amount=16 lease=3260 account=30940 database=68450524 process=68450524
+2026-11-04T07:10:55.8631290Z CI_RESOURCE refund class=0 amount=8 lease=3252 account=30932 database=68450516 process=68450516
+2026-11-04T07:10:55.8631940Z CI_RESOURCE refund class=0 amount=96 lease=3156 account=30836 database=68450420 process=68450420
+2026-11-04T07:10:55.8632450Z CI_RESOURCE refund class=0 amount=96 lease=3060 account=30740 database=68450324 process=68450324
+2026-11-04T07:10:55.8632960Z CI_RESOURCE refund class=0 amount=16 lease=3044 account=30724 database=68450308 process=68450308
+2026-11-04T07:10:55.8633460Z CI_RESOURCE refund class=0 amount=200 lease=2844 account=30524 database=68450108 process=68450108
+2026-11-04T07:10:55.8633970Z CI_RESOURCE refund class=0 amount=4 lease=2840 account=30520 database=68450104 process=68450104
+2026-11-04T07:10:55.8634480Z CI_RESOURCE refund class=0 amount=56 lease=2784 account=30464 database=68450048 process=68450048
+2026-11-04T07:10:55.8634970Z CI_RESOURCE refund class=0 amount=24 lease=2760 account=30440 database=68450024 process=68450024
+2026-11-04T07:10:55.8635450Z CI_RESOURCE refund class=0 amount=16 lease=2744 account=30424 database=68450008 process=68450008
+2026-11-04T07:10:55.8635930Z CI_RESOURCE refund class=0 amount=8 lease=2736 account=30416 database=68450000 process=68450000
+2026-11-04T07:10:55.8636430Z CI_RESOURCE refund class=0 amount=96 lease=2640 account=30320 database=68449904 process=68449904
+2026-11-04T07:10:55.8636910Z CI_RESOURCE refund class=0 amount=16 lease=2624 account=30304 database=68449888 process=68449888
+2026-11-04T07:10:55.8637400Z CI_RESOURCE refund class=0 amount=1800 lease=0 account=28504 database=68448088 process=68448088
+2026-11-04T07:10:55.8637940Z CI_RESOURCE refund class=0 amount=40 lease=2584 account=28464 database=68448048 process=68448048
+2026-11-04T07:10:55.8638450Z CI_RESOURCE refund class=0 amount=32 lease=2552 account=28432 database=68448016 process=68448016
+2026-11-04T07:10:55.8638970Z CI_RESOURCE refund class=0 amount=32 lease=2520 account=28400 database=68447984 process=68447984
+2026-11-04T07:10:55.8640010Z CI_RESOURCE refund class=0 amount=32 lease=2488 account=28368 database=68447952 process=68447952
+2026-11-04T07:10:55.8640550Z CI_RESOURCE refund class=0 amount=40 lease=2448 account=28328 database=68447912 process=68447912
+2026-11-04T07:10:55.8641060Z CI_RESOURCE refund class=0 amount=16 lease=2432 account=28312 database=68447896 process=68447896
+2026-11-04T07:10:55.8641580Z CI_RESOURCE refund class=0 amount=16 lease=2416 account=28296 database=68447880 process=68447880
+2026-11-04T07:10:55.8642090Z CI_RESOURCE refund class=0 amount=16 lease=2400 account=28280 database=68447864 process=68447864
+2026-11-04T07:10:55.8642690Z CI_RESOURCE refund class=0 amount=16 lease=2384 account=28264 database=68447848 process=68447848
+2026-11-04T07:10:55.8643210Z CI_RESOURCE refund class=0 amount=16 lease=2368 account=28248 database=68447832 process=68447832
+2026-11-04T07:10:55.8644010Z CI_RESOURCE refund class=0 amount=16 lease=2352 account=28232 database=68447816 process=68447816
+2026-11-04T07:10:55.8644580Z CI_RESOURCE refund class=0 amount=16 lease=2336 account=28216 database=68447800 process=68447800
+2026-11-04T07:10:55.8645130Z CI_RESOURCE refund class=0 amount=16 lease=2320 account=28200 database=68447784 process=68447784
+2026-11-04T07:10:55.8645650Z CI_RESOURCE refund class=0 amount=16 lease=2304 account=28184 database=68447768 process=68447768
+2026-11-04T07:10:55.8646140Z CI_RESOURCE refund class=0 amount=16 lease=2288 account=28168 database=68447752 process=68447752
+2026-11-04T07:10:55.8646660Z CI_RESOURCE refund class=0 amount=16 lease=2272 account=28152 database=68447736 process=68447736
+2026-11-04T07:10:55.8647260Z CI_RESOURCE refund class=0 amount=704 lease=1568 account=27448 database=68447032 process=68447032
+2026-11-04T07:10:55.8647780Z CI_RESOURCE refund class=0 amount=384 lease=1184 account=27064 database=68446648 process=68446648
+2026-11-04T07:10:55.8996760Z 
+2026-11-04T07:10:55.9000190Z ================================================================================
+2026-11-04T07:10:55.9002370Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:10:55.9003910Z ================================================================================
+2026-11-04T07:10:55.9005340Z  Target: 1 tests across 1 suites
+2026-11-04T07:10:55.9005840Z 
+2026-11-04T07:10:55.9005960Z 
+2026-11-04T07:10:55.9007050Z [  0% |   0/  1] X CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose FAILED
+2026-11-04T07:10:55.9007920Z               <unknown>:-1
+2026-11-04T07:10:55.9008740Z               C++ exception with description "hierarchical resource admission denied" thrown in the test body.
+2026-11-04T07:10:55.9009880Z 
+2026-11-04T07:10:55.9010760Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 283 ms)
+2026-11-04T07:10:55.9011590Z 
+2026-11-04T07:10:55.9012240Z ================================================================================
+2026-11-04T07:10:55.9013040Z   TESTS FAILED!
+2026-11-04T07:10:55.9014390Z 
+2026-11-04T07:10:55.9015730Z   Passed: 0
+2026-11-04T07:10:55.9016340Z   Failed: 1
+2026-11-04T07:10:55.9017050Z   Time  : 283 ms
+2026-11-04T07:10:55.9017900Z ================================================================================
+2026-11-04T07:10:55.9018360Z 
+2026-11-04T07:10:56.0305180Z CI_BUDGET_CASE END RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose exit=1
+2026-11-04T07:10:56.0404080Z CI_BUDGET_CASE BEGIN HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact
+2026-11-04T07:11:27.8105320Z CI_BUDGET operation=replace requested=16 previous=0 embedded=0 used=1048562 peak=1048562 maximum=1048576 available=14 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:11:27.8670490Z 
+2026-11-04T07:11:27.8676120Z ================================================================================
+2026-11-04T07:11:27.8678070Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:11:27.8689290Z ================================================================================
+2026-11-04T07:11:27.8692700Z  Target: 1 tests across 1 suites
+2026-11-04T07:11:27.8692900Z 
+2026-11-04T07:11:27.8692910Z 
+2026-11-04T07:11:27.8696190Z [  0% |   0/  1] X EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact FAILED
+2026-11-04T07:11:27.8698870Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp:150
+2026-11-04T07:11:27.8700490Z               Expected: run(conversion) doesn't throw an exception.
+2026-11-04T07:11:27.8702770Z                 Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+2026-11-04T07:11:27.8707320Z               Google Test trace:
+2026-11-04T07:11:27.8711660Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp:147: 6
+2026-11-04T07:11:27.8713520Z 
+2026-11-04T07:11:27.8714710Z [100% |   1/  1] FAIL HybridPropertyMatureShapeCostsTest (1 failures, 30969 ms)
+2026-11-04T07:11:27.8715670Z 
+2026-11-04T07:11:27.8717600Z ================================================================================
+2026-11-04T07:11:27.8718920Z   TESTS FAILED!
+2026-11-04T07:11:27.8719890Z 
+2026-11-04T07:11:27.8720510Z   Passed: 0
+2026-11-04T07:11:27.8721390Z   Failed: 1
+2026-11-04T07:11:27.8722480Z   Time  : 30969 ms
+2026-11-04T07:11:27.8723070Z ================================================================================
+2026-11-04T07:11:27.8723730Z 
+2026-11-04T07:11:27.9121620Z CI_BUDGET_CASE END HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact exit=1
+2026-11-04T07:11:27.9124130Z CI_BUDGET_CASE BEGIN LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce
+2026-11-04T07:11:28.6062820Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=152 payload=6016 working_set=6168 admitted=152 used=810 available=3086 source_admission=0
+2026-11-04T07:11:28.6064770Z CI_PREFETCH pressure_line=1342 rows=2 buffered=658 used=658 available=3238
+2026-11-04T07:11:28.6066550Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=754 available=3142 source_admission=0
+2026-11-04T07:11:28.6068910Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=425 available=3471 source_admission=0
+2026-11-04T07:11:28.6071020Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=152 payload=6016 working_set=6168 admitted=152 used=810 available=3086 source_admission=0
+2026-11-04T07:11:28.6072740Z CI_PREFETCH pressure_line=1342 rows=2 buffered=658 used=658 available=3238
+2026-11-04T07:11:28.6074470Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=754 available=3142 source_admission=0
+2026-11-04T07:11:28.6076430Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=425 available=3471 source_admission=0
+2026-11-04T07:11:28.6078470Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=152 payload=6016 working_set=6168 admitted=152 used=810 available=3086 source_admission=0
+2026-11-04T07:11:28.6080060Z CI_PREFETCH pressure_line=1342 rows=2 buffered=658 used=658 available=3238
+2026-11-04T07:11:28.6081810Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=754 available=3142 source_admission=0
+2026-11-04T07:11:28.6083960Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=96 payload=3008 working_set=3104 admitted=96 used=425 available=3471 source_admission=0
+2026-11-04T07:11:28.6086210Z CI_PREFETCH_READ rows=6 nodes=6 edges=0 structures=392 payload=18048 working_set=18440 admitted=392 used=2366 available=97434 source_admission=0
+2026-11-04T07:11:28.6238490Z 
+2026-11-04T07:11:28.6241630Z ================================================================================
+2026-11-04T07:11:28.6242740Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:11:28.6243990Z ================================================================================
+2026-11-04T07:11:28.6244850Z  Target: 1 tests across 1 suites
+2026-11-04T07:11:28.6245320Z 
+2026-11-04T07:11:28.6245330Z 
+2026-11-04T07:11:28.6246100Z [  0% |   0/  1] X TightAndAmplePropertyPrefetchReadEachNodeOnce FAILED
+2026-11-04T07:11:28.6250600Z               /Users/runner/work/zyx/zyx/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1966
+2026-11-04T07:11:28.6251590Z               Expected equality of these values:
+2026-11-04T07:11:28.6252080Z                 fetched
+2026-11-04T07:11:28.6252390Z                   Which is: { 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6 }
+2026-11-04T07:11:28.6252910Z                 (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U})
+2026-11-04T07:11:28.6253290Z                   Which is: { 1, 2, 3, 4, 5, 6 }
+2026-11-04T07:11:28.6253620Z               node predicate splits=0, property prefetch splits=3
+2026-11-04T07:11:28.6254560Z               Google Test trace:
+2026-11-04T07:11:28.6256280Z               /Users/runner/work/zyx/zyx/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1936: 4096
+2026-11-04T07:11:28.6256800Z 
+2026-11-04T07:11:28.6258150Z [100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 2 ms)
+2026-11-04T07:11:28.6258560Z 
+2026-11-04T07:11:28.6258910Z ================================================================================
+2026-11-04T07:11:28.6259320Z   TESTS FAILED!
+2026-11-04T07:11:28.6259530Z 
+2026-11-04T07:11:28.6259710Z   Passed: 0
+2026-11-04T07:11:28.6260740Z   Failed: 1
+2026-11-04T07:11:28.6262540Z   Time  : 2 ms
+2026-11-04T07:11:28.6263030Z ================================================================================
+2026-11-04T07:11:28.6263250Z 
+2026-11-04T07:11:28.6866080Z CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce exit=1
+2026-11-04T07:11:28.6868210Z CI_BUDGET_CASE BEGIN LogicalPlanLoadCsvRuntimeTest.ChargesHeaderMapLinksAndBucketsBeforeConstructingRows
+2026-11-04T07:11:29.2466060Z CI_STRING_BOUND characters=126 raw_upper=253 proxy=0 admitted=253
+2026-11-04T07:11:29.2470980Z CI_STRING_BOUND characters=126 raw_upper=253 proxy=0 admitted=253
+2026-11-04T07:11:29.2477820Z CI_BUDGET operation=wouldExceed requested=1310 previous=312 embedded=0 used=1213 peak=1213 maximum=1457 available=244 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:11:29.2480490Z CI_STRING_BOUND characters=126 raw_upper=253 proxy=0 admitted=253
+2026-11-04T07:11:29.2687580Z 
+2026-11-04T07:11:29.2689090Z ================================================================================
+2026-11-04T07:11:29.2690200Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:11:29.2691380Z ================================================================================
+2026-11-04T07:11:29.2692340Z  Target: 1 tests across 1 suites
+2026-11-04T07:11:29.2692760Z 
+2026-11-04T07:11:29.2693590Z [100% |   1/  1] PASS LogicalPlanLoadCsvRuntimeTest (14 ms)
+2026-11-04T07:11:29.2694460Z 
+2026-11-04T07:11:29.2695020Z ================================================================================
+2026-11-04T07:11:29.2696130Z   ALL TESTS PASSED!
+2026-11-04T07:11:29.2696580Z 
+2026-11-04T07:11:29.2696820Z   Passed: 1
+2026-11-04T07:11:29.2697760Z   Failed: 0
+2026-11-04T07:11:29.2698090Z   Time  : 14 ms
+2026-11-04T07:11:29.2698440Z ================================================================================
+2026-11-04T07:11:29.2698730Z 
+2026-11-04T07:11:29.3059380Z CI_BUDGET_CASE END LogicalPlanLoadCsvRuntimeTest.ChargesHeaderMapLinksAndBucketsBeforeConstructingRows exit=0
+2026-11-04T07:11:29.3062320Z CI_BUDGET_CASE BEGIN *HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large
+2026-11-04T07:11:30.1195020Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1203520Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1212810Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1221920Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1231130Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1240430Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1249550Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1258340Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1267810Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1276960Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1286640Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1296010Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1305590Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1315660Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1324850Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1333870Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1343500Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1353260Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1362400Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1371640Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1382100Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1391160Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1400600Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1410150Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1423370Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1432750Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1442230Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1499320Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1501170Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1502480Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1518850Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1538820Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1558220Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1585560Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1604290Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1615360Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1624350Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1635110Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1643640Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1653290Z CI_STRING_BOUND characters=8192 raw_upper=16385 proxy=0 admitted=16385
+2026-11-04T07:11:30.1869440Z CI_BUDGET operation=replace requested=8230 previous=0 embedded=0 used=1046947 peak=1046947 maximum=1048576 available=1629 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-04T07:11:30.1910530Z               [STDERR]
+2026-11-04T07:11:30.1911740Z               NATIVE_SHAPE_REFUSAL name=shared_large decoded=62 classified=0 proposals=0 peak=1046947
+2026-11-04T07:11:30.1912620Z 
+2026-11-04T07:11:30.1913250Z ================================================================================
+2026-11-04T07:11:30.1915150Z  ZYX Graph Database - Unit Test Suite
+2026-11-04T07:11:30.1916150Z ================================================================================
+2026-11-04T07:11:30.1917040Z  Target: 1 tests across 1 suites
+2026-11-04T07:11:30.1917380Z 
+2026-11-04T07:11:30.1917400Z 
+2026-11-04T07:11:30.1918430Z [  0% |   0/  1] X WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large FAILED
+2026-11-04T07:11:30.1919860Z               <unknown>:-1
+2026-11-04T07:11:30.1921350Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-04T07:11:30.2129610Z 
+2026-11-04T07:11:30.2130630Z [100% |   1/  1] FAIL FixedShapes/HybridPropertyShapeCostsTest (1 failures, 343 ms)
+2026-11-04T07:11:30.2131180Z 
+2026-11-04T07:11:30.2131470Z ================================================================================
+2026-11-04T07:11:30.2131900Z   TESTS FAILED!
+2026-11-04T07:11:30.2132250Z 
+2026-11-04T07:11:30.2132470Z   Passed: 0
+2026-11-04T07:11:30.2132900Z   Failed: 1
+2026-11-04T07:11:30.2133200Z   Time  : 343 ms
+2026-11-04T07:11:30.2133750Z ================================================================================
+2026-11-04T07:11:30.2134220Z 
+2026-11-04T07:11:30.2308680Z CI_BUDGET_CASE END *HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large exit=1
+2026-11-04T07:11:30.2311460Z CI_BUDGET_CASE total=6 failed=5
+2026-11-04T07:11:30.2415700Z ##[error]Process completed with exit co

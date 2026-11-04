@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="0.101" timestamp="2026-11-04T14:00:49.980" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0.101" timestamp="2026-11-04T14:00:49.980">
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1299" status="run" result="completed" time="0.101" timestamp="2026-11-04T14:00:49.980" classname="RelocatableStorageBackendTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1368&#x0A;Expected equality of these values:&#x0A;  trace.at(&quot;native_graph.read.selected_values_decoded&quot;).totalValue&#x0A;    Which is: 9&#x0A;  6&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1337: 6000&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1368
+Expected equality of these values:
+  trace.at("native_graph.read.selected_values_decoded").totalValue
+    Which is: 9
+  6
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1337: 6000
+]]></failure>
+      <properties>
+        <property name="tight_data_read_bytes" value="204800"/>
+        <property name="tight_logical_peak_bytes" value="3537"/>
+        <property name="retry_data_read_bytes" value="253952"/>
+        <property name="retry_logical_peak_bytes" value="4016"/>
+        <property name="ample_data_read_bytes" value="229376"/>
+        <property name="ample_logical_peak_bytes" value="23810"/>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>

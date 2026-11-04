@@ -27,3 +27,5 @@ budgets, allocator costs, native tight/ample reads and coordinated prefetch.
 The broader shape/64-owner conversion suite is recorded separately when complete.
 This is not the required complete coverage run or macOS/Windows CI acceptance.
 Native 6,000-byte retry duplication and other CI budget/RSS failures remain open.
+
+Additional same-tree shape suites passed 12/12 (363496 ms); /tmp/zyx-string-refund-shapes.xml. This remains Linux-only evidence.

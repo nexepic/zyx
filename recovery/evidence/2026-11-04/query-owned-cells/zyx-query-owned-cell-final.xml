@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.242" timestamp="2026-11-04T14:11:19.441" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.242" timestamp="2026-11-04T14:11:19.441">
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1301" status="run" result="completed" time="0.098" timestamp="2026-11-04T14:11:19.441" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="204800"/>
+        <property name="tight_logical_peak_bytes" value="3636"/>
+        <property name="retry_data_read_bytes" value="229376"/>
+        <property name="retry_logical_peak_bytes" value="4134"/>
+        <property name="ample_data_read_bytes" value="229376"/>
+        <property name="ample_logical_peak_bytes" value="24024"/>
+      </properties>
+    </testcase>
+    <testcase name="RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1375" status="run" result="completed" time="0.144" timestamp="2026-11-04T14:11:19.539" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.244" timestamp="2026-11-04T13:55:27.348" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.244" timestamp="2026-11-04T13:55:27.348">
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1299" status="run" result="completed" time="0.093" timestamp="2026-11-04T13:55:27.348" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_logical_peak_bytes" value="3636"/>
+        <property name="retry_logical_peak_bytes" value="4134"/>
+        <property name="ample_logical_peak_bytes" value="24024"/>
+      </properties>
+    </testcase>
+    <testcase name="CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp" line="193" status="run" result="completed" time="0.15" timestamp="2026-11-04T13:55:27.442" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+</testsuites>

@@ -160,6 +160,7 @@ namespace graph::storage {
 			}
 			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return true; }
 			[[nodiscard]] bool supportsNodePropertyCellBatches() const override { return true; }
+            [[nodiscard]] bool supportsResumableNodePropertyCells() const override { return true; }
 			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
 				std::span<const std::string_view> keys, const PropertyCellSink &sink,
 				const std::function<void(size_t)> &admission) const override {

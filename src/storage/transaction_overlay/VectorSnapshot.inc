@@ -39,6 +39,10 @@
             requireActive();
             return overlay_.logical_revision_ == 0U && derived_snapshot_.supportsNodePropertyCellBatches();
         }
+        [[nodiscard]] bool supportsResumableNodePropertyCells() const override {
+            requireActive();
+            return overlay_.logical_revision_ == 0U && derived_snapshot_.supportsResumableNodePropertyCells();
+        }
         void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
             std::span<const std::string_view> keys, const PropertyCellSink &values,
             const std::function<void(size_t)> &admission) const override {

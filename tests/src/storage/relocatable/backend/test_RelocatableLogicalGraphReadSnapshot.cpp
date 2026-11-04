@@ -9,6 +9,8 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
 #include "CypherParserImpl.hpp"
+#include <thread>
+#include <exception>
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
@@ -1333,7 +1335,7 @@ TEST_F(RelocatableStorageBackendTest, NativeSelectedPayloadAdmissionKeepsTightAn
 		.maximum_metadata_pages_per_node_page = 8U, .maximum_edges_per_node = 4U,
 		.maximum_edge_records = 16U, .maximum_adjacency_page_records = 4U,
 		.maximum_property_entries = 2U, .maximum_rows = 16U, .maximum_distinct_rows = 16U};
-	for (const size_t budget : {size_t{4096U}, size_t{100000U}}) {
+	for (const size_t budget : {size_t{4096U}, size_t{6000U}, size_t{100000U}}) {
 		SCOPED_TRACE(budget); bounds.maximum_materialized_bytes = budget;
 		const bool wasEnabled = graph::debug::PerfTrace::areValuesEnabled();
 		struct Restore { bool enabled; ~Restore() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); } } restore{wasEnabled};
@@ -1343,6 +1345,7 @@ TEST_F(RelocatableStorageBackendTest, NativeSelectedPayloadAdmissionKeepsTightAn
 			if (key == "logical_plan.materialized_budget_peak_bytes" && value > 0)
 				*static_cast<size_t *>(owner) = std::max(*static_cast<size_t *>(owner), static_cast<size_t>(value));
 		});
+		backend.resetIoStats();
 		size_t delivered = 0U; std::array<size_t, 6U> seen{};
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) {
 			++delivered;
@@ -1355,17 +1358,80 @@ TEST_F(RelocatableStorageBackendTest, NativeSelectedPayloadAdmissionKeepsTightAn
 			return true;
 		})));
 		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		::testing::Test::RecordProperty(budget == 4096U ? "tight_data_read_bytes" : budget == 6000U ? "retry_data_read_bytes" : "ample_data_read_bytes", static_cast<int>(backend.ioStats().data.read_bytes));
 		EXPECT_EQ(delivered, 6U);
 		EXPECT_EQ(seen, (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U}));
 		EXPECT_GT(observedPeak, 0U);
 		EXPECT_LE(observedPeak, budget);
-		::testing::Test::RecordProperty(budget == 4096U ? "tight_logical_peak_bytes" : "ample_logical_peak_bytes", static_cast<int>(observedPeak));
+		::testing::Test::RecordProperty(budget == 4096U ? "tight_logical_peak_bytes" : budget == 6000U ? "retry_logical_peak_bytes" : "ample_logical_peak_bytes", static_cast<int>(observedPeak));
 		ASSERT_TRUE(trace.contains("logical_plan.property_source.admitted_bytes"));
 		EXPECT_GE(trace.at("logical_plan.property_source.admitted_bytes").totalValue, 18000);
 		ASSERT_TRUE(trace.contains("native_graph.read.selected_values_decoded"));
 		EXPECT_EQ(trace.at("native_graph.read.selected_values_decoded").totalValue, 6);
 	}
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(std::move(options)); backend.open();
+    const auto ids = backend.createLogicalNodes({
+        {{"CellRetry"}, {{"payload", PropertyValue(std::string(3000U, 'a'))}}},
+        {{"CellRetry"}, {{"payload", PropertyValue(std::string(3000U, 'b'))}}},
+        {{"CellRetry"}, {{"payload", PropertyValue(std::string(3000U, 'c'))}}}});
+    graph::parser::cypher::CypherParserImpl parser;
+    const auto plan = parser.parseToLogical("MATCH (n:CellRetry) RETURN n.payload AS payload");
+    execution::LogicalPlanReadRuntime runtime(backend);
+    execution::LogicalPlanReadRuntimeBounds bounds{
+        .maximum_node_records = 16U, .maximum_node_page_records = 4U,
+        .maximum_metadata_pages_per_node_page = 8U, .maximum_edges_per_node = 4U,
+        .maximum_edge_records = 16U, .maximum_adjacency_page_records = 4U,
+        .maximum_property_entries = 2U, .maximum_rows = 16U, .maximum_distinct_rows = 16U};
+    bounds.maximum_materialized_bytes = 6000U;
+    auto account = std::make_shared<execution::detail::ResourceAccount>(backend.queryResourceDomain(),
+        execution::detail::ResourceClass::RCK_QUERY, 1U);
+    query::QueryContext context; context.resource_account = account;
+    // An exhausted shared account must reject before payload production and
+    // refund every charge, independently of the STL's empty-container layout.
+    size_t rejectedDeliveries = 0U;
+    EXPECT_THROW(static_cast<void>(runtime.execute(*plan.root, bounds,
+        [&](const execution::LogicalPlanReadRow &) { ++rejectedDeliveries; return true; }, context)),
+        execution::detail::ResourceAdmissionDenied);
+    EXPECT_EQ(rejectedDeliveries, 0U);
+    EXPECT_EQ(account->used(), 0U);
+    // Exercise the local materialization contract separately from snapshot
+    // startup allocation, retaining the same 6000-byte payload limit.
+    for (int mode : {0, 1, 2}) {
+        SCOPED_TRACE(mode);
+        size_t delivered = 0U;
+        const auto visit = [&](const execution::LogicalPlanReadRow &row) {
+            const auto &text = std::get<std::string>(std::get<PropertyValue>(row.values.at("payload")).getVariant());
+            EXPECT_EQ(text, std::string(3000U, static_cast<char>('a' + delivered)));
+            ++delivered;
+            if (mode == 1) throw std::runtime_error("test visitor failure");
+            if (mode == 0) return false;
+            if (delivered == 1U) {
+                std::exception_ptr failure;
+                std::thread writer([&] {
+                    try { backend.replaceLogicalNodeProperties({{ids.back(), {{"payload", PropertyValue(std::string(3000U, 'z'))}}}}); }
+                    catch (...) { failure = std::current_exception(); }
+                });
+                writer.join();
+                if (failure) std::rethrow_exception(failure);
+            }
+            return true;
+        };
+        if (mode == 1) EXPECT_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, visit)), std::runtime_error);
+        else EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, visit)));
+        EXPECT_EQ(delivered, mode == 2 ? 3U : 1U);
+        EXPECT_EQ(account->used(), 0U);
+    }
+    auto fresh = backend.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(fresh->readNodeProperty(ids.back(), "payload"), PropertyValue(std::string(3000U, 'z')));
+    fresh.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    backend.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, OverlayColumnAdmissionMergesBaseReplacementsAndCreatesWithoutPublication) {

@@ -775,9 +775,11 @@
 			std::function<bool()> flush;
 			struct PrefetchBytePressure { unsigned line; bool propertySource = false; };
 			const auto putCacheValue = [&](auto &cache, const std::string &variable, const std::string &key,
-										   auto &&value) {
+										   auto &&value, const size_t transferredPayloadCredit = 0U) {
 				const size_t previousBytes = bufferedRowsBytes.bytes();
-				size_t nextBytes = previousBytes;
+                if (transferredPayloadCredit > previousBytes)
+                    throw std::logic_error("Property payload transfer exceeds its row reservation");
+				size_t nextBytes = previousBytes - transferredPayloadCredit;
 				const auto alias = cache.find(variable);
 				if (alias == cache.end()) {
 					nextBytes =
@@ -1291,6 +1293,62 @@
 						const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
 						if (!sourceAdmission && (!nodeIds.empty() || !edgeIds.empty()))
 							throw std::logic_error("bounded Property prefetch requires source admission");
+                        // A synchronous owner-cell producer can hand completed values
+                        // directly to private, query-charged rows. On our own admission
+                        // refusal those rows survive subdivision; no value is copied to
+                        // the snapshot's longer-lived cache merely to make retry work.
+                        // Keep the matrix path for repeated bindings and multi-key
+                        // scatter, whose joint ownership has different handoff costs.
+                        if (groups.size() == 1U && group.keys.size() == 1U &&
+                            edgeIds.empty() &&
+                            nodeIds.size() == rows.size() && !nodeIds.empty() &&
+                            state.shared.snapshot.supportsResumableNodePropertyCells()) {
+                            const size_t ordinalBytes = detail::standardAllocatorRequestBytes(
+                                checkedSizeMul(nodeIds.size(), sizeof(size_t), "Property owner ordinal size overflowed"), alignof(size_t));
+                            const size_t seenBytes = detail::standardAllocatorRequestBytes(nodeIds.size(), alignof(uint8_t));
+                            const size_t cellStructures = checkedSizeAdd(
+                                checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
+                                checkedSizeAdd(checkedSizeAdd(ordinalBytes, seenBytes, "Property cell state overflowed"),
+                                    2U * detail::standardContainerProxyBytes(), "Property cell proxies overflowed"),
+                                "Property cell workspace overflowed");
+                            propertyReadBytes.set(cellStructures);
+                            std::vector<size_t> rowOrdinals(nodeIds.size(), rows.size());
+                            std::vector<uint8_t> received(nodeIds.size(), 0U);
+                            for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+                                const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
+                                const auto position = std::ranges::lower_bound(nodeIds, reference.entity_id);
+                                if (position == nodeIds.end() || *position != reference.entity_id)
+                                    throw std::runtime_error("Property cell batch lost its Node binding");
+                                rowOrdinals[static_cast<size_t>(position - nodeIds.begin())] = rowIndex;
+                            }
+                            const auto receiveValue =
+                                [&](size_t ordinal, size_t column, std::optional<PropertyValue> value) {
+                                    if (ordinal >= nodeIds.size() || column != 0U || received[ordinal] || rowOrdinals[ordinal] == rows.size())
+                                        throw std::runtime_error("logical graph backend changed Property cell cardinality");
+                                    PropertyValue decoded = value ? std::move(*value) : PropertyValue();
+                                    const size_t prior = propertyReadBytes.bytes();
+                                    const size_t payload = retainedExpressionValueBytes(decoded, state);
+                                    const size_t transfer = value ? (std::min)(payload, prior - (std::min)(prior, cellStructures)) : 0U;
+                                    // Reclassify the existing charge without a refund /
+                                    // re-admission gap in the shared parent account.
+                                    bufferedRowsBytes.absorb(propertyReadBytes.splitOff(transfer));
+                                    try {
+                                        putCacheValue(rows.values()[rowOrdinals[ordinal]].property_cache,
+                                            group.variable, group.keys.front(), std::move(decoded), transfer);
+                                    } catch (...) {
+                                        propertyReadBytes.absorb(bufferedRowsBytes.splitOff(transfer));
+                                        throw;
+                                    }
+                                    received[ordinal] = 1U;
+                                };
+                            const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
+                            state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(nodeIds, keys, receive, admitProperty);
+                            // This interface represents omitted cells as missing. Only
+                            // commit those NULLs after successful complete production.
+                            for (size_t ordinal = 0U; ordinal < nodeIds.size(); ++ordinal)
+                                if (!received[ordinal]) receive(ordinal, 0U, std::nullopt);
+                            continue;
+                        }
 						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
 										   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keys, admitProperty);
 						auto edgeColumns = edgeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
