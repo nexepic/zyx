@@ -1275,10 +1275,10 @@
 								checkedSizeAdd(columnFrameBytes(nodeIds.size()), columnFrameBytes(edgeIds.size()),
 											   "logical-plan Property column frame size overflowed"),
 								"logical-plan Property gather structure size overflowed");
-						// IDs and key views now have their actual capacities. Keep their
-						// charge while replacing the conservative gather reservation with
-						// the exact column-frame reservation before storage allocates results.
-						propertyReadBytes.set(columnStructures);
+                        // Admit the storage representation actually used below.
+                        // Direct cells do not allocate a rectangular value matrix.
+                        propertyReadBytes.set(checkedSizeAdd(idStorageBytes,
+                            keys.capacity() * sizeof(std::string_view), "Property cell gather overflowed"));
 						const std::function<void(size_t)> admitProperty = [&](size_t bytes) {
 							const size_t next = checkedSizeAdd(propertyReadBytes.bytes(), bytes,
 															   "logical-plan Property source size overflowed");
@@ -1297,26 +1297,32 @@
                         // directly to private, query-charged rows. On our own admission
                         // refusal those rows survive subdivision; no value is copied to
                         // the snapshot's longer-lived cache merely to make retry work.
-                        // Keep the matrix path for repeated bindings and multi-key
-                        // scatter, whose joint ownership has different handoff costs.
+                        // Repeated bindings retain the matrix route. Unique owners
+                        // are grouped by their still-missing key set: normal batches
+                        // decode all selected tokens together, while a partial retry
+                        // never asks storage for an already retained cell.
                         const auto &cellIds = nodeIds.empty() ? edgeIds : nodeIds;
                         const bool edgeCells = nodeIds.empty();
-                        if (groups.size() == 1U && group.keys.size() == 1U &&
+                        if (groups.size() == 1U && !group.keys.empty() &&
                             (nodeIds.empty() != edgeIds.empty()) &&
                             cellIds.size() == rows.size() && !cellIds.empty() &&
                             (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
                                        : state.shared.snapshot.supportsResumableNodePropertyCells())) {
                             const size_t ordinalBytes = detail::standardAllocatorRequestBytes(
                                 checkedSizeMul(cellIds.size(), sizeof(size_t), "Property owner ordinal size overflowed"), alignof(size_t));
-                            const size_t seenBytes = detail::standardAllocatorRequestBytes(cellIds.size(), alignof(uint8_t));
+                            const size_t selectionBytes = checkedSizeAdd(
+                                detail::standardAllocatorRequestBytes(keys.size() * sizeof(size_t), alignof(size_t)),
+                                detail::standardAllocatorRequestBytes(keys.size() * sizeof(std::string_view), alignof(std::string_view)),
+                                "Property cell key selection overflowed");
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
-                                checkedSizeAdd(checkedSizeAdd(ordinalBytes, seenBytes, "Property cell state overflowed"),
-                                    2U * detail::standardContainerProxyBytes(), "Property cell proxies overflowed"),
+                                checkedSizeAdd(checkedSizeAdd(ordinalBytes, selectionBytes, "Property cell state overflowed"),
+                                    3U * detail::standardContainerProxyBytes(), "Property cell proxies overflowed"),
                                 "Property cell workspace overflowed");
                             propertyReadBytes.set(cellStructures);
                             std::vector<size_t> rowOrdinals(cellIds.size(), rows.size());
-                            std::vector<uint8_t> received(cellIds.size(), 0U);
+                            std::vector<size_t> selectedColumns; selectedColumns.reserve(keys.size());
+                            std::vector<std::string_view> selectedKeys; selectedKeys.reserve(keys.size());
                             for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
                                 const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
                                 const auto position = std::ranges::lower_bound(cellIds, reference.entity_id);
@@ -1324,35 +1330,60 @@
                                     throw std::runtime_error("Property cell batch lost its owner binding");
                                 rowOrdinals[static_cast<size_t>(position - cellIds.begin())] = rowIndex;
                             }
-                            const auto receiveValue =
-                                [&](size_t ordinal, size_t column, std::optional<PropertyValue> value) {
-                                    if (ordinal >= cellIds.size() || column != 0U || received[ordinal] || rowOrdinals[ordinal] == rows.size())
+                            const auto hasCell = [&](size_t ordinal, size_t column) {
+                                const auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                const auto alias = cache.find(group.variable);
+                                return alias != cache.end() && alias->second.contains(group.keys[column]);
+                            };
+                            for (size_t first = 0U; first < cellIds.size();) {
+                                selectedColumns.clear(); selectedKeys.clear();
+                                for (size_t column = 0U; column < keys.size(); ++column) if (!hasCell(first, column)) {
+                                    selectedColumns.push_back(column); selectedKeys.push_back(keys[column]);
+                                }
+                                size_t last = first + 1U;
+                                for (; last < cellIds.size(); ++last) {
+                                    bool same = true;
+                                    for (size_t column = 0U; column < keys.size(); ++column)
+                                        if (hasCell(first, column) != hasCell(last, column)) { same = false; break; }
+                                    if (!same) break;
+                                }
+                                if (selectedKeys.empty()) { first = last; continue; }
+                                const auto receiveValue = [&](size_t relative, size_t selected, std::optional<PropertyValue> value) {
+                                    if (relative >= last - first || selected >= selectedColumns.size())
                                         throw std::runtime_error("logical graph backend changed Property cell cardinality");
+                                    const size_t ordinal = first + relative, column = selectedColumns[selected];
+                                    if (rowOrdinals[ordinal] == rows.size() || hasCell(ordinal, column))
+                                        throw std::runtime_error("logical graph backend repeated a Property cell");
                                     PropertyValue decoded = value ? std::move(*value) : PropertyValue();
                                     const size_t prior = propertyReadBytes.bytes();
                                     const size_t payload = retainedExpressionValueBytes(decoded, state);
                                     const size_t transfer = value ? (std::min)(payload, prior - (std::min)(prior, cellStructures)) : 0U;
-                                    // Reclassify the existing charge without a refund /
-                                    // re-admission gap in the shared parent account.
                                     bufferedRowsBytes.absorb(propertyReadBytes.splitOff(transfer));
                                     try {
                                         putCacheValue(rows.values()[rowOrdinals[ordinal]].property_cache,
-                                            group.variable, group.keys.front(), std::move(decoded), transfer);
+                                            group.variable, group.keys[column], std::move(decoded), transfer);
                                     } catch (...) {
                                         propertyReadBytes.absorb(bufferedRowsBytes.splitOff(transfer));
                                         throw;
                                     }
-                                    received[ordinal] = 1U;
                                 };
-                            const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
-                            if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(cellIds, keys, receive, admitProperty);
-                            else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(cellIds, keys, receive, admitProperty);
-                            // This interface represents omitted cells as missing. Only
-                            // commit those NULLs after successful complete production.
-                            for (size_t ordinal = 0U; ordinal < cellIds.size(); ++ordinal)
-                                if (!received[ordinal]) receive(ordinal, 0U, std::nullopt);
+                                const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
+                                const auto owners = std::span<const uint64_t>(cellIds).subspan(first, last - first);
+                                if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
+                                else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
+                                // Omitted cells become NULL only after this whole run
+                                // completed; a failed run leaves unproduced keys pending.
+                                for (size_t ordinal = first; ordinal < last; ++ordinal)
+                                    for (size_t column = 0U; column < selectedColumns.size(); ++column)
+                                        if (!hasCell(ordinal, selectedColumns[column])) receive(ordinal - first, column, std::nullopt);
+                                // Producer-local encoded/token staging has died;
+                                // owning payload credit is already in the private rows.
+                                propertyReadBytes.set(cellStructures);
+                                first = last;
+                            }
                             continue;
                         }
+						propertyReadBytes.set(columnStructures);
 						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
 										   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keys, admitProperty);
 						auto edgeColumns = edgeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
