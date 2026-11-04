@@ -403,34 +403,55 @@
 		}
 
 
-        // An unchanged overlay has exactly its pinned source's cells. Once a
-        // mutation is staged, the existing owning overlay adapter must merge it.
+        // Unchanged overlays forward native producers; staged views merge owning
+        // cells while retaining the same revision guard and admission contract.
         [[nodiscard]] bool supportsNodePropertyCellBatches() const override {
             requireActive();
-            return overlay_.logical_revision_ == 0U && overlay_.baseSnapshot().supportsNodePropertyCellBatches();
+            return overlay_.logical_revision_ == 0U ? overlay_.baseSnapshot().supportsNodePropertyCellBatches() : overlay_.baseSnapshot().supportsResumableNodePropertyCells();
         }
         [[nodiscard]] bool supportsResumableNodePropertyCells() const override {
             requireActive();
-            return overlay_.logical_revision_ == 0U && overlay_.baseSnapshot().supportsResumableNodePropertyCells();
+            return overlay_.baseSnapshot().supportsResumableNodePropertyCells();
         }
         void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
             std::span<const std::string_view> keys, const PropertyCellSink &values,
             const std::function<void(size_t)> &admission) const override {
-            if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
-            if (!values || !admission) throw std::invalid_argument("overlay direct cells require sink and admission");
+            if (!supportsResumableNodePropertyCells()) throw std::logic_error("overlay base lacks resumable Node cells");
+            if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
             const auto check = readRevisionCheckpoint();
-            const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
-                check(); values(row, column, std::move(value)); check();
-            };
             const auto admit = guardReadAdmission(admission);
-            overlay_.baseSnapshot().readNodePropertyCellsSortedWithAdmission(ids, keys, guarded, admit);
-            check();
+            readOverlayPropertyCells(ids, keys, overlay_.nodes_,
+                [](const auto &state) -> const auto & { return state.node.properties; },
+                [&](auto owners, auto selected, const auto &sink, const auto &fund) {
+                    overlay_.baseSnapshot().readNodePropertyCellsSortedWithAdmission(owners, selected, sink, fund);
+                }, check, values, admit);
+        }
+        [[nodiscard]] bool supportsResumableEdgePropertyCells() const override {
+            requireActive();
+            return overlay_.baseSnapshot().supportsResumableEdgePropertyCells();
+        }
+        void readEdgePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const PropertyCellSink &values,
+            const std::function<void(size_t)> &admission) const override {
+            if (!supportsResumableEdgePropertyCells()) throw std::logic_error("overlay base lacks resumable Edge cells");
+            if (!values || !admission) throw std::invalid_argument("overlay cells require sink and admission");
+            const auto check = readRevisionCheckpoint();
+            const auto admit = guardReadAdmission(admission);
+            readOverlayPropertyCells(ids, keys, overlay_.edges_,
+                [](const auto &state) -> const auto & { return state.edge.properties; },
+                [&](auto owners, auto selected, const auto &sink, const auto &fund) {
+                    overlay_.baseSnapshot().readEdgePropertyCellsSortedWithAdmission(owners, selected, sink, fund);
+                }, check, values, admit);
         }
         void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
             std::span<const std::string_view> keys, const PropertyCellSink &values,
             const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
             if (!supportsNodePropertyCellBatches()) throw std::logic_error("changed overlay requires owning Property adapter");
             if (!values || !scalars || !admission) throw std::invalid_argument("overlay direct scalars require sinks and admission");
+            if (overlay_.logical_revision_ != 0U) {
+                readNodePropertyCellsSortedWithAdmission(ids, keys, values, admission);
+                return;
+            }
             const auto check = readRevisionCheckpoint();
             const auto guarded = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                 check(); values(row, column, std::move(value)); check();

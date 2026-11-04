@@ -168,9 +168,20 @@ namespace graph::storage {
                 debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
 #endif
 				if (!admission) throw std::invalid_argument("direct Property cells require admission");
-				native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+				native_reads_.readEntityPropertyCellsSorted(snapshot_.metadataSnapshot(), EntityPropertyOwnerKind::EPOK_NODE, ids, keys,
 					sink, &read_session_, &admission);
 			}
+            [[nodiscard]] bool supportsResumableEdgePropertyCells() const override { return true; }
+            void readEdgePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+                std::span<const std::string_view> keys, const PropertyCellSink &sink,
+                const std::function<void(size_t)> &admission) const override {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+                debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
+#endif
+                if (!admission) throw std::invalid_argument("direct Edge Property cells require admission");
+                native_reads_.readEntityPropertyCellsSorted(snapshot_.metadataSnapshot(), EntityPropertyOwnerKind::EPOK_EDGE,
+                    ids, keys, sink, &read_session_, &admission);
+            }
             void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,
                 std::span<const std::string_view> keys, const PropertyCellSink &sink,
                 const PropertyScalarReadSink &scalars, const std::function<void(size_t)> &admission) const override {
@@ -178,7 +189,7 @@ namespace graph::storage {
                 debug::ScopedPropertyReadDiagnostic diagnosticScope(debug::PropertyDiagnosticStage::PDS_SELECTED);
 #endif
                 if (!sink || !scalars || !admission) throw std::invalid_argument("direct scalar cells require sinks and admission");
-                native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                native_reads_.readEntityPropertyCellsSorted(snapshot_.metadataSnapshot(), EntityPropertyOwnerKind::EPOK_NODE, ids, keys,
                     sink, &read_session_, &admission, &scalars);
             }
             void readNodePropertyCellsWithViewsSortedWithAdmission(std::span<const uint64_t> ids,
@@ -190,7 +201,7 @@ namespace graph::storage {
 #endif
                 if (!sink || !scalars || !texts || !admission)
                     throw std::invalid_argument("typed Property cells require sinks and admission");
-                native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                native_reads_.readEntityPropertyCellsSorted(snapshot_.metadataSnapshot(), EntityPropertyOwnerKind::EPOK_NODE, ids, keys,
                     sink, &read_session_, &admission, &scalars, &texts);
             }
             bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
@@ -209,7 +220,7 @@ namespace graph::storage {
                 const PropertyTextReadSink text = [&](size_t row, size_t column, std::string_view value) {
                     batches.texts(std::span(&row, 1U), column, std::span(&value, 1U));
                 };
-                native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+                native_reads_.readEntityPropertyCellsSorted(snapshot_.metadataSnapshot(), EntityPropertyOwnerKind::EPOK_NODE, ids, keys,
                     values, &read_session_, &admission, &scalar, &text, &batches);
                 return true;
             }

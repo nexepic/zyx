@@ -121,7 +121,7 @@ namespace graph::storage {
 		readEdgesShapedSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
 									  const EntityReadShape &shape, NativeReadSession *session = nullptr,
 				const SelectedPropertyReadAdmission *admission = nullptr) const;
-		void readNodePropertyCellsSorted(const MetadataSnapshotPin &, std::span<const uint64_t>,
+		void readEntityPropertyCellsSorted(const MetadataSnapshotPin &, EntityPropertyOwnerKind, std::span<const uint64_t>,
 			std::span<const std::string_view>, const LogicalGraphReadSnapshot::PropertyCellSink &,
 			NativeReadSession *, const SelectedPropertyReadAdmission *, const PropertyScalarReadSink * = nullptr,
             const PropertyTextReadSink * = nullptr, const PropertyColumnBatchReadSinks * = nullptr) const;

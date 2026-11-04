@@ -897,7 +897,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	void PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+	void PageBackedLogicalGraphReadAdapter::readEntityPropertyCellsSorted(const MetadataSnapshotPin &snapshot, EntityPropertyOwnerKind ownerKind,
 		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
 		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
 		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
@@ -971,7 +971,7 @@ namespace graph::storage {
                     batches->texts(rows, it->second, values);
             };
         }
-        pages_.readNodePropertyCellsSorted(snapshot, ids, tokens, std::ref(mapValue),
+        pages_.readEntityPropertyCellsSorted(snapshot, ownerKind, ids, tokens, std::ref(mapValue),
             &active, admission, scalars ? &emitScalar : nullptr, texts ? &emitText : nullptr,
             batches ? &mappedBatches : nullptr);
 	}

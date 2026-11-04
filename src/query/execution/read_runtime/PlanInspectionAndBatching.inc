@@ -1299,31 +1299,34 @@
                         // the snapshot's longer-lived cache merely to make retry work.
                         // Keep the matrix path for repeated bindings and multi-key
                         // scatter, whose joint ownership has different handoff costs.
+                        const auto &cellIds = nodeIds.empty() ? edgeIds : nodeIds;
+                        const bool edgeCells = nodeIds.empty();
                         if (groups.size() == 1U && group.keys.size() == 1U &&
-                            edgeIds.empty() &&
-                            nodeIds.size() == rows.size() && !nodeIds.empty() &&
-                            state.shared.snapshot.supportsResumableNodePropertyCells()) {
+                            (nodeIds.empty() != edgeIds.empty()) &&
+                            cellIds.size() == rows.size() && !cellIds.empty() &&
+                            (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
+                                       : state.shared.snapshot.supportsResumableNodePropertyCells())) {
                             const size_t ordinalBytes = detail::standardAllocatorRequestBytes(
-                                checkedSizeMul(nodeIds.size(), sizeof(size_t), "Property owner ordinal size overflowed"), alignof(size_t));
-                            const size_t seenBytes = detail::standardAllocatorRequestBytes(nodeIds.size(), alignof(uint8_t));
+                                checkedSizeMul(cellIds.size(), sizeof(size_t), "Property owner ordinal size overflowed"), alignof(size_t));
+                            const size_t seenBytes = detail::standardAllocatorRequestBytes(cellIds.size(), alignof(uint8_t));
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
                                 checkedSizeAdd(checkedSizeAdd(ordinalBytes, seenBytes, "Property cell state overflowed"),
                                     2U * detail::standardContainerProxyBytes(), "Property cell proxies overflowed"),
                                 "Property cell workspace overflowed");
                             propertyReadBytes.set(cellStructures);
-                            std::vector<size_t> rowOrdinals(nodeIds.size(), rows.size());
-                            std::vector<uint8_t> received(nodeIds.size(), 0U);
+                            std::vector<size_t> rowOrdinals(cellIds.size(), rows.size());
+                            std::vector<uint8_t> received(cellIds.size(), 0U);
                             for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
                                 const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
-                                const auto position = std::ranges::lower_bound(nodeIds, reference.entity_id);
-                                if (position == nodeIds.end() || *position != reference.entity_id)
-                                    throw std::runtime_error("Property cell batch lost its Node binding");
-                                rowOrdinals[static_cast<size_t>(position - nodeIds.begin())] = rowIndex;
+                                const auto position = std::ranges::lower_bound(cellIds, reference.entity_id);
+                                if (position == cellIds.end() || *position != reference.entity_id)
+                                    throw std::runtime_error("Property cell batch lost its owner binding");
+                                rowOrdinals[static_cast<size_t>(position - cellIds.begin())] = rowIndex;
                             }
                             const auto receiveValue =
                                 [&](size_t ordinal, size_t column, std::optional<PropertyValue> value) {
-                                    if (ordinal >= nodeIds.size() || column != 0U || received[ordinal] || rowOrdinals[ordinal] == rows.size())
+                                    if (ordinal >= cellIds.size() || column != 0U || received[ordinal] || rowOrdinals[ordinal] == rows.size())
                                         throw std::runtime_error("logical graph backend changed Property cell cardinality");
                                     PropertyValue decoded = value ? std::move(*value) : PropertyValue();
                                     const size_t prior = propertyReadBytes.bytes();
@@ -1342,10 +1345,11 @@
                                     received[ordinal] = 1U;
                                 };
                             const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
-                            state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(nodeIds, keys, receive, admitProperty);
+                            if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(cellIds, keys, receive, admitProperty);
+                            else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(cellIds, keys, receive, admitProperty);
                             // This interface represents omitted cells as missing. Only
                             // commit those NULLs after successful complete production.
-                            for (size_t ordinal = 0U; ordinal < nodeIds.size(); ++ordinal)
+                            for (size_t ordinal = 0U; ordinal < cellIds.size(); ++ordinal)
                                 if (!received[ordinal]) receive(ordinal, 0U, std::nullopt);
                             continue;
                         }

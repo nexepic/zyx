@@ -488,6 +488,13 @@ namespace graph::storage {
 			const std::function<void(size_t)> &) const {
 			throw std::logic_error("logical graph reader does not support direct Property cells");
 		}
+        // Edge cells obey the same independently authenticated, private retry contract.
+        [[nodiscard]] virtual bool supportsResumableEdgePropertyCells() const { return false; }
+        virtual void readEdgePropertyCellsSortedWithAdmission(std::span<const uint64_t>,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const std::function<void(size_t)> &) const {
+            throw std::logic_error("logical graph reader does not support resumable Edge Property cells");
+        }
         // Native scalar producers may bypass PropertyValue. Existing readers
         // and overlays retain their owning-cell route through this fallback.
         virtual void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,

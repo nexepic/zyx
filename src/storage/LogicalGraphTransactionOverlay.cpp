@@ -231,6 +231,60 @@ namespace graph::storage {
 			return {LogicalGraphMutationEntityKind::LGMK_EDGE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id};
 		}
 
+        // Merge contiguous base runs with staged owners without constructing an
+        // owning column matrix. Every callback remains inside one checked overlay
+        // revision, so a caller may retain private completed cells on admission
+        // refusal but cannot combine them with a changed transaction view.
+        template<class States, class Properties, class ReadBase, class Check>
+        void readOverlayPropertyCells(std::span<const uint64_t> ids,
+            std::span<const std::string_view> keys, const States &states,
+            Properties properties, ReadBase readBase, const Check &check,
+            const LogicalGraphReadSnapshot::PropertyCellSink &sink,
+            const std::function<void(size_t)> &admission) {
+            if (!sink || !admission) throw std::invalid_argument("overlay cells require sink and admission");
+            check();
+            for (const auto key : keys) if (key.empty())
+                throw std::invalid_argument("overlay cells require nonempty Property keys");
+            uint64_t previous = 0U;
+            for (const auto id : ids) {
+                if (id == 0U || id <= previous) throw std::invalid_argument("overlay cells require increasing owner IDs");
+                previous = id;
+                if (const auto found = states.find(id); found != states.end() && found->second.deleted)
+                    throw std::runtime_error("logical transaction overlay owner was deleted");
+            }
+            for (size_t row = 0U; row < ids.size();) {
+                check();
+                const auto state = states.find(ids[row]);
+                if (state == states.end()) {
+                    size_t end = row + 1U;
+                    while (end < ids.size() && !states.contains(ids[end])) ++end;
+                    const auto mapped = [&](size_t ordinal, size_t column, std::optional<PropertyValue> value) {
+                        check();
+                        if (ordinal >= end - row || column >= keys.size())
+                            throw std::runtime_error("overlay base changed Property cell cardinality");
+                        sink(row + ordinal, column, std::move(value));
+                        check();
+                    };
+                    const LogicalGraphReadSnapshot::PropertyCellSink emit = std::ref(mapped);
+                    readBase(ids.subspan(row, end - row), keys, emit, admission);
+                    check(); row = end;
+                } else {
+                    for (size_t column = 0U; column < keys.size(); ++column) {
+                        check();
+                        const auto &entries = properties(state->second);
+                        const auto found = std::ranges::find(entries, keys[column], &LogicalGraphPropertyEntry::key);
+                        if (found == entries.end()) sink(row, column, std::nullopt);
+                        else {
+                            admitStagedProperty(found->value, &admission);
+                            sink(row, column, copyStagedValue(found->value, &admission));
+                        }
+                        check();
+                    }
+                    ++row;
+                }
+            }
+        }
+
 	} // namespace
 
 #include "transaction_overlay/ReadSnapshot.inc"

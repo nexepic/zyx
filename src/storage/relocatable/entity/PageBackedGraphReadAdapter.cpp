@@ -538,7 +538,7 @@ namespace graph::storage {
 		return columns;
 	}
 
-	void PageBackedGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+	void PageBackedGraphReadAdapter::readEntityPropertyCellsSorted(const MetadataSnapshotPin &snapshot, EntityPropertyOwnerKind ownerKind,
 		std::span<const uint64_t> ids, std::span<const uint32_t> tokens,
 		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
 		NativeReadSession *session, const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
@@ -560,7 +560,7 @@ namespace graph::storage {
             }
             const size_t prefix = size_t(std::find_if(ids.begin(), ids.end(),
                 [](uint64_t id) { return !canHaveProperties(id); }) - ids.begin());
-            readNodePropertyCellsSorted(snapshot, ids.first(prefix), tokens, sink, session, admission, scalars, texts, batches);
+            readEntityPropertyCellsSorted(snapshot, ownerKind, ids.first(prefix), tokens, sink, session, admission, scalars, texts, batches);
             for (size_t row = prefix; row < ids.size(); ++row)
                 for (size_t column = 0; column < tokens.size(); ++column) sink(row, column, std::nullopt);
             return;
@@ -570,7 +570,7 @@ namespace graph::storage {
 			throw std::overflow_error("direct Property owner staging overflowed");
 		if (admission) (*admission)(ids.size() * sizeof(EntityPropertyKey));
 		std::vector<EntityPropertyKey> keys; keys.reserve(ids.size());
-		for (const auto id : ids) keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+		for (const auto id : ids) keys.push_back({ownerKind, id});
 		std::optional<NativeReadSession> localSession;
 		auto &active = selectNativeReadSession(snapshot, session, localSession);
 		const auto emitValue = [&](size_t owner, size_t column, std::optional<PropertyCollectionRootEntry> entry) {
