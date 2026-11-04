@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="4" failures="0" disabled="0" errors="0" time="0.004" timestamp="2026-11-04T11:58:46.243" name="AllTests">
+  <testsuite name="LogicalPlanDirectEdgeRuntimeTest" tests="4" failures="0" disabled="0" skipped="0" errors="0" time="0.004" timestamp="2026-11-04T11:58:46.243">
+    <testcase name="NodePredicateRequiresSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="44" status="run" result="completed" time="0.004" timestamp="2026-11-04T11:58:46.243" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="TightAndAmplePropertyPrefetchReadEachNodeOnce" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1934" status="run" result="completed" time="0." timestamp="2026-11-04T11:58:46.247" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PropertyPrefetchRejectsBackendWithoutSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1975" status="run" result="completed" time="0." timestamp="2026-11-04T11:58:46.248" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PointPropertyEvaluationRequiresSourceAdmissionBeforeReading" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1996" status="run" result="completed" time="0." timestamp="2026-11-04T11:58:46.248" classname="LogicalPlanDirectEdgeRuntimeTest" />
+  </testsuite>
+</testsuites>

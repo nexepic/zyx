@@ -323,10 +323,9 @@
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						auto columns = state.shared.snapshot.supportsPropertyReadAdmission()
-											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-														 nodeIds, keyViews, admission)
-											   : state.shared.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded Node Property predicates require source admission");
+						auto columns = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keyViews, admission);
 						if (columns.size() != propertyKeys.size()) {
 							throw std::runtime_error("logical graph backend changed Node Property column cardinality");
 						}
@@ -739,11 +738,10 @@
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
+						if (!propertyKeys.empty() && !state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded indexed Node Property predicates require source admission");
 						auto columns = propertyKeys.empty() ? std::vector<std::vector<PropertyValue>>{}
-									   : state.shared.snapshot.supportsPropertyReadAdmission()
-											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-														 batchIds, keyViews, admission)
-											   : state.shared.snapshot.readNodePropertyColumnsSorted(batchIds, keyViews);
+									   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(batchIds, keyViews, admission);
 						if (columns.size() != propertyKeys.size() ||
 							std::ranges::any_of(columns, [&](const auto &column) { return column.size() != count; }))
 							throw std::runtime_error(

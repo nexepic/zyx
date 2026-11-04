@@ -41,6 +41,24 @@ namespace graph::query::execution {
 		EXPECT_TRUE(graph.node_read_ids.empty());
 	}
 
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateRequiresSourceAdmissionBeforeReading) {
+		DirectEdgeGraph graph = directGraph(); graph.enable_property_read_admission = false;
+		DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto plan = parser.parseToLogical("MATCH (n {rank: 1}) RETURN id(n) AS id");
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(*plan.root, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U); EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+		graph.enable_property_read_admission = true;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})));
+		EXPECT_EQ(delivered, 1U); EXPECT_GT(graph.node_property_column_admission_reads, 0U);
+	}
+
 	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation) {
 		DirectEdgeGraph graph = directGraph();
 		graph.node_ref_scan_order = {3U, 1U, 2U};
