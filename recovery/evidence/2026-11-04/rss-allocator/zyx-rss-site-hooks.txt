@@ -1,0 +1,49 @@
+#include <atomic>
+#include <cstdio>
+#include <dlfcn.h>
+#include <cstdint>
+#include <array>
+#include <algorithm>
+extern "C" size_t __asan_get_alloc_stack(void *, void **, size_t, int *);
+namespace rss_probe {
+static std::atomic<bool> enabled{false};
+static std::atomic<size_t> active{0};
+static std::atomic_flag lock=ATOMIC_FLAG_INIT;
+static size_t overflow=0;
+struct Stack { uintptr_t hash=0; void *pcs[16]{}; size_t frames=0, samples=0, bytes=0, size=0; };
+static Stack stacks[2048];
+static void report() {
+ enabled.store(false);while(active.load()){}
+ Dl_info info{};dladdr(reinterpret_cast<void *>(&report),&info);
+ const auto base=reinterpret_cast<uintptr_t>(info.dli_fbase);
+ std::array<size_t,2048> order{};for(size_t i=0;i<order.size();++i)order[i]=i;
+ std::sort(order.begin(),order.end(),[](size_t a,size_t b){return stacks[a].bytes>stacks[b].bytes;});
+ std::fprintf(stderr,"SAMPLED_SITES denominator=64 overflow=%zu\n",overflow);
+ for(size_t i=0;i<30 && stacks[order[i]].samples;++i){
+  const auto &s=stacks[order[i]];
+  std::fprintf(stderr,"ALLOC_SITE size=%zu samples=%zu sample_bytes=%zu",s.size,s.samples,s.bytes);
+  for(size_t j=0;j<s.frames;++j){const auto pc=reinterpret_cast<uintptr_t>(s.pcs[j]);if(pc>=base && pc-base<0x80000000ULL)std::fprintf(stderr," pc=%zx",pc-base);}
+  std::fprintf(stderr,"\n");
+ }
+}
+}
+extern "C" void __sanitizer_malloc_hook(const volatile void *p,size_t size){
+ rss_probe::active.fetch_add(1);
+ static thread_local uint32_t random=0x61c88647U;
+ random^=random<<13;random^=random>>17;random^=random<<5;
+ if(rss_probe::enabled.load() && (random&63U)==0U){
+  void *pcs[16]{};int thread=0;const auto frames=__asan_get_alloc_stack(const_cast<void *>(p),pcs,16,&thread);
+  uintptr_t hash=size+0x9e3779b9U;
+  for(size_t i=0;i<frames;++i)hash=(hash^reinterpret_cast<uintptr_t>(pcs[i]))*1099511628211ULL;
+  if(!hash)hash=1;
+  while(rss_probe::lock.test_and_set()){}
+  size_t slot=hash%2048U,probes=0;
+  for(;probes<2048U;++probes,slot=(slot+1U)%2048U){
+   auto &s=rss_probe::stacks[slot];
+   if(!s.hash || s.hash==hash){if(!s.hash){s.hash=hash;s.size=size;s.frames=frames;for(size_t i=0;i<frames;++i)s.pcs[i]=pcs[i];}++s.samples;s.bytes+=size;break;}
+  }
+  if(probes==2048U)++rss_probe::overflow;
+  rss_probe::lock.clear();
+ }
+ rss_probe::active.fetch_sub(1);
+}

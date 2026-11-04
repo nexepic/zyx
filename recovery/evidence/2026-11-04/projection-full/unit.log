@@ -1,0 +1,782 @@
+
+--- Test shard 1 failed with exit code 1 ---
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 5505 tests across 576 suites
+
+[38;5;105;1m[  0% |   1/576][0m [1;32mPASS[0m [1mHistoryTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  0% |   2/576][0m [1;32mPASS[0m [1mLineBufferTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  0% |   3/576][0m [1;32mPASS[0m [1mEditorTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[  0% |   4/576][0m [1;32mPASS[0m [1mInputxxTerminalTest[0m [38;5;105;1m(50 ms)[0m
+[38;5;105;1m[  0% |   5/576][0m [1;32mPASS[0m [1mSessionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  1% |   6/576][0m [1;32mPASS[0m [1mBugVerificationTest[0m [38;5;105;1m(673 ms)[0m
+[38;5;105;1m[  1% |   7/576][0m [1;32mPASS[0m [1mAggregateProjectionTest[0m [38;5;105;1m(2643 ms)[0m
+[38;5;105;1m[  1% |   8/576][0m [1;32mPASS[0m [1mIntegrationConstraintTest[0m [38;5;105;1m(1235 ms)[0m
+[38;5;105;1m[  1% |   9/576][0m [1;32mPASS[0m [1mIntegrationCrudTest[0m [38;5;105;1m(686 ms)[0m
+[38;5;105;1m[  1% |  10/576][0m [1;32mPASS[0m [1mIntegrationCypherAdvancedTest[0m [38;5;105;1m(866 ms)[0m
+[38;5;105;1m[  1% |  11/576][0m [1;32mPASS[0m [1mIntegrationCypherClausesTest[0m [38;5;105;1m(1672 ms)[0m
+[38;5;105;1m[  2% |  12/576][0m [1;32mPASS[0m [1mCypherCombinationsTest[0m [38;5;105;1m(2149 ms)[0m
+[38;5;105;1m[  2% |  13/576][0m [1;32mPASS[0m [1mCypherExpressionDepthTest[0m [38;5;105;1m(1666 ms)[0m
+[38;5;105;1m[  2% |  14/576][0m [1;32mPASS[0m [1mIntegrationCypherExpressionsTest[0m [38;5;105;1m(1963 ms)[0m
+[38;5;105;1m[  2% |  15/576][0m [1;32mPASS[0m [1mIntegrationCypherFilteringTest[0m [38;5;105;1m(1903 ms)[0m
+[38;5;105;1m[  2% |  16/576][0m [1;32mPASS[0m [1mIntegrationCypherNewFeaturesTest[0m [38;5;105;1m(375 ms)[0m
+[38;5;105;1m[  2% |  17/576][0m [1;32mPASS[0m [1mCypherPatternsTest[0m [38;5;105;1m(2208 ms)[0m
+[38;5;105;1m[  3% |  18/576][0m [1;32mPASS[0m [1mCypherWithPipelineTest[0m [38;5;105;1m(5372 ms)[0m
+[38;5;105;1m[  3% |  19/576][0m [1;32mPASS[0m [1mIntegrationDatabaseTest[0m [38;5;105;1m(2445 ms)[0m
+[38;5;105;1m[  3% |  20/576][0m [1;32mPASS[0m [1mIntegrationHeterogeneousListsTest[0m [38;5;105;1m(651 ms)[0m
+[38;5;105;1m[  3% |  21/576][0m [1;32mPASS[0m [1mIntegrationPersistenceTest[0m [38;5;105;1m(627 ms)[0m
+[38;5;105;1m[  3% |  22/576][0m [1;32mPASS[0m [1mIntegrationQueryTest[0m [38;5;105;1m(3863 ms)[0m
+[38;5;105;1m[  3% |  23/576][0m [1;32mPASS[0m [1mIntegrationSubqueryFeaturesTest[0m [38;5;105;1m(1669 ms)[0m
+[38;5;105;1m[  4% |  24/576][0m [1;32mPASS[0m [1mIntegrationTransactionTest[0m [38;5;105;1m(569 ms)[0m
+[38;5;105;1m[  4% |  25/576][0m [1;32mPASS[0m [1mBulkApiTransactionTest[0m [38;5;105;1m(138 ms)[0m
+[38;5;105;1m[  4% |  26/576][0m [1;32mPASS[0m [1mReadOnlyTransactionInternalTest[0m [38;5;105;1m(272 ms)[0m
+[38;5;105;1m[  4% |  27/576][0m [1;32mPASS[0m [1mReadOnlyTransactionPublicTest[0m [38;5;105;1m(404 ms)[0m
+[38;5;105;1m[  4% |  28/576][0m [1;32mPASS[0m [1mRelationshipExpandCountScanIntegrationTest[0m [38;5;105;1m(1359 ms)[0m
+[38;5;105;1m[  5% |  29/576][0m [1;32mPASS[0m [1mVectorizedNodeScanIntegrationTest[0m [38;5;105;1m(4175 ms)[0m
+[38;5;105;1m[  5% |  30/576][0m [1;32mPASS[0m [1mCppApiTest[0m [38;5;105;1m(13137 ms)[0m
+[38;5;105;1m[  5% |  31/576][0m [1;32mPASS[0m [1mApiConcurrentExecutionTest[0m [38;5;105;1m(767 ms)[0m
+[38;5;105;1m[  5% |  32/576][0m [1;32mPASS[0m [1mApiSequentialExecutionTest[0m [38;5;105;1m(845 ms)[0m
+[38;5;105;1m[  5% |  33/576][0m [1;32mPASS[0m [1mApiTransactionEdgeCasesTest[0m [38;5;105;1m(425 ms)[0m
+[38;5;105;1m[  5% |  34/576][0m [1;32mPASS[0m [1mDriverAbiAgentMemoryTest[0m [38;5;105;1m(417 ms)[0m
+[38;5;105;1m[  6% |  35/576][0m [1;32mPASS[0m [1mDriverAbiBytesTest[0m [38;5;105;1m(255 ms)[0m
+[38;5;105;1m[  6% |  36/576][0m [1;32mPASS[0m [1mDriverAbiErrorHandlingTest[0m [38;5;105;1m(100 ms)[0m
+[38;5;105;1m[  6% |  37/576][0m [1;32mPASS[0m [1mDriverAbiGraphValuesTest[0m [38;5;105;1m(514 ms)[0m
+[38;5;105;1m[  6% |  38/576][0m [1;32mPASS[0m [1mDriverAbiIngestTest[0m [38;5;105;1m(1317 ms)[0m
+[38;5;105;1m[  6% |  39/576][0m [1;32mPASS[0m [1mRelocatableDriverAbiIngestTest[0m [38;5;105;1m(936 ms)[0m
+[38;5;105;1m[  6% |  40/576][0m [1;32mPASS[0m [1mRelocatableDriverAbiIngestRebaseCorruptionTest[0m [38;5;105;1m(184 ms)[0m
+[38;5;105;1m[  7% |  41/576][0m [1;32mPASS[0m [1mDriverAbiIngestSchemaValidationTest[0m [38;5;105;1m(118 ms)[0m
+[38;5;105;1m[  7% |  42/576][0m [1;32mPASS[0m [1mDriverAbiLifecycleTest[0m [38;5;105;1m(119 ms)[0m
+[38;5;105;1m[  7% |  43/576][0m [1;32mPASS[0m [1mDriverAbiNestedValuesTest[0m [38;5;105;1m(445 ms)[0m
+[38;5;105;1m[  7% |  44/576][0m [1;32mPASS[0m [1mDriverAbiValueRefRawPathsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  7% |  45/576][0m [1;32mPASS[0m [1mDriverAbiResultCursorTest[0m [38;5;105;1m(472 ms)[0m
+[38;5;105;1m[  7% |  46/576][0m [1;32mPASS[0m [1mDriverAbiTransactionsTest[0m [38;5;105;1m(418 ms)[0m
+[38;5;105;1m[  8% |  47/576][0m [1;32mPASS[0m [1mDriverAbiValueBuildersTest[0m [38;5;105;1m(211 ms)[0m
+[38;5;105;1m[  8% |  48/576][0m [1;32mPASS[0m [1mCompareBenchmarkTest[0m [38;5;105;1m(2548 ms)[0m
+[38;5;105;1m[  8% |  49/576][0m [1;32mPASS[0m [1mCompareBenchmarkObserverTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  8% |  50/576][0m [1;32mPASS[0m [1mCommandLineInterfaceTest[0m [38;5;105;1m(299 ms)[0m
+[38;5;105;1m[  8% |  51/576][0m [1;32mPASS[0m [1mCypherCompleterTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[  9% |  52/576][0m [1;32mPASS[0m [1mDebugCommandHandlerTest[0m [38;5;105;1m(432 ms)[0m
+[38;5;105;1m[  9% |  53/576][0m [1;32mPASS[0m [1mImportCommandTest[0m [38;5;105;1m(3621 ms)[0m
+[38;5;105;1m[  9% |  54/576][0m [1;32mPASS[0m [1mREPLTest[0m [38;5;105;1m(2861 ms)[0m
+[38;5;105;1m[  9% |  55/576][0m [1;32mPASS[0m [1mVectorMathTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  9% |  56/576][0m [1;32mPASS[0m [1mParallelExecutionTypesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[  9% |  57/576][0m [1;32mPASS[0m [1mParallelOperatorExecutorTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 10% |  58/576][0m [1;32mPASS[0m [1mParallelScanExecutorTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 10% |  59/576][0m [1;32mPASS[0m [1mThreadPoolTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 10% |  60/576][0m [1;32mPASS[0m [1mThreadPoolExceptionAndParallelTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 10% |  61/576][0m [1;32mPASS[0m [1mThreadPoolStoppedTest[0m [38;5;105;1m(10 ms)[0m
+[38;5;105;1m[ 10% |  62/576][0m [1;32mPASS[0m [1mThreadPoolSubmitAndParallelForTest[0m [38;5;105;1m(24 ms)[0m
+[38;5;105;1m[ 10% |  63/576][0m [1;32mPASS[0m [1mThreadPoolWorkerLoopDirectTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 11% |  64/576][0m [1;32mPASS[0m [1mEdgeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 11% |  65/576][0m [1;32mPASS[0m [1mNativeDatabaseLifecycleTest[0m [38;5;105;1m(240 ms)[0m
+[38;5;105;1m[ 11% |  66/576][0m [1;32mPASS[0m [1mNativeTransactionTest[0m [38;5;105;1m(1221 ms)[0m
+[38;5;105;1m[ 11% |  67/576][0m [1;32mPASS[0m [1mNodeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 11% |  68/576][0m [1;32mPASS[0m [1mPropertyValueTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 11% |  69/576][0m [1;32mPASS[0m [1mPropertyValueBytesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 12% |  70/576][0m [1;32mPASS[0m [1mPropertyTypesOrderingTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 12% |  71/576][0m [1;32mPASS[0m [1mPropertyTypesAccessTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 12% |  72/576][0m [1;32mPASS[0m [1mPropertyTypesHashTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 12% |  73/576][0m [1;32mPASS[0m [1mTemporalDateTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 12% |  74/576][0m [1;32mPASS[0m [1mTemporalDateTimeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 13% |  75/576][0m [1;32mPASS[0m [1mTemporalDurationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 13% |  76/576][0m [1;32mPASS[0m [1mPerfTraceTest[0m [38;5;105;1m(35 ms)[0m
+[38;5;105;1m[ 13% |  77/576][0m [1;32mPASS[0m [1mPerfTraceScopedObserverTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 13% |  78/576][0m [1;32mPASS[0m [1mLogTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 13% |  79/576][0m [1;32mPASS[0m [1mLogicalProcedureIdentityTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 13% |  80/576][0m [1;32mPASS[0m [1mLogicalVectorBufferedSortTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 14% |  81/576][0m [1;32mPASS[0m [1mLogicalGdsPathBudgetTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 14% |  82/576][0m [1;32mPASS[0m [1mQueryEngineLogicalBackendBoundaryTest[0m [38;5;105;1m(290 ms)[0m
+[38;5;105;1m[ 14% |  83/576][0m [1;32mPASS[0m [1mLogicalVectorPropertyBatchTest[0m [38;5;105;1m(293 ms)[0m
+[38;5;105;1m[ 14% |  84/576][0m [1;32mPASS[0m [1mQueryEngineAnchorPlanningTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 14% |  85/576][0m [1;32mPASS[0m [1mQueryTestFixture[0m [38;5;105;1m(124 ms)[0m
+[38;5;105;1m[ 14% |  86/576][0m [1;32mPASS[0m [1mQueryEngineTypePlanningTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 15% |  87/576][0m [1;32mPASS[0m [1mQueryResultTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 15% |  88/576][0m [1;32mPASS[0m [1mResultValueTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 15% |  89/576][0m [1;32mPASS[0m [1mQueryResultResourcesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 15% |  90/576][0m [1;32mPASS[0m [1mPlanCacheTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 15% |  91/576][0m [1;32mPASS[0m [1mBatchEnvelopeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 15% |  92/576][0m [1;32mPASS[0m [1mBoundColumnLayoutTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 16% |  93/576][0m [1;32mPASS[0m [1mMaterializedByteBudgetParentTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 16% |  94/576][0m [1;32mPASS[0m [1mBoundExecutionProgramTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 16% |  95/576][0m [1;32mPASS[0m [1mBoundExpressionInputsTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 16% |  96/576][0m [1;32mPASS[0m [1mBoundNodeColumnPredicatesTest[0m [38;5;105;1m(9 ms)[0m
+[38;5;105;1m[ 16% |  97/576][0m [1;32mPASS[0m [1mBoundNodeScanBatchTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% |  98/576][0m [1;32mPASS[0m [1mDirectPropertyColumnsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% |  99/576][0m [1;32mPASS[0m [1mBoundProjectionReferencesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% | 100/576][0m [1;32mPASS[0m [1mBoundPropertyBindingsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% | 101/576][0m [1;32mPASS[0m [1mBoundSlotRegistryTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% | 102/576][0m [1;32mPASS[0m [1mBoundedBatchTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 17% | 103/576][0m [1;32mPASS[0m [1mBudgetMemoryResourceTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 18% | 104/576][0m [1;32mPASS[0m [1mCoordinatedMaterializedBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 18% | 105/576][0m [1;32mPASS[0m [1mCsvReaderTest[0m [38;5;105;1m(22 ms)[0m
+[38;5;105;1m[ 18% | 106/576][0m [1;32mPASS[0m [1mDirectPrimitiveColumnFilterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 18% | 107/576][0m [1;32mPASS[0m [1mDynamicValueArenaTest[0m [38;5;105;1m(8 ms)[0m
+[38;5;105;1m[ 18% | 108/576][0m [1;32mPASS[0m [1mExternalQueryKeySetTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 18% | 109/576][0m [1;32mPASS[0m [1mExternalQuerySortTest[0m [38;5;105;1m(414 ms)[0m
+[38;5;105;1m[ 19% | 110/576][0m [1;32mPASS[0m [1mFixedWidthBatchTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 19% | 111/576][0m [1;32mPASS[0m [1mFixedWidthColumnTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 19% | 112/576][0m [1;32mPASS[0m [1mGuardedIdGatherTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 19% | 113/576][0m [1;32mPASS[0m [1mGuardedPropertyCopyTest[0m [38;5;105;1m(14 ms)[0m
+[38;5;105;1m[ 19% | 114/576][0m [1;32mPASS[0m [1mCountAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 19% | 115/576][0m [1;32mPASS[0m [1mLogicalAggregateAccumulatorBaseTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 20% | 116/576][0m [1;32mPASS[0m [1mSumAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 20% | 117/576][0m [1;32mPASS[0m [1mAvgAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 20% | 118/576][0m [1;32mPASS[0m [1mMinAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 20% | 119/576][0m [1;32mPASS[0m [1mMaxAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 20% | 120/576][0m [1;32mPASS[0m [1mCollectAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 121/576][0m [1;32mPASS[0m [1mCreateAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 122/576][0m [1;32mPASS[0m [1mCountDistinctAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 123/576][0m [1;32mPASS[0m [1mCollectDistinctAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 124/576][0m [1;32mPASS[0m [1mStDevAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 125/576][0m [1;32mPASS[0m [1mPercentileDiscAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 21% | 126/576][0m [1;32mPASS[0m [1mPercentileContAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 22% | 127/576][0m [1;32mPASS[0m [1mLogicalAggregateAccumulatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 22% | 128/576][0m [1;32mPASS[0m [1mLogicalGraphNodeCursorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 22% | 129/576][0m [1;32mPASS[0m [1mLogicalGraphAdjacencyCursorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 22% | 130/576][0m [1;32mPASS[0m [1mLogicalGraphReadExecutorTest[0m [38;5;105;1m(25 ms)[0m
+[38;5;105;1m[ 22% | 131/576][0m [1;32mPASS[0m [1mLogicalGraphReadExecutorIndexLookupContractsTest[0m [38;5;105;1m(19 ms)[0m
+[38;5;105;1m[ 22% | 132/576][0m [1;32mPASS[0m [1mLogicalPlanBoundedTopKTest[0m [38;5;105;1m(374 ms)[0m
+[38;5;105;1m[ 23% | 133/576][0m [1;32mPASS[0m [1mLogicalPlanCertifiedBatchHandoffTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 23% | 134/576][0m [1;32mPASS[0m [1mLogicalPlanDirectEdgeRuntimeTest[0m [38;5;105;1m(98 ms)[0m
+[38;5;105;1m[ 23% | 135/576][0m [1;32mPASS[0m [1mLogicalPlanDistinctAllocatorTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 23% | 136/576][0m [1;32mPASS[0m [1mLogicalPlanLoadCsvRuntimeTest[0m [38;5;105;1m(27 ms)[0m
+[38;5;105;1m[ 23% | 137/576][0m [1;32mPASS[0m [1mLogicalPlanMutationRuntimeTest[0m [38;5;105;1m(81 ms)[0m
+[38;5;105;1m[ 23% | 138/576][0m [1;32mPASS[0m [1mLogicalPlanNodeColumnAggregateTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 24% | 139/576][0m [1;32mPASS[0m [1mLogicalPlanDirectColumnAggregateTest[0m [38;5;105;1m(82 ms)[0m
+[38;5;105;1m[ 24% | 140/576][0m [1;32mPASS[0m [1mLogicalPlanPatternExpressionRuntimeTest[0m [38;5;105;1m(21 ms)[0m
+[38;5;105;1m[ 24% | 141/576][0m [1;32mPASS[0m [1mLogicalPlanSchemaRuntimeTest[0m [38;5;105;1m(25 ms)[0m
+[38;5;105;1m[ 24% | 142/576][0m [1;32mPASS[0m [1mLogicalPlanSortGrowthTest[0m [38;5;105;1m(86 ms)[0m
+[38;5;105;1m[ 24% | 143/576][0m [1;32mPASS[0m [1mLogicalPlanUnionRuntimeTest[0m [38;5;105;1m(245 ms)[0m
+[38;5;105;1m[ 25% | 144/576][0m [1;32mPASS[0m [1mLogicalPlanUnwindRuntimeTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 25% | 145/576][0m [1;32mPASS[0m [1mLogicalPlanReadRuntimeTest[0m [38;5;105;1m(32 ms)[0m
+[38;5;105;1m[ 25% | 146/576][0m [1;32mPASS[0m [1mLogicalPlanVarLengthRuntimeTest[0m [38;5;105;1m(41 ms)[0m
+[38;5;105;1m[ 25% | 147/576][0m [1;32mPASS[0m [1mLogicalPropertyPredicateTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 25% | 148/576][0m [1;32mPASS[0m [1mMaterializedReservationEmbeddedTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 25% | 149/576][0m [1;32mPASS[0m [1mOwnedExpressionMapTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 150/576][0m [1;32mPASS[0m [1mOwnedFunctionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 151/576][0m [1;32mPASS[0m [1mOwnedHeapReservationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 152/576][0m [1;32mPASS[0m [1mOwnedLazyUnorderedMapTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 153/576][0m [1;32mPASS[0m [1mOwnedMapProjectionItemsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 154/576][0m [1;32mPASS[0m [1mOwnedOutputVariablesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 26% | 155/576][0m [1;32mPASS[0m [1mOwnedPropertyContainersTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 156/576][0m [1;32mPASS[0m [1mOwnedPropertyValueTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 157/576][0m [1;32mPASS[0m [1mOwnedPropertyListTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 158/576][0m [1;32mPASS[0m [1mOwnedSharedPtrTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 159/576][0m [1;32mPASS[0m [1mOwnedStdStringTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 160/576][0m [1;32mPASS[0m [1mOwnedStdStringMutationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 27% | 161/576][0m [1;32mPASS[0m [1mOwnedStdVectorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 28% | 162/576][0m [1;32mPASS[0m [1mOwnedStringSetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 28% | 163/576][0m [1;32mPASS[0m [1mOwnedStringVectorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 28% | 164/576][0m [1;32mPASS[0m [1mPrepaidMemoryResourceTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 28% | 165/576][0m [1;32mPASS[0m [1mPrimitiveColumnFilterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 28% | 166/576][0m [1;32mPASS[0m [1mPrimitiveNumericColumnsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 28% | 167/576][0m [1;32mPASS[0m [1mProcessResourceDomainsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 29% | 168/576][0m [1;32mPASS[0m [1mQuerySpillRowCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 29% | 169/576][0m [1;32mPASS[0m [1mRecordTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 29% | 170/576][0m [1;32mPASS[0m [1mResourceCoordinatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 29% | 171/576][0m [1;32mPASS[0m [1mProcedurePayloadHandoffTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 29% | 172/576][0m [1;32mPASS[0m [1mSelectionVectorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 173/576][0m [1;32mPASS[0m [1mStreamingPredicateCountTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 174/576][0m [1;32mPASS[0m [1mJointPropertyWindowTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 175/576][0m [1;32mPASS[0m [1mTypedOrderKeyTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 176/576][0m [1;32mPASS[0m [1mTypedEqualityKeyTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 177/576][0m [1;32mPASS[0m [1mTypedGroupCounterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 30% | 178/576][0m [1;32mPASS[0m [1mTypedDistinctSetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 31% | 179/576][0m [1;32mPASS[0m [1mTypedScalarValueTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 31% | 180/576][0m [1;32mPASS[0m [1mEntityIntrospectionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 31% | 181/576][0m [1;32mPASS[0m [1mExpressionsTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 31% | 182/576][0m [1;32mPASS[0m [1mExpressionAcceptNonConstTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 31% | 183/576][0m [1;32mPASS[0m [1mExpressionClone[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 31% | 184/576][0m [1;32mPASS[0m [1mExpressionUtility[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 32% | 185/576][0m [1;32mPASS[0m [1mExpressionUtilsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 32% | 186/576][0m [1;32mPASS[0m [1mExpressionUtilsCoverageTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 32% | 187/576][0m [1;32mPASS[0m [1mFunctionRegistryTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 32% | 188/576][0m [1;32mPASS[0m [1mHeterogeneousListTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 32% | 189/576][0m [1;32mPASS[0m [1mMathFunctionsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 32% | 190/576][0m [1;32mPASS[0m [1mShortestPathExpressionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 33% | 191/576][0m [1;32mPASS[0m [1mMapProjectionExpressionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 33% | 192/576][0m [1;32mPASS[0m [1mParameterExpressionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 33% | 193/576][0m [1;32mPASS[0m [1mMapProjectionItemTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 33% | 194/576][0m [1;32mPASS[0m [1mLogicalGdsProceduresTest[0m [38;5;105;1m(1252 ms)[0m
+[38;5;105;1m[ 33% | 195/576][0m [1;32mPASS[0m [1mLogicalGdsResourceOwnershipTest[0m [38;5;105;1m(6 ms)[0m
+[38;5;105;1m[ 34% | 196/576][0m [1;32mPASS[0m [1mLogicalGraphProjectionTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 34% | 197/576][0m [1;32mPASS[0m [1mLogicalProjectionCatalogTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 34% | 198/576][0m [1;32mPASS[0m [1mLogicalGraphAlgorithmsTest[0m [38;5;105;1m(24 ms)[0m
+[38;5;105;1m[ 34% | 199/576][0m [1;32mPASS[0m [1mLogicalProjectionSpecCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 34% | 200/576][0m [1;32mPASS[0m [1mLogicalPlanBuilderCoverageTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 34% | 201/576][0m [1;32mPASS[0m [1mSemanticAnalyzerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 202/576][0m [1;32mPASS[0m [1mLogicalTxnControlUnitTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 203/576][0m [1;32mPASS[0m [1mLogicalCreateIndexTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 204/576][0m [1;32mPASS[0m [1mLogicalDropIndexTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 205/576][0m [1;32mPASS[0m [1mLogicalShowIndexesTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 206/576][0m [1;32mPASS[0m [1mLogicalCreateVectorIndexTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 35% | 207/576][0m [1;32mPASS[0m [1mLogicalCreateConstraintTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 208/576][0m [1;32mPASS[0m [1mLogicalDropConstraintTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 209/576][0m [1;32mPASS[0m [1mLogicalShowConstraintsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 210/576][0m [1;32mPASS[0m [1mLogicalTransactionControlTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 211/576][0m [1;32mPASS[0m [1mLogicalCallProcedureTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 212/576][0m [1;32mPASS[0m [1mLogicalAggregateTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 36% | 213/576][0m [1;32mPASS[0m [1mLogicalExplainTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 37% | 214/576][0m [1;32mPASS[0m [1mLogicalProfileTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 37% | 215/576][0m [1;32mPASS[0m [1mLogicalLimitNullChildTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 37% | 216/576][0m [1;32mPASS[0m [1mLogicalSkipNullChildTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 37% | 217/576][0m [1;32mPASS[0m [1mLogicalNamedPathTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 37% | 218/576][0m [1;32mPASS[0m [1mLogicalOpTypeToStringTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 219/576][0m [1;32mPASS[0m [1mLogicalOpTypeMutationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 220/576][0m [1;32mPASS[0m [1mLogicalFilterNullGuardTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 221/576][0m [1;32mPASS[0m [1mLogicalProjectNullGuardTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 222/576][0m [1;32mPASS[0m [1mLogicalJoinNullGuardTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 223/576][0m [1;32mPASS[0m [1mLogicalUnwindNullGuardTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 38% | 224/576][0m [1;32mPASS[0m [1mLogicalNodeScanTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 225/576][0m [1;32mPASS[0m [1mLogicalFilterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 226/576][0m [1;32mPASS[0m [1mLogicalProjectTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 227/576][0m [1;32mPASS[0m [1mLogicalJoinTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 228/576][0m [1;32mPASS[0m [1mLogicalSortTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 229/576][0m [1;32mPASS[0m [1mLogicalLimitTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 39% | 230/576][0m [1;32mPASS[0m [1mLogicalSingleRowTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 231/576][0m [1;32mPASS[0m [1mLogicalUnwindTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 232/576][0m [1;32mPASS[0m [1mLogicalOptionalMatchTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 233/576][0m [1;32mPASS[0m [1mLogicalUnionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 234/576][0m [1;32mPASS[0m [1mLogicalSingleRowStandaloneTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 235/576][0m [1;32mPASS[0m [1mLogicalPlanPrinterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 40% | 236/576][0m [1;32mPASS[0m [1mLogicalLoadCsvTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 41% | 237/576][0m [1;32mPASS[0m [1mLogicalCallSubqueryTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 41% | 238/576][0m [1;32mPASS[0m [1mLogicalForeachTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 41% | 239/576][0m [1;32mPASS[0m [1mLogicalTraversalTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 41% | 240/576][0m [1;32mPASS[0m [1mLogicalVarLengthTraversalTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 41% | 241/576][0m [1;32mPASS[0m [1mLogicalCreateNodeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 242/576][0m [1;32mPASS[0m [1mLogicalCreateEdgeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 243/576][0m [1;32mPASS[0m [1mLogicalDeleteTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 244/576][0m [1;32mPASS[0m [1mLogicalSetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 245/576][0m [1;32mPASS[0m [1mLogicalRemoveTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 246/576][0m [1;32mPASS[0m [1mLogicalMergeNodeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 42% | 247/576][0m [1;32mPASS[0m [1mLogicalMergeEdgeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 43% | 248/576][0m [1;32mPASS[0m [1mLogicalStatisticsProviderContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 43% | 249/576][0m [1;32mPASS[0m [1mLogicalPlanOptimizerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 43% | 250/576][0m [1;32mPASS[0m [1mAstExtractorUnitTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 43% | 251/576][0m [1;32mPASS[0m [1mExpressionBuilderUnitTest[0m [38;5;105;1m(18 ms)[0m
+[38;5;105;1m[ 43% | 252/576][0m [1;32mPASS[0m [1mExpressionBuilderParsingTest[0m [38;5;105;1m(10 ms)[0m
+[38;5;105;1m[ 43% | 253/576][0m [1;32mPASS[0m [1mCypherASTBuilderClausesTest[0m [38;5;105;1m(4413 ms)[0m
+[38;5;105;1m[ 44% | 254/576][0m [1;32mPASS[0m [1mCypherSyntaxTest[0m [38;5;105;1m(27 ms)[0m
+[38;5;105;1m[ 44% | 255/576][0m [1;32mPASS[0m [1mCypherASTBuilderExtractionTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 44% | 256/576][0m [1;32mPASS[0m [1mCypherAdminTest[0m [38;5;105;1m(751 ms)[0m
+[38;5;105;1m[ 44% | 257/576][0m [1;32mPASS[0m [1mCypherAdvancedTest[0m [38;5;105;1m(5014 ms)[0m
+[38;5;105;1m[ 44% | 258/576][0m [1;32mPASS[0m [1mCypherAggregateContractsTest[0m [38;5;105;1m(504 ms)[0m
+[38;5;105;1m[ 44% | 259/576][0m [1;32mPASS[0m [1mCypherAlgoTest[0m [38;5;105;1m(1116 ms)[0m
+[38;5;105;1m[ 45% | 260/576][0m [1;32mPASS[0m [1mCypherBasicTest[0m [38;5;105;1m(4152 ms)[0m
+[38;5;105;1m[ 45% | 261/576][0m [1;32mPASS[0m [1mCypherDataModificationTest[0m [38;5;105;1m(3380 ms)[0m
+[38;5;105;1m[ 45% | 262/576][0m [1;32mPASS[0m [1mCypherFunctionContractsTest[0m [38;5;105;1m(599 ms)[0m
+[38;5;105;1m[ 45% | 263/576][0m [1;32mPASS[0m [1mCypherGdsTest[0m [38;5;105;1m(3331 ms)[0m
+[38;5;105;1m[ 45% | 264/576][0m [1;32mPASS[0m [1mCypherListLiteralsTest[0m [38;5;105;1m(1834 ms)[0m
+[38;5;105;1m[ 46% | 265/576][0m [1;32mPASS[0m [1mCypherLogicalOnlyParserTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 46% | 266/576][0m [1;32mPASS[0m [1mCypherParserReuseTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 46% | 267/576][0m [1;32mPASS[0m [1mCypherProjectionSemanticsTest[0m [38;5;105;1m(11985 ms)[0m
+[38;5;105;1m[ 46% | 268/576][0m [1;32mPASS[0m [1mCypherStructuralExpressionsTest[0m [38;5;105;1m(2396 ms)[0m
+[38;5;105;1m[ 46% | 269/576][0m [1;32mPASS[0m [1mCypherTransactionTest[0m [38;5;105;1m(399 ms)[0m
+[38;5;105;1m[ 46% | 270/576][0m [1;32mPASS[0m [1mCypherVectorTest[0m [38;5;105;1m(2630 ms)[0m
+[38;5;105;1m[ 47% | 271/576][0m [1;32mPASS[0m [1mCypherWithAggregationSemanticsTest[0m [38;5;105;1m(118 ms)[0m
+[38;5;105;1m[ 47% | 272/576][0m [1;32mPASS[0m [1mCypherWithSemanticsTest[0m [38;5;105;1m(1113 ms)[0m
+[38;5;105;1m[ 47% | 273/576][0m [1;32mPASS[0m [1mLogicalPlanBuilderFlagsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 47% | 274/576][0m [1;32mPASS[0m [1mNativeProcedureRegistryTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 47% | 275/576][0m [1;32mPASS[0m [1mPipelineValidatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 47% | 276/576][0m [1;32mPASS[0m [1mScopeStackTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 48% | 277/576][0m [1;32mPASS[0m [1mExecModeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 48% | 278/576][0m [1;32mPASS[0m [1mLogicalOpHelperTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 48% | 279/576][0m [1;32mPASS[0m [1mQueryPlanTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 48% | 280/576][0m [1;32mPASS[0m [1mNativeConfigurationServiceTest[0m [38;5;105;1m(1040 ms)[0m
+[38;5;105;1m[ 48% | 281/576][0m [1;32mPASS[0m [1mQueryGuardTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 48% | 282/576][0m [1;32mPASS[0m [1mRelocatableAdjacencyKeyCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 49% | 283/576][0m [1;32mPASS[0m [1mAdjacencyTopologyContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 49% | 284/576][0m [1;32mPASS[0m [1mCoveredAdjacencyCandidateTest[0m [38;5;105;1m(7647 ms)[0m
+[38;5;105;1m[ 49% | 285/576][0m [1;32mPASS[0m [1mGlobalAdjacencyIndexTest[0m [38;5;105;1m(120 ms)[0m
+[38;5;105;1m[ 49% | 286/576][0m [1;32mPASS[0m [1mGlobalAdjacencyIndexCacheTest[0m [38;5;105;1m(45 ms)[0m
+[38;5;105;1m[ 49% | 287/576][0m [1;32mPASS[0m [1mGlobalAdjacencyMutationMergerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 50% | 288/576][0m [1;32mPASS[0m [1mRelocatableAllocatorDirectoryTest[0m [38;5;105;1m(2447 ms)[0m
+[38;5;105;1m[ 50% | 289/576][0m [1;32mPASS[0m [1mRelocatableAllocatorPageTest[0m [38;5;105;1m(689 ms)[0m
+[38;5;105;1m[ 50% | 290/576][0m [1;32mPASS[0m [1mRelocatablePhysicalSegmentAllocatorTest[0m [38;5;105;1m(429 ms)[0m
+[38;5;105;1m[ 50% | 291/576][0m [1;32mPASS[0m [1mRelocatablePhysicalSegmentAllocatorTypedIOTest[0m [38;5;105;1m(11 ms)[0m
+[38;5;105;1m[ 50% | 292/576][0m [1;32mPASS[0m [1mPoolPreparationBatchPrototypeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 50% | 293/576][0m [1;32mPASS[0m [1mRelocatableSharedPagePoolTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 51% | 294/576][0m [1;32mPASS[0m [1mRelocatableSharedPagePoolAllocatorTest[0m [38;5;105;1m(535 ms)[0m
+[38;5;105;1m[ 51% | 295/576][0m [1;32mPASS[0m [1mPoolPreparationRunPrototypeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 51% | 296/576][0m [1;32mPASS[0m [1mRelocatableSharedPagePoolAllocatorFaultTest[0m [38;5;105;1m(323 ms)[0m
+[38;5;105;1m[ 51% | 297/576][0m [1;32mPASS[0m [1mRelocatableSlottedPageTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 51% | 298/576][0m [1;32mPASS[0m [1mRelocatableSlottedPagePoolTest[0m [38;5;105;1m(4479 ms)[0m
+[38;5;105;1m[ 51% | 299/576][0m [1;32mPASS[0m [1mAdmittedMutationInputTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m[ 51% | 299/576][0m [1;31mX PublicAdaptiveRowStoreAdmitsOnlyTheWholeNativeCohortAndResumesLogicalQueries FAILED[0m
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatablePropertyCohortAdmission.cpp:92[0m
+              Value of: snapshot->supportsNodePropertyCellBatches()
+                Actual: true
+              Expected: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatablePropertyCohortAdmission.cpp:92[0m
+              Value of: snapshot->supportsNodePropertyCellBatches()
+                Actual: true
+              Expected: false
+              
+[1;33m              [STDOUT][0m
+              PUBLIC_COHORT_COST adaptive_row=true row=2752512 candidate=2228224
+
+
+[38;5;105;1m[ 51% | 299/576][0m [1;31mX ReadRuntimeChecksSnapshotAndGuardAfterFinalOutputCallback FAILED[0m
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: false
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: false
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1891[0m
+              Expected: static_cast<void>(run([&](const LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<PropertyValue>(row.values.at("value")); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("value", "mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? \"changed\" : \"base\")", value, mode < 2U ? PropertyValue(2) : PropertyValue(action == 0U ? "changed" : "base")))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp", 1889, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+                Actual: it throws std::runtime_error with description "transaction changed between resumable Property cell reads".
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+              [1m/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1892[0m
+              Expected equality of these values:
+                delivered
+                  Which is: 0
+                1U
+                  Which is: 1
+              Google Test trace:
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1848: 0
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1847: true
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1846: 2
+              /workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableReferenceAdmission.cpp:1845: true
+              
+
+[38;5;105;1m[ 52% | 300/576][0m [1;31mFAIL[0m [1mRelocatableStorageBackendTest[0m [1;31m(2 failures, 116997 ms)[0m
+[38;5;105;1m[ 52% | 301/576][0m [1;32mPASS[0m [1mNativeMembershipAccessCostTest[0m [38;5;105;1m(15 ms)[0m
+[38;5;105;1m[ 52% | 302/576][0m [1;32mPASS[0m [1mRelocatablePublicApiAlgorithmsTest[0m [38;5;105;1m(52 ms)[0m
+[38;5;105;1m[ 52% | 303/576][0m [1;32mPASS[0m [1mQueryScratchDiskBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 52% | 304/576][0m [1;32mPASS[0m [1mRelocatableStorageBackendOnlineIndexBoundsTest[0m [38;5;105;1m(157 ms)[0m
+[38;5;105;1m[ 52% | 305/576][0m [1;32mPASS[0m [1mRelocatableStorageBackendSchemaTest[0m [38;5;105;1m(16905 ms)[0m
+[38;5;105;1m[ 53% | 306/576][0m [1;32mPASS[0m [1mRelocatableStorageBackendVectorMetricTest[0m [38;5;105;1m(1711 ms)[0m
+[38;5;105;1m[ 53% | 307/576][0m [1;32mPASS[0m [1mRelocatableStorageBackendContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 53% | 308/576][0m [1;32mPASS[0m [1mRelocatableStorageBackendFenceTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 53% | 309/576][0m [1;32mPASS[0m [1mBufferPoolTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 53% | 310/576][0m [1;32mPASS[0m [1mBuildingScanFieldCohortTest[0m [38;5;105;1m(11509 ms)[0m
+[38;5;105;1m[ 53% | 311/576][0m [1;32mPASS[0m [1mBuildingScanMembershipTest[0m [38;5;105;1m(3961 ms)[0m
+[38;5;105;1m[ 54% | 312/576][0m [1;32mPASS[0m [1mRelocatableEntityLabelSetTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 54% | 313/576][0m [1;32mPASS[0m [1mRelocatableEntityLabelSetStoreTest[0m [38;5;105;1m(104 ms)[0m
+[38;5;105;1m[ 54% | 314/576][0m [1;32mPASS[0m [1mRelocatableEntityLabelSetStoreContractTest[0m [38;5;105;1m(38 ms)[0m
+[38;5;105;1m[ 54% | 315/576][0m [1;32mPASS[0m [1mRelocatableMetadataStoreTest[0m [38;5;105;1m(14937 ms)[0m
+[38;5;105;1m[ 54% | 316/576][0m [1;32mPASS[0m [1mRelocatableEntityPageTest[0m [38;5;105;1m(1946 ms)[0m
+[38;5;105;1m[ 55% | 317/576][0m [1;32mPASS[0m [1mEntityPageAuxiliaryMutationBatchTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 55% | 318/576][0m [1;32mPASS[0m [1mRelocatableEntityPageStoreTest[0m [38;5;105;1m(583 ms)[0m
+[38;5;105;1m[ 55% | 319/576][0m [1;32mPASS[0m [1mEntityPageStoreScanCacheTest[0m [38;5;105;1m(22 ms)[0m
+[38;5;105;1m[ 55% | 320/576][0m [1;32mPASS[0m [1mNativeBulkEdgeAdjacencyRunBuilderTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 55% | 321/576][0m [1;32mPASS[0m [1mNativeBulkEdgeEntityPageBatcherTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 55% | 322/576][0m [1;32mPASS[0m [1mNativeBulkEdgeMaterializerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 56% | 323/576][0m [1;32mPASS[0m [1mNativeBulkEdgePrivateFamilyMaterializerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 56% | 324/576][0m [1;32mPASS[0m [1mNativeBulkEdgePrivateRunMaterializerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 56% | 325/576][0m [1;32mPASS[0m [1mNativeBulkEdgePrivateRunPipelineTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 56% | 326/576][0m [1;32mPASS[0m [1mNativeBulkEdgePrivateRunSetTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 56% | 327/576][0m [1;32mPASS[0m [1mNativeBulkEdgePrivateTokenResolverTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 56% | 328/576][0m [1;32mPASS[0m [1mNativeBulkEdgePublicationPreflightTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 57% | 329/576][0m [1;32mPASS[0m [1mNativeBulkEdgeEndpointCacheTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 57% | 330/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRecordCodecTest[0m [38;5;105;1m(9 ms)[0m
+[38;5;105;1m[ 57% | 331/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRunCodecTest[0m [38;5;105;1m(11 ms)[0m
+[38;5;105;1m[ 57% | 332/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRunReducerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 57% | 333/576][0m [1;32mPASS[0m [1mNativeGraphLogicalIdLeaseRangeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 57% | 334/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRunManifestTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 58% | 335/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRunStoreTest[0m [38;5;105;1m(191 ms)[0m
+[38;5;105;1m[ 58% | 336/576][0m [1;32mPASS[0m [1mNativeBulkEdgeRunManifestCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 58% | 337/576][0m [1;32mPASS[0m [1mNativeBulkEdgeWireCodecTest[0m [38;5;105;1m(18 ms)[0m
+[38;5;105;1m[ 58% | 338/576][0m [1;32mPASS[0m [1mNativeBulkEdgeTokenRunBuilderTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 58% | 339/576][0m [1;32mPASS[0m [1mNativeGraphMutationExecutorValidationTest[0m [38;5;105;1m(410 ms)[0m
+[38;5;105;1m[ 59% | 340/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerTest[0m [38;5;105;1m(691 ms)[0m
+[38;5;105;1m[ 59% | 341/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerAdjacencyTest[0m [38;5;105;1m(2210 ms)[0m
+[38;5;105;1m[ 59% | 342/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerDetachTest[0m [38;5;105;1m(18 ms)[0m
+[38;5;105;1m[ 59% | 343/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerDurabilityTest[0m [38;5;105;1m(211 ms)[0m
+[38;5;105;1m[ 59% | 344/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerFreshPoolReplacementTest[0m [38;5;105;1m(529 ms)[0m
+[38;5;105;1m[ 59% | 345/576][0m [1;32mPASS[0m [1mNativeGraphLargeValueMutationTest[0m [38;5;105;1m(725 ms)[0m
+[38;5;105;1m[ 60% | 346/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerLeaseRecoveryTest[0m [38;5;105;1m(45 ms)[0m
+[38;5;105;1m[ 60% | 347/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerPublicContractsTest[0m [38;5;105;1m(231 ms)[0m
+[38;5;105;1m[ 60% | 348/576][0m [1;32mPASS[0m [1mNativeGraphWriteTransactionPublicContractsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 60% | 349/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerSharedPoolFallbackTest[0m [38;5;105;1m(386 ms)[0m
+[38;5;105;1m[ 60% | 350/576][0m [1;32mPASS[0m [1mNativeGraphWritePlannerVectorTest[0m [38;5;105;1m(24171 ms)[0m
+[38;5;105;1m[ 60% | 351/576][0m [1;32mPASS[0m [1mNativeReadSessionTokenBudgetTest[0m [38;5;105;1m(86 ms)[0m
+[38;5;105;1m[ 61% | 352/576][0m [1;32mPASS[0m [1mNativeScalarIndexMutationPlannerTest[0m [38;5;105;1m(108 ms)[0m
+[38;5;105;1m[ 61% | 353/576][0m [1;32mPASS[0m [1mNativeStreamedGraphCandidateLayoutTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 61% | 354/576][0m [1;32mPASS[0m [1mNativeStreamedGraphDeferredPublicationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 61% | 355/576][0m [1;32mPASS[0m [1mNativeStreamedGraphEntityPageMaterializerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 61% | 356/576][0m [1;32mPASS[0m [1mNativeStreamedGraphPrivatePreparationTest[0m [38;5;105;1m(17 ms)[0m
+[38;5;105;1m[ 61% | 357/576][0m [1;32mPASS[0m [1mNativeStreamedGraphPropertyPageMaterializerTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 62% | 358/576][0m [1;32mPASS[0m [1mNativeStreamedGraphPublicationPlanTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 62% | 359/576][0m [1;32mPASS[0m [1mNativeVectorMutationPlannerTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 62% | 360/576][0m [1;32mPASS[0m [1mPageBackedConstraintMutationAdapterTest[0m [38;5;105;1m(210 ms)[0m
+[38;5;105;1m[ 62% | 361/576][0m [1;32mPASS[0m [1mPageBackedGraphNameResolverContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 62% | 362/576][0m [1;32mPASS[0m [1mNativeReadSessionTest[0m [38;5;105;1m(15 ms)[0m
+[38;5;105;1m[ 63% | 363/576][0m [1;32mPASS[0m [1mPageBackedGraphReadAdapterTest[0m [38;5;105;1m(317 ms)[0m
+[38;5;105;1m[ 63% | 364/576][0m [1;32mPASS[0m [1mWideIdPropertyReadTest[0m [38;5;105;1m(34 ms)[0m
+[38;5;105;1m[ 63% | 365/576][0m [1;32mPASS[0m [1mPropertyNameBatchMaterializationTest[0m [38;5;105;1m(51 ms)[0m
+[38;5;105;1m[ 63% | 366/576][0m [1;32mPASS[0m [1mScanBlockMembershipTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 63% | 367/576][0m [1;32mPASS[0m [1mScanMembershipSourceTest[0m [38;5;105;1m(158 ms)[0m
+[38;5;105;1m[ 63% | 368/576][0m [1;32mPASS[0m [1mScanReadProofTest[0m [38;5;105;1m(180903 ms)[0m
+[38;5;105;1m[ 64% | 369/576][0m [1;32mPASS[0m [1mStoredScanMembershipTest[0m [38;5;105;1m(162 ms)[0m
+[38;5;105;1m[ 64% | 370/576][0m [1;32mPASS[0m [1mRelocatableFormatTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 64% | 371/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashTest[0m [38;5;105;1m(2068 ms)[0m
+[38;5;105;1m[ 64% | 372/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashAdjacencyMaintenanceTest[0m [38;5;105;1m(395 ms)[0m
+[38;5;105;1m[ 64% | 373/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashBTreeTest[0m [38;5;105;1m(277 ms)[0m
+[38;5;105;1m[ 64% | 374/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashBulkEdgeStagingTest[0m [38;5;105;1m(1424 ms)[0m
+[38;5;105;1m[ 65% | 375/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashDdlTest[0m [38;5;105;1m(832 ms)[0m
+[38;5;105;1m[ 65% | 376/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashGraphWriteTest[0m [38;5;105;1m(381 ms)[0m
+[38;5;105;1m[ 65% | 377/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashLargeValueTest[0m [38;5;105;1m(174 ms)[0m
+[38;5;105;1m[ 65% | 378/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashLargeValueMaintenanceTest[0m [38;5;105;1m(2809 ms)[0m
+[38;5;105;1m[ 65% | 379/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashOrdinaryEdgeTest[0m [38;5;105;1m(1266 ms)[0m
+[38;5;105;1m[ 65% | 380/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashSharedPagePoolTest[0m [38;5;105;1m(58 ms)[0m
+[38;5;105;1m[ 66% | 381/576][0m [1;32mPASS[0m [1mRelocatableProcessCrashVectorTest[0m [38;5;105;1m(687 ms)[0m
+[38;5;105;1m[ 66% | 382/576][0m [1;32mPASS[0m [1mScanBuildingCloneTest[0m [38;5;105;1m(10 ms)[0m
+[38;5;105;1m[ 66% | 383/576][0m [1;32mPASS[0m [1mScanPathFormatTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 66% | 384/576][0m [1;32mPASS[0m [1mRelocatableSuperblockTest[0m [38;5;105;1m(1759 ms)[0m
+[38;5;105;1m[ 66% | 385/576][0m [1;32mPASS[0m [1mRelocatableSuperblockFileTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 67% | 386/576][0m [1;32mPASS[0m [1mRelocatableSuperblockPairTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 67% | 387/576][0m [1;32mPASS[0m [1mRelocatableBTreeIndexTest[0m [38;5;105;1m(217 ms)[0m
+[38;5;105;1m[ 67% | 388/576][0m [1;32mPASS[0m [1mBTreeIndexScanCacheTest[0m [38;5;105;1m(291 ms)[0m
+[38;5;105;1m[ 67% | 389/576][0m [1;32mPASS[0m [1mRelocatableBTreePageCodecTest[0m [38;5;105;1m(25 ms)[0m
+[38;5;105;1m[ 67% | 390/576][0m [1;32mPASS[0m [1mRelocatableBTreePageStoreTest[0m [38;5;105;1m(8624 ms)[0m
+[38;5;105;1m[ 67% | 391/576][0m [1;32mPASS[0m [1mRelocatableIndexKeyCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 68% | 392/576][0m [1;32mPASS[0m [1mInitialBTreeBuilderTest[0m [38;5;105;1m(1410 ms)[0m
+[38;5;105;1m[ 68% | 393/576][0m [1;32mPASS[0m [1mNativeBulkRunFragmentLayoutBuilderTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 68% | 394/576][0m [1;32mPASS[0m [1mNativeBulkRunFragmentCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 68% | 395/576][0m [1;32mPASS[0m [1mNativeBulkRunStoreTest[0m [38;5;105;1m(249 ms)[0m
+[38;5;105;1m[ 68% | 396/576][0m [1;32mPASS[0m [1mNativeBulkRunCandidateSourceTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 68% | 397/576][0m [1;32mPASS[0m [1mNativeBulkRunMergerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 69% | 398/576][0m [1;32mPASS[0m [1mNativeBulkRunManifestCodecTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 69% | 399/576][0m [1;32mPASS[0m [1mRelocatableScalarIndexTreeReachabilityReclaimerTest[0m [38;5;105;1m(277 ms)[0m
+[38;5;105;1m[ 69% | 400/576][0m [1;32mPASS[0m [1mRelocatableDerivedObjectReachabilityReclaimerTest[0m [38;5;105;1m(456 ms)[0m
+[38;5;105;1m[ 69% | 401/576][0m [1;32mPASS[0m [1mLargeValueMaintenanceJournalCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 69% | 402/576][0m [1;32mPASS[0m [1mLargeValueOwnershipScanSinkTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 69% | 403/576][0m [1;32mPASS[0m [1mRelocatableOfflineScalarIndexMaterializerTest[0m [38;5;105;1m(103 ms)[0m
+[38;5;105;1m[ 70% | 404/576][0m [1;32mPASS[0m [1mOfflineVectorAdjacencyQualityTest[0m [38;5;105;1m(43 ms)[0m
+[38;5;105;1m[ 70% | 405/576][0m [1;32mPASS[0m [1mRelocatableOfflineVectorAdjacencyRebuildTest[0m [38;5;105;1m(370 ms)[0m
+[38;5;105;1m[ 70% | 406/576][0m [1;32mPASS[0m [1mRelocatableOfflineVectorBaseRebuildTest[0m [38;5;105;1m(1045 ms)[0m
+[38;5;105;1m[ 70% | 407/576][0m [1;32mPASS[0m [1mRelocatableOfflineVectorPqRebuildTest[0m [38;5;105;1m(601 ms)[0m
+[38;5;105;1m[ 70% | 408/576][0m [1;32mPASS[0m [1mRelocatableCompactionCoordinatorTest[0m [38;5;105;1m(304 ms)[0m
+[38;5;105;1m[ 71% | 409/576][0m [1;32mPASS[0m [1mRelocatableCompactionWorkloadTest[0m [38;5;105;1m(230 ms)[0m
+[38;5;105;1m[ 71% | 410/576][0m [1;32mPASS[0m [1mRelocatableIntegrityScannerTest[0m [38;5;105;1m(5662 ms)[0m
+[38;5;105;1m[ 71% | 411/576][0m [1;32mPASS[0m [1mRelocatableIntegrityScannerTestFixture[0m [38;5;105;1m(36837 ms)[0m
+[38;5;105;1m[ 71% | 412/576][0m [1;32mPASS[0m [1mRelocatableMaintenanceLoopTest[0m [38;5;105;1m(22 ms)[0m
+[38;5;105;1m[ 71% | 413/576][0m [1;32mPASS[0m [1mRelocatableMaintenanceServiceTest[0m [38;5;105;1m(521 ms)[0m
+[38;5;105;1m[ 71% | 414/576][0m [1;32mPASS[0m [1mRelocatablePageCompactionSchedulerTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 72% | 415/576][0m [1;32mPASS[0m [1mRelocatableSegmentRelocationSchedulerTest[0m [38;5;105;1m(18 ms)[0m
+[38;5;105;1m[ 72% | 416/576][0m [1;32mPASS[0m [1mRelocatableTailTruncationTest[0m [38;5;105;1m(77 ms)[0m
+[38;5;105;1m[ 72% | 417/576][0m [1;32mPASS[0m [1mSingleWriterSaturatingCounterTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 72% | 418/576][0m [1;32mPASS[0m [1mRelocatableVectorCodebookReachabilityCorruptionTest[0m [38;5;105;1m(27 ms)[0m
+[38;5;105;1m[ 72% | 419/576][0m [1;32mPASS[0m [1mRelocatableVectorRawReachabilityReclaimerTest[0m [38;5;105;1m(2335 ms)[0m
+[38;5;105;1m[ 72% | 420/576][0m [1;32mPASS[0m [1mRelocatableCatalogTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 73% | 421/576][0m [1;32mPASS[0m [1mRelocatableCatalogPageTest[0m [38;5;105;1m(1965 ms)[0m
+[38;5;105;1m[ 73% | 422/576][0m [1;32mPASS[0m [1mRelocatableCatalogRadixTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 73% | 423/576][0m [1;32mPASS[0m [1mMetadataPageAllocationContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 73% | 424/576][0m [1;32mPASS[0m [1mPhysicalSlotRangeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 73% | 425/576][0m [1;32mPASS[0m [1mRelocatableCatalogTreeTest[0m [38;5;105;1m(40 ms)[0m
+[38;5;105;1m[ 73% | 426/576][0m [1;32mPASS[0m [1mCatalogSelectedLookupTest[0m [38;5;105;1m(39 ms)[0m
+[38;5;105;1m[ 74% | 427/576][0m [1;32mPASS[0m [1mRelocatableLocationLeafCodecTest[0m [38;5;105;1m(908 ms)[0m
+[38;5;105;1m[ 74% | 428/576][0m [1;32mPASS[0m [1mRelocatableLocationDirectoryTest[0m [38;5;105;1m(63 ms)[0m
+[38;5;105;1m[ 74% | 429/576][0m [1;32mPASS[0m [1mLocationDirectoryRootGrowthTest[0m [38;5;105;1m(22 ms)[0m
+[38;5;105;1m[ 74% | 430/576][0m [1;32mPASS[0m [1mLocationDirectoryScanCacheTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 74% | 431/576][0m [1;32mPASS[0m [1mRelocatableLocationDirectoryRouteValidationTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 75% | 432/576][0m [1;32mPASS[0m [1mRelocatableMetadataEmergencyReserveExhaustionTest[0m [38;5;105;1m(8 ms)[0m
+[38;5;105;1m[ 75% | 433/576][0m [1;32mPASS[0m [1mRelocatableMetadataPageFileTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 75% | 434/576][0m [1;32mPASS[0m [1mRelocatableMetadataPagePoolCodecTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 75% | 435/576][0m [1;32mPASS[0m [1mRelocatableMetadataPagePoolTest[0m [38;5;105;1m(42 ms)[0m
+[38;5;105;1m[ 75% | 436/576][0m [1;32mPASS[0m [1mIncrementalMetadataPublicationTest[0m [38;5;105;1m(57 ms)[0m
+[38;5;105;1m[ 75% | 437/576][0m [1;32mPASS[0m [1mMetadataPageReadContextTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 76% | 438/576][0m [1;32mPASS[0m [1mRelocatableMetadataPageRouteTest[0m [38;5;105;1m(1001 ms)[0m
+[38;5;105;1m[ 76% | 439/576][0m [1;32mPASS[0m [1mRelocatableMetadataPageRouteDirectoryTest[0m [38;5;105;1m(20 ms)[0m
+[38;5;105;1m[ 76% | 440/576][0m [1;32mPASS[0m [1mMetadataRouteBranchReuseTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 76% | 441/576][0m [1;32mPASS[0m [1mMetadataSnapshotHandleContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 76% | 442/576][0m [1;32mPASS[0m [1mRelocatableMetadataSnapshotRegistryTest[0m [38;5;105;1m(6 ms)[0m
+[38;5;105;1m[ 76% | 443/576][0m [1;32mPASS[0m [1mRelocatableMetadataWriteBatchTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 77% | 444/576][0m [1;32mPASS[0m [1mNativeRecoveryOwnerCacheTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 77% | 445/576][0m [1;32mPASS[0m [1mRelocatablePageDirectoryBootstrapTest[0m [38;5;105;1m(935 ms)[0m
+[38;5;105;1m[ 77% | 446/576][0m [1;32mPASS[0m [1mRelocatableMetadataStoreValidationTest[0m [38;5;105;1m(586 ms)[0m
+[38;5;105;1m[ 77% | 447/576][0m [1;32mPASS[0m [1mRelocatableStateRecordTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 77% | 448/576][0m [1;32mPASS[0m [1mRelocatableStateRecordStoreTest[0m [38;5;105;1m(86 ms)[0m
+[38;5;105;1m[ 77% | 449/576][0m [1;32mPASS[0m [1mAdjacencyCandidateFaultTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 78% | 450/576][0m [1;32mPASS[0m [1mEntityPropertyLargeValueReferenceTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 78% | 451/576][0m [1;32mPASS[0m [1mHybridPropertyAllocationAdmissionTest[0m [38;5;105;1m(4469 ms)[0m
+[38;5;105;1m[ 78% | 452/576][0m [1;32mPASS[0m [1mHybridPropertyAllocationCostsTest[0m [38;5;105;1m(72 ms)[0m
+[38;5;105;1m[ 78% | 453/576][0m [1;32mPASS[0m [1mHybridPropertyCohortAdmissionTest[0m [38;5;105;1m(23209 ms)[0m
+[38;5;105;1m[ 78% | 454/576][0m [1;32mPASS[0m [1mHybridPropertyColdCompatibleHotTest[0m [38;5;105;1m(1200 ms)[0m
+[38;5;105;1m[ 78% | 455/576][0m [1;32mPASS[0m [1mHybridPropertyColdConversionProbeTest[0m [38;5;105;1m(133 ms)[0m
+[38;5;105;1m[ 79% | 456/576][0m [1;32mPASS[0m [1mHybridPropertyColdNativeLifecycleTest[0m [38;5;105;1m(3911 ms)[0m
+[38;5;105;1m[ 79% | 457/576][0m [1;32mPASS[0m [1mHybridPropertyColdPublicConversionTest[0m [38;5;105;1m(18208 ms)[0m
+[38;5;105;1m[ 79% | 458/576][0m [1;32mPASS[0m [1mHybridPropertyColdRowBlockTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 79% | 459/576][0m [1;32mPASS[0m [1mHybridPropertyColdRowBindingsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 79% | 460/576][0m [1;32mPASS[0m [1mHybridPropertyColdRowInspectionTest[0m [38;5;105;1m(45 ms)[0m
+[38;5;105;1m[ 80% | 461/576][0m [1;32mPASS[0m [1mHybridPropertyColdRowOwnershipTest[0m [38;5;105;1m(485 ms)[0m
+[38;5;105;1m[ 80% | 462/576][0m [1;32mPASS[0m [1mHybridPropertyColdRowRoutingTest[0m [38;5;105;1m(394 ms)[0m
+[38;5;105;1m[ 80% | 463/576][0m [1;32mPASS[0m [1mHybridPropertyColumnMembershipTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 80% | 464/576][0m [1;32mPASS[0m [1mHybridPropertyColumnReadReuseTest[0m [38;5;105;1m(370 ms)[0m
+[38;5;105;1m[ 80% | 465/576][0m [1;32mPASS[0m [1mHybridPropertyCompactMembershipLifecycleTest[0m [38;5;105;1m(1726 ms)[0m
+[38;5;105;1m[ 80% | 466/576][0m [1;32mPASS[0m [1mHybridPropertyConversionPreparationTest[0m [38;5;105;1m(10 ms)[0m
+[38;5;105;1m[ 81% | 467/576][0m [1;32mPASS[0m [1mHybridPropertyDescriptorTest[0m [38;5;105;1m(33 ms)[0m
+[38;5;105;1m[ 81% | 468/576][0m [1;32mPASS[0m [1mHybridPropertyDescriptorStoreTest[0m [38;5;105;1m(122 ms)[0m
+[38;5;105;1m[ 81% | 469/576][0m [1;32mPASS[0m [1mHybridPropertyExtensionTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 81% | 470/576][0m [1;32mPASS[0m [1mHybridPropertyFieldRelocationTest[0m [38;5;105;1m(17372 ms)[0m
+[38;5;105;1m[ 81% | 471/576][0m [1;32mPASS[0m [1mHybridPropertyGraphPublicationTest[0m [38;5;105;1m(99 ms)[0m
+[38;5;105;1m[ 81% | 472/576][0m [1;32mPASS[0m [1mHybridPropertyGroupConversionTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 82% | 473/576][0m [1;32mPASS[0m [1mHybridPropertyInlineMutationTest[0m [38;5;105;1m(2225 ms)[0m
+[38;5;105;1m[ 82% | 474/576][0m [1;32mPASS[0m [1mHybridPropertyLabeledDeletionTest[0m [38;5;105;1m(362 ms)[0m
+[38;5;105;1m[ 82% | 475/576][0m [1;32mPASS[0m [1mHybridPropertyLargeFieldPreparationTest[0m [38;5;105;1m(46 ms)[0m
+[38;5;105;1m[ 82% | 476/576][0m [1;32mPASS[0m [1mHybridPropertyLargeMutationTest[0m [38;5;105;1m(963 ms)[0m
+[38;5;105;1m[ 82% | 477/576][0m [1;32mPASS[0m [1mHybridPropertyLargeOwnershipTest[0m [38;5;105;1m(1376 ms)[0m
+[38;5;105;1m[ 82% | 478/576][0m [1;32mPASS[0m [1mHybridPropertyLargePublicationTest[0m [38;5;105;1m(2224 ms)[0m
+[38;5;105;1m[ 83% | 479/576][0m [1;32mPASS[0m [1mHybridPropertyLayoutScaleTest[0m [38;5;105;1m(19828 ms)[0m
+[38;5;105;1m[ 83% | 480/576][0m [1;32mPASS[0m [1mHybridPropertyLogicalIdsTest[0m [38;5;105;1m(105 ms)[0m
+[38;5;105;1m[ 83% | 481/576][0m [1;32mPASS[0m [1mHybridPropertyMapTransactionsTest[0m [38;5;105;1m(3516 ms)[0m
+[38;5;105;1m[ 83% | 482/576][0m [1;32mPASS[0m [1mHybridPropertyMultipleGroupsTest[0m [38;5;105;1m(20409 ms)[0m
+[38;5;105;1m[ 83% | 483/576][0m [1;32mPASS[0m [1mHybridPropertyNativeJournalTest[0m [38;5;105;1m(3227 ms)[0m
+[38;5;105;1m[ 84% | 484/576][0m [1;32mPASS[0m [1mNativeJournalEvidenceBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 84% | 485/576][0m [1;32mPASS[0m [1mHybridPropertyOrdinaryConversionTest[0m [38;5;105;1m(17115 ms)[0m
+[38;5;105;1m[ 84% | 486/576][0m [1;32mPASS[0m [1mHybridPropertyOwnerDeletionTest[0m [38;5;105;1m(15636 ms)[0m
+[38;5;105;1m[ 84% | 487/576][0m [1;32mPASS[0m [1mHybridPropertyOwnerInsertionPlanTest[0m [38;5;105;1m(201 ms)[0m
+[38;5;105;1m[ 84% | 488/576][0m [1;32mPASS[0m [1mHybridPropertyOwnerInsertionPublicationTest[0m [38;5;105;1m(20400 ms)[0m
+[38;5;105;1m[ 84% | 489/576][0m [1;32mPASS[0m [1mHybridPropertyPageBindingTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 85% | 490/576][0m [1;32mPASS[0m [1mHybridPropertyPublicationGuardTest[0m [38;5;105;1m(6 ms)[0m
+[38;5;105;1m[ 85% | 491/576][0m [1;32mPASS[0m [1mHybridPropertyPhysicalReaderTest[0m [38;5;105;1m(24 ms)[0m
+[38;5;105;1m[ 85% | 492/576][0m [1;32mPASS[0m [1mHybridPropertyPageImageTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 85% | 493/576][0m [1;32mPASS[0m [1mHybridPropertyQueryParityTest[0m [38;5;105;1m(116203 ms)[0m
+[38;5;105;1m[ 85% | 494/576][0m [1;32mPASS[0m [1mHybridPropertyIndexedLifecycleTest[0m [38;5;105;1m(19223 ms)[0m
+[38;5;105;1m[ 85% | 495/576][0m [1;32mPASS[0m [1mHybridPropertyReadContextTest[0m [38;5;105;1m(1871 ms)[0m
+[38;5;105;1m[ 86% | 496/576][0m [1;32mPASS[0m [1mHybridPropertyRecordsTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 86% | 497/576][0m [1;32mPASS[0m [1mHybridPropertyMatureShapeCostsTest[0m [38;5;105;1m(301179 ms)[0m
+[38;5;105;1m[ 86% | 498/576][0m [1;32mPASS[0m [1mRelocatableLargeValueRefTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 86% | 499/576][0m [1;32mPASS[0m [1mRelocatableLargeValueManifestPageTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 86% | 500/576][0m [1;32mPASS[0m [1mRelocatableLargeValueDataPageTest[0m [38;5;105;1m(466 ms)[0m
+[38;5;105;1m[ 86% | 501/576][0m [1;32mPASS[0m [1mPropertyRowChunkPolicyTest[0m [38;5;105;1m(11 ms)[0m
+[38;5;105;1m[ 87% | 502/576][0m [1;32mPASS[0m [1mPropertyBatchOrderTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 87% | 503/576][0m [1;32mPASS[0m [1mPropertyBlockFieldMembershipPrototypeTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 87% | 504/576][0m [1;32mPASS[0m [1mPropertyBlockMembershipSnapshotTest[0m [38;5;105;1m(172 ms)[0m
+[38;5;105;1m[ 87% | 505/576][0m [1;32mPASS[0m [1mPropertyBlockOwnerSlotsPrototypeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 87% | 506/576][0m [1;32mPASS[0m [1mRelocatableBorrowedPropertyTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 88% | 507/576][0m [1;32mPASS[0m [1mPropertyCandidateNativePageCostsTest[0m [38;5;105;1m(37 ms)[0m
+[38;5;105;1m[ 88% | 508/576][0m [1;32mPASS[0m [1mRelocatablePropertyCollectionRootTest[0m [38;5;105;1m(7 ms)[0m
+[38;5;105;1m[ 88% | 509/576][0m [1;32mPASS[0m [1mEntityPropertyLargeValuePayloadCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 88% | 510/576][0m [1;32mPASS[0m [1mRelocatableBorrowedPropertyRootTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 88% | 511/576][0m [1;32mPASS[0m [1mPropertyCollectionRootStoreCacheTest[0m [38;5;105;1m(106 ms)[0m
+[38;5;105;1m[ 88% | 512/576][0m [1;32mPASS[0m [1mPropertyCollectionRootStoreValidationTest[0m [38;5;105;1m(266 ms)[0m
+[38;5;105;1m[ 89% | 513/576][0m [1;32mPASS[0m [1mPropertyLayoutCostBaselineTest[0m [38;5;105;1m(113 ms)[0m
+[38;5;105;1m[ 89% | 514/576][0m [1;32mPASS[0m [1mPropertyPagePoolDurabilityTest[0m [38;5;105;1m(161 ms)[0m
+[38;5;105;1m[ 89% | 515/576][0m [1;32mPASS[0m [1mPropertyPagePoolPackingTest[0m [38;5;105;1m(776 ms)[0m
+[38;5;105;1m[ 89% | 516/576][0m [1;32mPASS[0m [1mPropertySubblockCandidateTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 89% | 517/576][0m [1;32mPASS[0m [1mPropertySubblockDirectoryTest[0m [38;5;105;1m(767 ms)[0m
+[38;5;105;1m[ 89% | 518/576][0m [1;32mPASS[0m [1mPropertySubblockFieldTransitionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 90% | 519/576][0m [1;32mPASS[0m [1mPropertySubblockGroupConversionTest[0m [38;5;105;1m(2 ms)[0m
+[38;5;105;1m[ 90% | 520/576][0m [1;32mPASS[0m [1mPropertySubblockMapMutationTest[0m [38;5;105;1m(53 ms)[0m
+[38;5;105;1m[ 90% | 521/576][0m [1;32mPASS[0m [1mRelocatablePropertyValueCodecBytesTest[0m [38;5;105;1m(11 ms)[0m
+[38;5;105;1m[ 90% | 522/576][0m [1;32mPASS[0m [1mRelocatablePropertyValueInspectionTest[0m [38;5;105;1m(20 ms)[0m
+[38;5;105;1m[ 90% | 523/576][0m [1;32mPASS[0m [1mReservedPropertySubblockTransitionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 90% | 524/576][0m [1;32mPASS[0m [1mScanMembershipPageTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 91% | 525/576][0m [1;32mPASS[0m [1mSparseFixedWidthPropertyColumnPrototypeTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 91% | 526/576][0m [1;32mPASS[0m [1mTypedPropertyBlockPrototypeTest[0m [38;5;105;1m(5 ms)[0m
+[38;5;105;1m[ 91% | 527/576][0m [1;32mPASS[0m [1mRelocatableConstraintDefinitionCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 91% | 528/576][0m [1;32mPASS[0m [1mConstraintDefinitionCodecBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 91% | 529/576][0m [1;32mPASS[0m [1mConstraintMutationValidatorTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 530/576][0m [1;32mPASS[0m [1mRelocatableConstraintSupportTreeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 531/576][0m [1;32mPASS[0m [1mRelocatableIndexDefinitionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 532/576][0m [1;32mPASS[0m [1mIndexDefinitionCodecBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 533/576][0m [1;32mPASS[0m [1mSystemCatalogTokenKeyCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 534/576][0m [1;32mPASS[0m [1mSystemCatalogGraphCardinalityCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 92% | 535/576][0m [1;32mPASS[0m [1mNativeBulkEdgeCatalogTokenMaterializerTest[0m [38;5;105;1m(45 ms)[0m
+[38;5;105;1m[ 93% | 536/576][0m [1;32mPASS[0m [1mNativeConstraintSupportTreeBuilderTest[0m [38;5;105;1m(235 ms)[0m
+[38;5;105;1m[ 93% | 537/576][0m [1;32mPASS[0m [1mSystemCatalogIdRangeTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 93% | 538/576][0m [1;32mPASS[0m [1mSystemCatalogTest[0m [38;5;105;1m(562 ms)[0m
+[38;5;105;1m[ 93% | 539/576][0m [1;32mPASS[0m [1mSystemCatalogPropertyNameBatchTest[0m [38;5;105;1m(251 ms)[0m
+[38;5;105;1m[ 93% | 540/576][0m [1;32mPASS[0m [1mRelocatableTokenDefinitionTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 93% | 541/576][0m [1;32mPASS[0m [1mRelocatableDeterministicProductQuantizerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 94% | 542/576][0m [1;32mPASS[0m [1mRelocatableVectorSemanticScannerTest[0m [38;5;105;1m(146 ms)[0m
+[38;5;105;1m[ 94% | 543/576][0m [1;32mPASS[0m [1mRelocatableVectorAdjacencyTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 94% | 544/576][0m [1;32mPASS[0m [1mRelocatableVectorAdjacencyMappingTest[0m [38;5;105;1m(9 ms)[0m
+[38;5;105;1m[ 94% | 545/576][0m [1;32mPASS[0m [1mRelocatableVectorAdjacencyPageStoreTest[0m [38;5;105;1m(66 ms)[0m
+[38;5;105;1m[ 94% | 546/576][0m [1;32mPASS[0m [1mRelocatableVectorCodebookTest[0m [38;5;105;1m(17 ms)[0m
+[38;5;105;1m[ 94% | 547/576][0m [1;32mPASS[0m [1mRelocatableVectorCodebookStoreTest[0m [38;5;105;1m(149 ms)[0m
+[38;5;105;1m[ 95% | 548/576][0m [1;32mPASS[0m [1mRelocatableVectorCodebookExtentIdCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 95% | 549/576][0m [1;32mPASS[0m [1mRelocatableVectorDeltaMappingTest[0m [38;5;105;1m(46 ms)[0m
+[38;5;105;1m[ 95% | 550/576][0m [1;32mPASS[0m [1mRelocatableVectorDeltaMappingBoundsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 95% | 551/576][0m [1;32mPASS[0m [1mRelocatableVectorManifestPageTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 95% | 552/576][0m [1;32mPASS[0m [1mRelocatableVectorManifestStoreTest[0m [38;5;105;1m(144 ms)[0m
+[38;5;105;1m[ 96% | 553/576][0m [1;32mPASS[0m [1mRelocatableVectorNodeMappingTest[0m [38;5;105;1m(15798 ms)[0m
+[38;5;105;1m[ 96% | 554/576][0m [1;32mPASS[0m [1mRelocatableVectorPageTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 96% | 555/576][0m [1;32mPASS[0m [1mRelocatableVectorPageStoreTest[0m [38;5;105;1m(144 ms)[0m
+[38;5;105;1m[ 96% | 556/576][0m [1;32mPASS[0m [1mRelocatableVectorPqMappingTest[0m [38;5;105;1m(14 ms)[0m
+[38;5;105;1m[ 96% | 557/576][0m [1;32mPASS[0m [1mRelocatableVectorSemanticCodecTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 96% | 558/576][0m [1;32mPASS[0m [1mCancellationCheckpointTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 97% | 559/576][0m [1;32mPASS[0m [1mLogicalGraphPropertyPatchTest[0m [38;5;105;1m(4 ms)[0m
+[38;5;105;1m[ 97% | 560/576][0m [1;32mPASS[0m [1mLogicalGraphReadContractTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 97% | 561/576][0m [1;32mPASS[0m [1mLogicalGraphTransactionOverlayTest[0m [38;5;105;1m(136 ms)[0m
+[38;5;105;1m[ 97% | 562/576][0m [1;32mPASS[0m [1mLogicalGraphTransactionOverlayUndoTest[0m [38;5;105;1m(3 ms)[0m
+[38;5;105;1m[ 97% | 563/576][0m [1;32mPASS[0m [1mPreadHelperTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 97% | 564/576][0m [1;32mPASS[0m [1mPwriteHelperTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 98% | 565/576][0m [1;32mPASS[0m [1mStorageFormatTest[0m [38;5;105;1m(102 ms)[0m
+[38;5;105;1m[ 98% | 566/576][0m [1;32mPASS[0m [1mStorageIOTest[0m [38;5;105;1m(1 ms)[0m
+[38;5;105;1m[ 98% | 567/576][0m [1;32mPASS[0m [1mStorageIOFileBudgetTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 98% | 568/576][0m [1;32mPASS[0m [1mChecksumUtilsTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 98% | 569/576][0m [1;32mPASS[0m [1mCompressUtilsTest[0m [38;5;105;1m(98 ms)[0m
+[38;5;105;1m[ 98% | 570/576][0m [1;32mPASS[0m [1mSerializerTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 99% | 571/576][0m [1;32mPASS[0m [1mSha256Test[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 99% | 572/576][0m [1;32mPASS[0m [1mTemporalSerializationTest[0m [38;5;105;1m(0 ms)[0m
+[38;5;105;1m[ 99% | 573/576][0m [1;32mPASS[0m [1mBufferModes/RelocatablePropertyRunTest[0m [38;5;105;1m(161 ms)[0m
+[38;5;105;1m[ 99% | 574/576][0m [1;32mPASS[0m [1mPartialAndCompleteInactiveSlot/StreamedAdjacencyBootstrapFaultTest[0m [38;5;105;1m(797 ms)[0m
+[38;5;105;1m[ 99% | 575/576][0m [1;32mPASS[0m [1mBranchCounts/LocationDirectoryLogicalCowTest[0m [38;5;105;1m(67 ms)[0m
+[38;5;105;1m[100% | 576/576][0m [1;32mPASS[0m [1mFixedShapes/HybridPropertyShapeCostsTest[0m [38;5;105;1m(10805 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;31m  TESTS FAILED![0m
+
+  Passed: [1;32m5503[0m
+  Failed: [1;31m2[0m
+  Time  : 1246432 ms
+[38;5;105;1m================================================================================[0m
+
+
+Failed shard logs retained at: /tmp/zyx-projection-full-failures
+Running 2 isolated GoogleTest shards (timeout: 3600s per shard)...
