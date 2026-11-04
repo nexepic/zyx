@@ -517,6 +517,13 @@ TEST(LogicalGraphReadExecutorIndexLookupContractsTest, UnverifiedCandidatesSplit
 			*reads = 0U;
 			std::vector<PropertyValue> delivered;
 			LogicalPlanReadRuntimeStats stats;
+			if (!admit) {
+				EXPECT_THROW(static_cast<void>(runtime.execute(project, bounds, [&](const LogicalPlanReadRow &) {
+					ADD_FAILURE() << "unsupported reader delivered a row"; return true;
+				})), std::logic_error);
+				EXPECT_EQ(*reads, 0U);
+				continue;
+			}
 			EXPECT_NO_THROW(stats = runtime.execute(project, bounds, [&](const LogicalPlanReadRow &row) {
 				delivered.push_back(std::get<PropertyValue>(row.values.at("payload"))); return !stop;
 			}));
@@ -531,7 +538,7 @@ TEST(LogicalGraphReadExecutorIndexLookupContractsTest, UnverifiedCandidateReject
 	for (bool malformed: {false, true}) {
 		LogicalGraphFixtureData data = graphData();
 		data.enable_native_exact_node_candidates = true;
-		data.enable_property_admission = !malformed;
+		data.enable_property_admission = true;
 		data.truncate_node_property_columns = malformed;
 		data.native_snapshot_generation = 17U;
 		data.expected_exact_labels = std::vector<std::string>{};
