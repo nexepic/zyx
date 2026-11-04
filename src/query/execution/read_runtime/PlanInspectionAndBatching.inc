@@ -671,7 +671,7 @@
 										   const BatchSelectionPredicate &selectionPredicate = {},
 										   const std::vector<std::string> &completeEntityVariables = {},
 										   const ChargedRowVisitor *chargedReceiver = nullptr,
-										   bool borrowRepeatedNodeColumns = false) {
+										   bool borrowRepeatedNodeColumns = false, bool discardUnusedBindings = false) {
 			if (!state.shared.allow_deferred_entity_refs ||
 				(!state.shared.snapshot.supportsNativeNodeRefScans() && !state.shared.snapshot.supportsNativeEdgeRefScans())) {
 				return std::nullopt;
@@ -1682,6 +1682,17 @@
 			};
 
 			const auto acceptInput = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+                if (discardUnusedBindings) {
+                    const auto needed = [&](const std::string &name) {
+                        return std::ranges::any_of(groups, [&](const auto &group) { return group.variable == name; }) ||
+                            std::ranges::any_of(metadataRequests, [&](const auto &request) { return request.variable == name; }) ||
+                            std::ranges::find(completeEntityVariables, name) != completeEntityVariables.end();
+                    };
+                    const auto prune = [&](auto &entries) { std::erase_if(entries, [&](const auto &entry) { return !needed(entry.first); }); };
+                    prune(row.values); prune(row.property_cache); prune(row.entity_metadata_cache); prune(row.path_cache);
+                    std::erase_if(row.complete_entity_property_cache, [&](const auto &name) { return !needed(name); });
+                    if (charge.bytes()) charge.set((std::min)(charge.bytes(), logicalReadRowBytes(row, state.shared.context)));
+                }
 				// Leave room for cache enrichment rather than filling the entire
 				// allowance with input references before their payload sizes are known.
 				const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);

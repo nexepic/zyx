@@ -1922,9 +1922,9 @@ namespace graph::query::execution {
 		}, context)));
 		const auto trace = debug::PerfTrace::snapshotAndReset();
 		debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
-		const auto boundReads = trace.find("logical_plan.bound_projection.property_reads");
+		const auto boundReads = trace.find("logical_plan.project.moved_property_values");
 		ASSERT_NE(boundReads, trace.end());
-		EXPECT_GE(boundReads->second.totalValue, 2);
+		EXPECT_EQ(boundReads->second.totalValue, 2);
 		EXPECT_EQ(delivered, 1U);
 		EXPECT_EQ(account->used(), 0U);
 	}

@@ -3,7 +3,7 @@
 
 using namespace relocatable_storage_backend_test;
 
-TEST_F(RelocatableStorageBackendTest, UnmodifiedOverlayForwardsCellsAndChangedOverlayFallsBack) {
+TEST_F(RelocatableStorageBackendTest, OverlayCellsBindRetryRevisionAndFreshChangedViewsMergeValues) {
     materializeNativeDatabase();
     auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
     RelocatableStorageBackend backend(options); backend.open();
@@ -43,9 +43,26 @@ TEST_F(RelocatableStorageBackendTest, UnmodifiedOverlayForwardsCellsAndChangedOv
         EXPECT_THROW(snapshot->readNodePropertyCellsSortedWithAdmission(ids, keys, {}, [](size_t) {}), std::invalid_argument);
         EXPECT_THROW(snapshot->readNodePropertyCellsWithScalarsSortedWithAdmission(ids, keys, ignore, {}, [](size_t) {}), std::invalid_argument);
         overlay.replaceLogicalNodeProperties({{ids[0], {{"value", PropertyValue(19)}}}});
-        EXPECT_FALSE(snapshot->supportsNodePropertyCellBatches());
-        EXPECT_THROW(snapshot->readNodePropertyCellsSortedWithAdmission(ids, keys, ignore, [](size_t) {}), std::logic_error);
+        EXPECT_TRUE(snapshot->supportsNodePropertyCellBatches());
+        size_t staleCells = 0U;
+        EXPECT_THROW(snapshot->readNodePropertyCellsSortedWithAdmission(ids, keys,
+            [&](size_t, size_t, auto) { ++staleCells; }, [](size_t) {}), std::runtime_error);
+        EXPECT_EQ(staleCells, 0U);
         EXPECT_EQ(snapshot->readNodeProperty(ids[0], "value"), PropertyValue(19));
+        auto changed = vector ? std::unique_ptr<LogicalGraphReadSnapshot>(overlay.openLogicalGraphVectorSearchSnapshot())
+            : overlay.openLogicalGraphReadSnapshot();
+        EXPECT_TRUE(changed->supportsResumableNodePropertyCells());
+        cells.clear(); bytes = 0U;
+        changed->readNodePropertyCellsSortedWithAdmission(ids, keys,
+            [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                EXPECT_TRUE(cells.emplace(std::pair{row, column}, std::move(value)).second);
+            }, [&](size_t size) { bytes += size; });
+        EXPECT_GT(bytes, 0U);
+        EXPECT_EQ(cells.at({0, 0}), PropertyValue(19));
+        EXPECT_EQ(cells.at({0, 3}), PropertyValue(19));
+        EXPECT_EQ(cells.at({1, 0}), PropertyValue(9));
+        EXPECT_TRUE(missing(0, 1));
+        EXPECT_TRUE(missing(0, 2));
     }
 }
 
