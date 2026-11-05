@@ -192,8 +192,15 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
             environment["TMP"] = str(temporary_directory)
             environment["TEMP"] = str(temporary_directory)
             log_file = log_path.open("wb")
+            launched = list(command)
+            if failure_log_dir is not None and environment.get("ZYX_CI_EVIDENCE_DIR"):
+                # The existing bounded relay saves the complete prefix/tail,
+                # while this shard's supervisor transcript also stays bounded.
+                launched = [sys.executable, str(Path(__file__).with_name("run_ci_evidence.py").resolve()),
+                            "--root", str((failure_log_dir / "bounded").resolve()),
+                            "--name", f"shard-{index}", "--timeout", str(timeout_seconds), "--", *command]
             process = subprocess.Popen(
-                list(command),
+                launched,
                 cwd=workdir,
                 env=environment,
                 stdin=subprocess.DEVNULL,

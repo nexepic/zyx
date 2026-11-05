@@ -66,6 +66,7 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     handlers = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
     kept = total = console = 0
     tail = bytearray()
+    console_tail = bytearray()
     last_tail = 0.0
     try:
         with (directory / 'output.log').open('wb') as log:
@@ -74,6 +75,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                 if not chunk:
                     break
                 total += len(chunk)
+                console_tail.extend(chunk)
+                if len(console_tail)>65536: del console_tail[:-65536]
                 first = chunk[:max(0, LOG_LIMIT - kept)]
                 log.write(first); log.flush(); kept += len(first)
                 if len(first) != len(chunk):
@@ -97,6 +100,9 @@ def run_evidence(command, directory, timeout, *, gtest=False):
             try: process.wait(timeout=15)
             except subprocess.TimeoutExpired: process.kill(); process.wait()
         if tail: (directory / 'output-tail.log').write_bytes(tail)
+        if total>CONSOLE_LIMIT:
+            sys.stdout.buffer.write(b'\nCI_EVIDENCE retained console tail:\n'+console_tail)
+            sys.stdout.buffer.flush()
         code = process.returncode
         if interrupted and code == 0: code = 130
         record.update(state='interrupted' if interrupted else 'completed', completed_at=time.time(),

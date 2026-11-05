@@ -82,3 +82,33 @@ def test_interrupt_keeps_partial_evidence(tmp_path):
         assert 'ready' in log.read_text()
     finally:
         if p.poll() is None:p.kill();p.wait()
+
+@pytest.mark.skipif(os.name == 'nt', reason='two-shard workspace isolation is POSIX-only')
+@pytest.mark.parametrize('hang', [False, True])
+def test_tier_evidence_survives_failure_or_timeout(tmp_path, hang):
+    fake=tmp_path/'fake-gtest'
+    fake.write_text('#!'+sys.executable+'\n'+
+        "import os,time\nfrom pathlib import Path\nprint('tier-partial-marker',flush=True)\n"+
+        ("time.sleep(60)\n" if hang else
+         "Path(os.environ['GTEST_OUTPUT'][4:]).write_text('<testsuites tests=\"1\" failures=\"0\"/>')\nraise SystemExit(9 if os.environ['GTEST_SHARD_INDEX']=='1' else 0)\n"))
+    fake.chmod(0o700)
+    directory=tmp_path/'evidence/unit'
+    command=[sys.executable,str(ROOT/'scripts/run_test_tier.py'),'unit','--binary',str(fake),
+             '--jobs','2','--timeout','2','--xml-dir',str(directory/'xml'),'--failure-log-dir',str(directory/'shards')]
+    env=os.environ.copy();env.pop('ZYX_CI_DEADLINE_UNIX',None)
+    env['ZYX_CI_EVIDENCE_DIR']=str(tmp_path/'evidence')
+    result=subprocess.run([sys.executable,str(WRAPPER),'--root',str(tmp_path/'evidence'),
+                           '--name','unit','--timeout','10','--',*command],
+                          capture_output=True,env=env,cwd=ROOT,timeout=20)
+    record=json.loads((directory/'result.json').read_text())
+    assert result.returncode==record['exit_code']==(124 if hang else 1)
+    statuses=json.loads((directory/'shards/status.json').read_text())
+    assert statuses['exit_code']==result.returncode
+    assert all('tier-partial-marker' in (directory/f'shards/shard-{n}.log').read_text() for n in (0,1))
+    assert (directory/'shards/bounded/shard-0/output.log').exists()
+    if hang:
+        assert not record['xml_present']
+    else:
+        assert len(record['xml_documents'])==2
+        assert all(x['parse_state']=='complete' for x in record['xml_documents'])
+        assert any(x['raw_exit_code']==9 for x in statuses['shards'])
