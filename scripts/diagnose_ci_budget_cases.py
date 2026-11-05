@@ -33,12 +33,20 @@ MACOS = [
 ]
 
 
+ASAN = [
+    'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
+    'RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded',
+    'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',
+    'ResultPropertyMapAdmissionTest.*',
+]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
-    parser.add_argument('--platform', choices=('windows', 'macos'), required=True)
+    parser.add_argument('--platform', choices=('windows', 'macos', 'asan'), required=True)
     args = parser.parse_args()
-    cases = WINDOWS if args.platform == 'windows' else MACOS
+    cases = {'windows': WINDOWS, 'macos': MACOS, 'asan': ASAN}[args.platform]
     runner = Path(__file__).with_name('run_test_process.py')
     failures = []
     for case in cases:

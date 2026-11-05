@@ -208,6 +208,18 @@ jobs:
               --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
         shell: bash
 
+      # Independent processes reset diagnostic caps for every known failed case.
+      # These additional runs never replace the complete sanitizer gate.
+      - name: Diagnose sanitizer admission cases
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+          ASAN_OPTIONS: 'halt_on_error=1:fast_unwind_on_fatal=0'
+          UBSAN_OPTIONS: 'halt_on_error=1:print_stacktrace=1'
+        run: python scripts/run_ci_evidence.py --name asan-budget-cases --timeout 1500 -- python scripts/diagnose_ci_budget_cases.py --binary build-asan-ubsan/zyx_test_suite --platform asan
+        shell: bash
+
       - name: Run native storage ASan+UBSan gates
         env:
           ZYX_CI_RSS_TRACE: '1'
