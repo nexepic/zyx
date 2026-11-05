@@ -1,3 +1,4 @@
+#include "query/execution/CiDiagnosticForkSupport.hpp"
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <filesystem>
@@ -163,6 +164,12 @@ public:
 };
 
 int main(int argc, char **argv) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if (!graph::test::ci_diagnostics::initialize()) {
+        std::fputs("CI_DIAGNOSTICS fork initialization failed\n",stderr);
+        return 2;
+    }
+#endif
 	if (argc == 5 && std::string_view(argv[1]) == "--zyx-relocatable-crash-child") {
 		return graph::test::runRelocatableCrashChild(argv[2], argv[3], argv[4]);
 	}

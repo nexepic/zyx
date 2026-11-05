@@ -1,3 +1,8 @@
+#include "query/execution/CiDiagnosticForkSupport.hpp"
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
+#include <chrono>
 #include <gtest/gtest.h>
 #include "graph/utils/AdmissionPmrContainers.hpp"
 #include <atomic>
@@ -338,3 +343,47 @@ TEST(ProcedurePayloadHandoffTest, DistinctKeyRetainsIndependentCreditAcrossRowRe
     escaped.reset(); EXPECT_TRUE(weak.expired());
 }
 } // namespace graph::query::execution::detail
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST(CiDiagnosticForkSupportTest, ProcessNamespaceAndForkRemainSafeWithAWorkerHoldingTheRegistry) {
+    namespace ci = graph::test::ci_diagnostics;
+    ASSERT_TRUE(ci::initialized);
+    size_t currentNamespace=0U;
+    { graph::debug::ci_budget_detail::Lock lock;
+      if constexpr(sizeof(size_t)>=8U)currentNamespace=graph::debug::ci_budget_detail::state.next>>32U; }
+    if constexpr(sizeof(size_t)>=8U)EXPECT_EQ(currentNamespace,ci::pid());
+#ifndef _WIN32
+    char sentinel=0;size_t originalId=0U;
+    { graph::debug::ci_budget_detail::Lock lock;
+      originalId=graph::debug::ci_budget_detail::find(&sentinel,"fork-sentinel",true)->id; }
+    std::atomic<bool> locked{false},sawPreparation{false};
+    std::thread worker([&] {
+        graph::debug::ci_budget_detail::Lock lock;
+        locked.store(true,std::memory_order_release);
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(!ci::preparing.load(std::memory_order_acquire) && std::chrono::steady_clock::now()<deadline)
+            std::this_thread::yield();
+        sawPreparation.store(ci::preparing.load(std::memory_order_acquire));
+    });
+    while(!locked.load(std::memory_order_acquire))std::this_thread::yield();
+    const auto child=::fork();
+    if(child==0) {
+        ::alarm(3);
+        graph::debug::ci_budget_detail::Lock lock;
+        const auto &state=graph::debug::ci_budget_detail::state;
+        const bool valid=state.active==0U && state.next==ci::firstId();
+        ::_exit(valid ? 0 : 1);
+    }
+    worker.join();
+    bool parentPreserved=false;
+    { graph::debug::ci_budget_detail::Lock lock;
+      auto *entry=graph::debug::ci_budget_detail::find(&sentinel,"fork-sentinel",false);
+      parentPreserved=entry && entry->id==originalId;
+      if(entry){*entry={};--graph::debug::ci_budget_detail::state.active;} }
+    EXPECT_TRUE(parentPreserved);EXPECT_TRUE(sawPreparation.load());
+    ASSERT_GT(child,0);
+    int status=0;ASSERT_EQ(::waitpid(child,&status,0),child);
+    ASSERT_TRUE(WIFEXITED(status));EXPECT_EQ(WEXITSTATUS(status),0);
+#endif
+}
+#endif
