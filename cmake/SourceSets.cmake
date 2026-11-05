@@ -423,6 +423,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundPropertyBindings.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundColumnLayout.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ExecutionBindingContainers.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ResultPropertyMapAdmission.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_AdmissionPmrContainers.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ResourceCoordinator.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp"
