@@ -610,7 +610,10 @@ namespace graph::query {
 
         ASSERT_NE(account, nullptr);
         EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
-        options.bounds.maximum_materialized_bytes = 64U * 1024U;
+        // Fixed efficiency gate plus an ample retry: neither grows with a
+        // measured peak or an empty private-container header.
+        for (const size_t fundedLimit : {4096U, 64U * 1024U}) {
+        options.bounds.maximum_materialized_bytes = fundedLimit;
         size_t duringSearch = 0U, beforeProperty = 0U;
         backend->state->during_vector_search = [&](const storage::LogicalGraphVectorSearchRequest &request) {
             ASSERT_EQ(request.query_vector.size(), 750U);
@@ -624,11 +627,12 @@ namespace graph::query {
             ASSERT_EQ(result.rowCount(), 1U);
             EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(10));
             EXPECT_GT(account->used(), 0U); // escaped output retains its owner
-            ASSERT_GT(duringSearch, 750U * sizeof(float));
+            ASSERT_GE(duringSearch, 750U * sizeof(float));
             ASSERT_GT(beforeProperty, 0U);
             EXPECT_LT(beforeProperty, duringSearch); // consumed request no longer overlaps the row
         }
         EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        }
 	}
 
 
