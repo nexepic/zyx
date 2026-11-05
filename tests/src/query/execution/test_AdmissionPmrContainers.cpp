@@ -30,6 +30,8 @@ TEST(AdmissionPmrContainersTest, AllEmptyMetadataContainersAcceptADenyingResourc
         utils::AdmissionPmrUnorderedMap<uint64_t,uint64_t> hashed(&memory);
         utils::AdmissionPmrUnorderedSet<uint64_t> hashedSet(&memory);
         EXPECT_TRUE(vector.empty()); EXPECT_TRUE(ordered.empty()); EXPECT_TRUE(orderedSet.empty());
+        EXPECT_THROW(static_cast<void>(ordered.at(1U)),std::out_of_range);
+        EXPECT_THROW(static_cast<void>(std::as_const(ordered).at(1U)),std::out_of_range);
         EXPECT_TRUE(hashed.empty()); EXPECT_TRUE(hashedSet.empty()); EXPECT_EQ(memory.calls,0U);
     }
     EXPECT_EQ(memory.calls,0U); EXPECT_EQ(memory.live,0U);

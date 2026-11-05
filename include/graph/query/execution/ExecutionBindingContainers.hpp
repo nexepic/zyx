@@ -41,6 +41,16 @@ class ExecutionBindingMap : public ExecutionBindingMapBase<Key, Value, Allocator
 public:
     using execution_binding_tree = void;
     using Base::Base;
+    Value &at(const Key &key) {
+        const auto found=this->find(key);
+        if(found==this->end()) throw std::out_of_range("execution binding key not found");
+        return found->second;
+    }
+    const Value &at(const Key &key) const {
+        const auto found=this->find(key);
+        if(found==this->end()) throw std::out_of_range("execution binding key not found");
+        return found->second;
+    }
     void reserve(size_t count) const {
         // A tree never relocates existing values. It has no bucket capacity to
         // preallocate; node admission happens before each actual insertion.

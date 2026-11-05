@@ -130,3 +130,13 @@ TEST(ExecutionBindingContainersTest, CompletenessSetFailureAndDuplicateInsertion
     EXPECT_EQ(upstream.live, 0U); EXPECT_EQ(budget.used(), 0U);
 }
 } // namespace graph::query::execution::detail
+
+TEST(ExecutionBindingContainersTest, MissingKeysKeepStandardExceptionCategoriesWithoutInsertion) {
+    graph::query::execution::detail::ExecutionBindingMap<int,int> bindings;
+    EXPECT_THROW(static_cast<void>(bindings.at(7)),std::out_of_range);
+    EXPECT_THROW(static_cast<void>(std::as_const(bindings).at(7)),std::out_of_range);
+    EXPECT_TRUE(bindings.empty());
+    bindings.emplace(7,42);
+    EXPECT_EQ(bindings.at(7),42);
+    EXPECT_EQ(std::as_const(bindings).at(7),42);
+}

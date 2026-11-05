@@ -80,12 +80,27 @@ template<class T>
 using AdmissionPmrVector = std::pmr::vector<T>;
 #endif
 
-template<class Key, class Value, class Compare = std::less<Key>>
-using AdmissionPmrMap =
 #if defined(_MSVC_STL_VERSION)
-    boost::container::map<Key, Value, Compare, std::pmr::polymorphic_allocator<std::pair<const Key, Value>>>;
+template<class Key, class Value, class Compare = std::less<Key>>
+class AdmissionPmrMap : public boost::container::map<Key,Value,Compare,std::pmr::polymorphic_allocator<std::pair<const Key,Value>>> {
+    using Base=boost::container::map<Key,Value,Compare,std::pmr::polymorphic_allocator<std::pair<const Key,Value>>>;
+public:
+    using Base::Base;
+    using Base::operator=;
+    Value &at(const Key &key) {
+        const auto found=this->find(key);
+        if(found==this->end()) throw std::out_of_range("admitted map key not found");
+        return found->second;
+    }
+    const Value &at(const Key &key) const {
+        const auto found=this->find(key);
+        if(found==this->end()) throw std::out_of_range("admitted map key not found");
+        return found->second;
+    }
+};
 #else
-    std::pmr::map<Key, Value, Compare>;
+template<class Key, class Value, class Compare = std::less<Key>>
+using AdmissionPmrMap = std::pmr::map<Key,Value,Compare>;
 #endif
 
 template<class Key, class Compare = std::less<Key>>
