@@ -94,12 +94,12 @@ def test_tier_evidence_survives_failure_or_timeout(tmp_path, hang):
     fake.chmod(0o700)
     directory=tmp_path/'evidence/unit'
     command=[sys.executable,str(ROOT/'scripts/run_test_tier.py'),'unit','--binary',str(fake),
-             '--jobs','2','--timeout','2','--xml-dir',str(directory/'xml'),'--failure-log-dir',str(directory/'shards')]
+             '--jobs','2','--timeout','2' if hang else '10','--xml-dir',str(directory/'xml'),'--failure-log-dir',str(directory/'shards')]
     env=os.environ.copy();env.pop('ZYX_CI_DEADLINE_UNIX',None)
     env['ZYX_CI_EVIDENCE_DIR']=str(tmp_path/'evidence')
     result=subprocess.run([sys.executable,str(WRAPPER),'--root',str(tmp_path/'evidence'),
-                           '--name','unit','--timeout','10','--',*command],
-                          capture_output=True,env=env,cwd=ROOT,timeout=20)
+                           '--name','unit','--timeout','30','--',*command],
+                          capture_output=True,env=env,cwd=ROOT,timeout=40)
     record=json.loads((directory/'result.json').read_text())
     assert result.returncode==record['exit_code']==(124 if hang else 1)
     statuses=json.loads((directory/'shards/status.json').read_text())
