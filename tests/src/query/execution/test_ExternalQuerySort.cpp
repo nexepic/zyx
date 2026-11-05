@@ -94,3 +94,31 @@ TEST(ExternalQuerySortTest, UnsupportedOrderingAfterSealedRunsFailsWithoutReplay
 	}
 	EXPECT_EQ(budget.used(),0U);EXPECT_TRUE(provider.state.bytes.empty());EXPECT_EQ(provider.state.finished,1U);
 }
+
+TEST(ExternalQuerySortTest, ProtectedWorkspaceRunSizingBoundsMemoryAndWriteAmplification) {
+    constexpr size_t limit=4U*1024U*1024U;
+    size_t peak=0U;
+    graph::debug::PerfTrace::ScopedObserver observer(&peak,[](void *owner,std::string_view name,int64_t value,bool duration) noexcept {
+        if(!duration && name=="logical_plan.materialized_budget_peak_bytes" && value>0)
+            *static_cast<size_t *>(owner)=(std::max)(*static_cast<size_t *>(owner),static_cast<size_t>(value));
+    });
+    Provider provider;MaterializedByteBudget budget(limit);const std::array<uint8_t,1U> ascending{1U};
+    {
+        ExternalQuerySort sort(provider,budget,30000U,limit,ascending,size,[]{});
+        for(size_t i=0;i<12000U;++i) sort.append(row(i),MaterializedByteReservation(&budget));
+        std::vector<bool> seen(12000U,false);size_t delivered=0U;
+        ASSERT_TRUE(sort.finish([&](auto record,auto) {
+            const auto id=static_cast<size_t>(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant()));
+            if(id>=seen.size() || seen[id]) return false;
+            seen[id]=true;++delivered;return true;
+        }));
+        EXPECT_EQ(delivered,12000U);EXPECT_TRUE(sort.spilled());
+        // Fixed regression ceiling: <=4 MiB of 128 KiB fragment writes for
+        // this <0.7 MiB encoded input, including all intermediate merge runs.
+        // It is independent of the observed count and of allocator estimates.
+        EXPECT_LE(provider.state.writes,32U);
+        RecordProperty("fragment_writes",std::to_string(provider.state.writes));
+    }
+    EXPECT_GT(peak,0U);EXPECT_LE(peak,limit);EXPECT_EQ(budget.used(),0U);
+    EXPECT_TRUE(provider.state.bytes.empty());RecordProperty("logical_peak_bytes",std::to_string(peak));
+}

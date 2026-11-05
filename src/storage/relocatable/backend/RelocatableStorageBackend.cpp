@@ -690,6 +690,36 @@ namespace graph::storage {
 				catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
 				locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;disk_.release(RSS_SEGMENT_SIZE);
 			}
+            void releaseBatch(std::span<const uint64_t> handles) override {
+                requireActive();
+                if(handles.empty()) return;
+                if(handles.size()>locations_.size())
+                    throw std::invalid_argument("query scratch release batch is stale or duplicated");
+                // Validate the entire request before any durable change. The
+                // session is task-confined and bounds the route count, so this
+                // fixed-storage check needs no fallible cleanup allocation.
+                for(size_t i=0;i<handles.size();++i) {
+                    if(!locations_.contains(handles[i]))
+                        throw std::invalid_argument("query scratch release handle is stale or foreign");
+                    for(size_t j=0;j<i;++j) if(handles[j]==handles[i])
+                        throw std::invalid_argument("query scratch release batch contains duplicates");
+                }
+                auto cleanup=openCleanupWorkspace();
+                for(size_t begin=0;begin<handles.size();) {
+                    std::array<NativeBulkRunFragmentLocation,64U> batch;
+                    const auto count=(std::min)(batch.size(),handles.size()-begin);
+                    for(size_t i=0;i<count;++i) batch[i]=locations_.at(handles[begin+i]);
+                    try {
+                        auto gate=backend_.acquireNativePublicationGate();
+                        store_->releaseBatch(std::span(batch).first(count),backend_.nextNativeBulkScratchCheckpointLsn());
+                    } catch(...) { backend_.requireReopenAfterNativeBulkStagingFailure();throw; }
+                    for(size_t i=0;i<count;++i) locations_.erase(handles[begin+i]);
+                    used_bytes_-=count*RSS_SEGMENT_SIZE;
+                    disk_.release(count*RSS_SEGMENT_SIZE);
+                    begin+=count;
+                }
+            }
+
 			void finish() override {
 				if(!refund_)return;
 				if(backend_.hasIndeterminateWriteOutcome() && !locations_.empty())throw std::logic_error("query scratch cleanup requires writable recovery");

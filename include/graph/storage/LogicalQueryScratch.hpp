@@ -22,6 +22,13 @@ public:
 	virtual void release(uint64_t) = 0;
 	virtual void finish() = 0;
 	[[nodiscard]] virtual size_t maximumFragmentBytes() const = 0;
+    // Readers must be quiescent just as for release(). Providers may reclaim
+    // distinct handles together, amortizing durable allocator publication.
+    // A failure need not undo earlier releases, so session cleanup remains the
+    // authority for handles still live after a failed batch.
+    virtual void releaseBatch(std::span<const uint64_t> handles) {
+        for(const auto handle:handles) release(handle);
+    }
 };
 class LogicalQueryScratchProvider {
 public:

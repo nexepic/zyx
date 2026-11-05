@@ -26,10 +26,14 @@ public:
 	ExternalQuerySort(storage::LogicalQueryScratchProvider &provider,MaterializedByteBudget &budget,
 		size_t maximumRows,size_t maximumBytes,std::span<const uint8_t> ascending,SizeFunction size,
 		std::function<void()> checkpoint,size_t maximumDiskBytes=128U*1024U*1024U,size_t maximumFragments=1024U,std::function<void()> publicationCheckpoint={},std::shared_ptr<ResourceAccount> account={})
-		:provider_(provider),budget_(budget),maximum_rows_(maximumRows),buffer_target_(maximumBytes/8U),
+		:provider_(provider),budget_(budget),maximum_rows_(maximumRows),buffer_target_(maximumBytes>WORKSPACE_BYTES ? (maximumBytes-WORKSPACE_BYTES)/2U : 0U),
 		workspace_(&budget),memory_(budget),ascending_(ascending.begin(),ascending.end(),&memory_),size_(std::move(size)),checkpoint_(std::move(checkpoint)),publication_checkpoint_(publicationCheckpoint?std::move(publicationCheckpoint):checkpoint_),
 		maximum_disk_(maximumDiskBytes),maximum_fragments_(maximumFragments),account_(std::move(account)),
 		runs_(&memory_),rows_(maximumRows,maximumBytes,size_,&budget,true,sizeof(LogicalPlanReadRow)) {
+        // Protect the complete merge workspace first, then use at most half
+        // the remaining allowance for live runs. The other half covers
+        // incoming rows and old/new vector buffers during capacity growth.
+        // All allocations/reservations still use the same hard budget.
 		if(maximumBytes<MINIMUM_QUERY_BYTES || ascending_.empty() || !checkpoint_)
 			throw std::invalid_argument("external Sort requires ordering, guards and bounded workspace");
 	}
@@ -40,7 +44,29 @@ public:
 		const bool eligible=qualified(record);
 		if(!eligible && !runs_.empty())throw std::runtime_error("external Sort encountered an unsupported spill row after sealing runs");
 		spillable_=spillable_ && eligible;
-		if(spillable_ && !rows_.empty() && rows_.bytes()+size_(record)>buffer_target_)flush();
+        if(spillable_ && !rows_.empty()) {
+            const auto recordBytes=size_(record);
+            const auto &storage=rows_.values();
+            // The source already owns/charges this row when charge is present.
+            // Preserve enough headroom for the first spill workspace and an
+            // admitted incoming record; do not discover that shortage only
+            // after buffering the row. All actual allocations remain charged.
+            size_t required=workspace_.bytes()?0U:WORKSPACE_BYTES+MAX_RECORD_BYTES*64U;
+            if(!charge.bytes()) {
+                if(recordBytes>SIZE_MAX-required) throw std::overflow_error("Sort append size overflowed");
+                required+=recordBytes;
+            }
+            if(storage.size()==storage.capacity()) {
+                // Audited standard/Boost vector growth is at most doubling.
+                // Count the complete new buffer while the old one is live.
+                if(storage.capacity()>SIZE_MAX/(2U*sizeof(Record))) throw std::overflow_error("Sort capacity overflowed");
+                const size_t growth=(storage.capacity()?2U*storage.capacity():1U)*sizeof(Record);
+                if(growth>SIZE_MAX-required) throw std::overflow_error("Sort workspace size overflowed");
+                required+=growth;
+            }
+            if(recordBytes>buffer_target_-(std::min)(buffer_target_,rows_.bytes()) ||
+                    required>budget_.availableWithParent()) flush();
+        }
 		if(charge.bytes())rows_.appendCharged(std::move(record),std::move(charge));else rows_.append(std::move(record));
 	}
 	bool finish(const Visitor &visitor) {
@@ -131,7 +157,13 @@ private:
 		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));rows_.clear();}
 	Run merge(Run &left,Run &right){Cursor a(*this,left),b(*this,right);Writer writer(*this);
 		while(a.current || b.current){checkpoint_();if(!b.current || (a.current && precedes(*a.current,*b.current))){writer.append(*a.current);a.advance();}else{writer.append(*b.current);b.advance();}}
-		auto result=writer.finish();for(const auto handle:left.handles)scratch_->release(handle);for(const auto handle:right.handles)scratch_->release(handle);return result;}
+		auto result=writer.finish();
+        // Both cursors are exhausted and their read buffers own all bytes.
+        // Reclaim each input run in bounded durable batches, rather than
+        // rebuilding/publishing allocator metadata for every fragment.
+        scratch_->releaseBatch(std::span<const uint64_t>(left.handles.data(),left.handles.size()));
+        scratch_->releaseBatch(std::span<const uint64_t>(right.handles.data(),right.handles.size()));
+        return result;}
 	storage::LogicalQueryScratchProvider &provider_;MaterializedByteBudget &budget_;size_t maximum_rows_,buffer_target_,total_=0;
 	MaterializedByteReservation workspace_;BudgetMemoryResource memory_;utils::AdmissionPmrVector<uint8_t> ascending_;
 	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::shared_ptr<ResourceAccount> account_;utils::AdmissionPmrVector<Run> runs_;BoundedBatch<Record> rows_;
