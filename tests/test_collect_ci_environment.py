@@ -35,3 +35,20 @@ def test_normal_test_failure_does_not_copy_symbol_images(tmp_path, monkeypatch):
     monkeypatch.setattr(sys,'argv',['collector','--output',str(out/'environment.json'),'--build-dir',str(build),'--save-crash-symbols'])
     module.main();r=json.loads((out/'environment.json').read_text())
     assert not r['crash_symbols']['crash_detected'] and not (out/'crash-symbols').exists()
+
+
+def test_locked_symbols_do_not_destroy_other_evidence(tmp_path, monkeypatch):
+    source=Path(__file__).resolve().parents[1]/'scripts/collect_ci_environment.py'
+    spec=importlib.util.spec_from_file_location('ci_environment_locked',source)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    build=tmp_path/'build';build.mkdir();(build/'zyx_test_suite.exe').write_bytes(b'image')
+    out=tmp_path/'evidence';(out/'case').mkdir(parents=True)
+    (out/'case/result.json').write_text(json.dumps({'process':{'raw_exit_code':3}}))
+    monkeypatch.setattr(module.shutil,'which',lambda _:None)
+    def denied(*_):raise PermissionError('simulated locked symbol')
+    monkeypatch.setattr(module.shutil,'copyfile',denied)
+    monkeypatch.setattr(sys,'argv',['collector','--output',str(out/'environment.json'),'--build-dir',str(build),'--save-crash-symbols'])
+    module.main();r=json.loads((out/'environment.json').read_text())
+    assert r['modules'][0]['sha256']
+    assert r['crash_symbols']['copied']==[]
+    assert r['crash_symbols']['copy_errors'][0]['error_type']=='PermissionError'
