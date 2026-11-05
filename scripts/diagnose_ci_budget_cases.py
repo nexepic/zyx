@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Run known platform-budget cases separately so bounded traces reset per case."""
 import argparse
+import os
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -48,8 +50,14 @@ def main():
             failures.append(case)
             continue
         timeout = '1200' if 'EightBoundedGroups' in case else '300'
-        status = subprocess.call([sys.executable, str(runner), '--timeout', timeout, '--',
-                                  str(args.binary), '--gtest_filter=' + case])
+        command = [sys.executable, str(runner), '--timeout', timeout, '--',
+                   str(args.binary), '--gtest_filter=' + case]
+        if os.environ.get('ZYX_CI_EVIDENCE_DIR'):
+            token = hashlib.sha256(case.encode()).hexdigest()[:16]
+            command = [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
+                       '--name', 'budget-' + token, '--timeout', timeout, '--gtest', '--',
+                       str(args.binary), '--gtest_filter=' + case]
+        status = subprocess.call(command)
         print(f'CI_BUDGET_CASE END {case} exit={status}', flush=True)
         if status:
             failures.append(case)

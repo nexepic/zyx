@@ -6,6 +6,7 @@
 #include "graph/query/QueryGuard.hpp"
 #if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
 #include "graph/debug/SanitizerAllocationSnapshot.hpp"
+#include "graph/debug/ResidentMemoryDiagnostics.hpp"
 #include <cstdio>
 #include <cstdlib>
 #endif
@@ -54,6 +55,7 @@ void QueryGuard::checkSlow() {
                 std::fprintf(stderr, "CI_RSS_REJECT limit=%zu baseline=%zu current=%zu asan_available=%d live=%zu heap=%zu\n",
                     memoryLimitBytes_, baselineResidentBytes_, currentBytes, allocator.available,
                     allocator.live_bytes, allocator.heap_bytes);
+                debug::traceResidentMemory("rejection-before-unwind");
             }
 #endif
 			throw QueryMemoryExceededException(memoryLimitMb_, baselineResidentBytes_, currentBytes);

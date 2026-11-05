@@ -72,6 +72,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 2100 ))" >> "$GITHUB_ENV"
+        shell: bash
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -81,6 +88,7 @@ jobs:
         run: pip install conan ninja
 
       - name: Install Project Dependencies
+        timeout-minutes: 20
         run: |
           conan profile detect --force
           conan install . --output-folder=build-tsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
@@ -90,22 +98,37 @@ jobs:
       # required macOS gate without turning unrelated tests into sanitizer noise.
       - name: Configure and build native storage TSan tests
         run: |
-          cmake -S . -B build-tsan -G Ninja \
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B build-tsan -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build-tsan/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=OFF \
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
-          cmake --build build-tsan --target zyx_test_suite
+          python scripts/run_ci_evidence.py --name build --timeout 3600 -- cmake --build build-tsan --target zyx_test_suite
         shell: bash
 
       - name: Run native storage TSan concurrency gates
         run: |
           TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' \
-            ./build-tsan/zyx_test_suite \
+            python scripts/run_ci_evidence.py --name tsan-gate --timeout 1800 --gtest -- ./build-tsan/zyx_test_suite \
               --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied'
         shell: bash
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir build-tsan --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-tsan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14
 
   native-storage-asan-ubsan:
     name: Native storage ASan+UBSan (macOS)
@@ -118,6 +141,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 5100 ))" >> "$GITHUB_ENV"
+        shell: bash
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -127,6 +157,7 @@ jobs:
         run: pip install conan ninja
 
       - name: Install Project Dependencies
+        timeout-minutes: 20
         run: |
           conan profile detect --force
           conan install . --output-folder=build-asan-ubsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
@@ -136,14 +167,18 @@ jobs:
       # ASan does not support leak detection, so do not request it here.
       - name: Configure and build native storage ASan+UBSan tests
         run: |
-          cmake -S . -B build-asan-ubsan -G Ninja \
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B build-asan-ubsan -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build-asan-ubsan/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=OFF \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-          cmake --build build-asan-ubsan --target zyx_test_suite
+          python scripts/run_ci_evidence.py --name build --timeout 4800 -- cmake --build build-asan-ubsan --target zyx_test_suite
+        shell: bash
+
+      - name: Record sanitizer test discovery
+        run: python scripts/run_ci_evidence.py --name discovery --timeout 120 -- ./build-asan-ubsan/zyx_test_suite --gtest_list_tests
         shell: bash
 
       - name: Diagnose concurrent publication with ASan+UBSan
@@ -153,7 +188,7 @@ jobs:
             --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage' \
             | grep -F 'BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
           ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-            python scripts/run_test_process.py --timeout 600 -- ./build-asan-ubsan/zyx_test_suite \
+            python scripts/run_ci_evidence.py --name asan-publication --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
               --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
         shell: bash
 
@@ -161,23 +196,40 @@ jobs:
         continue-on-error: true
         env:
           ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
         run: |
           ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
             --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
             | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
           ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-            python scripts/run_test_process.py --timeout 600 -- ./build-asan-ubsan/zyx_test_suite \
+            python scripts/run_ci_evidence.py --name asan-cold-rss --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
               --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
         shell: bash
 
       - name: Run native storage ASan+UBSan gates
         env:
           ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
         run: |
           ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-            ./build-asan-ubsan/zyx_test_suite \
-              --gtest_filter='NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
+            python scripts/run_ci_evidence.py --name asan-gate --timeout 3600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='ResultPropertyMapAdmissionTest.*:NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
         shell: bash
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir build-asan-ubsan --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-asan-ubsan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14
 
   build:
     name: Build on ${{ matrix.os }}
@@ -204,6 +256,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 21300 ))" >> "$GITHUB_ENV"
+        shell: bash
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -215,8 +274,8 @@ jobs:
       - name: Diagnose fresh string allocations (macOS)
         if: runner.os == 'macOS'
         run: |
-          clang++ -std=c++20 -O0 scripts/diagnose_string_allocations.cpp -o "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
-          "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
+          python scripts/run_ci_evidence.py --name string-probe-build --timeout 300 -- clang++ -std=c++20 -O0 scripts/diagnose_string_allocations.cpp -o "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
+          python scripts/run_ci_evidence.py --name string-allocations --timeout 300 -- "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
 
       - name: Install System Deps (Linux)
         if: runner.os == 'Linux'
@@ -233,10 +292,12 @@ jobs:
         shell: pwsh
 
       - name: Install Project Dependencies (Conan) (Windows)
+        timeout-minutes: 30
         if: runner.os == 'Windows'
         run: pwsh scripts/install_conan_windows.ps1 Debug
 
       - name: Install Project Dependencies (Conan) (Unix)
+        timeout-minutes: 30
         if: runner.os != 'Windows'
         run: |
           conan profile detect
@@ -247,13 +308,13 @@ jobs:
 
       - name: Configure and Build
         run: |
-          cmake -S . -B buildDir -G Ninja \
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B buildDir -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=ON \
             -DZYX_ENABLE_COVERAGE=ON
-          cmake --build buildDir --target zyx_test_suite
+          python scripts/run_ci_evidence.py --name build --timeout 7200 -- cmake --build buildDir --target zyx_test_suite
         shell: bash
         env:
           CC: ${{ matrix.cc || '' }}
@@ -267,8 +328,8 @@ jobs:
         env:
           MSYS_NO_PATHCONV: '1'
         run: |
-          clang-cl /nologo /std:c++20 /EHsc /Od /MDd scripts/diagnose_string_allocations.cpp /FebuildDir/zyx-string-alloc.exe
-          ./buildDir/zyx-string-alloc.exe
+          python scripts/run_ci_evidence.py --name string-probe-build --timeout 300 -- clang-cl /nologo /std:c++20 /EHsc /Od /MDd scripts/diagnose_string_allocations.cpp /FebuildDir/zyx-string-alloc.exe
+          python scripts/run_ci_evidence.py --name string-allocations --timeout 300 -- ./buildDir/zyx-string-alloc.exe
         shell: bash
 
       - name: Prepare Stage 10 evidence directory
@@ -299,19 +360,23 @@ jobs:
           printf 'ZYX_STAGE10_ENDURANCE_REPETITIONS=%s\n' "$repetitions" >> "$GITHUB_ENV"
         shell: bash
 
+      - name: Record enabled test discovery
+        run: python scripts/run_ci_evidence.py --name discovery --timeout 120 -- buildDir/zyx_test_suite --gtest_list_tests
+        shell: bash
+
       # Diagnostics are additional to, and cannot replace, the normal unit gate.
       - name: Diagnose Windows ingest failures
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
-          python scripts/run_test_process.py --timeout 1800 -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverASameOwnerEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
+          python scripts/run_ci_evidence.py --name windows-ingest --timeout 1800 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverASameOwnerEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
         shell: bash
 
       - name: Diagnose Windows plan cache failures
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
-          python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
+          python scripts/run_ci_evidence.py --name windows-plan-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
         shell: bash
 
       # These additional, bounded diagnostics cannot replace the unit gate.
@@ -322,7 +387,7 @@ jobs:
         env:
           ZYX_CI_BUDGET_TRACE: '1'
         run: |
-          python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
+          python scripts/run_ci_evidence.py --name windows-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
         shell: bash
 
       - name: Diagnose macOS materialization budgets
@@ -331,14 +396,14 @@ jobs:
         env:
           ZYX_CI_BUDGET_TRACE: '1'
         run: |
-          python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
+          python scripts/run_ci_evidence.py --name macos-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
         shell: bash
 
       - name: Run Unit Tests
         id: unit_tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
-          python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite
+          python scripts/run_ci_evidence.py --name unit --timeout 3660 -- python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
         shell: bash
 
       # Preserve the original large-scale correctness and recovery contracts as
@@ -347,7 +412,7 @@ jobs:
         if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stress-%p.profraw"
-          python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite
+          python scripts/run_ci_evidence.py --name stress --timeout 3660 -- python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/stress/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/stress/shards"
         shell: bash
 
       # Keep the storage-format cutover visible as an explicit cross-platform
@@ -497,3 +562,19 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
+
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir buildDir --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-${{ matrix.os }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14

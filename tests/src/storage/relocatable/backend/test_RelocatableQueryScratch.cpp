@@ -41,13 +41,16 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchEnforcesDiskFragmentsAndPhysic
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryGuard.hpp"
+#include "graph/debug/ResidentMemoryDiagnostics.hpp"
 TEST_F(RelocatableStorageBackendTest, NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection) {
+    struct FinalRss { ~FinalRss(){graph::debug::traceResidentMemory("after-backend-destruction");} } finalRss;
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
 	graph::query::LogicalReadExecutionOptions reads;reads.bounds.maximum_materialized_bytes=8U*1024U*1024U;
 	graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend),reads);const auto fence=backend->currentNativeLogicalGraphMutationFence();
 	const bool wasEnabled=graph::debug::PerfTrace::isEnabled(),wasCollecting=graph::debug::PerfTrace::areValuesEnabled();
 	struct RestoreTrace{bool enabled,collecting;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(collecting);graph::debug::PerfTrace::setEnabled(enabled);}}restore{wasEnabled,wasCollecting};
 	graph::debug::PerfTrace::setEnabled(true);graph::debug::PerfTrace::setValueCollectionEnabled(true);(void)graph::debug::PerfTrace::snapshotAndReset();
+    graph::debug::traceResidentMemory("before-query");
     if (std::getenv("ZYX_CI_RSS_TRACE")) {
         const auto allocator = graph::debug::captureSanitizerAllocations();
         std::fprintf(stderr, "CI_RSS_BEGIN rss=%zu asan_available=%d live=%zu heap=%zu\n",

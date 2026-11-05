@@ -176,7 +176,9 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
     try:
         for index in range(jobs):
             workdir, temporary_directory = make_isolated_workdir(source_root, shard_root, index)
-            log_path = shard_root / f"shard-{index}.log"
+            log_directory = failure_log_dir if failure_log_dir is not None else shard_root
+            log_directory.mkdir(parents=True, exist_ok=True)
+            log_path = log_directory / f"shard-{index}.log"
             environment = os.environ.copy()
             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
             environment["GTEST_SHARD_INDEX"] = str(index)
@@ -227,7 +229,8 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
                         contents = log_path.read_text(errors="replace")
                         print(contents, file=sys.stderr)
                         if failure_log_dir is not None:
-                            (failure_log_dir / f"shard-{index}.log").write_text(contents)
+                            if log_path.resolve() != (failure_log_dir / f"shard-{index}.log").resolve():
+                                (failure_log_dir / f"shard-{index}.log").write_text(contents)
                     except OSError as error:
                         print(f"Unable to read shard log {log_path}: {error}", file=sys.stderr)
                 if failure_log_dir is not None:
@@ -241,6 +244,19 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
         remaining = terminate_and_reap_processes(processes, reason="runner finalization")
         if remaining and exit_code == 0:
             exit_code = 125
+        retained = failure_log_dir
+        if exit_code != 0 and retained is None:
+            retained = Path(tempfile.mkdtemp(prefix="zyx-retained-shard-logs-"))
+        if retained is not None:
+            retained.mkdir(parents=True, exist_ok=True)
+            for index, process, log_path, _ in processes:
+                if log_path.is_file() and log_path.resolve() != (retained / f"shard-{index}.log").resolve():
+                    shutil.copyfile(log_path, retained / f"shard-{index}.log")
+            (retained / "status.json").write_text(json.dumps({
+                "exit_code": exit_code, "interrupted": interrupted,
+                "shards": [{"index": index, "pid": process.pid, "raw_exit_code": process.poll()}
+                           for index, process, _, _ in processes]}, indent=2) + "\n")
+            print(f"Shard evidence retained at: {retained.resolve()}", flush=True)
         if all(not process_tree_is_active(process) for _, process, _, _ in processes):
             shutil.rmtree(shard_root, ignore_errors=True)
         else:

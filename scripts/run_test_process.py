@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import json
 import os
 import signal
 import subprocess
@@ -371,16 +372,23 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=600.0, help="maximum runtime in seconds")
+    parser.add_argument("--result-file", type=Path, help="retain raw process status including POSIX signals")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="test executable and arguments")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be greater than zero")
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    started = time.time()
     try:
-        return run(command, args.timeout)
+        code = run(command, args.timeout)
     except (OSError, ValueError) as error:
         print(f"Unable to start test process: {error}", file=sys.stderr)
-        return 127
+        code = 127
+    if args.result_file is not None:
+        args.result_file.parent.mkdir(parents=True, exist_ok=True)
+        args.result_file.write_text(json.dumps({'raw_exit_code': code, 'started_at': started,
+            'completed_at': time.time(), 'posix_signal': -code if code < 0 and os.name != 'nt' else None}) + '\n')
+    return code
 
 
 if __name__ == "__main__":

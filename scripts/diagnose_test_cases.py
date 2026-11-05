@@ -2,6 +2,8 @@
 """Run named TEST cases one process at a time to isolate process termination."""
 
 import argparse
+import os
+import hashlib
 import re
 import subprocess
 import sys
@@ -31,6 +33,11 @@ def main():
         print(f'RUN {case}', flush=True)
         command = [sys.executable, str(runner), '--timeout', str(args.timeout), '--',
                    str(args.binary), '--gtest_filter=' + case]
+        if os.environ.get('ZYX_CI_EVIDENCE_DIR'):
+            token = hashlib.sha256(case.encode()).hexdigest()[:16]
+            command = [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
+                       '--name', 'plan-' + token, '--timeout', str(args.timeout), '--gtest', '--',
+                       str(args.binary), '--gtest_filter=' + case]
         status = subprocess.call(command)
         print(f'RESULT {case} exit={status}', flush=True)
         if status:

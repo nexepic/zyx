@@ -257,3 +257,12 @@ def test_linux_group_detection_never_treats_live_member_as_zombie(tmp_path, monk
     (tmp_path / '102' / 'stat').write_text('invalid')
     assert module._linux_group_has_live_members(77)
     assert module._linux_group_has_live_members(999)
+
+@pytest.mark.skipif(os.name == 'nt', reason='parallel shard isolation is POSIX-only')
+def test_shard_timeout_keeps_logs_outside_deleted_workdir(tmp_path):
+    runner = _load_script('run_test_shards.py')
+    logs = tmp_path / 'retained'
+    code = "import time;print('persist-before-timeout',flush=True);time.sleep(60)"
+    assert runner.run_shards([sys.executable, '-c', code], 2, .5, logs) == 124
+    assert len(list(logs.glob('shard-*.log'))) == 2
+    assert all('persist-before-timeout' in p.read_text() for p in logs.glob('*.log'))
