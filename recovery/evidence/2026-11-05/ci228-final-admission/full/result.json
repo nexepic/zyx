@@ -1,0 +1,85 @@
+{
+  "source_commit": "561460b30174e3dbc167f7a87bfceae6e1e7f138",
+  "source_fingerprint": "507c067e1cffdff8d993a419668ea16440ae99984e64b7466acd6a943c96d4fe",
+  "source_files_match": true,
+  "discovered_enabled": 11049,
+  "discovered_disabled": 20,
+  "executed": 11049,
+  "executed_distinct": 11049,
+  "passed": 11049,
+  "failures": [],
+  "skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicates": {},
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "stress_execution_counts": {
+    "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace": 1,
+    "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce": 1,
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": 1,
+    "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories": 1,
+    "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages": 1,
+    "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication": 1
+  },
+  "shard_xml_attributes": {
+    "shard-0.xml": {
+      "tests": "5539",
+      "failures": "0",
+      "disabled": "14",
+      "errors": "0",
+      "time": "1152.652",
+      "timestamp": "2026-11-05T12:37:04.691",
+      "name": "AllTests"
+    },
+    "shard-1.xml": {
+      "tests": "5530",
+      "failures": "0",
+      "disabled": "6",
+      "errors": "0",
+      "time": "1551.387",
+      "timestamp": "2026-11-05T12:37:04.691",
+      "name": "AllTests"
+    }
+  },
+  "runner": {
+    "command": [
+      "/workspace/zyx-ci-fix/buildDir/zyx_test_suite"
+    ],
+    "completed_at_unix_seconds": 1793883776.3215897,
+    "exit_code": 0,
+    "jobs": 2,
+    "launcher_pid": 116311,
+    "run_id": "ci228-result-admission-final-20261105",
+    "started_at_unix_seconds": 1793882224.6636467,
+    "working_directory": "/workspace/zyx-ci-fix"
+  },
+  "coverage_percent": {
+    "lines": 95.85,
+    "functions": 98.15,
+    "regions": 93.89,
+    "branches": 86.89
+  },
+  "coverage_target_met_for_all_metrics": false,
+  "note": "Required unfiltered scripts/run_tests.sh --quick includes all enabled stress cases. Local overall shard timeout2400s; individual query guards unchanged. Linux Clang19 Debug O0 g0 coverage, same-source incremental build, not a clean or native Windows/macOS build."
+}

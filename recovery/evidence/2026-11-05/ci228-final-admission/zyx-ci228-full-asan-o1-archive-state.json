@@ -1,0 +1,21 @@
+{
+  "source_commit": "561460b30174e3dbc167f7a87bfceae6e1e7f138",
+  "baseline_source_commit": "ca9e7e630406a101bc250ab3a629caec3bafa935",
+  "unchanged_project_production_units": 253,
+  "rebuilt_or_reused_identical_source_overrides": [
+    {
+      "object": "/workspace/zyx-ci228-full-asan-o1/final/LogicalPlanReadRuntime.cpp.o",
+      "sha256": "4e2f171d5f66d4f5b7184d09c826c9dac1b328cee6809e22d14127351e593004"
+    }
+  ],
+  "production_source_diff_from_baseline": [
+    "src/query/execution/LogicalPlanReadRuntime.cpp",
+    "src/query/execution/ResultPropertyMapAdmission.hpp",
+    "src/query/execution/read_runtime/PlanInspectionAndBatching.inc",
+    "src/query/execution/read_runtime/RowBindingAndResults.inc"
+  ],
+  "baseline_archive_sha256": "f22bd30055a85dd24ee02844b4a0b3f02c7df53ccb01193cf064dff221c5055d",
+  "current_archive_sha256": "9844b7a75afd00dbb614ddf2b292788db3d0e0bb0a6bfbcc84a6fe6769293a4c",
+  "member_count": 254,
+  "note": "Baseline compile-manifest.json is preserved; this archive-state.json records the subsequent coherent-source incremental replacement. No public or shared production header changed; the new private helper is included only by LogicalPlanReadRuntime."
+}
