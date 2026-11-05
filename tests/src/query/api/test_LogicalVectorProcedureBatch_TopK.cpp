@@ -51,11 +51,13 @@ namespace graph::query {
 		EXPECT_EQ(backend->state->property_column_ids.back(), (std::vector<uint64_t>{2U}));
 		EXPECT_EQ(backend->state->node_batch_reads, 0U);
 
-        // With the converted query still live, only one row frame remains;
-        // omitting its charge would incorrectly admit the one-row heap.
+        // The synchronous search request has already been retired. Its hit
+        // array remains live: leave room only for an empty row header, less
+        // than a bound row's allocated value node. Ignoring the hit array's
+        // retained charge would incorrectly admit the one-row heap.
         options.bounds.maximum_materialized_bytes =
             backend->state->search_result.hits.size() * sizeof(storage::LogicalGraphVectorSearchHit) +
-            queryCoordinates.size() * sizeof(float) + sizeof(execution::LogicalPlanReadRow);
+            sizeof(execution::LogicalPlanReadRow);
 		EXPECT_THROW(static_cast<void>(execute(logical::LogicalLimit(
 				std::make_unique<logical::LogicalProject>(
 						std::make_unique<logical::LogicalSort>(topKSearch(),
