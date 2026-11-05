@@ -1,0 +1,48 @@
+{
+  "source_cpp_commit": "27f758f56958fb2d7cdfc14409b1aa613921d4ae",
+  "runtime_launcher_commit": "7f0009825f89801a5718efc1c59b1ad66cc4dcf0",
+  "passed": 11049,
+  "failed": [],
+  "skipped": [],
+  "discovered_enabled": 11049,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "missing": [],
+  "extra": [],
+  "duplicates": {},
+  "stress_execution_counts": {
+    "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace": 1,
+    "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce": 1,
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": 1,
+    "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories": 1,
+    "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages": 1,
+    "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication": 1
+  },
+  "coverage_percent": {
+    "regions": 93.77,
+    "functions": 98.12,
+    "lines": 95.82,
+    "branches": 86.88
+  },
+  "note": "Negative/positive evidence preserved before adding the independent test-harness POSIX fork safeguard. Later CI-only Python profile-path/test-window changes were separately tested; compiled C++ inputs match the recorded source commit."
+}
