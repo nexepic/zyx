@@ -629,7 +629,11 @@
 				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
 									   "logical-plan result row size overflowed");
 			}
-			return bytes;
+			const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            const size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                detail::freshResultEntryMapHeapUpper(entries, checkpoint),
+                "logical-plan result map allocation overflowed");
+            return (std::max)(bytes, physical);
 		}
 
 		template<typename Entity>
@@ -778,7 +782,11 @@
 				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
 									   "logical-plan result row size overflowed");
 			}
-			return bytes;
+			const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            const size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                detail::freshResultEntryMapHeapUpper(entries, checkpoint),
+                "logical-plan result map allocation overflowed");
+            return (std::max)(bytes, physical);
 		}
 
         // A compact internal cache is not the public unordered result map.

@@ -28,6 +28,7 @@
  **/
 
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "ResultPropertyMapAdmission.hpp"
 #include "query/execution/GuardedIdGather.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
 #include "query/execution/BoundProjectionReferences.hpp"
