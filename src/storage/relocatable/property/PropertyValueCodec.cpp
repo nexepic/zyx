@@ -292,18 +292,11 @@ namespace graph::storage {
 			}, value.getVariant());
 		}
 
-		void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
-			if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
-			std::vector<std::byte> payload;
-			encodePayload(payload, value, depth);
-			requireU32Size(payload.size(), "Property value payload is too large");
-			appendU8(bytes, static_cast<uint8_t>(kindFor(value)));
-			appendU8(bytes, 0U);
-			appendU32(bytes, static_cast<uint32_t>(payload.size()));
-			appendBytes(bytes, payload);
-		}
-
-		void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+        // Write nested payloads directly into the caller's buffer. Both
+        // allocator variants share prefix rollback; a per-value temporary
+        // would allocate/copy even an eight-byte integer at every spill pass.
+        template<class Bytes>
+        void encodeValueInPlace(Bytes &bytes, const PropertyValue &value, uint32_t depth) {
             if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
             const size_t start = bytes.size();
             try {
@@ -315,6 +308,13 @@ namespace graph::storage {
                 requireU32Size(payloadBytes, "Property value payload is too large");
                 LittleEndianCodec::writeU32(bytes, start + 2U, static_cast<uint32_t>(payloadBytes));
             } catch (...) { bytes.resize(start); throw; }
+        }
+
+        void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+            encodeValueInPlace(bytes, value, depth);
+        }
+        void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+            encodeValueInPlace(bytes, value, depth);
         }
 
         using query::execution::detail::addStandardHeapBytes;
