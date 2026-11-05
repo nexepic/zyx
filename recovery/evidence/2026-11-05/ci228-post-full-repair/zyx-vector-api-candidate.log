@@ -1,0 +1,303 @@
+Running main() from /workspace/zyx-sysroot/usr/src/googletest/googletest/src/gtest_main.cc
+[==========] Running 144 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 64 tests from QueryEngineLogicalBackendBoundaryTest
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeValidatesBufferedSearchRowsAndSortKeys
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeValidatesBufferedSearchRowsAndSortKeys (1 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRestoresSearchOrderAfterSortedNodeBatches
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRestoresSearchOrderAfterSortedNodeBatches (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureMaterializesLargeHitSetsInBoundedNodeBatches
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureMaterializesLargeHitSetsInBoundedNodeBatches (94 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureEnforcesMaterializedByteBoundForCompleteNodes
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureEnforcesMaterializedByteBoundForCompleteNodes (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureAvoidsCompleteNodeReadsForScalarProjection
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureAvoidsCompleteNodeReadsForScalarProjection (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.RejectsANullLogicalBackendAtConstruction
+[       OK ] QueryEngineLogicalBackendBoundaryTest.RejectsANullLogicalBackendAtConstruction (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.UsesLabelCostsForJoinAndFallsBackOnUnavailableOrInvalidEstimates
+[       OK ] QueryEngineLogicalBackendBoundaryTest.UsesLabelCostsForJoinAndFallsBackOnUnavailableOrInvalidEstimates (4 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.KeepsFilteredJoinOrderWhenPropertySelectivityIsUnknown
+[       OK ] QueryEngineLogicalBackendBoundaryTest.KeepsFilteredJoinOrderWhenPropertySelectivityIsUnknown (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ReadsBoundedNativeCardinalityDuringLogicalPlanOptimization
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ReadsBoundedNativeCardinalityDuringLogicalPlanOptimization (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.UsesCatalogAdjacencyCardinalityToOrderCartesianTraversalInput
+[       OK ] QueryEngineLogicalBackendBoundaryTest.UsesCatalogAdjacencyCardinalityToOrderCartesianTraversalInput (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.FallsBackSafelyWhenOptionalCardinalityStatisticsAreUnavailableOrMalformed
+[       OK ] QueryEngineLogicalBackendBoundaryTest.FallsBackSafelyWhenOptionalCardinalityStatisticsAreUnavailableOrMalformed (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.IdentifiesItsReadBackendAndAcceptsAnEmptyTransactionOverlayPlan
+[       OK ] QueryEngineLogicalBackendBoundaryTest.IdentifiesItsReadBackendAndAcceptsAnEmptyTransactionOverlayPlan (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ClearsCachedReadPlansWhenBuildingSchemaMutationPlans
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ClearsCachedReadPlansWhenBuildingSchemaMutationPlans (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.RejectsIncompleteExecutionBackendBoundariesBeforeOpeningASnapshot
+[       OK ] QueryEngineLogicalBackendBoundaryTest.RejectsIncompleteExecutionBackendBoundariesBeforeOpeningASnapshot (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.EnforcesExecutionModesForPrebuiltLogicalPlans
+[       OK ] QueryEngineLogicalBackendBoundaryTest.EnforcesExecutionModesForPrebuiltLogicalPlans (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ValidatesAndExecutesObservabilityPlansWithoutStorageSideEffects
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ValidatesAndExecutesObservabilityPlansWithoutStorageSideEffects (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ExplainRejectsMalformedAndOverBoundPrebuiltPlanTrees
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ExplainRejectsMalformedAndOverBoundPrebuiltPlanTrees (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ExplainCapsRenderedIndentForDeepPrebuiltPlanTrees
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ExplainCapsRenderedIndentForDeepPrebuiltPlanTrees (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.RejectsUnknownQueryLanguageBeforeParsing
+[       OK ] QueryEngineLogicalBackendBoundaryTest.RejectsUnknownQueryLanguageBeforeParsing (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ExplainIsSnapshotFreeAndMayInspectAWriteInReadOnlyMode
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ExplainIsSnapshotFreeAndMayInspectAWriteInReadOnlyMode (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.AdministrationMutationWaitsForTheCompleteCypherResultPipelineBeforePublishing
+[       OK ] QueryEngineLogicalBackendBoundaryTest.AdministrationMutationWaitsForTheCompleteCypherResultPipelineBeforePublishing (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget
+[       OK ] QueryEngineLogicalBackendBoundaryTest.AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.AdministrationMutationChecksAnExpiredGuardImmediatelyBeforePublishing
+[       OK ] QueryEngineLogicalBackendBoundaryTest.AdministrationMutationChecksAnExpiredGuardImmediatelyBeforePublishing (75 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.AdministrationObservabilityProceduresExcludeThemselvesAndCommitOnlyAfterTheirResult
+[       OK ] QueryEngineLogicalBackendBoundaryTest.AdministrationObservabilityProceduresExcludeThemselvesAndCommitOnlyAfterTheirResult (1 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.BytesFunctionAcceptsHexListsAndBinaryParameters
+[       OK ] QueryEngineLogicalBackendBoundaryTest.BytesFunctionAcceptsHexListsAndBinaryParameters (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.BytesFunctionRejectsMalformedInputs
+[       OK ] QueryEngineLogicalBackendBoundaryTest.BytesFunctionRejectsMalformedInputs (1 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.EntityIntrospectionListsRespectTheNativeResultBound
+[       OK ] QueryEngineLogicalBackendBoundaryTest.EntityIntrospectionListsRespectTheNativeResultBound (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ScalarFunctionsRespectTheNativeListAndArgumentBounds
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ScalarFunctionsRespectTheNativeListAndArgumentBounds (4 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerReadPlanAndAddsOneSummaryRow
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerReadPlanAndAddsOneSummaryRow (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerCreatePlanThroughOneAtomicBatch
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerCreatePlanThroughOneAtomicBatch (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ProfileUsesTheLogicalTransactionOverlayInsteadOfTheBaseBackend
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ProfileUsesTheLogicalTransactionOverlayInsteadOfTheBaseBackend (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.LogicalVectorBoundaryDefaultsRemainExplicitAndFailClosed
+[       OK ] QueryEngineLogicalBackendBoundaryTest.LogicalVectorBoundaryDefaultsRemainExplicitAndFailClosed (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingSupportsTheBoundedScalarOutputPipeline
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingSupportsTheBoundedScalarOutputPipeline (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingDirectResultSharesMaterializationBudget
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingDirectResultSharesMaterializationBudget (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingRejectsReadOnlyAndUnboundedRequestsBeforeMaintenance
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingRejectsReadOnlyAndUnboundedRequestsBeforeMaintenance (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TimedOutVectorTrainingDoesNotStartMaintenance
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TimedOutVectorTrainingDoesNotStartMaintenance (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingPropagatesCancellationIntoMaintenanceWork
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingPropagatesCancellationIntoMaintenanceWork (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingDoesNotReportTimeoutAfterSuccessfulMaintenance
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingDoesNotReportTimeoutAfterSuccessfulMaintenance (20 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingChecksTheGuardImmediatelyBeforePublication
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorTrainingChecksTheGuardImmediatelyBeforePublication (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ShortestPathProcedureUsesTheLogicalReadSnapshot
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ShortestPathProcedureUsesTheLogicalReadSnapshot (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ShortestPathProcedureRejectsNonMonotonicAdjacencyPages
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ShortestPathProcedureRejectsNonMonotonicAdjacencyPages (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ShortestPathRejectsInvalidReadBudgetsBeforeTraversal
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ShortestPathRejectsInvalidReadBudgetsBeforeTraversal (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayUsesOnlyManifestApprovedPinnedProcedures
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayUsesOnlyManifestApprovedPinnedProcedures (1 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayRejectsEveryAutocommitOnlyProcedureBeforeBackendAccess
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayRejectsEveryAutocommitOnlyProcedureBeforeBackendAccess (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.EveryNativeProcedureTimesOutBeforeBackendAccess
+[       OK ] QueryEngineLogicalBackendBoundaryTest.EveryNativeProcedureTimesOutBeforeBackendAccess (48 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.NativeProcedureEntryChecksAnExpiredGuardWithoutPeriodicPriming
+[       OK ] QueryEngineLogicalBackendBoundaryTest.NativeProcedureEntryChecksAnExpiredGuardWithoutPeriodicPriming (50 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayProcedureTimesOutBeforeOpeningItsSnapshot
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayProcedureTimesOutBeforeOpeningItsSnapshot (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayVectorProcedureTimesOutBeforeOpeningItsSnapshot
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TransactionOverlayVectorProcedureTimesOutBeforeOpeningItsSnapshot (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedurePropagatesCancellationIntoTheSearchWork
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedurePropagatesCancellationIntoTheSearchWork (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TransactionLocalGdsProcedureTimesOutBeforeOpeningItsSnapshot
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TransactionLocalGdsProcedureTimesOutBeforeOpeningItsSnapshot (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.GdsProjectionCancellationDoesNotPublishAPartialCatalogEntry
+[       OK ] QueryEngineLogicalBackendBoundaryTest.GdsProjectionCancellationDoesNotPublishAPartialCatalogEntry (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.GdsProjectionChecksAnExpiredGuardImmediatelyBeforePublishingItsCatalogMutation
+[       OK ] QueryEngineLogicalBackendBoundaryTest.GdsProjectionChecksAnExpiredGuardImmediatelyBeforePublishingItsCatalogMutation (75 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TimedOutGdsCatalogDeletionLeavesTheProjectionVisible
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TimedOutGdsCatalogDeletionLeavesTheProjectionVisible (4 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.FailedGdsCatalogResultPipelinesDoNotPublishMutations
+[       OK ] QueryEngineLogicalBackendBoundaryTest.FailedGdsCatalogResultPipelinesDoNotPublishMutations (1 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.TimedOutGdsAlgorithmLeavesItsProjectionReusable
+[       OK ] QueryEngineLogicalBackendBoundaryTest.TimedOutGdsAlgorithmLeavesItsProjectionReusable (4 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.GdsProcedureRowsRespectTheConfiguredResultBound
+[       OK ] QueryEngineLogicalBackendBoundaryTest.GdsProcedureRowsRespectTheConfiguredResultBound (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorSearchRejectsInvalidArgumentsAndBrokenBackendResults
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorSearchRejectsInvalidArgumentsAndBrokenBackendResults (2 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorSearchValidatesOwnerKeyedPropertiesAtResultMaterialization
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorSearchValidatesOwnerKeyedPropertiesAtResultMaterialization (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsMalformedAndUnavailableBoundaries
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsMalformedAndUnavailableBoundaries (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ValidatesScalarGdsArgumentsBeforeCatalogLookup
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ValidatesScalarGdsArgumentsBeforeCatalogLookup (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget
+[       OK ] QueryEngineLogicalBackendBoundaryTest.GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsMalformedOutputOperators
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsMalformedOutputOperators (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsInvalidSearchBoundsAndHits
+[       OK ] QueryEngineLogicalBackendBoundaryTest.VectorProcedureRuntimeRejectsInvalidSearchBoundsAndHits (0 ms)
+[----------] 64 tests from QueryEngineLogicalBackendBoundaryTest (433 ms total)
+
+[----------] 78 tests from LogicalVectorPropertyBatchTest
+[ RUN      ] LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget
+[       OK ] LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.RejectsQueryVectorCopyBeforeSearchWhenItExceedsMaterializedBound
+[       OK ] LogicalVectorPropertyBatchTest.RejectsQueryVectorCopyBeforeSearchWhenItExceedsMaterializedBound (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches
+[       OK ] LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches (167 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathDirectResultSharesBufferedOutputBudget
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathDirectResultSharesBufferedOutputBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget
+[       OK ] LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathLimitMaterializesOnlyRequestedNodeAndHandlesSelfPath
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathLimitMaterializesOnlyRequestedNodeAndHandlesSelfPath (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompletePropertyBatchAlsoSuppliesLabelsWithoutSecondRead
+[       OK ] LogicalVectorPropertyBatchTest.CompletePropertyBatchAlsoSuppliesLabelsWithoutSecondRead (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.MetadataBatchRejectsMalformedAndOversizedLabels
+[       OK ] LogicalVectorPropertyBatchTest.MetadataBatchRejectsMalformedAndOversizedLabels (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.SelectedProcedureColumnsRequireSourceAdmissionBeforeReading
+[       OK ] LogicalVectorPropertyBatchTest.SelectedProcedureColumnsRequireSourceAdmissionBeforeReading (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ProcedureFixtureAdmitsEdgePayloadBeforeCopy
+[       OK ] LogicalVectorPropertyBatchTest.ProcedureFixtureAdmitsEdgePayloadBeforeCopy (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesSelectedProjectionAndRestoresScoreOrderWithMissingFields
+[       OK ] LogicalVectorPropertyBatchTest.BatchesSelectedProjectionAndRestoresScoreOrderWithMissingFields (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder
+[       OK ] LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder (1 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing
+[       OK ] LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesFilterAndReusesSurvivingFields
+[       OK ] LogicalVectorPropertyBatchTest.BatchesFilterAndReusesSurvivingFields (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteBatchReplacesEarlierSelectedMissingFieldCache
+[       OK ] LogicalVectorPropertyBatchTest.CompleteBatchReplacesEarlierSelectedMissingFieldCache (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches
+[       OK ] LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches (160 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteBatchRejectsInvalidPropertiesAndResourceBounds
+[       OK ] LogicalVectorPropertyBatchTest.CompleteBatchRejectsInvalidPropertiesAndResourceBounds (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.StreamsFilterInBoundedBatchesAndReusesSurvivingProperties
+[       OK ] LogicalVectorPropertyBatchTest.StreamsFilterInBoundedBatchesAndReusesSurvivingProperties (5 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ProcedureArgumentViewReferencesLargeDirectAndBoundValues
+[       OK ] LogicalVectorPropertyBatchTest.ProcedureArgumentViewReferencesLargeDirectAndBoundValues (10 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ReleasesConvertedQueryVectorBeforeResultPublication
+[       OK ] LogicalVectorPropertyBatchTest.ReleasesConvertedQueryVectorBeforeResultPublication (1 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathBfsStateObeysMaterializedByteBudget
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathBfsStateObeysMaterializedByteBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.GdsDijkstraPipelineRetainsPathBytesDuringResultPublication
+[       OK ] LogicalVectorPropertyBatchTest.GdsDijkstraPipelineRetainsPathBytesDuringResultPublication (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.GdsCatalogListSharesBufferedRowsAndRetainedResultBudget
+[       OK ] LogicalVectorPropertyBatchTest.GdsCatalogListSharesBufferedRowsAndRetainedResultBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression
+[       OK ] LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression (2 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry
+[       OK ] LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry (1 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.RejectsMalformedColumnsAndOversizedSelectedValues
+[       OK ] LogicalVectorPropertyBatchTest.RejectsMalformedColumnsAndOversizedSelectedValues (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.SelectedSourceRejectsBeforeCopyAndRetriesAfterCancellationOrPressure
+[       OK ] LogicalVectorPropertyBatchTest.SelectedSourceRejectsBeforeCopyAndRetriesAfterCancellationOrPressure (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ProjectionAliasesKeepOriginalScopeAndIndependentPayloads
+[       OK ] LogicalVectorPropertyBatchTest.ProjectionAliasesKeepOriginalScopeAndIndependentPayloads (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder
+[       OK ] LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry
+[       OK ] LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.SelectedCacheDoesNotReplaceCompleteMapOrNodeOutput
+[       OK ] LogicalVectorPropertyBatchTest.SelectedCacheDoesNotReplaceCompleteMapOrNodeOutput (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.MaterializesRepeatedNodeOutputsWithCapacityAccountedGatherBuffers
+[       OK ] LogicalVectorPropertyBatchTest.MaterializesRepeatedNodeOutputsWithCapacityAccountedGatherBuffers (139 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.StreamsSelectedProjectionAcrossBoundedHitBatches
+[       OK ] LogicalVectorPropertyBatchTest.StreamsSelectedProjectionAcrossBoundedHitBatches (63 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.SkipAndLimitBeforeProjectReadOnlyRetainedRows
+[       OK ] LogicalVectorPropertyBatchTest.SkipAndLimitBeforeProjectReadOnlyRetainedRows (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ValidatesNegativeWindowEvenWhenSearchReturnsNoHits
+[       OK ] LogicalVectorPropertyBatchTest.ValidatesNegativeWindowEvenWhenSearchReturnsNoHits (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.EmptyVectorProcedureResultChargesOutputColumnStorage
+[       OK ] LogicalVectorPropertyBatchTest.EmptyVectorProcedureResultChargesOutputColumnStorage (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.DirectVectorResultSharesBufferedRowsAndRetainedResultBudget
+[       OK ] LogicalVectorPropertyBatchTest.DirectVectorResultSharesBufferedRowsAndRetainedResultBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes
+[       OK ] LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathScalarOutputSkipsFullNodesUnderSmallByteBound
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathScalarOutputSkipsFullNodesUnderSmallByteBound (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ShortestPathProjectedResultCountsLivePathIds
+[       OK ] LogicalVectorPropertyBatchTest.ShortestPathProjectedResultCountsLivePathIds (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.GdsPageRankPipelineSharesAlgorithmRowsAndQueryResultBudget
+[       OK ] LogicalVectorPropertyBatchTest.GdsPageRankPipelineSharesAlgorithmRowsAndQueryResultBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.GdsPageRankAndWccProceduresForwardMaterializedByteBudget
+[       OK ] LogicalVectorPropertyBatchTest.GdsPageRankAndWccProceduresForwardMaterializedByteBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting
+[       OK ] LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ScalarHeapProjectionSharesRetainedResultBudget
+[       OK ] LogicalVectorPropertyBatchTest.ScalarHeapProjectionSharesRetainedResultBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound
+[       OK ] LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication
+[       OK ] LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors
+[       OK ] LogicalVectorPropertyBatchTest.CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesCompleteExpressionsForBufferedAndStreamingProjection
+[       OK ] LogicalVectorPropertyBatchTest.BatchesCompleteExpressionsForBufferedAndStreamingProjection (2 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ProcedureProjectionReadsOnlySelectedColumnsMissingFromFilterCache
+[       OK ] LogicalVectorPropertyBatchTest.ProcedureProjectionReadsOnlySelectedColumnsMissingFromFilterCache (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CarriesSelectedFieldsAcrossEntityRefRenaming
+[       OK ] LogicalVectorPropertyBatchTest.CarriesSelectedFieldsAcrossEntityRefRenaming (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesOnlyPrefixNeededForProjectSkipLimit
+[       OK ] LogicalVectorPropertyBatchTest.BatchesOnlyPrefixNeededForProjectSkipLimit (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds
+[       OK ] LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortSkipLimitPipeline
+[       OK ] LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortSkipLimitPipeline (49 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKFilterReadsProjectedEntityAliasAfterItsBinding
+[       OK ] LogicalVectorPropertyBatchTest.TopKFilterReadsProjectedEntityAliasAfterItsBinding (37 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.DistinctBeforeLimitKeepsFullSortedCandidateSemantics
+[       OK ] LogicalVectorPropertyBatchTest.DistinctBeforeLimitKeepsFullSortedCandidateSemantics (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenDistinctSortAndProjectionShareAnExpression
+[       OK ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenDistinctSortAndProjectionShareAnExpression (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.KeepsFilterAfterSkipSemanticsInSortWindowPipeline
+[       OK ] LogicalVectorPropertyBatchTest.KeepsFilterAfterSkipSemanticsInSortWindowPipeline (1 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BufferedSortPreservesStableTiesMultiKeyDirectionAndNulls
+[       OK ] LogicalVectorPropertyBatchTest.BufferedSortPreservesStableTiesMultiKeyDirectionAndNulls (7 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKComputedKeyReleasesUnreadSuffixAndPreservesWindowOrder
+[       OK ] LogicalVectorPropertyBatchTest.TopKComputedKeyReleasesUnreadSuffixAndPreservesWindowOrder (6 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BatchesFilterDistinctSkipLimitAcrossHitBoundaryAndStopsAtLimit
+[       OK ] LogicalVectorPropertyBatchTest.BatchesFilterDistinctSkipLimitAcrossHitBoundaryAndStopsAtLimit (14 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKAllFilteredRowsStillChargesOutputColumnStorage
+[       OK ] LogicalVectorPropertyBatchTest.TopKAllFilteredRowsStillChargesOutputColumnStorage (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget
+[       OK ] LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesExpandableTopKWhenFilterFollowsSkipBeforeLimit
+[       OK ] LogicalVectorPropertyBatchTest.UsesExpandableTopKWhenFilterFollowsSkipBeforeLimit (2 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKPrefetchesFilterPropertyThroughProjectedEntityAlias
+[       OK ] LogicalVectorPropertyBatchTest.TopKPrefetchesFilterPropertyThroughProjectedEntityAlias (38 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortDistinctSkipLimit
+[       OK ] LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortDistinctSkipLimit (1 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.BufferedSortChargesHeapKeysTogetherWithRowsAndCanRetry
+[       OK ] LogicalVectorPropertyBatchTest.BufferedSortChargesHeapKeysTogetherWithRowsAndCanRetry (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKHeapPayloadBackpressurePreservesStableTieWindowAcrossBatches
+[       OK ] LogicalVectorPropertyBatchTest.TopKHeapPayloadBackpressurePreservesStableTieWindowAcrossBatches (4 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.CompleteBatchCacheSurvivesFilterSortAndProjection
+[       OK ] LogicalVectorPropertyBatchTest.CompleteBatchCacheSurvivesFilterSortAndProjection (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ReusesMetadataAcrossEntityRenamingFilterAndSort
+[       OK ] LogicalVectorPropertyBatchTest.ReusesMetadataAcrossEntityRenamingFilterAndSort (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ReusesSortPropertiesForFollowingProjection
+[       OK ] LogicalVectorPropertyBatchTest.ReusesSortPropertiesForFollowingProjection (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterPrecedesSkipAndLimitAfterSort
+[       OK ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterPrecedesSkipAndLimitAfterSort (30 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow
+[       OK ] LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKPreservesFiltersOnBothSidesOfEntityProjection
+[       OK ] LogicalVectorPropertyBatchTest.TopKPreservesFiltersOnBothSidesOfEntityProjection (48 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.DistinctTopKFallsBackWhenSortKeyIsNotProjected
+[       OK ] LogicalVectorPropertyBatchTest.DistinctTopKFallsBackWhenSortKeyIsNotProjected (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip
+[       OK ] LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.TopKHeapAndNextHeapPayloadShareAllowanceAndRetryCleanly
+[       OK ] LogicalVectorPropertyBatchTest.TopKHeapAndNextHeapPayloadShareAllowanceAndRetryCleanly (0 ms)
+[ RUN      ] LogicalVectorPropertyBatchTest.PreservesDistinctProjectionStateAcrossHitBatches
+[       OK ] LogicalVectorPropertyBatchTest.PreservesDistinctProjectionStateAcrossHitBatches (68 ms)
+[----------] 78 tests from LogicalVectorPropertyBatchTest (890 ms total)
+
+[----------] 2 tests from ResultPropertyMapAdmissionTest
+[ RUN      ] ResultPropertyMapAdmissionTest.FreshNumericMapAdmitsObservedBucketAndNodeRequests
+[       OK ] ResultPropertyMapAdmissionTest.FreshNumericMapAdmitsObservedBucketAndNodeRequests (0 ms)
+[ RUN      ] ResultPropertyMapAdmissionTest.CancellationLeavesSourceAndAllocatorUntouched
+[       OK ] ResultPropertyMapAdmissionTest.CancellationLeavesSourceAndAllocatorUntouched (0 ms)
+[----------] 2 tests from ResultPropertyMapAdmissionTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 144 tests from 3 test suites ran. (1324 ms total)
+[  PASSED  ] 144 tests.

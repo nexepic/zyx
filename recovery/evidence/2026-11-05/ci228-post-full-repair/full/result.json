@@ -1,0 +1,67 @@
+{
+  "source_commit": "ca9e7e630406a101bc250ab3a629caec3bafa935",
+  "source_fingerprint": "f579d38a4b905273ec2cfdc088b8e36fe86d1f50e97929db15a46afae2926d7b",
+  "source_files_match": true,
+  "enabled_discovered": 11046,
+  "disabled_discovered": 20,
+  "executed": 11046,
+  "executed_distinct": 11046,
+  "passed": 11045,
+  "failed": 1,
+  "skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicate_count": 0,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "failures": [
+    {
+      "name": "LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortSkipLimitPipeline",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp:63\nExpected: static_cast<void>(execute(logical::LogicalLimit( std::make_unique<logical::LogicalProject>( std::make_unique<logical::LogicalSort>(topKSearch(), std::vector<logical::LogicalSortItem>{{rank, true}}), std::vector<logical::LogicalProjectItem>{{tag, \"tag\"}}), 1))) throws an exception of type std::runtime_error.\n  Actual: it throws nothing.\n"
+      ]
+    }
+  ],
+  "shard_xml_attributes": {
+    "shard-0.xml": {
+      "tests": "5537",
+      "failures": "1",
+      "disabled": "14",
+      "errors": "0",
+      "time": "1742.78",
+      "timestamp": "2026-11-05T11:28:26.739",
+      "name": "AllTests"
+    },
+    "shard-1.xml": {
+      "tests": "5529",
+      "failures": "0",
+      "disabled": "6",
+      "errors": "0",
+      "time": "1434.361",
+      "timestamp": "2026-11-05T11:28:26.738",
+      "name": "AllTests"
+    }
+  },
+  "xml_note": "GTEST_OUTPUT directory selected the same GoogleTest basename for both processes. The completed shard-1 XML was copied before shard-0 replaced that file; both original complete documents are retained under canonical names. No test execution was interrupted or repeated.",
+  "coverage": "not generated: unfiltered required quick exited 1 on one real assertion; no timeout; local overall shard guard explicitly 2400s, individual query guards unchanged"
+}
