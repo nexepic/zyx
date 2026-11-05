@@ -1311,7 +1311,18 @@
                         // Direct cells do not allocate a rectangular value matrix.
                         propertyReadBytes.set(checkedSizeAdd(idStorageBytes,
                             keys.capacity() * sizeof(std::string_view), "Property cell gather overflowed"));
+                        MaterializedByteReservation columnMetadata(&state.shared.materialized_budget);
+                        size_t columnMetadataUpper = 0U;
+                        bool columnMetadataAdmitted = false;
+                        const auto admitColumnMetadata = [&] {
+                            if (columnMetadataAdmitted) return;
+                            if (columnMetadata.wouldExceed(columnMetadataUpper))
+                                throw PrefetchBytePressure{__LINE__};
+                            columnMetadata.set(columnMetadataUpper);
+                            columnMetadataAdmitted = true;
+                        };
 						const std::function<void(size_t)> admitProperty = [&](size_t bytes) {
+                            admitColumnMetadata();
 							const size_t next = checkedSizeAdd(propertyReadBytes.bytes(), bytes,
 															   "logical-plan Property source size overflowed");
 							if (propertyReadBytes.wouldExceed(next))
@@ -1445,6 +1456,34 @@
                             }
                             continue;
                         }
+                        const bool borrowColumns = borrowRepeatedNodeColumns && groups.size() == 1U &&
+                            metadataGroups.empty() && completeEntityVariables.empty() && edgeIds.empty() &&
+                            !nodeIds.empty() && nodeIds.size() < rows.size();
+                        if (!borrowColumns) {
+                            // Reserve destination nodes before the first payload admission.
+                            // Malformed producers that return without admission still have
+                            // their shape checked before any pressure-driven subdivision.
+                            for (const auto &row : rows.values()) {
+                                const auto binding = row.values.find(group.variable);
+                                if (binding == row.values.end() ||
+                                    !std::holds_alternative<storage::EntityRef>(binding->second)) continue;
+                                bool newAliasCharged = false;
+                                for (const auto &key : group.keys) {
+                                    size_t bytes = cacheMetadataBytes(row.property_cache, group.variable, key);
+                                    if (!row.property_cache.contains(group.variable)) {
+                                        using Cache = std::remove_cvref_t<decltype(row.property_cache)>;
+                                        const size_t aliasBytes = checkedSizeAdd(detail::executionBindingNodeBytes<Cache>(),
+                                            (std::max)(group.variable.size(), utils::detail::standardFreshStringHeapUpper(group.variable.size())),
+                                            "Property column cache alias overflowed");
+                                        if (newAliasCharged) bytes -= aliasBytes;
+                                        newAliasCharged = true;
+                                    }
+                                    columnMetadataUpper = checkedSizeAdd(columnMetadataUpper, bytes,
+                                        "Property column destination metadata overflowed");
+                                }
+                            }
+                        }
+                        columnMetadataAdmitted = false;
 						propertyReadBytes.set(columnStructures);
 						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
 										   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keys, admitProperty);
@@ -1463,6 +1502,7 @@
 						};
 						validateColumns(nodeIds, nodeColumns);
 						validateColumns(edgeIds, edgeColumns);
+                        admitColumnMetadata();
 						const auto columnPayloadBytes = [&](const auto &columns, const char *message) {
 							size_t bytes = 0U;
 							for (const auto &column: columns) {
@@ -1542,26 +1582,38 @@
 									const size_t ordinal = static_cast<size_t>(position - ids.begin());
 									for (size_t column = 0U; column < group.keys.size(); ++column) {
 										if (lastRow[ordinal] == rowIndex) {
-											const size_t previous = propertyReadBytes.bytes();
 											const size_t transferred =
 													property_utils::getPropertyValueSize(columns[column][ordinal]);
-											propertyReadBytes.set(previous - transferred);
+                                            const size_t metadata = cacheMetadataBytes(row.property_cache, group.variable, group.keys[column]);
+                                            bufferedRowsBytes.absorb(columnMetadata.splitOff(metadata));
+                                            bufferedRowsBytes.absorb(propertyReadBytes.splitOff(transferred));
 											try {
 												putCacheValue(row.property_cache, group.variable, group.keys[column],
-															  std::move(columns[column][ordinal]));
+															  std::move(columns[column][ordinal]),
+                                                        checkedSizeAdd(transferred, metadata, "Property column credit overflowed"));
 											} catch (...) {
-												propertyReadBytes.set(previous);
+                                                propertyReadBytes.absorb(bufferedRowsBytes.splitOff(transferred));
+                                                columnMetadata.absorb(bufferedRowsBytes.splitOff(metadata));
 												throw;
 											}
 										} else {
-											putCacheValue(row.property_cache, group.variable, group.keys[column],
-														  std::as_const(columns[column][ordinal]));
+                                            const size_t metadata = cacheMetadataBytes(row.property_cache, group.variable, group.keys[column]);
+                                            bufferedRowsBytes.absorb(columnMetadata.splitOff(metadata));
+                                            try {
+                                                putCacheValue(row.property_cache, group.variable, group.keys[column],
+                                                    std::as_const(columns[column][ordinal]), metadata);
+                                            } catch (...) {
+                                                columnMetadata.absorb(bufferedRowsBytes.splitOff(metadata));
+                                                throw;
+                                            }
 										}
 									}
 								}
 							};
 							fill(false, nodeIds, nodeColumns);
 							fill(true, edgeIds, edgeColumns);
+                            if (columnMetadata.bytes() != 0U)
+                                throw std::logic_error("Property column destination metadata was not transferred");
 							// The output rows now own the selected values. Drop the temporary
 							// column matrices and gather vectors before charging downstream row
 							// enrichment; retaining their empty/moved-from slots would inflate the
