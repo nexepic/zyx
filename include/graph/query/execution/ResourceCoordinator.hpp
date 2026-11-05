@@ -133,10 +133,10 @@ public:
 	~ResourceAccount() {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
         if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
-            size_t used, peak;
-            { std::lock_guard lock(database_.process_.mutex_); used = used_; peak = ci_peak_; }
-            ci_trace_.summary(used, peak, maximum_);
-        }
+            size_t used;
+            { std::lock_guard lock(database_.process_.mutex_); used = used_; }
+            ciTrace().summary(used, 0U, maximum_);
+        } else ciTrace().discard();
 #endif
 		if (kind_ == static_cast<size_t>(ResourceClass::RCK_QUERY)) {
 			std::lock_guard lock(database_.process_.mutex_); --database_.queries_;
@@ -157,8 +157,7 @@ public:
 private:
 	friend class ResourceLease;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-    debug::CiBudgetTrace ci_trace_{"account"};
-    size_t ci_peak_ = 0U; // protected by the process resource mutex
+    debug::CiBudgetTrace ciTrace() const noexcept { return {this,"account"}; }
 #endif
 	[[nodiscard]] size_t availableLocked() const noexcept {
 		const auto &process = database_.process_;
@@ -206,7 +205,7 @@ public:
 	}
 	[[nodiscard]] size_t bytes() const noexcept { return bytes_; }
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-    size_t diagnosticAccountId() const noexcept { return account_ ? account_->ci_trace_.id() : 0U; }
+    size_t diagnosticAccountId() const noexcept { return account_ ? account_->ciTrace().id() : 0U; }
 #endif
 	[[nodiscard]] bool sameAccount(const ResourceLease &other) const noexcept { return account_ && account_ == other.account_; }
 	[[nodiscard]] size_t accountMaximum() const noexcept { return account_ ? account_->maximum() : 0U; }
@@ -245,8 +244,8 @@ public:
                     const auto databaseClassUsed = database.usage_.classes[kind], databaseClassMaximum = database.limits_.classes[kind];
                     const auto processClassUsed = process.usage_.classes[kind], processClassMaximum = process.limits_.classes[kind];
                     lock.unlock();
-                    if (account_->ci_trace_.allow()) {
-                    std::fprintf(stderr, "CI_RESOURCE account_id=%zu class=%zu lease=%zu requested=%zu available=%zu account=%zu/%zu database=%zu/%zu database_class=%zu/%zu process=%zu/%zu process_class=%zu/%zu\n", account_->ci_trace_.id(), kind, previous, next, available, accountUsed, accountMaximum, databaseUsed, databaseMaximum, databaseClassUsed, databaseClassMaximum, processUsed, processMaximum, processClassUsed, processClassMaximum);
+                    if (account_->ciTrace().allow()) {
+                    std::fprintf(stderr, "CI_RESOURCE account_id=%zu class=%zu lease=%zu requested=%zu available=%zu account=%zu/%zu database=%zu/%zu database_class=%zu/%zu process=%zu/%zu process_class=%zu/%zu\n", account_->ciTrace().id(), kind, previous, next, available, accountUsed, accountMaximum, databaseUsed, databaseMaximum, databaseClassUsed, databaseClassMaximum, processUsed, processMaximum, processClassUsed, processClassMaximum);
                     std::fflush(stderr);
                     }
                 }
@@ -255,7 +254,7 @@ public:
 			}
 			account_->used_ += delta;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-            account_->ci_peak_ = (std::max)(account_->ci_peak_, account_->used_);
+            account_->ciTrace().observePeak(account_->used_);
 #endif
 			database.usage_.total += delta; database.usage_.classes[kind] += delta;
 			process.usage_.total += delta; process.usage_.classes[kind] += delta;
@@ -265,12 +264,12 @@ public:
 			database.usage_.total -= delta; database.usage_.classes[kind] -= delta;
 			process.usage_.total -= delta; process.usage_.classes[kind] -= delta;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-            if (delta && account_->ci_trace_.active()) {
+            if (delta && account_->ciTrace().active()) {
                 const auto accountUsed = account_->used_, databaseUsed = database.usage_.total, processUsed = process.usage_.total;
                 bytes_ = next;
                 lock.unlock();
-                if (account_->ci_trace_.allow()) {
-                std::fprintf(stderr, "CI_RESOURCE account_id=%zu refund class=%zu amount=%zu lease=%zu account=%zu database=%zu process=%zu\n", account_->ci_trace_.id(), kind, delta, next, accountUsed, databaseUsed, processUsed);
+                if (account_->ciTrace().allow()) {
+                std::fprintf(stderr, "CI_RESOURCE account_id=%zu refund class=%zu amount=%zu lease=%zu account=%zu database=%zu process=%zu\n", account_->ciTrace().id(), kind, delta, next, accountUsed, databaseUsed, processUsed);
                 std::fflush(stderr);
                 }
                 return true;

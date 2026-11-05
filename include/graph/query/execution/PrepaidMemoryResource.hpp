@@ -26,7 +26,7 @@ public:
 	}
 	~PrepaidMemoryResource() override {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-        ci_trace_.summary(used(), peakAdmitted(), capacity_, grant_.bytes());
+        ciTrace().summary(used(), peakAdmitted(), capacity_, grant_.bytes());
 #endif
 		// Refunding a grant while its allocated buffers remain live would let a
 		// later owner reuse the same quota. Such lifetime misuse must fail closed.
@@ -76,8 +76,8 @@ private:
 			if (bytes > capacity_ - prior) {
 				denials_.fetch_add(1U, std::memory_order_relaxed);
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                if (ci_trace_.allow()) {
-                    std::fprintf(stderr, "CI_PREPAID owner=%zu account_id=%zu rejection requested=%zu used=%zu peak=%zu capacity=%zu\n", ci_trace_.id(), grant_.diagnosticAccountId(), bytes, prior, peak_.load(std::memory_order_relaxed), capacity_);
+                if (ciTrace().allow()) {
+                    std::fprintf(stderr, "CI_PREPAID owner=%zu account_id=%zu rejection requested=%zu used=%zu peak=%zu capacity=%zu\n", ciTrace().id(), grant_.diagnosticAccountId(), bytes, prior, peak_.load(std::memory_order_relaxed), capacity_);
                     std::fflush(stderr);
                 }
 #endif
@@ -91,8 +91,8 @@ private:
 	void releaseBytes(size_t bytes) noexcept {
         const auto previous = used_.fetch_sub(bytes, std::memory_order_relaxed);
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-        if (bytes && ci_trace_.active() && ci_trace_.allow()) {
-            std::fprintf(stderr, "CI_PREPAID owner=%zu account_id=%zu refund=%zu previous=%zu remaining=%zu capacity=%zu\n", ci_trace_.id(), grant_.diagnosticAccountId(), bytes, previous, previous - bytes, capacity_);
+        if (bytes && ciTrace().active() && ciTrace().allow()) {
+            std::fprintf(stderr, "CI_PREPAID owner=%zu account_id=%zu refund=%zu previous=%zu remaining=%zu capacity=%zu\n", ciTrace().id(), grant_.diagnosticAccountId(), bytes, previous, previous - bytes, capacity_);
             std::fflush(stderr);
         }
 #else
@@ -115,7 +115,7 @@ private:
 	std::pmr::memory_resource *upstream_;
 	std::atomic<size_t> used_{0U}, peak_{0U}, denials_{0U};
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-    mutable debug::CiBudgetTrace ci_trace_{"prepaid"};
+    debug::CiBudgetTrace ciTrace() const noexcept { return {this,"prepaid"}; }
 #endif
 };
 } // namespace graph::query::execution::detail

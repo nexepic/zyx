@@ -98,6 +98,7 @@ def run_evidence(command, directory, timeout, *, gtest=False):
             except subprocess.TimeoutExpired: process.kill(); process.wait()
         if tail: (directory / 'output-tail.log').write_bytes(tail)
         code = process.returncode
+        if interrupted and code == 0: code = 130
         record.update(state='interrupted' if interrupted else 'completed', completed_at=time.time(),
                       exit_code=code, output_bytes=total, retained_prefix_bytes=kept,
                       retained_tail_bytes=len(tail), output_truncated=total > LOG_LIMIT,

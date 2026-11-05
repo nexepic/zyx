@@ -63,7 +63,7 @@ namespace graph::query::execution {
             owned_parent_.emplace(std::move(owner));
         }
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-        ~MaterializedByteBudget() override { ci_trace_.summary(used_bytes_, peak_bytes_, maximum_bytes_, parent_ ? parent_->bytes() : 0U); }
+        ~MaterializedByteBudget() override { ciTrace().summary(used_bytes_, peak_bytes_, maximum_bytes_, parent_ ? parent_->bytes() : 0U); }
 #endif
 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
@@ -143,8 +143,8 @@ namespace graph::query::execution {
 		}
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 		void diagnosticRejection(const char *operation, size_t previous, size_t requested, size_t embedded) const noexcept {
-			if (ci_trace_.allow()) {
-				std::fprintf(stderr, "CI_BUDGET owner=%zu account_id=%zu operation=%s requested=%zu previous=%zu embedded=%zu used=%zu peak=%zu maximum=%zu available=%zu parent_charge=%zu parent_maximum=%zu owned_parent_charge=%zu\n", ci_trace_.id(), parent_ ? parent_->diagnosticAccountId() : 0U, operation, requested, previous, embedded, used_bytes_, peak_bytes_, maximum_bytes_, available(), parent_ ? parent_->bytes() : 0U, parent_ ? parent_->accountMaximum() : 0U, owned_parent_ ? owned_parent_->bytes() : 0U);
+			if (ciTrace().allow()) {
+				std::fprintf(stderr, "CI_BUDGET owner=%zu account_id=%zu operation=%s requested=%zu previous=%zu embedded=%zu used=%zu peak=%zu maximum=%zu available=%zu parent_charge=%zu parent_maximum=%zu owned_parent_charge=%zu\n", ciTrace().id(), parent_ ? parent_->diagnosticAccountId() : 0U, operation, requested, previous, embedded, used_bytes_, peak_bytes_, maximum_bytes_, available(), parent_ ? parent_->bytes() : 0U, parent_ ? parent_->accountMaximum() : 0U, owned_parent_ ? owned_parent_->bytes() : 0U);
 				std::fflush(stderr);
 			}
 		}
@@ -179,7 +179,7 @@ namespace graph::query::execution {
         size_t peak_bytes_ = 0U;
 		std::pmr::memory_resource *upstream_;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-        debug::CiBudgetTrace ci_trace_{"materialized"};
+        debug::CiBudgetTrace ciTrace() const noexcept { return {this,"materialized"}; }
 #endif
 	};
 

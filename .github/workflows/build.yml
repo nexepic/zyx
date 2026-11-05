@@ -85,6 +85,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
+        timeout-minutes: 10
         run: pip install conan ninja
 
       - name: Install Project Dependencies
@@ -154,6 +155,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
+        timeout-minutes: 10
         run: pip install conan ninja
 
       - name: Install Project Dependencies
@@ -269,6 +271,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
+        timeout-minutes: 10
         run: pip install conan ninja
 
       - name: Diagnose fresh string allocations (macOS)
@@ -421,7 +424,7 @@ jobs:
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendTest.*:RelocatableDriverAbiIngestTest.*:DriverAbiLifecycleTest.*' 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
+          python scripts/run_ci_evidence.py --name lifecycle --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendTest.*:RelocatableDriverAbiIngestTest.*:DriverAbiLifecycleTest.*' 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
         shell: bash
 
       # These deterministic lifecycle tests are repeated to catch state that
@@ -430,7 +433,7 @@ jobs:
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-recovery-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat=5 --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
+          python scripts/run_ci_evidence.py --name recovery-maintenance --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat=5 --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
         shell: bash
 
       - name: Run requested Stage 10 endurance gate
@@ -441,7 +444,7 @@ jobs:
           fi
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-endurance-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat="$ZYX_STAGE10_ENDURANCE_REPETITIONS" --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log"
+          python scripts/run_ci_evidence.py --name endurance --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat="$ZYX_STAGE10_ENDURANCE_REPETITIONS" --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log"
         shell: bash
 
       # This validates the single-file report schema, threshold-enforcement
@@ -459,10 +462,10 @@ jobs:
           query_report="$calibration_dir/query-report.json"
           large_value_report="$calibration_dir/large-value-report.json"
           bulk_edge_report="$calibration_dir/bulk-edge-report.json"
-          ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 1.0 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-bulk-edge-calibrate --data "$bulk_edge_data_path" --output "$bulk_edge_report" --edge-count 100 --dataset-label bulk-edge-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --include-trace-phases --enforce-gates --minimum-ingest-edges-per-second 0.000001 --maximum-bytes-per-edge 1000000000000 --maximum-reopen-and-scan-ms 1000000000000 --maximum-peak-rss-bytes 1099511627776 --maximum-scratch-candidate-segments 1000000000000 --minimum-scratch-source-runs 1 --minimum-scratch-merge-passes 0
+          python scripts/run_ci_evidence.py --name calibration-vector-build --timeout 21600 -- ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-vector-query --timeout 21600 -- ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 1.0 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-large-value --timeout 21600 -- ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-bulk-edge --timeout 21600 -- ./buildDir/zyx-bulk-edge-calibrate --data "$bulk_edge_data_path" --output "$bulk_edge_report" --edge-count 100 --dataset-label bulk-edge-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --include-trace-phases --enforce-gates --minimum-ingest-edges-per-second 0.000001 --maximum-bytes-per-edge 1000000000000 --maximum-reopen-and-scan-ms 1000000000000 --maximum-peak-rss-bytes 1099511627776 --maximum-scratch-candidate-segments 1000000000000 --minimum-scratch-source-runs 1 --minimum-scratch-merge-passes 0
           python -c 'import json, sys; build = json.load(open(sys.argv[1], encoding="utf-8")); query = json.load(open(sys.argv[2], encoding="utf-8")); large_value = json.load(open(sys.argv[3], encoding="utf-8")); bulk_edge = json.load(open(sys.argv[4], encoding="utf-8")); assert build["schema_version"] == 2 and build["gate"]["enforced"] and build["gate"]["passed"]; assert query["schema_version"] == 2 and query["all_measured_searches_used_adjacency"] and query["all_measured_searches_used_pq"] and query["gate"]["enforced"] and query["gate"]["passed"]; assert large_value["schema_version"] == 1 and large_value["storage"]["single_file"] and large_value["gate"]["enforced"] and large_value["gate"]["passed"]; assert bulk_edge["schema_version"] == 3 and bulk_edge["storage"]["single_file"] and bulk_edge["scratch"]["candidate_segments"] > 0 and bulk_edge["scratch"]["source_run_count"] >= 1 and bulk_edge["gate"]["enforced"] and bulk_edge["gate"]["passed"]' "$build_report" "$query_report" "$large_value_report" "$bulk_edge_report"
         shell: bash
 
@@ -494,7 +497,7 @@ jobs:
           p0_dir="$ZYX_STAGE10_EVIDENCE_DIR/p0-bulk-edge-${P0_PROFILE}"
           mkdir -p "$p0_dir"
           cmake --build buildDir --target zyx_bulk_edge_calibrate
-          ./buildDir/zyx-bulk-edge-calibrate \
+          python scripts/run_ci_evidence.py --name p0-bulk-edge --timeout 21600 -- ./buildDir/zyx-bulk-edge-calibrate \
             --data "$p0_dir/bulk-edge-calibration.zyx" \
             --output "$p0_dir/report.json" \
             --edge-count "$p0_edge_count" \
