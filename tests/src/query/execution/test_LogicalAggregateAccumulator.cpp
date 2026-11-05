@@ -1082,3 +1082,50 @@ TEST_F(CountAccumulatorTest, MergesPartialCountsAndRejectsOverflowWithoutChangin
     EXPECT_THROW(accumulator.addRows(1U), std::overflow_error);
     EXPECT_EQ(accumulator.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
 }
+
+TEST_F(CollectAccumulatorTest, IncrementalAdmissionMatchesFullTraversalAcrossOwnershipChanges) {
+    CollectAccumulator accumulator;
+    PropertyValue::MapType sparse;
+    sparse.rehash(97U);
+    sparse.emplace("nested", PropertyValue(std::vector<PropertyValue>{
+        PropertyValue(std::string(512U, 'x')), PropertyValue(42)}));
+    std::vector<PropertyValue> list;
+    list.reserve(32U);
+    list.emplace_back(std::move(sparse));
+    const std::vector<PropertyValue> values{PropertyValue(), PropertyValue(7),
+        PropertyValue(std::string(8192U, 's')), PropertyValue(std::move(list))};
+    for (size_t i=0U; i<64U; ++i) {
+        const auto &value=values[i%values.size()];
+        if(i%2U) accumulator.update(value);
+        else accumulator.updateAdmitted(value,[](size_t) {});
+        EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+    }
+    auto clone=accumulator.clone();
+    EXPECT_EQ(clone->retainedBytesForAdmission(),clone->retainedBytes());
+    EXPECT_EQ(clone->getResult(),accumulator.getResult());
+    const auto before=accumulator.getResult();
+    EXPECT_THROW(accumulator.updateAdmitted(values.back(),[](size_t) {
+        throw std::runtime_error("admission rejected");
+    }),std::runtime_error);
+    EXPECT_EQ(accumulator.getResult(),before);
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+    size_t checks=0U;
+    EXPECT_THROW(accumulator.updateAdmitted(values.back(),[&](size_t bytes) {
+        // The first nonzero checkpoint admits the peak; the next is inside
+        // guarded copying, after the initial payload-size traversal.
+        if(bytes!=0U && ++checks==2U) throw std::runtime_error("cancelled during guarded copy");
+    }),std::runtime_error);
+    EXPECT_EQ(checks,2U);
+    EXPECT_EQ(accumulator.getResult(),before);
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+    accumulator.updateAdmitted(values.back(),[](size_t) {});
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+    const auto taken=accumulator.takeResult();
+    EXPECT_NE(taken,PropertyValue());
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),0U);
+    accumulator.update(values.back());
+    accumulator.reset();
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+    accumulator.updateAdmitted(values.back(),[](size_t) {});
+    EXPECT_EQ(accumulator.retainedBytesForAdmission(),accumulator.retainedBytes());
+}

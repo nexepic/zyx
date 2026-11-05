@@ -455,6 +455,13 @@ public:
 			return;
 		}
 		values_.push_back(value);
+		try {
+			retained_payload_bytes_ = checkedAggregateBytesAdd(retained_payload_bytes_,
+				detail::retainedPropertyValueBytes(values_.back(), [] {}));
+		} catch (...) {
+			values_.pop_back();
+			throw;
+		}
 	}
 
 	void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &admit) override {
@@ -465,8 +472,11 @@ public:
 		const size_t peak = checkedAggregateBytesAdd(payload, grow ? checkedAggregateBytesMul(capacity, sizeof(PropertyValue)) : 0U);
 		admit(peak);
 		PropertyValue copied = detail::copyPropertyValueGuarded(value, [&] { admit(peak); }, true);
+		const auto retained = checkedAggregateBytesAdd(retained_payload_bytes_,
+			detail::retainedPropertyValueBytes(copied, [&] { admit(peak); }));
 		if (grow) values_.reserve(capacity);
 		values_.push_back(std::move(copied));
+		retained_payload_bytes_ = retained;
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
@@ -486,18 +496,32 @@ public:
 		return total;
 	}
 
+	// Values are privately owned and immutable until reset/finalization. Cache
+	// their payload sum so each admission check is O(1), while retainedBytes()
+	// remains a full independent traversal for diagnostics and verification.
+	[[nodiscard]] size_t retainedBytesForAdmission() const override {
+		return checkedAggregateBytesAdd(checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue)),
+			retained_payload_bytes_);
+	}
+
 	void reset() override {
 		values_.clear();
+		retained_payload_bytes_ = 0U;
 	}
 
 	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
 		auto acc = std::make_unique<CollectAccumulator>();
 		acc->values_ = values_;
+		// Copies may have different string/vector/map capacity from the source.
+		for (const auto &value : acc->values_)
+			acc->retained_payload_bytes_ = checkedAggregateBytesAdd(acc->retained_payload_bytes_,
+				detail::retainedPropertyValueBytes(value, [] {}));
 		return acc;
 	}
 
 private:
 	std::vector<PropertyValue> values_;
+	size_t retained_payload_bytes_ = 0U;
 };
 
 /**
