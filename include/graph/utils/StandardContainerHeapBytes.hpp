@@ -65,8 +65,20 @@ namespace graph::utils::detail {
     if (count <= 15U) return proxy;
     const auto bytes = addStandardHeapBytes(count, 1U);
 #elif defined(_LIBCPP_VERSION)
-    if (count <= sizeof(std::string) - 2U) return proxy;
+    if (sizeof(std::string) == 24U && count <= 22U) return proxy;
+#if _LIBCPP_VERSION >= 190000 && _LIBCPP_VERSION < 220000 && __cplusplus <= 202002L
+    // Audited libc++ 19--21 basic_string::__recommend uses 8-byte
+    // alignment, with a special correction at the SSO boundary. A 16-byte
+    // rounded allocation dominates both string layouts/endian factors, and
+    // retains a small margin instead of doubling every selected value.
+    // LLVM llvmorg-{19.1.7,20.1.8,21.1.6}/libcxx/include/string.
+    // Keep the old conservative policy for unaudited versions/layout sizes.
+    const auto bytes = sizeof(std::string) == 24U
+        ? addStandardHeapBytes(count, 16U) & ~size_t{15U}
+        : addStandardHeapBytes(addStandardHeapBytes(count, count), 1U);
+#else
     const auto bytes = addStandardHeapBytes(addStandardHeapBytes(count, count), 1U);
+#endif
 #else
     const size_t bytes = 0U;
     throw std::logic_error("admitted string construction requires a supported standard string ABI");
