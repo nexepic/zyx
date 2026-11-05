@@ -1,0 +1,85 @@
+Running main() from /workspace/zyx-sysroot/usr/src/googletest/googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+CI_RSS_BEGIN rss=191709184 asan_available=1 live=350653 heap=21663744
+RSS_COMPONENT before-query RssAnon:	   73152 kB
+RSS_COMPONENT before-query RssFile:	  114080 kB
+RSS_COMPONENT before-query RssShmem:	       0 kB
+CI_RSS_REJECT limit=67108864 baseline=191725568 current=264429568 asan_available=1 live=5111906 heap=70004736
+RSS_COMPONENT after-query RssAnon:	  131028 kB
+RSS_COMPONENT after-query RssFile:	  134244 kB
+RSS_COMPONENT after-query RssShmem:	       0 kB
+Stats: 42M malloced (4M for red zones) by 124968 calls
+Stats: 0M realloced by 0 calls
+Stats: 38M freed by 108715 calls
+Stats: 0M really freed by 0 calls
+Stats: 70M (70M-0M) mmaped; 296 maps, 0 unmaps
+  mallocs by size class: 2:6204; 3:27675; 4:12630; 5:2; 6:27474; 7:17383; 8:3072; 9:3; 11:3511; 12:494; 13:20049; 14:284; 15:8; 16:93; 17:400; 18:1749; 19:127; 20:228; 21:269; 22:175; 23:906; 24:37; 25:155; 26:25; 27:38; 28:55; 29:37; 30:7; 31:20; 32:4; 33:1317; 35:3; 36:1; 37:361; 38:6; 39:6; 41:8; 42:12; 43:4; 45:4; 47:3; 48:1; 49:10; 50:1; 51:9; 52:2; 
+Stats: malloc large: 106
+Stats: StackDepot: 33404 ids; 9M allocated
+Stats: SizeClassAllocator64: 35M mapped (27M rss) in 126471 allocations; remains 126471
+  02 (    32): mapped:    256K allocs:    6272 frees:       0 inuse:   6272 num_freed_chunks    1920 avail:   8192 rss:    196K releases:      0 last released:      0K region: 0x502000000000
+  03 (    48): mapped:   1536K allocs:   27776 frees:       0 inuse:  27776 num_freed_chunks    4992 avail:  32768 rss:   1300K releases:      0 last released:      0K region: 0x503000000000
+  04 (    64): mapped:   1024K allocs:   12672 frees:       0 inuse:  12672 num_freed_chunks    3712 avail:  16384 rss:    792K releases:      0 last released:      0K region: 0x504000000000
+  05 (    80): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    3148 avail:   3276 rss:      4K releases:      0 last released:      0K region: 0x505000000000
+  06 (    96): mapped:   2816K allocs:   27520 frees:       0 inuse:  27520 num_freed_chunks    2517 avail:  30037 rss:   2580K releases:      0 last released:      0K region: 0x506000000000
+  07 (   112): mapped:   2048K allocs:   17408 frees:       0 inuse:  17408 num_freed_chunks    1316 avail:  18724 rss:   1904K releases:      0 last released:      0K region: 0x507000000000
+  08 (   128): mapped:    512K allocs:    3072 frees:       0 inuse:   3072 num_freed_chunks    1024 avail:   4096 rss:    384K releases:      0 last released:      0K region: 0x508000000000
+  09 (   144): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1692 avail:   1820 rss:      4K releases:      0 last released:      0K region: 0x509000000000
+  11 (   176): mapped:    768K allocs:    3584 frees:       0 inuse:   3584 num_freed_chunks     884 avail:   4468 rss:    612K releases:      0 last released:      0K region: 0x50b000000000
+  12 (   192): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     853 avail:   1365 rss:     96K releases:      0 last released:      0K region: 0x50c000000000
+  13 (   208): mapped:   4096K allocs:   20096 frees:       0 inuse:  20096 num_freed_chunks      68 avail:  20164 rss:   4080K releases:      0 last released:      0K region: 0x50d000000000
+  14 (   224): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     786 avail:   1170 rss:     64K releases:      0 last released:      0K region: 0x50e000000000
+  15 (   240): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     964 avail:   1092 rss:      4K releases:      0 last released:      0K region: 0x50f000000000
+  16 (   256): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     896 avail:   1024 rss:     24K releases:      0 last released:      0K region: 0x510000000000
+  17 (   320): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     307 avail:    819 rss:    128K releases:      0 last released:      0K region: 0x511000000000
+  18 (   384): mapped:    768K allocs:    1792 frees:       0 inuse:   1792 num_freed_chunks     256 avail:   2048 rss:    664K releases:      0 last released:      0K region: 0x512000000000
+  19 (   448): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     457 avail:    585 rss:     56K releases:      0 last released:      0K region: 0x513000000000
+  20 (   512): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks     256 avail:    512 rss:    116K releases:      0 last released:      0K region: 0x514000000000
+  21 (   640): mapped:    256K allocs:     306 frees:       0 inuse:    306 num_freed_chunks     103 avail:    409 rss:    172K releases:      0 last released:      0K region: 0x515000000000
+  22 (   768): mapped:    256K allocs:     255 frees:       0 inuse:    255 num_freed_chunks      86 avail:    341 rss:    132K releases:      0 last released:      0K region: 0x516000000000
+  23 (   896): mapped:   1024K allocs:     949 frees:       0 inuse:    949 num_freed_chunks     221 avail:   1170 rss:    796K releases:      0 last released:      0K region: 0x517000000000
+  24 (  1024): mapped:    256K allocs:      64 frees:       0 inuse:     64 num_freed_chunks     192 avail:    256 rss:     40K releases:      0 last released:      0K region: 0x518000000000
+  25 (  1280): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks       0 avail:    204 rss:    196K releases:      0 last released:      0K region: 0x519000000000
+  26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss:     40K releases:      0 last released:      0K region: 0x51a000000000
+  27 (  1792): mapped:    256K allocs:      72 frees:       0 inuse:     72 num_freed_chunks      74 avail:    146 rss:     68K releases:      0 last released:      0K region: 0x51b000000000
+  28 (  2048): mapped:    256K allocs:      64 frees:       0 inuse:     64 num_freed_chunks      64 avail:    128 rss:    112K releases:      0 last released:      0K region: 0x51c000000000
+  29 (  2560): mapped:    256K allocs:      50 frees:       0 inuse:     50 num_freed_chunks      52 avail:    102 rss:     96K releases:      0 last released:      0K region: 0x51d000000000
+  30 (  3072): mapped:    256K allocs:      21 frees:       0 inuse:     21 num_freed_chunks      64 avail:     85 rss:     24K releases:      0 last released:      0K region: 0x51e000000000
+  31 (  3584): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks      37 avail:     73 rss:     72K releases:      0 last released:      0K region: 0x51f000000000
+  32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss:     16K releases:      0 last released:      0K region: 0x520000000000
+  33 (  5120): mapped:   6656K allocs:    1320 frees:       0 inuse:   1320 num_freed_chunks      11 avail:   1331 rss:   6592K releases:      0 last released:      0K region: 0x521000000000
+  35 (  7168): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks      27 avail:     36 rss:     24K releases:      0 last released:      0K region: 0x523000000000
+  36 (  8192): mapped:   1024K allocs:     128 frees:       0 inuse:    128 num_freed_chunks       0 avail:    128 rss:    932K releases:      0 last released:      0K region: 0x524000000000
+  37 ( 10240): mapped:   3840K allocs:     366 frees:       0 inuse:    366 num_freed_chunks      18 avail:    384 rss:   3612K releases:      0 last released:      0K region: 0x525000000000
+  38 ( 12288): mapped:    256K allocs:      10 frees:       0 inuse:     10 num_freed_chunks      11 avail:     21 rss:     72K releases:      0 last released:      0K region: 0x526000000000
+  39 ( 14336): mapped:    256K allocs:       8 frees:       0 inuse:      8 num_freed_chunks      10 avail:     18 rss:     84K releases:      0 last released:      0K region: 0x527000000000
+  41 ( 20480): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       3 avail:     12 rss:    112K releases:      0 last released:      0K region: 0x529000000000
+  42 ( 24576): mapped:    512K allocs:      12 frees:       0 inuse:     12 num_freed_chunks       9 avail:     21 rss:    288K releases:      0 last released:      0K region: 0x52a000000000
+  43 ( 28672): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       5 avail:      9 rss:    112K releases:      0 last released:      0K region: 0x52b000000000
+  45 ( 40960): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       2 avail:      6 rss:    148K releases:      0 last released:      0K region: 0x52d000000000
+  47 ( 57344): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       1 avail:      4 rss:    156K releases:      0 last released:      0K region: 0x52f000000000
+  48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss:     60K releases:      0 last released:      0K region: 0x530000000000
+  49 ( 81920): mapped:   1024K allocs:      10 frees:       0 inuse:     10 num_freed_chunks       2 avail:     12 rss:    376K releases:      0 last released:      0K region: 0x531000000000
+  50 ( 98304): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       1 avail:      2 rss:      8K releases:      0 last released:      0K region: 0x532000000000
+  51 (114688): mapped:   1024K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       0 avail:      9 rss:    924K releases:      0 last released:      0K region: 0x533000000000
+  52 (131072): mapped:    256K allocs:       2 frees:       0 inuse:      2 num_freed_chunks       0 avail:      2 rss:    232K releases:      0 last released:      0K region: 0x534000000000
+Stats: LargeMmapAllocator: allocated 106 times, remains 106 (23444 K) max 22 M; by size logs: 17:94; 18:4; 19:4; 20:3; 21:1; 
+Quarantine limits: global: 256Mb; thread local: 1024Kb
+Global quarantine stats: batches: 125; bytes: 41259217 (user: 40235217); chunks: 108625 (capacity: 127625); 85% chunks used; 2% memory overhead
+unknown file: Failure
+C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 69MB, baseline RSS: 182MB, current RSS: 252MB)" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection (5440 ms)
+[----------] 1 test from RelocatableStorageBackendTest (5440 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (5440 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+
+ 1 FAILED TEST

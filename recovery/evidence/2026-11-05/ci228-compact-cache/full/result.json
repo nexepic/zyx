@@ -1,0 +1,80 @@
+{
+  "source_commit": "ff02643c0d7bdf43e9a0364129982ff3c7c7ed33",
+  "source_fingerprint": "be3aabdc4a92140c518cfb71a9643932126184886fb702f196c3ae715cd3d9bb",
+  "source_files_match": true,
+  "discovered_enabled": 11046,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "executed_distinct": 11046,
+  "passed": 11039,
+  "failures": [
+    {
+      "name": "QueryEngineLogicalBackendBoundaryTest.GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget",
+      "errors": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1893\nFailed\nGDS catalog pipeline omitted its retained QueryResult row from the shared byte budget\n"
+      ]
+    },
+    {
+      "name": "LogicalVectorPropertyBatchTest.GdsPageRankPipelineSharesAlgorithmRowsAndQueryResultBudget",
+      "errors": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1298\nExpected: static_cast<void>(executeGds(20U * 1024U)) throws an exception of type std::runtime_error.\n  Actual: it throws nothing.\n"
+      ]
+    },
+    {
+      "name": "LogicalVectorPropertyBatchTest.RetainsConvertedQueryVectorThroughResultPublication",
+      "errors": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:606\nFailed\nthe live converted Vector query and retained result should share the byte bound\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchCombinesRowsWhenBudgetAllows",
+      "errors": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:1289\nExpected equality of these values:\n  graph.node_property_column_batch_reads\n    Which is: 2\n  1U\n    Which is: 1\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:1290\nExpected equality of these values:\n  graph.node_property_column_batch_keys\n    Which is: { { \"priority\" }, { \"priority\" } }\n  (std::vector<std::vector<std::string>>{{\"priority\"}})\n    Which is: { { \"priority\" } }\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "errors": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "errors": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+      "errors": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp:827\nExpected equality of these values:\n  graph.node_property_column_batch_reads\n    Which is: 2\n  readsBeforeCombined\n    Which is: 1\n"
+      ]
+    }
+  ],
+  "skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicate_count": 0,
+  "coverage": "not generated: full required quick exited 1 on assertion failures, without timeout"
+}

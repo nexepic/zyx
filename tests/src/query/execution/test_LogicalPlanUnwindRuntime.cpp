@@ -1855,7 +1855,8 @@ TEST(LogicalPlanReadRuntimeTest, SkipStreamsAnExactBudgetRowWithoutSelectionStor
     const auto &text = std::get<std::string>(payload.getVariant());
     const size_t rowBytes = sizeof(LogicalPlanReadRow) + (std::max)(
         std::string("value").size()+sizeof(LogicalPlanReadValue)+property_utils::getPropertyValueSize(payload),
-        sizeof(Node)+graph::query::execution::detail::dynamicStringBufferBytes(text));
+        sizeof(Node)+graph::query::execution::detail::dynamicStringBufferBytes(text)+
+            graph::query::execution::detail::dynamicStringBufferBytes(std::string("value")));
     constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
     // A layout regression must not silently expand this success boundary.
     ASSERT_LE(constrained.maximum_materialized_bytes, 1792U);

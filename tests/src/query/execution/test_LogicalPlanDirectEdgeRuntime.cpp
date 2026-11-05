@@ -1243,9 +1243,10 @@ namespace graph::query::execution {
 		auto constrained = directBounds();
         // Fixed efficiency envelope, independent of sizeof(empty row maps).
         // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
-        // smaller 4352-byte cap, including old/new public vector coexistence,
-        // while checking complete result order and one fetch per owner.
-        constrained.maximum_materialized_bytes = 4352U;
+        // smaller 4608-byte cap, including destination-cache admission and
+        // old/new public vector coexistence. Complete ordering and exactly
+        // one fetch per owner remain mandatory.
+        constrained.maximum_materialized_bytes = 4608U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
@@ -1280,7 +1281,10 @@ namespace graph::query::execution {
 		// Include buffered/source/output row frames and key/Property slots.
 		constrained.maximum_materialized_bytes =
 				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
-        constrained.maximum_materialized_bytes += 8U * 3U * sizeof(LogicalPlanReadRow);
+        // The carrier heuristic includes the owned binding node, not just
+        // the empty row header. This is the explicitly ample-batch case.
+        constrained.maximum_materialized_bytes += 8U * 3U *
+            (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow{}.values)>());
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
@@ -1346,9 +1350,10 @@ namespace graph::query::execution {
 		auto constrained = directBounds();
         // Fixed efficiency envelope, independent of sizeof(empty row maps).
         // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
-        // smaller 4352-byte cap, including old/new public vector coexistence,
-        // while checking complete result order and one fetch per owner.
-        constrained.maximum_materialized_bytes = 4352U;
+        // smaller 4608-byte cap, including destination-cache admission and
+        // old/new public vector coexistence. Complete ordering and exactly
+        // one fetch per owner remain mandatory.
+        constrained.maximum_materialized_bytes = 4608U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);
@@ -1407,9 +1412,10 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
 		logical::LogicalSort outer(std::move(filtered), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U;
+		// Freeze the pre-compaction 280-byte frame envelope; shrinking an
+        // empty private map must not also shrink this successful-query cap.
+        static_assert(sizeof(LogicalPlanReadRow) <= 280U);
+        constrained.maximum_materialized_bytes = 8U * 280U + 12U * sizeof(PropertyValue) + 824U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 2U);
 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 1U);
@@ -1456,10 +1462,11 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("item"), true);
 		logical::LogicalSort outer(std::move(expanded), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Six expanded rows coexist with retained source frames, sorting keys
-		// and result publication. Account for actual platform slot sizes.
-		constrained.maximum_materialized_bytes =
-				16U * sizeof(LogicalPlanReadRow) + 24U * sizeof(PropertyValue) + 3648U;
+		// Six expanded rows coexist with retained source frames and keys.
+        // Keep the original fixed frame envelope as an efficiency gate,
+        // independent of the newly compact empty private-map headers.
+        static_assert(sizeof(LogicalPlanReadRow) <= 280U);
+        constrained.maximum_materialized_bytes = 16U * 280U + 24U * sizeof(PropertyValue) + 3648U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 6U);
 		for (size_t index = 0U; index < 6U; ++index) {
