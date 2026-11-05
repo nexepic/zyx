@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "query/execution/ResultPropertyMapAdmission.hpp"
+#include "graph/core/GuardedPropertyCopy.hpp"
+#include "graph/core/PropertyHeapRequestBytes.hpp"
 
 namespace graph::query::execution::detail {
 namespace {
@@ -58,4 +60,22 @@ TEST(ResultPropertyMapAdmissionTest, CancellationLeavesSourceAndAllocatorUntouch
     EXPECT_EQ(std::get<std::string>(entries.front().value.getVariant()), std::string(5000U, 'p'));
     EXPECT_EQ(MapRequests::live, 0U);
 }
+TEST(ResultPropertyMapAdmissionTest, GuardedCopyCanGrowAnAdoptedMapBeyondItsSourceLayout) {
+    PropertyValue::MapType adopted;
+    adopted.max_load_factor(16.0F);
+    adopted.rehash(1U);
+    for (int64_t i = 0; i < 8; ++i) adopted.emplace(std::to_string(i), PropertyValue(i));
+    const PropertyValue source(std::move(adopted));
+    const size_t before = property_heap::retainedRequestUpper(source);
+    const size_t upper = storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(source, [] {});
+    const PropertyValue copy = graph::property_copy::copyPropertyValueGuarded(source, [] {});
+    // The actual copied hash table, rather than a duplicated prediction model,
+    // proves that source capacity alone cannot fund a fresh guarded copy.
+    EXPECT_GT(copy.getMap().bucket_count(), source.getMap().bucket_count());
+    EXPECT_GT(property_heap::retainedRequestUpper(copy), before);
+    EXPECT_GE(upper, property_heap::retainedRequestUpper(copy));
+    EXPECT_EQ(copy, source);
+    EXPECT_NE(&copy.getMap().at("0"), &source.getMap().at("0"));
+}
+
 } // namespace graph::query::execution::detail

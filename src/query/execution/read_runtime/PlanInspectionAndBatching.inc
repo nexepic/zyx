@@ -819,7 +819,12 @@
                 // commits. Its reservation is refunded only afterwards.
                 const size_t replacedPayload = newKey ? 0U :
                     retainedExpressionValueBytes(alias->second.at(key), state);
-				const size_t requestedPayloadBytes = retainedExpressionValueBytes(value, state);
+                size_t requestedPayloadBytes = retainedExpressionValueBytes(value, state);
+                if constexpr (std::is_lvalue_reference_v<decltype(value)>) {
+                    const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+                    requestedPayloadBytes = (std::max)(requestedPayloadBytes,
+                        storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(value, checkpoint));
+                }
 				nextBytes = checkedSizeAdd(nextBytes, requestedPayloadBytes,
 										   "logical-plan prefetch cache size overflowed");
 				const size_t withSelection =
@@ -832,7 +837,13 @@
 				bufferedRowsBytes.set(nextBytes);
 				try {
 					if constexpr (std::is_lvalue_reference_v<decltype(value)>) {
-						PropertyValue copy = detail::copyPropertyValueGuarded(value, [&] { checkGuardNow(state); });
+                        const auto checkpoint = [&] { checkGuardNow(state); };
+                        // The local manual reservation already funds this copy.
+                        // An enabled procedure handoff transfers it to the caller;
+                        // do not fund the same heap again through its decode scope.
+                        PropertyValue copy = state.shared.materialized_budget.transfersReservations()
+                            ? graph::property_copy::copyPropertyValueGuarded(value, checkpoint)
+                            : detail::copyPropertyValueGuarded(value, checkpoint);
 						cache[variable].insert_or_assign(key, std::move(copy));
 					} else {
 						cache[variable].insert_or_assign(key, std::forward<decltype(value)>(value));
